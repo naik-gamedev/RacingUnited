@@ -1,0 +1,21 @@
+# Visual Studio
+.vs/
+x64/
+Debug/
+Release/
+*.user
+*.suo
+*.ncb
+*.aps
+
+# Compiled output
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# OS junk
+Thumbs.db
+Desktop.ini

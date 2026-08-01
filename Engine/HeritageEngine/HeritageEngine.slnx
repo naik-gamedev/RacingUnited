@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="HeritageEngine/HeritageEngine.vcxproj" Id="5a1d857d-c901-4e17-97c2-50661a043cf6" />
+</Solution>
