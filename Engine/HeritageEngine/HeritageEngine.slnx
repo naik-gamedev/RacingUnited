@@ -3,5 +3,6 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Project Path="../Launcher/Launcher.vcxproj" Id="6445f293-129e-4522-b0a7-8e7c70af525d" />
   <Project Path="HeritageEngine/HeritageEngine.vcxproj" Id="5a1d857d-c901-4e17-97c2-50661a043cf6" />
 </Solution>
