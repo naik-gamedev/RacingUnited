@@ -1,14 +1,17 @@
 // Racing United - Launcher
 // Powered by Heritage Engine
-// Scans Modules/ folder automatically, no manual registration needed.
+// Borderless custom window — no Windows chrome.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #include <shlobj.h>
 #include <shellapi.h>
+#include <dwmapi.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -20,26 +23,31 @@
 #include <vector>
 #include <map>
 #include <filesystem>
-#include <windows.h>
-#include <shlobj.h>
 
 namespace fs = std::filesystem;
 
 // -----------------------------------------------------------------------
-//  Module descriptor  (read from Modules/<name>/module.ini)
+//  Drag state
+// -----------------------------------------------------------------------
+static bool   g_dragging = false;
+static double g_dragStartX = 0, g_dragStartY = 0;
+static int    g_winStartX = 0, g_winStartY = 0;
+
+// -----------------------------------------------------------------------
+//  Module descriptor
 // -----------------------------------------------------------------------
 struct Module
 {
-    std::string folderName;   // used as launch argument
+    std::string folderName;
     std::string name;
     std::string version;
     std::string author;
     std::string description;
-    std::string executable;   // which exe to launch (default: RacingUnited.exe)
+    std::string executable;
 };
 
 // -----------------------------------------------------------------------
-//  INI parser  (dead simple: key = value, # comments)
+//  INI parser
 // -----------------------------------------------------------------------
 static std::map<std::string, std::string> parseINI(const std::string& path)
 {
@@ -53,7 +61,6 @@ static std::map<std::string, std::string> parseINI(const std::string& path)
         if (eq == std::string::npos) continue;
         std::string key = line.substr(0, eq);
         std::string val = line.substr(eq + 1);
-        // trim whitespace
         auto trim = [](std::string& s) {
             size_t a = s.find_first_not_of(" \t\r\n");
             size_t b = s.find_last_not_of(" \t\r\n");
@@ -66,7 +73,7 @@ static std::map<std::string, std::string> parseINI(const std::string& path)
 }
 
 // -----------------------------------------------------------------------
-//  Scan Modules/ folder — returns list of valid modules
+//  Scan Modules/ folder
 // -----------------------------------------------------------------------
 static std::vector<Module> scanModules(const std::string& modulesRoot)
 {
@@ -93,20 +100,18 @@ static std::vector<Module> scanModules(const std::string& modulesRoot)
 }
 
 // -----------------------------------------------------------------------
-//  Create desktop shortcut  (Windows only)
+//  Desktop shortcut
 // -----------------------------------------------------------------------
 static void createDesktopShortcut(const Module& mod, const std::string& exePath)
 {
     HRESULT hr = CoInitialize(nullptr);
-
     IShellLinkA* pLink = nullptr;
     hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
         IID_IShellLinkA, (void**)&pLink);
     if (SUCCEEDED(hr))
     {
-        std::string args = mod.folderName;
         pLink->SetPath(exePath.c_str());
-        pLink->SetArguments(args.c_str());
+        pLink->SetArguments(mod.folderName.c_str());
         pLink->SetDescription(mod.description.c_str());
         pLink->SetWorkingDirectory(
             fs::path(exePath).parent_path().string().c_str());
@@ -115,10 +120,8 @@ static void createDesktopShortcut(const Module& mod, const std::string& exePath)
         hr = pLink->QueryInterface(IID_IPersistFile, (void**)&pFile);
         if (SUCCEEDED(hr))
         {
-            // Get desktop path
             char desktopPath[MAX_PATH];
             SHGetFolderPathA(nullptr, CSIDL_DESKTOP, nullptr, 0, desktopPath);
-
             std::string lnkPath = std::string(desktopPath) + "\\" + mod.name + ".lnk";
             std::wstring wLnk(lnkPath.begin(), lnkPath.end());
             pFile->Save(wLnk.c_str(), TRUE);
@@ -130,13 +133,13 @@ static void createDesktopShortcut(const Module& mod, const std::string& exePath)
 }
 
 // -----------------------------------------------------------------------
-//  Settings  (shared with the game via settings.ini in module folder)
+//  Settings
 // -----------------------------------------------------------------------
 struct Settings
 {
-    int  resolutionIdx = 2;       // index into resolutions list
-    bool fullscreen = false;
-    int  fpsCapIdx = 0;       // 0 = unlimited
+    int   resolutionIdx = 2;
+    bool  fullscreen = false;
+    int   fpsCapIdx = 0;
     float masterVolume = 1.0f;
     float musicVolume = 0.8f;
     float sfxVolume = 1.0f;
@@ -149,12 +152,11 @@ static const char* resolutions[] = {
 static const char* fpsCaps[] = {
     "Unlimited", "30", "60", "90", "120", "144", "165", "240"
 };
-static const char* apis[] = {
-    "OpenGL"  // Vulkan, D3D12 etc added here when supported
-};
+static const char* apis[] = { "OpenGL" };
 
 static void saveSettings(const Settings& s, const std::string& path)
 {
+    if (path.empty()) return;
     std::ofstream f(path);
     f << "resolution = " << resolutions[s.resolutionIdx] << "\n";
     f << "fullscreen = " << (s.fullscreen ? "1" : "0") << "\n";
@@ -168,32 +170,28 @@ static void saveSettings(const Settings& s, const std::string& path)
 static Settings loadSettings(const std::string& path)
 {
     Settings s;
-    if (!fs::exists(path)) return s;
+    if (path.empty() || !fs::exists(path)) return s;
     auto ini = parseINI(path);
-
     if (ini.count("fullscreen")) s.fullscreen = ini["fullscreen"] == "1";
     if (ini.count("master_vol")) s.masterVolume = std::stof(ini["master_vol"]);
     if (ini.count("music_vol"))  s.musicVolume = std::stof(ini["music_vol"]);
     if (ini.count("sfx_vol"))    s.sfxVolume = std::stof(ini["sfx_vol"]);
-
     if (ini.count("resolution"))
         for (int i = 0; i < IM_ARRAYSIZE(resolutions); i++)
             if (ini["resolution"] == resolutions[i]) { s.resolutionIdx = i; break; }
-
     if (ini.count("fps_cap"))
         for (int i = 0; i < IM_ARRAYSIZE(fpsCaps); i++)
             if (ini["fps_cap"] == fpsCaps[i]) { s.fpsCapIdx = i; break; }
-
     return s;
 }
 
 // -----------------------------------------------------------------------
-//  ImGui style  — dark, clean, minimal
+//  ImGui style
 // -----------------------------------------------------------------------
 static void applyStyle()
 {
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 6.0f;
+    style.WindowRounding = 0.0f;
     style.FrameRounding = 4.0f;
     style.ScrollbarRounding = 4.0f;
     style.GrabRounding = 4.0f;
@@ -236,15 +234,16 @@ static void applyStyle()
 // -----------------------------------------------------------------------
 int main()
 {
-    // Paths (relative to exe location)
-    std::string modulesRoot = "F:/Racing United/SourceCode/GitHub/RacingUnited/Modules";
-    std::string exePath = "../Engine/HeritageEngine/x64/Debug/HeritageEngine.exe";
+    const int WIN_W = 820;
+    const int WIN_H = 560;
+    const int TITLEBAR_H = 36;
 
-    // Scan modules
+    std::string modulesRoot = "F:/Racing United/SourceCode/GitHub/RacingUnited/Modules";
+    std::string exePath = "F:/Racing United/SourceCode/GitHub/RacingUnited/Engine/HeritageEngine/x64/Debug/HeritageEngine.exe";
+
     std::vector<Module> modules = scanModules(modulesRoot);
     int selectedModule = 0;
 
-    // Load settings for first module if any
     Settings settings;
     auto getSettingsPath = [&]() -> std::string {
         if (modules.empty()) return "";
@@ -253,56 +252,125 @@ int main()
     if (!modules.empty())
         settings = loadSettings(getSettingsPath());
 
-    // GLFW init
     if (!glfwInit()) return -1;
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);   // no OS chrome
 
-    GLFWwindow* window = glfwCreateWindow(820, 560, "Racing United", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(WIN_W, WIN_H, "Racing United", nullptr, nullptr);
     if (!window) { glfwTerminate(); return -1; }
+
+    // Center on screen
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    glfwSetWindowPos(window,
+        (mode->width - WIN_W) / 2,
+        (mode->height - WIN_H) / 2);
+
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) return -1;
 
-    // ImGui init
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename = nullptr; // don't save imgui layout
+    io.IniFilename = nullptr;
 
     applyStyle();
-
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
-    // Notification state
     std::string notification = "";
     double      notifyTime = 0.0;
+    bool        showSettings = false;
+    bool        shouldClose = false;
+    bool        shouldMin = false;
 
-    bool showSettings = false;
-
-    while (!glfwWindowShouldClose(window))
+    while (!glfwWindowShouldClose(window) && !shouldClose)
     {
         glfwPollEvents();
+
+        // Handle minimize
+        if (shouldMin)
+        {
+            glfwIconifyWindow(window);
+            shouldMin = false;
+        }
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // Full screen window
+        // ----------------------------------------------------------------
+        //  Custom title bar
+        // ----------------------------------------------------------------
         ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2(820, 560));
+        ImGui::SetNextWindowSize(ImVec2((float)WIN_W, (float)TITLEBAR_H));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, 1.f));
+        ImGui::Begin("##titlebar", nullptr,
+            ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoSavedSettings);
+
+        // Drag region — invisible button covering most of the title bar
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImGui::InvisibleButton("##drag", ImVec2((float)WIN_W - 80, (float)TITLEBAR_H));
+        if (ImGui::IsItemActive())
+        {
+            if (!g_dragging)
+            {
+                g_dragging = true;
+                glfwGetCursorPos(window, &g_dragStartX, &g_dragStartY);
+                glfwGetWindowPos(window, &g_winStartX, &g_winStartY);
+            }
+            double cx, cy;
+            glfwGetCursorPos(window, &cx, &cy);
+            glfwSetWindowPos(window,
+                g_winStartX + (int)(cx - g_dragStartX),
+                g_winStartY + (int)(cy - g_dragStartY));
+        }
+        else g_dragging = false;
+
+        // Title text
+        ImGui::SetCursorPos(ImVec2(12, 9));
+        ImGui::TextDisabled("Racing United");
+
+        // Minimize button
+        ImGui::SameLine(0, 0);
+        ImGui::SetCursorPos(ImVec2((float)WIN_W - 76, 4));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.25f, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.35f, 0.35f, 0.35f, 1));
+        if (ImGui::Button(" _ ##min", ImVec2(36, 28))) shouldMin = true;
+
+        // Close button
+        ImGui::SetCursorPos(ImVec2((float)WIN_W - 40, 4));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.1f, 0.1f, 1));
+        if (ImGui::Button(" X ##cls", ImVec2(36, 28))) shouldClose = true;
+        ImGui::PopStyleColor(4);
+
+        ImGui::End();
+        ImGui::PopStyleColor();
+
+        // ----------------------------------------------------------------
+        //  Main content window
+        // ----------------------------------------------------------------
+        ImGui::SetNextWindowPos(ImVec2(0, (float)TITLEBAR_H));
+        ImGui::SetNextWindowSize(ImVec2((float)WIN_W, (float)(WIN_H - TITLEBAR_H)));
         ImGui::Begin("##root", nullptr,
             ImGuiWindowFlags_NoTitleBar |
             ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoScrollbar);
+            ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoSavedSettings);
 
-        // ---- Header ----
+        // Header
         ImGui::SetCursorPosY(14);
         ImGui::SetWindowFontScale(1.5f);
         ImGui::Text("RACING UNITED");
@@ -313,11 +381,11 @@ int main()
         ImGui::Separator();
         ImGui::Spacing();
 
-        // ---- Two column layout ----
+        // Two column layout
         ImGui::Columns(2, "layout", false);
         ImGui::SetColumnWidth(0, 280);
 
-        // ---- Module list ----
+        // Module list
         ImGui::TextDisabled("INSTALLED MODULES");
         ImGui::Spacing();
 
@@ -330,8 +398,7 @@ int main()
             for (int i = 0; i < (int)modules.size(); i++)
             {
                 bool selected = (i == selectedModule);
-                if (ImGui::Selectable(modules[i].name.c_str(), selected,
-                    0, ImVec2(0, 36)))
+                if (ImGui::Selectable(modules[i].name.c_str(), selected, 0, ImVec2(0, 36)))
                 {
                     if (selectedModule != i)
                     {
@@ -347,20 +414,16 @@ int main()
         ImGui::Separator();
         ImGui::Spacing();
 
-        // ---- Launch / Shortcut buttons ----
         bool hasModule = !modules.empty();
-
         if (!hasModule) ImGui::BeginDisabled();
 
         if (ImGui::Button("LAUNCH", ImVec2(120, 36)))
         {
             saveSettings(settings, getSettingsPath());
-            std::string cmd = "\"" + exePath + "\" " +
-                modules[selectedModule].folderName;
             ShellExecuteA(nullptr, "open", exePath.c_str(),
                 modules[selectedModule].folderName.c_str(),
                 nullptr, SW_SHOWNORMAL);
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
+            shouldClose = true;
         }
 
         ImGui::SameLine();
@@ -376,13 +439,12 @@ int main()
 
         ImGui::Spacing();
 
-        if (ImGui::Button(showSettings ? "HIDE SETTINGS" : "SETTINGS",
-            ImVec2(248, 28)))
+        if (ImGui::Button(showSettings ? "HIDE SETTINGS" : "SETTINGS", ImVec2(248, 28)))
             showSettings = !showSettings;
 
         ImGui::NextColumn();
 
-        // ---- Module info panel ----
+        // Module info
         if (!modules.empty())
         {
             auto& m = modules[selectedModule];
@@ -399,12 +461,11 @@ int main()
         ImGui::Separator();
         ImGui::Spacing();
 
-        // ---- Settings panel ----
+        // Settings panel
         if (showSettings && !modules.empty())
         {
             if (ImGui::BeginTabBar("SettingsTabs"))
             {
-                // VIDEO
                 if (ImGui::BeginTabItem("Video"))
                 {
                     ImGui::Spacing();
@@ -412,44 +473,34 @@ int main()
                     if (ImGui::Combo("Resolution", &settings.resolutionIdx,
                         resolutions, IM_ARRAYSIZE(resolutions)))
                         saveSettings(settings, getSettingsPath());
-
                     if (ImGui::Checkbox("Fullscreen", &settings.fullscreen))
                         saveSettings(settings, getSettingsPath());
-
                     ImGui::SetNextItemWidth(200);
                     if (ImGui::Combo("FPS Cap", &settings.fpsCapIdx,
                         fpsCaps, IM_ARRAYSIZE(fpsCaps)))
                         saveSettings(settings, getSettingsPath());
-
                     ImGui::SetNextItemWidth(200);
                     int apiIdx = 0;
-                    if (ImGui::Combo("Render API", &apiIdx,
-                        apis, IM_ARRAYSIZE(apis)))
+                    if (ImGui::Combo("Render API", &apiIdx, apis, IM_ARRAYSIZE(apis)))
                         saveSettings(settings, getSettingsPath());
-
                     ImGui::EndTabItem();
                 }
 
-                // AUDIO
                 if (ImGui::BeginTabItem("Audio"))
                 {
                     ImGui::Spacing();
                     ImGui::SetNextItemWidth(200);
                     if (ImGui::SliderFloat("Master", &settings.masterVolume, 0.f, 1.f))
                         saveSettings(settings, getSettingsPath());
-
                     ImGui::SetNextItemWidth(200);
                     if (ImGui::SliderFloat("Music", &settings.musicVolume, 0.f, 1.f))
                         saveSettings(settings, getSettingsPath());
-
                     ImGui::SetNextItemWidth(200);
                     if (ImGui::SliderFloat("SFX", &settings.sfxVolume, 0.f, 1.f))
                         saveSettings(settings, getSettingsPath());
-
                     ImGui::EndTabItem();
                 }
 
-                // INPUT
                 if (ImGui::BeginTabItem("Input"))
                 {
                     ImGui::Spacing();
@@ -462,13 +513,13 @@ int main()
             }
         }
 
-        // ---- Notification toast ----
+        // Notification toast
         if (!notification.empty())
         {
             double elapsed = glfwGetTime() - notifyTime;
             if (elapsed < 3.0)
             {
-                ImGui::SetCursorPosY(530);
+                ImGui::SetCursorPosY(490);
                 ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.f),
                     "%s", notification.c_str());
             }
@@ -479,7 +530,7 @@ int main()
 
         // Render
         ImGui::Render();
-        glClearColor(0.06f, 0.06f, 0.06f, 1.f);
+        glClearColor(0.08f, 0.08f, 0.08f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);

@@ -419,7 +419,7 @@ int main()
 
     GLuint prog = buildProgram();
 
-    Mesh logo = loadOBJ("../../../Assets/RacingUnited_3D_Logo.obj");
+    Mesh logo = loadOBJ("F:/Racing United/SourceCode/GitHub/RacingUnited/Assets/RacingUnited_3D_Logo.obj");
     uploadMesh(logo);
 
     // Projection (fixed)
