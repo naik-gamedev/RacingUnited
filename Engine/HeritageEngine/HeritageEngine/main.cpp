@@ -636,6 +636,7 @@ int main()
     bool   menuShowSettings = false;
 
     int prevFbW = 0, prevFbH = 0;
+    int prevAA = -1, prevScale = -1;
 
     auto modeName = [](WindowMode m)->const char* {
         if (m == WindowMode::Windowed)   return "Windowed";
@@ -683,7 +684,7 @@ int main()
         int rW, rH;
         getRenderSize(fbW, fbH, rW, rH);
 
-        if (fbW != prevFbW || fbH != prevFbH)
+        if (fbW != prevFbW || fbH != prevFbH || g_aaIdx != prevAA || g_scaleIdx != prevScale)
         {
             int samples = 1;
             if (g_aaIdx == 1) samples = 2;
@@ -704,6 +705,7 @@ int main()
             if (rW != fbW || rH != fbH)
                 scaleFBO.init(fbW, fbH, 1);
             prevFbW = fbW; prevFbH = fbH;
+            prevAA = g_aaIdx; prevScale = g_scaleIdx;
         }
 
         double now = glfwGetTime();
@@ -772,6 +774,16 @@ int main()
             glBindFramebuffer(GL_READ_FRAMEBUFFER, msaaFBO.fbo);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveFBO.fbo);
             glBlitFramebuffer(0, 0, rW, rH, 0, 0, rW, rH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        }
+
+        // Present the resolved MSAA image when no later post-processing pass
+        // will sample it. Without this blit, the scene remains only in the
+        // off-screen resolve framebuffer and the window shows a blank scene.
+        if (needMSAA && !needFXAA && !needScale && resolveFBO.fbo)
+        {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, resolveFBO.fbo);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+            glBlitFramebuffer(0, 0, rW, rH, 0, 0, fbW, fbH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
         }
 
         // --- FXAA pass ---
