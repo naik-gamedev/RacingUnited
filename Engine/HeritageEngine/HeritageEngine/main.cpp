@@ -1,8 +1,8 @@
 // Heritage Engine - main.cpp
 // Requirements: GLAD (OpenGL 4.6 core), GLFW 3.4, ImGui
 //
+// ESC          — open/close in-game menu
 // F11          — cycle window modes (Windowed → Borderless → Exclusive)
-// ESC          — close
 // Mouse drag   — orbit logo
 // Scroll       — zoom
 
@@ -17,9 +17,7 @@
 #endif
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#ifdef _WIN32
 #include <GLFW/glfw3native.h>
-#endif
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -52,7 +50,6 @@ static fs::path findProjectRoot()
     ssize_t length = readlink("/proc/self/exe", modulePath, sizeof(modulePath) - 1);
     fs::path location = length > 0 ? fs::path(std::string(modulePath, length)).parent_path() : fs::current_path();
 #endif
-
     for (fs::path candidate = location; !candidate.empty(); candidate = candidate.parent_path())
     {
         if (fs::exists(candidate / "Assets")) return candidate;
@@ -62,11 +59,11 @@ static fs::path findProjectRoot()
 }
 
 // -----------------------------------------------------------------------
-//  Font pointers (loaded once, used everywhere)
+//  Fonts
 // -----------------------------------------------------------------------
-static ImFont* g_fontSmall = nullptr;  // 13px — titlebar, labels
-static ImFont* g_fontNormal = nullptr;  // 16px — buttons, UI text
-static ImFont* g_fontLarge = nullptr;  // 22px — headers
+static ImFont* g_fontSmall = nullptr;
+static ImFont* g_fontNormal = nullptr;
+static ImFont* g_fontLarge = nullptr;
 
 // -----------------------------------------------------------------------
 //  Window mode
@@ -92,6 +89,159 @@ static void applyWindowMode(GLFWwindow* window, WindowMode mode)
         glfwSetWindowMonitor(window, mon, 0, 0, vid->width, vid->height, vid->refreshRate);
     g_windowMode = mode;
 }
+
+// -----------------------------------------------------------------------
+//  Video settings state
+// -----------------------------------------------------------------------
+static const char* aaOptions[] = { "None","MSAA x2","MSAA x4","MSAA x8","FXAA","FXAA + MSAA x2","FXAA + MSAA x4" };
+static const char* tfOptions[] = { "Nearest","Bilinear","Trilinear","Anisotropic x2","Anisotropic x4","Anisotropic x8","Anisotropic x16" };
+static const char* scaleOptions[] = { "Native","Integer x1","Integer x2","Integer x3","Half (50%)","Quarter (25%)" };
+static const char* resOptions[] = { "1280x720","1600x900","1920x1080","2560x1440","3840x2160","Custom" };
+static const char* fpsOptions[] = { "Unlimited","30","60","90","120","144","165","240" };
+static const char* apiOptions[] = { "OpenGL" };
+static const char* wmOptions[] = { "Windowed","Borderless","Exclusive" };
+
+static int g_aaIdx = 2;  // MSAA x4 default
+static int g_tfIdx = 2;  // Trilinear default
+static int g_scaleIdx = 0;  // Native default
+static int g_resIdx = 2;  // 1920x1080 default
+static int g_fpsIdx = 0;  // Unlimited default
+static int g_apiIdx = 0;  // OpenGL
+static int g_wmIdx = 0;  // Windowed
+static bool g_fxaaEnabled = false;
+static int  g_msaaSamples = 4;
+
+// -----------------------------------------------------------------------
+//  FXAA shader
+// -----------------------------------------------------------------------
+// Simple fullscreen quad for post-process passes
+static const char* QUAD_VS = RACING_GLSL_VERSION R"glsl(
+out vec2 vUV;
+void main()
+{
+    vec2 pos = vec2((gl_VertexID & 1) << 1, gl_VertexID & 2);
+    vUV = pos * 0.5;
+    gl_Position = vec4(pos - 1.0, 0.0, 1.0);
+}
+)glsl";
+
+static const char* FXAA_FS = RACING_GLSL_VERSION R"glsl(
+in vec2 vUV;
+uniform sampler2D uScene;
+uniform vec2 uTexelSize;
+out vec4 FragColor;
+
+void main()
+{
+    // FXAA 3.11 simplified implementation
+    vec3 rgbNW = texture(uScene, vUV + vec2(-1.0,-1.0)*uTexelSize).rgb;
+    vec3 rgbNE = texture(uScene, vUV + vec2( 1.0,-1.0)*uTexelSize).rgb;
+    vec3 rgbSW = texture(uScene, vUV + vec2(-1.0, 1.0)*uTexelSize).rgb;
+    vec3 rgbSE = texture(uScene, vUV + vec2( 1.0, 1.0)*uTexelSize).rgb;
+    vec3 rgbM  = texture(uScene, vUV).rgb;
+
+    vec3 luma = vec3(0.299, 0.587, 0.114);
+    float lumaNW = dot(rgbNW, luma);
+    float lumaNE = dot(rgbNE, luma);
+    float lumaSW = dot(rgbSW, luma);
+    float lumaSE = dot(rgbSE, luma);
+    float lumaM  = dot(rgbM,  luma);
+
+    float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+    float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+    float lumaRange = lumaMax - lumaMin;
+
+    // Skip pixels with low contrast
+    if (lumaRange < max(0.0833, lumaMax * 0.125))
+    {
+        FragColor = vec4(rgbM, 1.0);
+        return;
+    }
+
+    vec2 dir;
+    dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+    dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+
+    float dirReduce = max((lumaNW+lumaNE+lumaSW+lumaSE)*0.03125, 0.0078125);
+    float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+    dir = clamp(dir * rcpDirMin, -8.0, 8.0) * uTexelSize;
+
+    vec3 rgbA = 0.5 * (
+        texture(uScene, vUV + dir * (1.0/3.0 - 0.5)).rgb +
+        texture(uScene, vUV + dir * (2.0/3.0 - 0.5)).rgb);
+    vec3 rgbB = rgbA * 0.5 + 0.25 * (
+        texture(uScene, vUV + dir * -0.5).rgb +
+        texture(uScene, vUV + dir *  0.5).rgb);
+
+    float lumaB = dot(rgbB, luma);
+    if (lumaB < lumaMin || lumaB > lumaMax)
+        FragColor = vec4(rgbA, 1.0);
+    else
+        FragColor = vec4(rgbB, 1.0);
+}
+)glsl";
+
+// Passthrough shader for integer scaling / blit
+static const char* BLIT_FS = RACING_GLSL_VERSION R"glsl(
+in vec2 vUV;
+uniform sampler2D uScene;
+uniform bool uNearestNeighbour;
+out vec4 FragColor;
+void main()
+{
+    FragColor = texture(uScene, vUV);
+}
+)glsl";
+
+// -----------------------------------------------------------------------
+//  Framebuffer for post-processing
+// -----------------------------------------------------------------------
+struct PostFBO
+{
+    GLuint fbo = 0, tex = 0, rbo = 0;
+    int w = 0, h = 0;
+
+    void init(int width, int height, int samples = 1)
+    {
+        destroy();
+        w = width; h = height;
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+        glGenTextures(1, &tex);
+        if (samples > 1)
+        {
+            glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, tex);
+            glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, samples, GL_RGB, w, h, GL_TRUE);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, tex, 0);
+        }
+        else
+        {
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+        }
+
+        glGenRenderbuffers(1, &rbo);
+        glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+        if (samples > 1)
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, w, h);
+        else
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    void destroy()
+    {
+        if (fbo) { glDeleteFramebuffers(1, &fbo); fbo = 0; }
+        if (tex) { glDeleteTextures(1, &tex); tex = 0; }
+        if (rbo) { glDeleteRenderbuffers(1, &rbo); rbo = 0; }
+    }
+};
 
 // -----------------------------------------------------------------------
 //  Math helpers
@@ -262,16 +412,71 @@ static GLuint compileShader(GLenum type, const char* src)
     return s;
 }
 
-static GLuint buildProgram()
+static GLuint buildProgram(const char* vs, const char* fs)
 {
-    GLuint vs = compileShader(GL_VERTEX_SHADER, VS);
-    GLuint fs = compileShader(GL_FRAGMENT_SHADER, FS);
+    GLuint v = compileShader(GL_VERTEX_SHADER, vs);
+    GLuint f = compileShader(GL_FRAGMENT_SHADER, fs);
     GLuint p = glCreateProgram();
-    glAttachShader(p, vs); glAttachShader(p, fs); glLinkProgram(p);
+    glAttachShader(p, v); glAttachShader(p, f); glLinkProgram(p);
     int ok; glGetProgramiv(p, GL_LINK_STATUS, &ok);
     if (!ok) { char log[512]; glGetProgramInfoLog(p, 512, nullptr, log); std::cerr << "Link:\n" << log << "\n"; }
-    glDeleteShader(vs); glDeleteShader(fs);
+    glDeleteShader(v); glDeleteShader(f);
     return p;
+}
+
+// -----------------------------------------------------------------------
+//  Apply texture filtering to currently bound texture
+// -----------------------------------------------------------------------
+static void applyTextureFiltering(GLenum target)
+{
+    switch (g_tfIdx)
+    {
+    case 0: // Nearest
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        break;
+    case 1: // Bilinear
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        break;
+    case 2: // Trilinear
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        break;
+    default: // Anisotropic
+    {
+        float af = 1.f;
+        switch (g_tfIdx) {
+        case 3: af = 2.f;  break;
+        case 4: af = 4.f;  break;
+        case 5: af = 8.f;  break;
+        case 6: af = 16.f; break;
+        }
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        float maxAF; glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAF);
+        glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY, fminf(af, maxAF));
+        break;
+    }
+    }
+}
+
+// -----------------------------------------------------------------------
+//  Get render resolution from scale setting
+// -----------------------------------------------------------------------
+static void getRenderSize(int fbW, int fbH, int& rW, int& rH)
+{
+    switch (g_scaleIdx)
+    {
+    case 0: rW = fbW; rH = fbH; break;                         // Native
+    case 1: rW = fbW; rH = fbH; break;                         // Integer x1 = native
+    case 2: rW = (fbW / 2); rH = (fbH / 2); break;                 // Integer x2 (render at half, display at 2x)
+    case 3: rW = (fbW / 3); rH = (fbH / 3); break;                 // Integer x3
+    case 4: rW = fbW / 2; rH = fbH / 2; break;                     // Half
+    case 5: rW = fbW / 4; rH = fbH / 4; break;                     // Quarter
+    default: rW = fbW; rH = fbH; break;
+    }
+    rW = std::max(rW, 1); rH = std::max(rH, 1);
 }
 
 // -----------------------------------------------------------------------
@@ -347,10 +552,6 @@ static void applyStyle()
 // -----------------------------------------------------------------------
 int main()
 {
-    glfwSetErrorCallback([](int code, const char* description) {
-        std::cerr << "GLFW error " << code << ": " << description << "\n";
-    });
-
     if (!glfwInit()) { std::cerr << "GLFW init failed\n"; return -1; }
 
 #ifdef _WIN32
@@ -360,9 +561,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 #endif
-#ifdef _WIN32
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#endif
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
@@ -394,16 +593,12 @@ int main()
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
 
-    // Load Orbitron SemiBold at 3 sizes
     const std::string fontPath = (findProjectRoot() / "Assets/Fonts/Orbitron-SemiBold.ttf").string();
     g_fontSmall = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 13.0f);
     g_fontNormal = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 16.0f);
     g_fontLarge = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 22.0f);
     if (!g_fontSmall || !g_fontNormal || !g_fontLarge)
-    {
-        std::cerr << "Warning: Could not load Orbitron font, using default\n";
         g_fontSmall = g_fontNormal = g_fontLarge = io.Fonts->AddFontDefault();
-    }
 
     applyStyle();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -417,15 +612,30 @@ int main()
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_CULL_FACE);
 
-    GLuint prog = buildProgram();
+    GLuint sceneProg = buildProgram(VS, FS);
+    GLuint fxaaProg = buildProgram(QUAD_VS, FXAA_FS);
+    GLuint blitProg = buildProgram(QUAD_VS, BLIT_FS);
+
+    // Dummy VAO for fullscreen quad (no vertex data needed)
+    GLuint quadVAO;
+    glGenVertexArrays(1, &quadVAO);
+
     Mesh logo = loadOBJ((findProjectRoot() / "Assets/RacingUnited_3D_Logo.obj").string());
     uploadMesh(logo);
+
+    // Framebuffers for post-processing
+    PostFBO msaaFBO, resolveFBO, scaleFBO;
 
     double prevTime = glfwGetTime();
     float  autoYaw = 0.f;
     bool   shouldClose = false;
     bool   shouldMin = false;
     bool   f11Prev = false;
+    bool   escPrev = false;
+    bool   menuOpen = false;
+    bool   menuShowSettings = false;
+
+    int prevFbW = 0, prevFbH = 0;
 
     auto modeName = [](WindowMode m)->const char* {
         if (m == WindowMode::Windowed)   return "Windowed";
@@ -439,6 +649,7 @@ int main()
 
         if (shouldMin) { glfwIconifyWindow(window); shouldMin = false; }
 
+        // F11 cycle
         bool f11Now = (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS);
         if (f11Now && !f11Prev)
         {
@@ -455,24 +666,69 @@ int main()
         }
         f11Prev = f11Now;
 
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        // ESC toggles menu
+        bool escNow = (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+        if (escNow && !escPrev)
         {
-            shouldClose = true;
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
+            menuOpen = !menuOpen;
+            if (!menuOpen) menuShowSettings = false;
         }
+        escPrev = escNow;
 
         int fbW, fbH;
         glfwGetFramebufferSize(window, &fbW, &fbH);
         if (fbW == 0 || fbH == 0) { glfwSwapBuffers(window); continue; }
 
+        // Rebuild FBOs if size changed or settings changed
+        int rW, rH;
+        getRenderSize(fbW, fbH, rW, rH);
+
+        if (fbW != prevFbW || fbH != prevFbH)
+        {
+            int samples = 1;
+            if (g_aaIdx == 1) samples = 2;
+            else if (g_aaIdx == 2 || g_aaIdx == 5) samples = 4; // wait, let's simplify
+            // Just use 4 samples if any MSAA option selected
+            if (g_aaIdx >= 1 && g_aaIdx <= 3)
+            {
+                if (g_aaIdx == 1) samples = 2;
+                else if (g_aaIdx == 2) samples = 4;
+                else samples = 8;
+            }
+            else if (g_aaIdx == 5) samples = 2;
+            else if (g_aaIdx == 6) samples = 4;
+
+            if (samples > 1)
+                msaaFBO.init(rW, rH, samples);
+            resolveFBO.init(rW, rH, 1);
+            if (rW != fbW || rH != fbH)
+                scaleFBO.init(fbW, fbH, 1);
+            prevFbW = fbW; prevFbH = fbH;
+        }
+
         double now = glfwGetTime();
         float dt = (float)(now - prevTime); prevTime = now;
-        if (!g_drag) autoYaw += dt * 0.6f;
+        if (!g_drag && !menuOpen) autoYaw += dt * 0.6f;
 
-        glViewport(0, 0, fbW, fbH);
+        // Determine if we need post-processing
+        bool needMSAA = (g_aaIdx >= 1 && g_aaIdx <= 3) || (g_aaIdx == 5) || (g_aaIdx == 6);
+        bool needFXAA = (g_aaIdx == 4) || (g_aaIdx == 5) || (g_aaIdx == 6);
+        bool needScale = (g_scaleIdx > 0) && (rW != fbW || rH != fbH);
+        bool nearestUp = (g_scaleIdx >= 1 && g_scaleIdx <= 3); // integer scale = nearest
+
+        // --- Render scene to FBO or default ---
+        if (needMSAA && msaaFBO.fbo)
+            glBindFramebuffer(GL_FRAMEBUFFER, msaaFBO.fbo);
+        else if (needFXAA && resolveFBO.fbo)
+            glBindFramebuffer(GL_FRAMEBUFFER, resolveFBO.fbo);
+        else
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        glViewport(0, 0, rW, rH);
         glClearColor(0.f, 0.f, 0.f, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glUseProgram(prog);
+        glEnable(GL_DEPTH_TEST);
+        glUseProgram(sceneProg);
 
         float camX = sinf(g_orbitY + autoYaw) * cosf(g_orbitX) * g_zoom;
         float camY = sinf(g_orbitX) * g_zoom;
@@ -496,25 +752,77 @@ int main()
         view.m[13] = -(vup.x * eye.x + vup.y * eye.y + vup.z * eye.z);
         view.m[14] = (fwd.x * eye.x + fwd.y * eye.y + fwd.z * eye.z);
 
-        Mat4 proj = perspective(0.6f, (float)fbW / (float)fbH, 0.1f, 100.f);
+        Mat4 proj = perspective(0.6f, (float)rW / (float)rH, 0.1f, 100.f);
         Mat4 model = identity();
 
-        glUniformMatrix4fv(glGetUniformLocation(prog, "uModel"), 1, GL_FALSE, model.m);
-        glUniformMatrix4fv(glGetUniformLocation(prog, "uView"), 1, GL_FALSE, view.m);
-        glUniformMatrix4fv(glGetUniformLocation(prog, "uProj"), 1, GL_FALSE, proj.m);
-        glUniform3f(glGetUniformLocation(prog, "uLightPos"), 4.f, 6.f, 5.f);
-        glUniform3f(glGetUniformLocation(prog, "uViewPos"), eye.x, eye.y, eye.z);
-        glUniform3f(glGetUniformLocation(prog, "uColor"), 1.f, 1.f, 1.f);
+        glUniformMatrix4fv(glGetUniformLocation(sceneProg, "uModel"), 1, GL_FALSE, model.m);
+        glUniformMatrix4fv(glGetUniformLocation(sceneProg, "uView"), 1, GL_FALSE, view.m);
+        glUniformMatrix4fv(glGetUniformLocation(sceneProg, "uProj"), 1, GL_FALSE, proj.m);
+        glUniform3f(glGetUniformLocation(sceneProg, "uLightPos"), 4.f, 6.f, 5.f);
+        glUniform3f(glGetUniformLocation(sceneProg, "uViewPos"), eye.x, eye.y, eye.z);
+        glUniform3f(glGetUniformLocation(sceneProg, "uColor"), 1.f, 1.f, 1.f);
 
         glBindVertexArray(logo.vao);
         glDrawElements(GL_TRIANGLES, (GLsizei)logo.idx.size(), GL_UNSIGNED_INT, nullptr);
         glBindVertexArray(0);
 
-        // ImGui titlebar
+        // --- Resolve MSAA → resolve FBO ---
+        if (needMSAA && msaaFBO.fbo && resolveFBO.fbo)
+        {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, msaaFBO.fbo);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveFBO.fbo);
+            glBlitFramebuffer(0, 0, rW, rH, 0, 0, rW, rH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        }
+
+        // --- FXAA pass ---
+        if (needFXAA && resolveFBO.fbo)
+        {
+            // If we need to scale up after, blit to scaleFBO, else to default
+            if (needScale && scaleFBO.fbo)
+                glBindFramebuffer(GL_FRAMEBUFFER, scaleFBO.fbo);
+            else
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            glViewport(0, 0, needScale ? fbW : fbW, needScale ? fbH : fbH);
+            glDisable(GL_DEPTH_TEST);
+            glUseProgram(fxaaProg);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, resolveFBO.tex);
+            glUniform1i(glGetUniformLocation(fxaaProg, "uScene"), 0);
+            glUniform2f(glGetUniformLocation(fxaaProg, "uTexelSize"),
+                1.f / (float)rW, 1.f / (float)rH);
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+        }
+
+        // --- Integer scale / blit pass ---
+        if (needScale && !needFXAA && resolveFBO.fbo)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, fbW, fbH);
+            glDisable(GL_DEPTH_TEST);
+            glUseProgram(blitProg);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, resolveFBO.tex);
+            // Apply nearest for integer scaling
+            GLenum filter = nearestUp ? GL_NEAREST : GL_LINEAR;
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+            glUniform1i(glGetUniformLocation(blitProg, "uScene"), 0);
+            glUniform1i(glGetUniformLocation(blitProg, "uNearestNeighbour"), nearestUp ? 1 : 0);
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+        }
+
+        // If no post processing at all, we already rendered to default FBO
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // --- ImGui ---
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        // Titlebar
         bool showTitlebar = (g_windowMode == WindowMode::Windowed);
         if (!showTitlebar)
         {
@@ -543,8 +851,6 @@ int main()
                         glfwGetWindowPos(window, &g_winStartX, &g_winStartY);
                         double cursorX, cursorY;
                         glfwGetCursorPos(window, &cursorX, &cursorY);
-                        // Store the cursor in screen coordinates. Window-local
-                        // cursor coordinates change as the window moves and cause feedback.
                         g_winDragStartX = g_winStartX + cursorX;
                         g_winDragStartY = g_winStartY + cursorY;
                     }
@@ -552,33 +858,27 @@ int main()
                     double cx, cy;
                     glfwGetWindowPos(window, &currentWindowX, &currentWindowY);
                     glfwGetCursorPos(window, &cx, &cy);
-                    const double cursorScreenX = currentWindowX + cx;
-                    const double cursorScreenY = currentWindowY + cy;
                     glfwSetWindowPos(window,
-                        g_winStartX + (int)(cursorScreenX - g_winDragStartX),
-                        g_winStartY + (int)(cursorScreenY - g_winDragStartY));
+                        g_winStartX + (int)(currentWindowX + cx - g_winDragStartX),
+                        g_winStartY + (int)(currentWindowY + cy - g_winDragStartY));
                 }
                 else g_winDragging = false;
             }
 
-            // Title — small Orbitron
             ImGui::PushFont(g_fontSmall);
             ImGui::SetCursorPos(ImVec2(10, 7));
             ImGui::TextDisabled("HERITAGE ENGINE");
             ImGui::SameLine();
             ImGui::SetCursorPosY(7);
-            ImGui::TextDisabled("|  %s  |  F11", modeName(g_windowMode));
+            ImGui::TextDisabled("|  %s  |  F11  |  ESC = Menu", modeName(g_windowMode));
             ImGui::PopFont();
 
-            // Minimize
             ImGui::PushFont(g_fontSmall);
             ImGui::SetCursorPos(ImVec2((float)fbW - 112, 1));
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.25f, 1));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.35f, 0.35f, 0.35f, 1));
             if (ImGui::Button(" _ ##min", ImVec2(36, 26))) shouldMin = true;
-
-            // Close
             ImGui::SetCursorPos(ImVec2((float)fbW - 40, 1));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.1f, 0.1f, 1));
             if (ImGui::Button(" X ##cls", ImVec2(36, 26)))
@@ -593,11 +893,133 @@ int main()
             ImGui::PopStyleColor();
         }
 
+        // In-game menu overlay
+        if (menuOpen)
+        {
+            // Dim background
+            ImGui::SetNextWindowPos(ImVec2(0, 0));
+            ImGui::SetNextWindowSize(ImVec2((float)fbW, (float)fbH));
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.55f));
+            ImGui::Begin("##dim", nullptr,
+                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs);
+            ImGui::End();
+            ImGui::PopStyleColor();
+
+            // Menu panel — centered
+            float mw = 420, mh = menuShowSettings ? 480.f : 180.f;
+            ImGui::SetNextWindowPos(ImVec2((fbW - mw) * 0.5f, (fbH - mh) * 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(mw, mh));
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.07f, 0.07f, 0.07f, 0.98f));
+            ImGui::Begin("##menu", nullptr,
+                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                ImGuiWindowFlags_NoSavedSettings);
+
+            // Header
+            ImGui::PushFont(g_fontLarge);
+            float tw = ImGui::CalcTextSize("HERITAGE ENGINE").x;
+            ImGui::SetCursorPosX((mw - tw) * 0.5f);
+            ImGui::SetCursorPosY(16);
+            ImGui::Text("HERITAGE ENGINE");
+            ImGui::PopFont();
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // Buttons
+            ImGui::PushFont(g_fontNormal);
+            float bw = 200, bh = 38;
+            ImGui::SetCursorPosX((mw - bw) * 0.5f);
+            if (ImGui::Button(menuShowSettings ? "HIDE SETTINGS" : "SETTINGS", ImVec2(bw, bh)))
+                menuShowSettings = !menuShowSettings;
+
+            ImGui::Spacing();
+            ImGui::SetCursorPosX((mw - bw) * 0.5f);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.08f, 0.08f, 1));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.55f, 0.10f, 0.10f, 1));
+            if (ImGui::Button("EXIT", ImVec2(bw, bh)))
+            {
+                shouldClose = true;
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            }
+            ImGui::PopStyleColor(2);
+            ImGui::PopFont();
+
+            // Settings panel inside menu
+            if (menuShowSettings)
+            {
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+                ImGui::PushFont(g_fontNormal);
+                if (ImGui::BeginTabBar("MenuSettings"))
+                {
+                    if (ImGui::BeginTabItem("Video"))
+                    {
+                        ImGui::Spacing();
+                        ImGui::SetNextItemWidth(220);
+                        ImGui::Combo("Resolution", &g_resIdx, resOptions, IM_ARRAYSIZE(resOptions));
+                        ImGui::SetNextItemWidth(220);
+                        if (ImGui::Combo("Window Mode", &g_wmIdx, wmOptions, IM_ARRAYSIZE(wmOptions)))
+                        {
+                            WindowMode nm = WindowMode::Windowed;
+                            if (g_wmIdx == 1) nm = WindowMode::Borderless;
+                            if (g_wmIdx == 2) nm = WindowMode::Exclusive;
+                            if (nm != g_windowMode)
+                            {
+                                if (g_windowMode == WindowMode::Windowed)
+                                {
+                                    glfwGetWindowPos(window, &g_savedX, &g_savedY); glfwGetWindowSize(window, &g_savedW, &g_savedH);
+                                }
+                                applyWindowMode(window, nm);
+                            }
+                        }
+                        ImGui::SetNextItemWidth(220);
+                        ImGui::Combo("Anti-Aliasing", &g_aaIdx, aaOptions, IM_ARRAYSIZE(aaOptions));
+                        ImGui::SetNextItemWidth(220);
+                        ImGui::Combo("Texture Filter", &g_tfIdx, tfOptions, IM_ARRAYSIZE(tfOptions));
+                        ImGui::SetNextItemWidth(220);
+                        ImGui::Combo("Scale Mode", &g_scaleIdx, scaleOptions, IM_ARRAYSIZE(scaleOptions));
+                        ImGui::SetNextItemWidth(220);
+                        ImGui::Combo("FPS Cap", &g_fpsIdx, fpsOptions, IM_ARRAYSIZE(fpsOptions));
+                        ImGui::SetNextItemWidth(220);
+                        ImGui::Combo("Render API", &g_apiIdx, apiOptions, IM_ARRAYSIZE(apiOptions));
+                        ImGui::EndTabItem();
+                    }
+                    if (ImGui::BeginTabItem("Audio"))
+                    {
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Audio settings coming soon.");
+                        ImGui::EndTabItem();
+                    }
+                    if (ImGui::BeginTabItem("Input"))
+                    {
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Input binding coming soon.");
+                        ImGui::EndTabItem();
+                    }
+                    ImGui::EndTabBar();
+                }
+                ImGui::PopFont();
+            }
+
+            ImGui::End();
+            ImGui::PopStyleColor();
+        }
+
         ImGui::Render();
+        glDisable(GL_DEPTH_TEST);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window);
     }
+
+    msaaFBO.destroy();
+    resolveFBO.destroy();
+    scaleFBO.destroy();
+    glDeleteVertexArrays(1, &quadVAO);
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -606,7 +1028,9 @@ int main()
     glDeleteVertexArrays(1, &logo.vao);
     glDeleteBuffers(1, &logo.vbo);
     glDeleteBuffers(1, &logo.ebo);
-    glDeleteProgram(prog);
+    glDeleteProgram(sceneProg);
+    glDeleteProgram(fxaaProg);
+    glDeleteProgram(blitProg);
 
     glfwDestroyWindow(window);
     glfwTerminate();
