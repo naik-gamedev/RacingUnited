@@ -8,12 +8,18 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#ifdef _WIN32
 #include <windows.h>
 #include <dwmapi.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
+#else
+#include <unistd.h>
+#endif
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#ifdef _WIN32
 #include <GLFW/glfw3native.h>
+#endif
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -25,6 +31,35 @@
 #include <fstream>
 #include <sstream>
 #include <map>
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
+#ifdef _WIN32
+#define RACING_GLSL_VERSION "#version 460 core\n"
+#else
+#define RACING_GLSL_VERSION "#version 330 core\n"
+#endif
+
+static fs::path findProjectRoot()
+{
+#ifdef _WIN32
+    char modulePath[MAX_PATH] = {};
+    DWORD length = GetModuleFileNameA(nullptr, modulePath, MAX_PATH);
+    fs::path location = length ? fs::path(modulePath).parent_path() : fs::current_path();
+#else
+    char modulePath[4096] = {};
+    ssize_t length = readlink("/proc/self/exe", modulePath, sizeof(modulePath) - 1);
+    fs::path location = length > 0 ? fs::path(std::string(modulePath, length)).parent_path() : fs::current_path();
+#endif
+
+    for (fs::path candidate = location; !candidate.empty(); candidate = candidate.parent_path())
+    {
+        if (fs::exists(candidate / "Assets")) return candidate;
+        if (candidate == candidate.parent_path()) break;
+    }
+    return fs::current_path();
+}
 
 // -----------------------------------------------------------------------
 //  Font pointers (loaded once, used everywhere)
@@ -83,8 +118,7 @@ static Mat4 perspective(float fovY, float aspect, float zNear, float zFar)
 // -----------------------------------------------------------------------
 //  Shaders
 // -----------------------------------------------------------------------
-static const char* VS = R"glsl(
-#version 460 core
+static const char* VS = RACING_GLSL_VERSION R"glsl(
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNormal;
 uniform mat4 uModel, uView, uProj;
@@ -98,8 +132,7 @@ void main()
 }
 )glsl";
 
-static const char* FS = R"glsl(
-#version 460 core
+static const char* FS = RACING_GLSL_VERSION R"glsl(
 in vec3 vNormal, vFragPos;
 uniform vec3 uLightPos, uViewPos, uColor;
 out vec4 FragColor;
@@ -255,8 +288,9 @@ static void mouseButtonCB(GLFWwindow* w, int btn, int action, int mods)
     if (btn == GLFW_MOUSE_BUTTON_LEFT) g_drag = (action == GLFW_PRESS);
 }
 
-static void cursorPosCB(GLFWwindow*, double x, double y)
+static void cursorPosCB(GLFWwindow* w, double x, double y)
 {
+    ImGui_ImplGlfw_CursorPosCallback(w, x, y);
     if (!ImGui::GetIO().WantCaptureMouse && g_drag)
     {
         g_orbitY += (float)(x - g_lastX) * 0.01f;
@@ -313,11 +347,22 @@ static void applyStyle()
 // -----------------------------------------------------------------------
 int main()
 {
+    glfwSetErrorCallback([](int code, const char* description) {
+        std::cerr << "GLFW error " << code << ": " << description << "\n";
+    });
+
     if (!glfwInit()) { std::cerr << "GLFW init failed\n"; return -1; }
 
+#ifdef _WIN32
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+#else
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+#endif
+#ifdef _WIN32
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#endif
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
@@ -332,9 +377,11 @@ int main()
     if (!window) { std::cerr << "Window failed\n"; glfwTerminate(); return -1; }
     glfwSetWindowPos(window, g_savedX, g_savedY);
 
+#ifdef _WIN32
     HWND hwnd = glfwGetWin32Window(window);
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark));
+#endif
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
@@ -348,10 +395,10 @@ int main()
     io.IniFilename = nullptr;
 
     // Load Orbitron SemiBold at 3 sizes
-    const char* fontPath = "F:/Racing United/SourceCode/GitHub/RacingUnited/Assets/Fonts/Orbitron-SemiBold.ttf";
-    g_fontSmall = io.Fonts->AddFontFromFileTTF(fontPath, 13.0f);
-    g_fontNormal = io.Fonts->AddFontFromFileTTF(fontPath, 16.0f);
-    g_fontLarge = io.Fonts->AddFontFromFileTTF(fontPath, 22.0f);
+    const std::string fontPath = (findProjectRoot() / "Assets/Fonts/Orbitron-SemiBold.ttf").string();
+    g_fontSmall = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 13.0f);
+    g_fontNormal = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 16.0f);
+    g_fontLarge = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 22.0f);
     if (!g_fontSmall || !g_fontNormal || !g_fontLarge)
     {
         std::cerr << "Warning: Could not load Orbitron font, using default\n";
@@ -359,8 +406,8 @@ int main()
     }
 
     applyStyle();
-    ImGui_ImplGlfw_InitForOpenGL(window, false);
-    ImGui_ImplOpenGL3_Init("#version 460");
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init(RACING_GLSL_VERSION);
 
     glfwSetMouseButtonCallback(window, mouseButtonCB);
     glfwSetCursorPosCallback(window, cursorPosCB);
@@ -371,7 +418,7 @@ int main()
     glEnable(GL_CULL_FACE);
 
     GLuint prog = buildProgram();
-    Mesh logo = loadOBJ("F:/Racing United/SourceCode/GitHub/RacingUnited/Assets/RacingUnited_3D_Logo.obj");
+    Mesh logo = loadOBJ((findProjectRoot() / "Assets/RacingUnited_3D_Logo.obj").string());
     uploadMesh(logo);
 
     double prevTime = glfwGetTime();
@@ -408,7 +455,11 @@ int main()
         }
         f11Prev = f11Now;
 
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) shouldClose = true;
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        {
+            shouldClose = true;
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
 
         int fbW, fbH;
         glfwGetFramebufferSize(window, &fbW, &fbH);
@@ -489,13 +540,23 @@ int main()
                 {
                     if (!g_winDragging) {
                         g_winDragging = true;
-                        glfwGetCursorPos(window, &g_winDragStartX, &g_winDragStartY);
                         glfwGetWindowPos(window, &g_winStartX, &g_winStartY);
+                        double cursorX, cursorY;
+                        glfwGetCursorPos(window, &cursorX, &cursorY);
+                        // Store the cursor in screen coordinates. Window-local
+                        // cursor coordinates change as the window moves and cause feedback.
+                        g_winDragStartX = g_winStartX + cursorX;
+                        g_winDragStartY = g_winStartY + cursorY;
                     }
-                    double cx, cy; glfwGetCursorPos(window, &cx, &cy);
+                    int currentWindowX, currentWindowY;
+                    double cx, cy;
+                    glfwGetWindowPos(window, &currentWindowX, &currentWindowY);
+                    glfwGetCursorPos(window, &cx, &cy);
+                    const double cursorScreenX = currentWindowX + cx;
+                    const double cursorScreenY = currentWindowY + cy;
                     glfwSetWindowPos(window,
-                        g_winStartX + (int)(cx - g_winDragStartX),
-                        g_winStartY + (int)(cy - g_winDragStartY));
+                        g_winStartX + (int)(cursorScreenX - g_winDragStartX),
+                        g_winStartY + (int)(cursorScreenY - g_winDragStartY));
                 }
                 else g_winDragging = false;
             }
@@ -520,7 +581,11 @@ int main()
             // Close
             ImGui::SetCursorPos(ImVec2((float)fbW - 40, 1));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.1f, 0.1f, 1));
-            if (ImGui::Button(" X ##cls", ImVec2(36, 26))) shouldClose = true;
+            if (ImGui::Button(" X ##cls", ImVec2(36, 26)))
+            {
+                shouldClose = true;
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            }
             ImGui::PopStyleColor(4);
             ImGui::PopFont();
 

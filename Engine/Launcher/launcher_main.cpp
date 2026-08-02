@@ -4,13 +4,19 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#ifdef _WIN32
 #include <windows.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <dwmapi.h>
+#else
+#include <unistd.h>
+#endif
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#ifdef _WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
+#endif
 #include <GLFW/glfw3native.h>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -25,6 +31,33 @@
 #include <filesystem>
 
 namespace fs = std::filesystem;
+
+#ifdef _WIN32
+#define RACING_GLSL_VERSION "#version 460"
+#else
+#define RACING_GLSL_VERSION "#version 330"
+#endif
+
+static fs::path findProjectRoot()
+{
+#ifdef _WIN32
+    char modulePath[MAX_PATH] = {};
+    DWORD length = GetModuleFileNameA(nullptr, modulePath, MAX_PATH);
+    fs::path location = length ? fs::path(modulePath).parent_path() : fs::current_path();
+#else
+    char modulePath[4096] = {};
+    ssize_t length = readlink("/proc/self/exe", modulePath, sizeof(modulePath) - 1);
+    fs::path location = length > 0 ? fs::path(std::string(modulePath, length)).parent_path() : fs::current_path();
+#endif
+
+    for (fs::path candidate = location; !candidate.empty(); candidate = candidate.parent_path())
+    {
+        if (fs::exists(candidate / "Modules") && fs::exists(candidate / "Assets"))
+            return candidate;
+        if (candidate == candidate.parent_path()) break;
+    }
+    return fs::current_path();
+}
 
 // -----------------------------------------------------------------------
 //  Font pointers
@@ -52,6 +85,34 @@ struct Module
     std::string description;
     std::string executable;
 };
+
+static std::string resolveModuleExecutable(const fs::path& projectRoot, const Module& mod)
+{
+    fs::path configured = mod.executable;
+    if (configured.is_absolute()) return configured.string();
+
+    std::vector<fs::path> candidates = {
+        projectRoot / configured,
+        projectRoot / "build/bin" / configured,
+        projectRoot / "Engine/HeritageEngine/x64/Debug" / configured,
+        projectRoot / "Engine/HeritageEngine/x64/Release" / configured,
+        fs::current_path() / configured,
+    };
+
+#ifdef _WIN32
+    if (!configured.has_extension())
+    {
+        const size_t candidateCount = candidates.size();
+        for (size_t i = 0; i < candidateCount; ++i)
+            candidates.push_back(candidates[i].string() + ".exe");
+    }
+#endif
+
+    for (const fs::path& candidate : candidates)
+        if (fs::exists(candidate)) return candidate.lexically_normal().string();
+
+    return (projectRoot / "build/bin" / configured).lexically_normal().string();
+}
 
 // -----------------------------------------------------------------------
 //  INI parser
@@ -109,6 +170,7 @@ static std::vector<Module> scanModules(const std::string& modulesRoot)
 // -----------------------------------------------------------------------
 static void createDesktopShortcut(const Module& mod, const std::string& exePath)
 {
+#ifdef _WIN32
     HRESULT hr = CoInitialize(nullptr);
     IShellLinkA* pLink = nullptr;
     hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
@@ -133,6 +195,11 @@ static void createDesktopShortcut(const Module& mod, const std::string& exePath)
         pLink->Release();
     }
     CoUninitialize();
+#else
+    (void)mod;
+    (void)exePath;
+    std::cerr << "Desktop shortcut creation is not implemented on Linux\n";
+#endif
 }
 
 // -----------------------------------------------------------------------
@@ -229,13 +296,17 @@ static void applyStyle()
 // -----------------------------------------------------------------------
 int main()
 {
+    glfwSetErrorCallback([](int code, const char* description) {
+        std::cerr << "GLFW error " << code << ": " << description << "\n";
+    });
+
     const int WIN_W = 820;
     const int WIN_H = 560;
     const int TITLEBAR_H = 36;
 
-    std::string modulesRoot = "F:/Racing United/SourceCode/GitHub/RacingUnited/Modules";
-    std::string exePath = "F:/Racing United/SourceCode/GitHub/RacingUnited/Engine/HeritageEngine/x64/Debug/HeritageEngine.exe";
-    const char* fontPath = "F:/Racing United/SourceCode/GitHub/RacingUnited/Assets/Fonts/Orbitron-SemiBold.ttf";
+    const fs::path projectRoot = findProjectRoot();
+    const std::string modulesRoot = (projectRoot / "Modules").string();
+    const std::string fontPath = (projectRoot / "Assets/Fonts/Orbitron-SemiBold.ttf").string();
 
     std::vector<Module> modules = scanModules(modulesRoot);
     int selectedModule = 0;
@@ -249,9 +320,16 @@ int main()
 
     if (!glfwInit()) return -1;
 
+#ifdef _WIN32
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+#else
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+#endif
+#ifdef _WIN32
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#endif
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
@@ -273,9 +351,9 @@ int main()
     io.IniFilename = nullptr;
 
     // Load Orbitron SemiBold at 3 sizes
-    g_fontSmall = io.Fonts->AddFontFromFileTTF(fontPath, 13.0f);
-    g_fontNormal = io.Fonts->AddFontFromFileTTF(fontPath, 16.0f);
-    g_fontLarge = io.Fonts->AddFontFromFileTTF(fontPath, 22.0f);
+    g_fontSmall = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 13.0f);
+    g_fontNormal = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 16.0f);
+    g_fontLarge = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 22.0f);
     if (!g_fontSmall || !g_fontNormal || !g_fontLarge)
     {
         std::cerr << "Warning: Could not load Orbitron font, using default\n";
@@ -284,7 +362,7 @@ int main()
 
     applyStyle();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 460");
+    ImGui_ImplOpenGL3_Init(RACING_GLSL_VERSION);
 
     std::string notification = "";
     double      notifyTime = 0.0;
@@ -316,13 +394,23 @@ int main()
         {
             if (!g_dragging) {
                 g_dragging = true;
-                glfwGetCursorPos(window, &g_dragStartX, &g_dragStartY);
                 glfwGetWindowPos(window, &g_winStartX, &g_winStartY);
+                double cursorX, cursorY;
+                glfwGetCursorPos(window, &cursorX, &cursorY);
+                // Store the cursor in screen coordinates. Window-local cursor
+                // coordinates change as the window moves and cause feedback.
+                g_dragStartX = g_winStartX + cursorX;
+                g_dragStartY = g_winStartY + cursorY;
             }
-            double cx, cy; glfwGetCursorPos(window, &cx, &cy);
+            int currentWindowX, currentWindowY;
+            double cx, cy;
+            glfwGetWindowPos(window, &currentWindowX, &currentWindowY);
+            glfwGetCursorPos(window, &cx, &cy);
+            const double cursorScreenX = currentWindowX + cx;
+            const double cursorScreenY = currentWindowY + cy;
             glfwSetWindowPos(window,
-                g_winStartX + (int)(cx - g_dragStartX),
-                g_winStartY + (int)(cy - g_dragStartY));
+                g_winStartX + (int)(cursorScreenX - g_dragStartX),
+                g_winStartY + (int)(cursorScreenY - g_dragStartY));
         }
         else g_dragging = false;
 
@@ -339,7 +427,11 @@ int main()
         if (ImGui::Button(" _ ##min", ImVec2(36, 28))) shouldMin = true;
         ImGui::SetCursorPos(ImVec2((float)WIN_W - 40, 4));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.1f, 0.1f, 1));
-        if (ImGui::Button(" X ##cls", ImVec2(36, 28))) shouldClose = true;
+        if (ImGui::Button(" X ##cls", ImVec2(36, 28)))
+        {
+            shouldClose = true;
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
         ImGui::PopStyleColor(4);
         ImGui::PopFont();
 
@@ -412,14 +504,26 @@ int main()
         if (ImGui::Button("LAUNCH", ImVec2(120, 36)))
         {
             saveSettings(settings, getSettingsPath());
-            ShellExecuteA(nullptr, "open", exePath.c_str(),
+            const std::string executablePath = resolveModuleExecutable(projectRoot, modules[selectedModule]);
+#ifdef _WIN32
+            ShellExecuteA(nullptr, "open", executablePath.c_str(),
                 modules[selectedModule].folderName.c_str(), nullptr, SW_SHOWNORMAL);
+#else
+            pid_t child = fork();
+            if (child == 0)
+            {
+                execl(executablePath.c_str(), executablePath.c_str(),
+                    modules[selectedModule].folderName.c_str(), nullptr);
+                _exit(127);
+            }
+#endif
             shouldClose = true;
         }
         ImGui::SameLine();
         if (ImGui::Button("SHORTCUT", ImVec2(120, 36)))
         {
-            createDesktopShortcut(modules[selectedModule], exePath);
+            const std::string executablePath = resolveModuleExecutable(projectRoot, modules[selectedModule]);
+            createDesktopShortcut(modules[selectedModule], executablePath);
             notification = "Shortcut created for " + modules[selectedModule].name;
             notifyTime = glfwGetTime();
         }

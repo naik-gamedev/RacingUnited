@@ -9,8 +9,8 @@ Release/
 *.aps
 
 # Compiled output
+build/
 *.exe
-*.obj
 *.pdb
 *.ilk
 *.exp
