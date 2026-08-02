@@ -77,13 +77,13 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLAD\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib
 ;opengl32.lib;Ole32.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
@@ -100,13 +100,13 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLAD\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib
 ;opengl32.lib;Ole32.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
@@ -121,13 +121,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLAD\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib
 ;opengl32.lib;Ole32.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
@@ -144,13 +144,13 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLAD\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib
 ;opengl32.lib;Ole32.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
@@ -167,10 +167,10 @@
     <ClCompile Include="..\..\ThirdParty\IMGUI\imgui_tables.cpp" />
     <ClCompile Include="..\..\ThirdParty\IMGUI\imgui_widgets.cpp" />
     <ClCompile Include="launcher_main.cpp">
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLAD\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLAD\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLAD\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLAD\include;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
