@@ -87,7 +87,7 @@
 ;opengl32.lib;
 gdi32.lib;
 user32.lib
-;shell32.lib</AdditionalDependencies>
+;shell32.lib;dwmapi.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>MSVCRT</IgnoreSpecificDefaultLibraries>
       <AdditionalLibraryDirectories>;F:\Racing United\SourceCode\ThirdParty\GLFW\lib-vc2022;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\lib-vc2022</AdditionalLibraryDirectories>
     </Link>
@@ -114,7 +114,7 @@ user32.lib
 ;opengl32.lib;
 gdi32.lib;
 user32.lib
-;shell32.lib</AdditionalDependencies>
+;shell32.lib;dwmapi.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>MSVCRT</IgnoreSpecificDefaultLibraries>
       <AdditionalLibraryDirectories>;F:\Racing United\SourceCode\ThirdParty\GLFW\lib-vc2022;F:\Racing United\SourceCode\GitHub\RacingUnited\ThirdParty\GLFW\lib-vc2022</AdditionalLibraryDirectories>
     </Link>
@@ -140,7 +140,7 @@ user32.lib
 ;opengl32.lib;
 gdi32.lib;
 user32.lib
-;shell32.lib</AdditionalDependencies>
+;shell32.lib;dwmapi.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>MSVCRT</IgnoreSpecificDefaultLibraries>
     </Link>
     <Manifest>
@@ -167,7 +167,7 @@ user32.lib
 ;opengl32.lib;
 gdi32.lib;
 user32.lib
-;shell32.lib</AdditionalDependencies>
+;shell32.lib;dwmapi.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>MSVCRT</IgnoreSpecificDefaultLibraries>
     </Link>
     <Manifest>
@@ -176,6 +176,8 @@ user32.lib
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\ThirdParty\GLAD\src\glad.c" />
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\backends\imgui_impl_opengl3.cpp" />
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui.cpp" />
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_draw.cpp" />
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_tables.cpp" />
