@@ -26,36 +26,19 @@
 
 namespace fs = std::filesystem;
 
-// -----------------------------------------------------------------------
-//  Font pointers
-// -----------------------------------------------------------------------
-static ImFont* g_fontSmall = nullptr;  // 13px — titlebar, labels
-static ImFont* g_fontNormal = nullptr;  // 16px — buttons, UI text
-static ImFont* g_fontLarge = nullptr;  // 22px — headers
+static ImFont* g_fontSmall = nullptr;
+static ImFont* g_fontNormal = nullptr;
+static ImFont* g_fontLarge = nullptr;
 
-// -----------------------------------------------------------------------
-//  Drag state
-// -----------------------------------------------------------------------
 static bool   g_dragging = false;
 static double g_dragStartX = 0, g_dragStartY = 0;
 static int    g_winStartX = 0, g_winStartY = 0;
 
-// -----------------------------------------------------------------------
-//  Module descriptor
-// -----------------------------------------------------------------------
 struct Module
 {
-    std::string folderName;
-    std::string name;
-    std::string version;
-    std::string author;
-    std::string description;
-    std::string executable;
+    std::string folderName, name, version, author, description, executable;
 };
 
-// -----------------------------------------------------------------------
-//  INI parser
-// -----------------------------------------------------------------------
 static std::map<std::string, std::string> parseINI(const std::string& path)
 {
     std::map<std::string, std::string> out;
@@ -66,11 +49,9 @@ static std::map<std::string, std::string> parseINI(const std::string& path)
         if (line.empty() || line[0] == '#' || line[0] == ';') continue;
         auto eq = line.find('=');
         if (eq == std::string::npos) continue;
-        std::string key = line.substr(0, eq);
-        std::string val = line.substr(eq + 1);
+        std::string key = line.substr(0, eq), val = line.substr(eq + 1);
         auto trim = [](std::string& s) {
-            size_t a = s.find_first_not_of(" \t\r\n");
-            size_t b = s.find_last_not_of(" \t\r\n");
+            size_t a = s.find_first_not_of(" \t\r\n"), b = s.find_last_not_of(" \t\r\n");
             s = (a == std::string::npos) ? "" : s.substr(a, b - a + 1);
             };
         trim(key); trim(val);
@@ -79,9 +60,6 @@ static std::map<std::string, std::string> parseINI(const std::string& path)
     return out;
 }
 
-// -----------------------------------------------------------------------
-//  Scan Modules/ folder
-// -----------------------------------------------------------------------
 static std::vector<Module> scanModules(const std::string& modulesRoot)
 {
     std::vector<Module> results;
@@ -104,15 +82,11 @@ static std::vector<Module> scanModules(const std::string& modulesRoot)
     return results;
 }
 
-// -----------------------------------------------------------------------
-//  Desktop shortcut
-// -----------------------------------------------------------------------
 static void createDesktopShortcut(const Module& mod, const std::string& exePath)
 {
     HRESULT hr = CoInitialize(nullptr);
     IShellLinkA* pLink = nullptr;
-    hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-        IID_IShellLinkA, (void**)&pLink);
+    hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_IShellLinkA, (void**)&pLink);
     if (SUCCEEDED(hr))
     {
         pLink->SetPath(exePath.c_str());
@@ -135,14 +109,15 @@ static void createDesktopShortcut(const Module& mod, const std::string& exePath)
     CoUninitialize();
 }
 
-// -----------------------------------------------------------------------
-//  Settings
-// -----------------------------------------------------------------------
 struct Settings
 {
     int   resolutionIdx = 2;
     bool  fullscreen = false;
     int   fpsCapIdx = 0;
+    int   aaIdx = 2;
+    int   tfIdx = 2;
+    int   scaleIdx = 0;
+    int   wmIdx = 0;
     float masterVolume = 1.0f;
     float musicVolume = 0.8f;
     float sfxVolume = 1.0f;
@@ -152,6 +127,10 @@ struct Settings
 static const char* resolutions[] = { "1280x720","1600x900","1920x1080","2560x1440","3840x2160" };
 static const char* fpsCaps[] = { "Unlimited","30","60","90","120","144","165","240" };
 static const char* apis[] = { "OpenGL" };
+static const char* aaOptions[] = { "None","MSAA x2","MSAA x4","MSAA x8","FXAA","FXAA + MSAA x2","FXAA + MSAA x4" };
+static const char* tfOptions[] = { "Nearest","Bilinear","Trilinear","Anisotropic x2","Anisotropic x4","Anisotropic x8","Anisotropic x16" };
+static const char* scaleOptions[] = { "Native","Integer x1","Integer x2","Integer x3","Half (50%)","Quarter (25%)" };
+static const char* wmOptions[] = { "Windowed","Borderless","Exclusive" };
 
 static void saveSettings(const Settings& s, const std::string& path)
 {
@@ -160,6 +139,10 @@ static void saveSettings(const Settings& s, const std::string& path)
     f << "resolution = " << resolutions[s.resolutionIdx] << "\n";
     f << "fullscreen = " << (s.fullscreen ? "1" : "0") << "\n";
     f << "fps_cap    = " << fpsCaps[s.fpsCapIdx] << "\n";
+    f << "aa         = " << s.aaIdx << "\n";
+    f << "tf         = " << s.tfIdx << "\n";
+    f << "scale      = " << s.scaleIdx << "\n";
+    f << "wm         = " << s.wmIdx << "\n";
     f << "master_vol = " << s.masterVolume << "\n";
     f << "music_vol  = " << s.musicVolume << "\n";
     f << "sfx_vol    = " << s.sfxVolume << "\n";
@@ -175,6 +158,10 @@ static Settings loadSettings(const std::string& path)
     if (ini.count("master_vol")) s.masterVolume = std::stof(ini["master_vol"]);
     if (ini.count("music_vol"))  s.musicVolume = std::stof(ini["music_vol"]);
     if (ini.count("sfx_vol"))    s.sfxVolume = std::stof(ini["sfx_vol"]);
+    if (ini.count("aa"))         s.aaIdx = std::stoi(ini["aa"]);
+    if (ini.count("tf"))         s.tfIdx = std::stoi(ini["tf"]);
+    if (ini.count("scale"))      s.scaleIdx = std::stoi(ini["scale"]);
+    if (ini.count("wm"))         s.wmIdx = std::stoi(ini["wm"]);
     if (ini.count("resolution"))
         for (int i = 0;i < IM_ARRAYSIZE(resolutions);i++)
             if (ini["resolution"] == resolutions[i]) { s.resolutionIdx = i;break; }
@@ -184,15 +171,12 @@ static Settings loadSettings(const std::string& path)
     return s;
 }
 
-// -----------------------------------------------------------------------
-//  ImGui style
-// -----------------------------------------------------------------------
 static void applyStyle()
 {
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 0.0f; style.FrameRounding = 4.0f;
-    style.ScrollbarRounding = 4.0f; style.GrabRounding = 4.0f;
-    style.WindowBorderSize = 0.0f; style.FrameBorderSize = 0.0f;
+    style.WindowRounding = 0; style.FrameRounding = 4;
+    style.ScrollbarRounding = 4; style.GrabRounding = 4;
+    style.WindowBorderSize = 0; style.FrameBorderSize = 0;
     style.ItemSpacing = ImVec2(10, 8); style.WindowPadding = ImVec2(16, 16);
 
     ImVec4* c = style.Colors;
@@ -224,14 +208,9 @@ static void applyStyle()
     c[ImGuiCol_TextDisabled] = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
 }
 
-// -----------------------------------------------------------------------
-//  Main
-// -----------------------------------------------------------------------
 int main()
 {
-    const int WIN_W = 820;
-    const int WIN_H = 560;
-    const int TITLEBAR_H = 36;
+    const int WIN_W = 820, WIN_H = 600, TITLEBAR_H = 36;
 
     std::string modulesRoot = "F:/Racing United/SourceCode/GitHub/RacingUnited/Modules";
     std::string exePath = "F:/Racing United/SourceCode/GitHub/RacingUnited/Engine/HeritageEngine/x64/Debug/HeritageEngine.exe";
@@ -248,7 +227,6 @@ int main()
     if (!modules.empty()) settings = loadSettings(getSettingsPath());
 
     if (!glfwInit()) return -1;
-
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -264,7 +242,6 @@ int main()
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
-
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) return -1;
 
     IMGUI_CHECKVERSION();
@@ -272,25 +249,19 @@ int main()
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
 
-    // Load Orbitron SemiBold at 3 sizes
     g_fontSmall = io.Fonts->AddFontFromFileTTF(fontPath, 13.0f);
     g_fontNormal = io.Fonts->AddFontFromFileTTF(fontPath, 16.0f);
     g_fontLarge = io.Fonts->AddFontFromFileTTF(fontPath, 22.0f);
     if (!g_fontSmall || !g_fontNormal || !g_fontLarge)
-    {
-        std::cerr << "Warning: Could not load Orbitron font, using default\n";
         g_fontSmall = g_fontNormal = g_fontLarge = io.Fonts->AddFontDefault();
-    }
 
     applyStyle();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
     std::string notification = "";
-    double      notifyTime = 0.0;
-    bool        showSettings = false;
-    bool        shouldClose = false;
-    bool        shouldMin = false;
+    double notifyTime = 0.0;
+    bool showSettings = false, shouldClose = false, shouldMin = false;
 
     while (!glfwWindowShouldClose(window) && !shouldClose)
     {
@@ -301,7 +272,7 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // Custom title bar
+        // Title bar
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2((float)WIN_W, (float)TITLEBAR_H));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, 1.f));
@@ -320,18 +291,13 @@ int main()
                 glfwGetWindowPos(window, &g_winStartX, &g_winStartY);
             }
             double cx, cy; glfwGetCursorPos(window, &cx, &cy);
-            glfwSetWindowPos(window,
-                g_winStartX + (int)(cx - g_dragStartX),
-                g_winStartY + (int)(cy - g_dragStartY));
+            glfwSetWindowPos(window, g_winStartX + (int)(cx - g_dragStartX), g_winStartY + (int)(cy - g_dragStartY));
         }
         else g_dragging = false;
 
         ImGui::PushFont(g_fontSmall);
         ImGui::SetCursorPos(ImVec2(12, 11));
         ImGui::TextDisabled("RACING UNITED");
-        ImGui::PopFont();
-
-        ImGui::PushFont(g_fontSmall);
         ImGui::SetCursorPos(ImVec2((float)WIN_W - 76, 4));
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.25f, 1));
@@ -342,7 +308,6 @@ int main()
         if (ImGui::Button(" X ##cls", ImVec2(36, 28))) shouldClose = true;
         ImGui::PopStyleColor(4);
         ImGui::PopFont();
-
         ImGui::End();
         ImGui::PopStyleColor();
 
@@ -424,10 +389,9 @@ int main()
             notifyTime = glfwGetTime();
         }
         ImGui::PopFont();
-
         if (!hasModule) ImGui::EndDisabled();
-        ImGui::Spacing();
 
+        ImGui::Spacing();
         ImGui::PushFont(g_fontNormal);
         if (ImGui::Button(showSettings ? "HIDE SETTINGS" : "SETTINGS", ImVec2(248, 28)))
             showSettings = !showSettings;
@@ -467,6 +431,18 @@ int main()
                     if (ImGui::Combo("Resolution", &settings.resolutionIdx, resolutions, IM_ARRAYSIZE(resolutions)))
                         saveSettings(settings, getSettingsPath());
                     if (ImGui::Checkbox("Fullscreen", &settings.fullscreen))
+                        saveSettings(settings, getSettingsPath());
+                    ImGui::SetNextItemWidth(200);
+                    if (ImGui::Combo("Window Mode", &settings.wmIdx, wmOptions, IM_ARRAYSIZE(wmOptions)))
+                        saveSettings(settings, getSettingsPath());
+                    ImGui::SetNextItemWidth(200);
+                    if (ImGui::Combo("Anti-Aliasing", &settings.aaIdx, aaOptions, IM_ARRAYSIZE(aaOptions)))
+                        saveSettings(settings, getSettingsPath());
+                    ImGui::SetNextItemWidth(200);
+                    if (ImGui::Combo("Texture Filter", &settings.tfIdx, tfOptions, IM_ARRAYSIZE(tfOptions)))
+                        saveSettings(settings, getSettingsPath());
+                    ImGui::SetNextItemWidth(200);
+                    if (ImGui::Combo("Scale Mode", &settings.scaleIdx, scaleOptions, IM_ARRAYSIZE(scaleOptions)))
                         saveSettings(settings, getSettingsPath());
                     ImGui::SetNextItemWidth(200);
                     if (ImGui::Combo("FPS Cap", &settings.fpsCapIdx, fpsCaps, IM_ARRAYSIZE(fpsCaps)))
@@ -509,7 +485,7 @@ int main()
             double elapsed = glfwGetTime() - notifyTime;
             if (elapsed < 3.0)
             {
-                ImGui::SetCursorPosY(490);
+                ImGui::SetCursorPosY(520);
                 ImGui::PushFont(g_fontSmall);
                 ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.f), "%s", notification.c_str());
                 ImGui::PopFont();
