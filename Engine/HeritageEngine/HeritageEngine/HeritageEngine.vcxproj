@@ -182,10 +182,20 @@ user32.lib
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_draw.cpp" />
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_tables.cpp" />
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_widgets.cpp" />
+    <ClCompile Include="..\Graphics\DisplaySystem.cpp" />
+    <ClCompile Include="..\Graphics\Mesh.cpp" />
+    <ClCompile Include="..\Graphics\AntiAliasing.cpp" />
+    <ClCompile Include="..\Graphics\ShaderProgram.cpp" />
+    <ClCompile Include="..\Graphics\WindowSystem.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\ThirdParty\IMGUI\imgui.h" />
+    <ClInclude Include="..\Graphics\DisplaySystem.hpp" />
+    <ClInclude Include="..\Graphics\Mesh.hpp" />
+    <ClInclude Include="..\Graphics\AntiAliasing.hpp" />
+    <ClInclude Include="..\Graphics\ShaderProgram.hpp" />
+    <ClInclude Include="..\Graphics\WindowSystem.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
