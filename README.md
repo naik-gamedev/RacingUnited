@@ -6,17 +6,16 @@ This project is open-source and crowdsourced, built in collaboration with the co
 
 [Join our Discord community](https://discord.gg/rTfC2Ev)
 
-## Linux build
+## Current development platform
 
-Linux builds use CMake and require a C++20 compiler, CMake 3.20+, GLFW 3.3+
-development files, and OpenGL development files.
+Heritage Engine currently targets Windows 10/11 x64 and is built with Visual
+Studio using the Windows SDK and the v145 C++ platform toolset. GLFW, GLAD and
+Dear ImGui are included in the repository.
 
-```sh
-cmake -S . -B build
-cmake --build build -j
-```
+Open `Engine/HeritageEngine/HeritageEngine.slnx`, select an x64 configuration,
+and build the solution. The solution contains both Heritage Engine and the
+Racing United launcher.
 
-The resulting binaries are placed in build/bin/:
-
-- HeritageEngine
-- RacingUnitedLauncher
+Linux is not a supported build target during the current prototype phase. It
+may return after the Windows engine, module API and racing simulation have
+stabilized.
