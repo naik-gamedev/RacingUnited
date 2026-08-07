@@ -49,6 +49,18 @@ The Dynamics Lab records those values at the requested native capture rate,
 offers force/power plots and writes them to CSV. Peak travel-stop force and peak
 damper dissipation are part of the capture summary.
 
+## Live per-wheel tuning
+
+Step 29N adds atomic native set/readback APIs for the complete healthy force
+description. The Racing United Vehicle `SUSP.` tab selects an individual wheel,
+edits spring, damper, motion-ratio and travel-stop parameters live, and can copy
+that tune to every wheel. Its `LIVE` page displays the force breakdown and
+damper watts from the 1000 Hz solver.
+
+The ordinary prototype creation path now supplies the same nonlinear fields as
+the versioned Workshop definition. Older modules that call `Vehicle.AddWheel`
+with the original argument list retain linear-compatible defaults.
+
 ## Damage and wear ordering
 
 Damage is intentionally not simulated yet. A defensible later model can build

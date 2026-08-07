@@ -84,6 +84,16 @@
     "returns": "47 values; inspect Vehicles/Telemetry.lua for the canonical unpack order",
     "description": "Returns wheel suspension force components and damper dissipation, advanced tire pure/combined-force telemetry, brake/driver-aid state, contact collider, and per-wheel detected surface data."
   },
+  "Vehicle.SetWheelSuspensionModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, springPreloadN: number, springRateNPerM: number, springProgressionNPerM2: number, bumpDampingNsPerM: number, bumpHighSpeedDampingNsPerM: number, bumpDampingKneeVelocityMps: number, reboundDampingNsPerM: number, reboundHighSpeedDampingNsPerM: number, reboundDampingKneeVelocityMps: number, bumpStopEngagementM: number, bumpStopRateNPerM: number, bumpStopProgressionNPerM2: number, droopStopEngagementM: number, droopStopRateNPerM: number, motionRatio: number, maximumForceN: number)",
+    "returns": "boolean",
+    "description": "Atomically validates and applies an independent healthy nonlinear suspension tune to one wheel/contact unit. Geometry and tire data are unchanged."
+  },
+  "Vehicle.GetWheelSuspensionModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "provider, springPreloadN, springRateNPerM, springProgressionNPerM2, bumpDampingNsPerM, bumpHighSpeedDampingNsPerM, bumpDampingKneeVelocityMps, reboundDampingNsPerM, reboundHighSpeedDampingNsPerM, reboundDampingKneeVelocityMps, bumpStopEngagementM, bumpStopRateNPerM, bumpStopProgressionNPerM2, droopStopEngagementM, droopStopRateNPerM, motionRatio, maximumForceN",
+    "description": "Reads the exact native nonlinear suspension description assigned to one wheel so live tools never infer state from Lua defaults."
+  },
   "Vehicle.SetTireModel": {
     "arguments": "(vehicle: VehicleHandle, nominalLoad: number, peakFriction: number, longitudinalStiffness: number, corneringStiffness: number, loadSensitivity: number, longitudinalRelaxationLength: number, lateralRelaxationLength: number, wheelInertia: number, pneumaticTrail: number, stiffnessLoadExponent?: number, longitudinalShapeFactor?: number, lateralShapeFactor?: number, longitudinalCurvatureFactor?: number, lateralCurvatureFactor?: number, combinedSlipExponent?: number, pneumaticTrailFalloff?: number)",
     "returns": "boolean",

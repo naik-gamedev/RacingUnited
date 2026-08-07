@@ -140,6 +140,12 @@ components remain visible separately in `WheelState` and the Dynamics Lab.
 Damage and wear are deferred until linkage, unsprung-mass, load-cycle and
 thermal state exist. See `SUSPENSION_MODEL.md` and ADR-014.
 
+Step 29N exposes atomic set/readback of that complete healthy description per
+wheel. Live tools edit native truth rather than maintaining an unverified Lua
+copy, and asymmetric axle/corner setups do not require a new solver. The
+historical `Vehicle.AddWheel` argument order remains source compatible; new
+nonlinear values are optional trailing arguments. See ADR-015.
+
 ## Dynamics instrumentation
 
 Step 29J.5 adds an opt-in `VehicleDynamicsLab` recorder owned by each native

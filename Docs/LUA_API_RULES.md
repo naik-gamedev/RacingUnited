@@ -81,3 +81,11 @@ The bridge copies values during `Vehicle.CompileDefinitionV2` or
 `Vehicle.CreateFromDefinitionV2`; native systems must not retain Lua table
 indices or pointers. Component IDs are resolved and validated by the native
 compiler before a runtime provider can create anything.
+
+## Per-wheel suspension tuning
+
+`Vehicle.SetWheelSuspensionModel` validates a complete replacement before
+changing the selected wheel. `Vehicle.GetWheelSuspensionModel` returns the exact
+native description in the canonical order documented by
+`LuaApiAnnotations.json`. Tools must read native state when switching wheels;
+they must not assume a shared vehicle-wide tune.

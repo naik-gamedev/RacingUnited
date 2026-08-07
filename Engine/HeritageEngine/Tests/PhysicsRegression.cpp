@@ -87,9 +87,22 @@ bool addPrototypeWheel(
     wheel.restLength = 0.55f;
     wheel.maximumCompression = 0.20f;
     wheel.maximumDroop = 0.15f;
+    wheel.springPreload = 0.0f;
     wheel.springRate = 35000.0f;
+    wheel.springProgression = 15000.0f;
     wheel.bumpDamping = 3200.0f;
+    wheel.bumpHighSpeedDamping = 1800.0f;
+    wheel.bumpDampingKneeVelocity = 0.25f;
     wheel.reboundDamping = 4200.0f;
+    wheel.reboundHighSpeedDamping = 2600.0f;
+    wheel.reboundDampingKneeVelocity = 0.30f;
+    wheel.bumpStopEngagement = 0.15f;
+    wheel.bumpStopRate = 120000.0f;
+    wheel.bumpStopProgression = 1000000.0f;
+    wheel.droopStopEngagement = 0.1275f;
+    wheel.droopStopRate = 35000.0f;
+    wheel.suspensionMotionRatio = 1.0f;
+    wheel.maximumSuspensionForce = 250000.0f;
     wheel.driveFactor = driveFactor;
     wheel.steerFactor = steerFactor;
     wheel.brakeFactor = serviceBrakeFactor;
@@ -927,6 +940,27 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && std::abs(nonlinearRebound.droopStopForceN - 50.0f) <= 0.0001f
         && nonlinearRebound.normalForceN == 0.0f;
 
+    heritage::vehicles::SuspensionModelDescription suspensionReadback;
+    const bool liveSuspensionSet = vehicles.setWheelSuspensionModel(
+        loaded, 0, nonlinearSuspension);
+    const bool liveSuspensionRead = vehicles.wheelSuspensionModel(
+        loaded, 0, suspensionReadback);
+    heritage::vehicles::SuspensionModelDescription invalidLiveSuspension =
+        nonlinearSuspension;
+    invalidLiveSuspension.motionRatio = 0.0f;
+    const bool invalidLiveSuspensionRejected =
+        !vehicles.setWheelSuspensionModel(
+            loaded, 0, invalidLiveSuspension);
+    const bool liveSuspensionRoundTrip = liveSuspensionSet
+        && liveSuspensionRead
+        && std::abs(suspensionReadback.springPreloadN - 100.0f)
+            <= 0.0001f
+        && std::abs(suspensionReadback.bumpHighSpeedDampingNsPerM - 50.0f)
+            <= 0.0001f
+        && std::abs(suspensionReadback.bumpStopProgressionNPerM2 - 2000.0f)
+            <= 0.0001f
+        && invalidLiveSuspensionRejected;
+
     std::cout
         << "definition_compiler provider="
         << compiled.definition.runtimeProvider
@@ -944,6 +978,7 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         << " motion_ratio_force_n=" << bumpOutput.normalForceN
         << " nonlinear_force_n=" << nonlinearBump.normalForceN
         << " damper_power_w=" << nonlinearBump.damperDissipationW
+        << " live_suspension_roundtrip=" << liveSuspensionRoundTrip
         << '\n';
 
     return compiled.valid
@@ -963,7 +998,8 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && futureSuspensionResult.issueSummary().find("double_wishbone_v1")
             != std::string::npos
         && suspensionForcesWorked
-        && nonlinearSuspensionWorked;
+        && nonlinearSuspensionWorked
+        && liveSuspensionRoundTrip;
 }
 
 } // namespace

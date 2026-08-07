@@ -1350,6 +1350,8 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("Vehicle", "GetCount", &LuaModuleRuntime::luaVehicleGetCount);
     registerFunction("Vehicle", "AddWheel", &LuaModuleRuntime::luaVehicleAddWheel);
     registerFunction("Vehicle", "GetWheelCount", &LuaModuleRuntime::luaVehicleGetWheelCount);
+    registerFunction("Vehicle", "SetWheelSuspensionModel", &LuaModuleRuntime::luaVehicleSetWheelSuspensionModel);
+    registerFunction("Vehicle", "GetWheelSuspensionModel", &LuaModuleRuntime::luaVehicleGetWheelSuspensionModel);
     registerFunction("Vehicle", "SetInputs", &LuaModuleRuntime::luaVehicleSetInputs);
     registerFunction("Vehicle", "SetWheelBrakeFactors", &LuaModuleRuntime::luaVehicleSetWheelBrakeFactors);
     registerFunction("Vehicle", "SetDriverAids", &LuaModuleRuntime::luaVehicleSetDriverAids);
@@ -6706,6 +6708,32 @@ int LuaModuleRuntime::luaVehicleAddWheel(lua_State* state)
     description.steerFactor = static_cast<float>(numberArgument(*runtime, state, 16, 0.0));
     description.brakeFactor = static_cast<float>(numberArgument(*runtime, state, 17, 1.0));
     description.handbrakeFactor = static_cast<float>(numberArgument(*runtime, state, 18, 0.0));
+    description.springPreload = static_cast<float>(
+        numberArgument(*runtime, state, 19, 0.0));
+    description.springProgression = static_cast<float>(
+        numberArgument(*runtime, state, 20, 0.0));
+    description.bumpHighSpeedDamping = static_cast<float>(
+        numberArgument(*runtime, state, 21, description.bumpDamping));
+    description.bumpDampingKneeVelocity = static_cast<float>(
+        numberArgument(*runtime, state, 22, 1.0));
+    description.reboundHighSpeedDamping = static_cast<float>(
+        numberArgument(*runtime, state, 23, description.reboundDamping));
+    description.reboundDampingKneeVelocity = static_cast<float>(
+        numberArgument(*runtime, state, 24, 1.0));
+    description.bumpStopEngagement = static_cast<float>(
+        numberArgument(*runtime, state, 25, description.maximumCompression));
+    description.bumpStopRate = static_cast<float>(
+        numberArgument(*runtime, state, 26, 0.0));
+    description.bumpStopProgression = static_cast<float>(
+        numberArgument(*runtime, state, 27, 0.0));
+    description.droopStopEngagement = static_cast<float>(
+        numberArgument(*runtime, state, 28, description.maximumDroop));
+    description.droopStopRate = static_cast<float>(
+        numberArgument(*runtime, state, 29, 0.0));
+    description.suspensionMotionRatio = static_cast<float>(
+        numberArgument(*runtime, state, 30, 1.0));
+    description.maximumSuspensionForce = static_cast<float>(
+        numberArgument(*runtime, state, 31, 250000.0));
     const bool result = runtime->m_physics && runtime->m_physics->vehicles().addWheel(
         vehicleHandleArgument(*runtime, state, 1), description);
     runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
@@ -6720,6 +6748,98 @@ int LuaModuleRuntime::luaVehicleGetWheelCount(lua_State* state)
         ? static_cast<LuaInteger>(runtime->m_physics->vehicles().wheelCount(
             vehicleHandleArgument(*runtime, state, 1))) : 0);
     return 1;
+}
+
+int LuaModuleRuntime::luaVehicleSetWheelSuspensionModel(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime) return 0;
+    int converted = 0;
+    const LuaInteger luaIndex = runtime->m_api.lua_tointegerx(
+        state, 2, &converted);
+    const std::size_t wheelIndex = converted && luaIndex >= 1
+        ? static_cast<std::size_t>(luaIndex - 1)
+        : static_cast<std::size_t>(-1);
+    heritage::vehicles::SuspensionModelDescription value;
+    value.springPreloadN = static_cast<float>(
+        numberArgument(*runtime, state, 3, 0.0));
+    value.springRateNPerM = static_cast<float>(
+        numberArgument(*runtime, state, 4, 35000.0));
+    value.springProgressionNPerM2 = static_cast<float>(
+        numberArgument(*runtime, state, 5, 0.0));
+    value.bumpDampingNsPerM = static_cast<float>(
+        numberArgument(*runtime, state, 6, 3200.0));
+    value.bumpHighSpeedDampingNsPerM = static_cast<float>(
+        numberArgument(*runtime, state, 7, value.bumpDampingNsPerM));
+    value.bumpDampingKneeVelocityMps = static_cast<float>(
+        numberArgument(*runtime, state, 8, 1.0));
+    value.reboundDampingNsPerM = static_cast<float>(
+        numberArgument(*runtime, state, 9, 4200.0));
+    value.reboundHighSpeedDampingNsPerM = static_cast<float>(
+        numberArgument(*runtime, state, 10, value.reboundDampingNsPerM));
+    value.reboundDampingKneeVelocityMps = static_cast<float>(
+        numberArgument(*runtime, state, 11, 1.0));
+    value.bumpStopEngagementM = static_cast<float>(
+        numberArgument(*runtime, state, 12, 0.18));
+    value.bumpStopRateNPerM = static_cast<float>(
+        numberArgument(*runtime, state, 13, 0.0));
+    value.bumpStopProgressionNPerM2 = static_cast<float>(
+        numberArgument(*runtime, state, 14, 0.0));
+    value.droopStopEngagementM = static_cast<float>(
+        numberArgument(*runtime, state, 15, 0.15));
+    value.droopStopRateNPerM = static_cast<float>(
+        numberArgument(*runtime, state, 16, 0.0));
+    value.motionRatio = static_cast<float>(
+        numberArgument(*runtime, state, 17, 1.0));
+    value.maximumForceN = static_cast<float>(
+        numberArgument(*runtime, state, 18, 250000.0));
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().setWheelSuspensionModel(
+            vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaModuleRuntime::luaVehicleGetWheelSuspensionModel(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime) return 0;
+    int converted = 0;
+    const LuaInteger luaIndex = runtime->m_api.lua_tointegerx(
+        state, 2, &converted);
+    const std::size_t wheelIndex = converted && luaIndex >= 1
+        ? static_cast<std::size_t>(luaIndex - 1)
+        : static_cast<std::size_t>(-1);
+    heritage::vehicles::SuspensionModelDescription value;
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().wheelSuspensionModel(
+            vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
+    if (!result)
+    {
+        for (int index = 0; index < 17; ++index)
+            runtime->m_api.lua_pushnil(state);
+        return 17;
+    }
+
+    runtime->m_api.lua_pushstring(state, heritage::vehicles::suspensionProviderId(
+        value.provider));
+    runtime->m_api.lua_pushnumber(state, value.springPreloadN);
+    runtime->m_api.lua_pushnumber(state, value.springRateNPerM);
+    runtime->m_api.lua_pushnumber(state, value.springProgressionNPerM2);
+    runtime->m_api.lua_pushnumber(state, value.bumpDampingNsPerM);
+    runtime->m_api.lua_pushnumber(state, value.bumpHighSpeedDampingNsPerM);
+    runtime->m_api.lua_pushnumber(state, value.bumpDampingKneeVelocityMps);
+    runtime->m_api.lua_pushnumber(state, value.reboundDampingNsPerM);
+    runtime->m_api.lua_pushnumber(state, value.reboundHighSpeedDampingNsPerM);
+    runtime->m_api.lua_pushnumber(state, value.reboundDampingKneeVelocityMps);
+    runtime->m_api.lua_pushnumber(state, value.bumpStopEngagementM);
+    runtime->m_api.lua_pushnumber(state, value.bumpStopRateNPerM);
+    runtime->m_api.lua_pushnumber(state, value.bumpStopProgressionNPerM2);
+    runtime->m_api.lua_pushnumber(state, value.droopStopEngagementM);
+    runtime->m_api.lua_pushnumber(state, value.droopStopRateNPerM);
+    runtime->m_api.lua_pushnumber(state, value.motionRatio);
+    runtime->m_api.lua_pushnumber(state, value.maximumForceN);
+    return 17;
 }
 
 int LuaModuleRuntime::luaVehicleSetInputs(lua_State* state)

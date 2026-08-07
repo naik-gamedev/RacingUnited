@@ -240,6 +240,14 @@ public:
     bool addWheel(VehicleHandle handle, const WheelDescription& description);
     std::size_t wheelCount(VehicleHandle handle) const;
     bool wheelState(VehicleHandle handle, std::size_t wheelIndex, WheelState& value) const;
+    bool setWheelSuspensionModel(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const SuspensionModelDescription& value);
+    bool wheelSuspensionModel(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        SuspensionModelDescription& value) const;
 
     bool setInputs(
         VehicleHandle handle,

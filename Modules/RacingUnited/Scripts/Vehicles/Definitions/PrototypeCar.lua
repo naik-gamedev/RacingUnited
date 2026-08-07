@@ -102,9 +102,22 @@ PrototypeCarDefinition = {
         restLengthM = 0.55,
         maximumCompressionM = 0.20,
         maximumDroopM = 0.15,
+        springPreloadN = 0.0,
         springRateNPerM = 35000.0,
+        springProgressionNPerM2 = 15000.0,
         bumpDampingNsPerM = 3200.0,
-        reboundDampingNsPerM = 4200.0
+        bumpHighSpeedDampingNsPerM = 1800.0,
+        bumpDampingKneeVelocityMps = 0.25,
+        reboundDampingNsPerM = 4200.0,
+        reboundHighSpeedDampingNsPerM = 2600.0,
+        reboundDampingKneeVelocityMps = 0.30,
+        bumpStopEngagementM = 0.15,
+        bumpStopRateNPerM = 120000.0,
+        bumpStopProgressionNPerM2 = 1000000.0,
+        droopStopEngagementM = 0.1275,
+        droopStopRateNPerM = 35000.0,
+        motionRatio = 1.0,
+        maximumForceN = 250000.0
     },
 
     -- Vehicle-wide default. Each wheel below can override this with a named

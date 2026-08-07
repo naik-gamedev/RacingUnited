@@ -74,7 +74,25 @@ function AddNativeVehicleWheel(
         wheel.driveFactor,
         wheel.steerFactor,
         serviceBrakeFactor,
-        handbrakeFactor)
+        handbrakeFactor,
+        wheel.springPreloadN or physics.springPreloadN,
+        wheel.springProgressionNPerM2 or physics.springProgressionNPerM2,
+        wheel.bumpHighSpeedDampingNsPerM
+            or physics.bumpHighSpeedDampingNsPerM,
+        wheel.bumpDampingKneeVelocityMps
+            or physics.bumpDampingKneeVelocityMps,
+        wheel.reboundHighSpeedDampingNsPerM
+            or physics.reboundHighSpeedDampingNsPerM,
+        wheel.reboundDampingKneeVelocityMps
+            or physics.reboundDampingKneeVelocityMps,
+        wheel.bumpStopEngagementM or physics.bumpStopEngagementM,
+        wheel.bumpStopRateNPerM or physics.bumpStopRateNPerM,
+        wheel.bumpStopProgressionNPerM2
+            or physics.bumpStopProgressionNPerM2,
+        wheel.droopStopEngagementM or physics.droopStopEngagementM,
+        wheel.droopStopRateNPerM or physics.droopStopRateNPerM,
+        wheel.motionRatio or physics.motionRatio,
+        wheel.maximumForceN or physics.maximumForceN)
 end
 
 function CreateNativeVehicleDemo(compiledSourceDefinition)
@@ -253,10 +271,13 @@ function CreateNativeVehicleDemo(compiledSourceDefinition)
     if not ApplyDefinitionTireProfiles() then
         return false
     end
+    if not ReadVehicleSuspensionModel(1) then
+        return false
+    end
 
     ResetNativeVehicle()
     vehicleMessage = compiledSourceDefinition
-        and ("Step 29M native definition loaded: " .. nativeProvider)
-        or "Step 29J.1 online: Peugeot-reference wheel centers + articulated wheel presentation"
+        and ("Step 29N native definition loaded: " .. nativeProvider)
+        or "Step 29N online: nonlinear suspension + live per-wheel tuning"
     return true
 end

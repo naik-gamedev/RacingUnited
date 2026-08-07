@@ -46,6 +46,7 @@ $required = @(
     "Docs\Decisions\ADR-012-Native-Vehicle-Definition-Compiler.md",
     "Docs\Decisions\ADR-013-Suspension-Provider-Contract.md",
     "Docs\Decisions\ADR-014-Nonlinear-Suspension-Forces.md",
+    "Docs\Decisions\ADR-015-Live-Per-Wheel-Suspension-Tuning.md",
     "Docs\LuaApiAnnotations.json",
     "Engine\HeritageEngine\Core\Diagnostics\BuildIdentity.hpp",
     "Engine\HeritageEngine\Core\Diagnostics\GeneratedBuildIdentity.hpp",
@@ -78,6 +79,7 @@ $required = @(
     "Modules\RacingUnited\Tests\VehicleDefinitionV2Tests.lua",
     "Modules\RacingUnited\Scripts\Vehicles\Visuals.lua",
     "Modules\RacingUnited\Scripts\Vehicles\DynamicsLab.lua",
+    "Modules\RacingUnited\Scripts\Vehicles\Suspension.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\VisualPanel.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\Visual\BodyPanel.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\Visual\WheelsPanel.lua",
@@ -89,6 +91,7 @@ $required = @(
     "Modules\RacingUnited\Assets\Scenes\Player\README_IMPORT.txt",
     "Modules\RacingUnited\Scripts\UI\VehicleDebugPanel.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\DynamicsLabPanel.lua",
+    "Modules\RacingUnited\Scripts\UI\Vehicle\SuspensionPanel.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\WorkshopPanel.lua",
     "Tools\RunPhysicsTests.cmd"
 )
@@ -113,6 +116,8 @@ if (Test-Path $manifestPath) {
         "Vehicle.SetTireModel",
         "Vehicle.SetWheelTireModel",
         "Vehicle.GetWheelTireModel",
+        "Vehicle.SetWheelSuspensionModel",
+        "Vehicle.GetWheelSuspensionModel",
         "Vehicle.StartDynamicsLab",
         "Vehicle.GetDynamicsLabSummary",
         "Vehicle.GetDynamicsLabSeries",
@@ -185,6 +190,8 @@ Check ($vehicleHeader.Contains("surfaceMaterial")) "wheel telemetry retains cont
 Check ($vehicleHeader.Contains("TireModelDescription tireModel")) "each wheel record owns independent native tire data"
 Check ($vehicleHeader.Contains("setWheelTireModel")) "per-wheel tire setter contract exists"
 Check ($vehicleHeader.Contains("wheelTireModel")) "per-wheel tire readback contract exists"
+Check ($vehicleHeader.Contains("setWheelSuspensionModel")) "per-wheel suspension setter contract exists"
+Check ($vehicleHeader.Contains("wheelSuspensionModel")) "per-wheel suspension readback contract exists"
 Check ($vehicleHeader.Contains("struct VehicleRestState")) "vehicle parked-rest diagnostic contract exists"
 Check ($vehicleHeader.Contains("startDynamicsLabCapture")) "vehicle exposes opt-in native dynamics capture"
 Check ($vehicleHeader.Contains("damperDissipationWatts")) "wheel state exposes damper energy-rate telemetry"
@@ -198,6 +205,7 @@ Check ($physicsRegression.Contains("dynamicsLabCapturesHighRateTelemetry")) "hea
 Check ($physicsRegression.Contains("vehicleDefinitionCompilerAndLoaderWork")) "headless regression verifies native definition compilation and loading"
 Check ($physicsRegression.Contains("motion_ratio_force_n")) "headless regression verifies suspension motion-ratio force evaluation"
 Check ($physicsRegression.Contains("nonlinear_force_n")) "headless regression verifies non-linear suspension force components"
+Check ($physicsRegression.Contains("live_suspension_roundtrip")) "headless regression verifies live suspension tuning roundtrip"
 
 $definitionV2Path = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Definitions\VehicleDefinitionV2.lua"
 $definitionV2 = if (Test-Path $definitionV2Path) { [IO.File]::ReadAllText($definitionV2Path) } else { "" }
@@ -248,6 +256,14 @@ Check ($suspensionCpp.Contains('"linear_raycast_v1"')) "linear raycast suspensio
 Check ($suspensionCpp.Contains("digressiveDamperForce")) "suspension provider implements low/high-speed damping"
 Check ($suspensionCpp.Contains("damperDissipationW")) "suspension provider reports dissipated damper power"
 Check ($vehicleCpp.Contains("evaluateSuspensionModel")) "VehicleSystem evaluates suspension through the provider boundary"
+Check ($runtimeCpp.Contains("luaVehicleGetWheelSuspensionModel")) "Lua exposes exact native suspension readback"
+
+$suspensionRuntimePath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Suspension.lua"
+$suspensionRuntime = if (Test-Path $suspensionRuntimePath) { [IO.File]::ReadAllText($suspensionRuntimePath) } else { "" }
+Check ($suspensionRuntime.Contains("ApplyVehicleSuspensionModelToAllWheels")) "module can explicitly copy a selected suspension tune"
+$suspensionPanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\SuspensionPanel.lua"
+$suspensionPanel = if (Test-Path $suspensionPanelPath) { [IO.File]::ReadAllText($suspensionPanelPath) } else { "" }
+Check ($suspensionPanel.Contains("DrawSuspensionLiveTelemetry")) "vehicle suspension panel exposes live force telemetry"
 
 $dynamicsLabHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp"
 $dynamicsLabHeader = if (Test-Path $dynamicsLabHeaderPath) { [IO.File]::ReadAllText($dynamicsLabHeaderPath) } else { "" }

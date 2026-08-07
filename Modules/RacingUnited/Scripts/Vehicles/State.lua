@@ -144,7 +144,7 @@ vehicleSelectedGearRatio = vehicleForwardRatios[1]
 vehicleOutputTorque = 0.0
 vehicleDrivenWheelSpeedDifferenceRpm = 0.0
 vehicleForwardGearCount = #vehicleForwardRatios
-vehicleMessage = "Step 29J.1 exact wheel-center presentation is ready"
+vehicleMessage = "Step 29N nonlinear suspension tuning is ready"
 vehicleWheelTelemetry = {}
 vehicleWheelTireProfileNames = {}
 for index, wheel in ipairs(definition.wheels) do
@@ -154,3 +154,27 @@ vehicleWheelMounts = {}
 for index, wheel in ipairs(definition.wheels) do
     vehicleWheelMounts[index] = wheel.mount
 end
+
+local suspension = definition.wheelPhysics
+vehicleSuspension = {
+    selectedWheel = 1,
+    provider = "linear_raycast_v1",
+    springPreloadN = suspension.springPreloadN,
+    springRateNPerM = suspension.springRateNPerM,
+    springProgressionNPerM2 = suspension.springProgressionNPerM2,
+    bumpDampingNsPerM = suspension.bumpDampingNsPerM,
+    bumpHighSpeedDampingNsPerM = suspension.bumpHighSpeedDampingNsPerM,
+    bumpDampingKneeVelocityMps = suspension.bumpDampingKneeVelocityMps,
+    reboundDampingNsPerM = suspension.reboundDampingNsPerM,
+    reboundHighSpeedDampingNsPerM =
+        suspension.reboundHighSpeedDampingNsPerM,
+    reboundDampingKneeVelocityMps =
+        suspension.reboundDampingKneeVelocityMps,
+    bumpStopEngagementM = suspension.bumpStopEngagementM,
+    bumpStopRateNPerM = suspension.bumpStopRateNPerM,
+    bumpStopProgressionNPerM2 = suspension.bumpStopProgressionNPerM2,
+    droopStopEngagementM = suspension.droopStopEngagementM,
+    droopStopRateNPerM = suspension.droopStopRateNPerM,
+    motionRatio = suspension.motionRatio,
+    maximumForceN = suspension.maximumForceN
+}

@@ -739,6 +739,86 @@ bool VehicleSystem::wheelState(
     return true;
 }
 
+bool VehicleSystem::setWheelSuspensionModel(
+    VehicleHandle handle,
+    std::size_t wheelIndex,
+    const SuspensionModelDescription& value)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle.SetWheelSuspensionModel received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+
+    WheelDescription updated = slot->record.wheels[wheelIndex].description;
+    updated.suspensionProvider = value.provider;
+    updated.springPreload = value.springPreloadN;
+    updated.springRate = value.springRateNPerM;
+    updated.springProgression = value.springProgressionNPerM2;
+    updated.bumpDamping = value.bumpDampingNsPerM;
+    updated.bumpHighSpeedDamping = value.bumpHighSpeedDampingNsPerM;
+    updated.bumpDampingKneeVelocity = value.bumpDampingKneeVelocityMps;
+    updated.reboundDamping = value.reboundDampingNsPerM;
+    updated.reboundHighSpeedDamping = value.reboundHighSpeedDampingNsPerM;
+    updated.reboundDampingKneeVelocity =
+        value.reboundDampingKneeVelocityMps;
+    updated.bumpStopEngagement = value.bumpStopEngagementM;
+    updated.bumpStopRate = value.bumpStopRateNPerM;
+    updated.bumpStopProgression = value.bumpStopProgressionNPerM2;
+    updated.droopStopEngagement = value.droopStopEngagementM;
+    updated.droopStopRate = value.droopStopRateNPerM;
+    updated.suspensionMotionRatio = value.motionRatio;
+    updated.maximumSuspensionForce = value.maximumForceN;
+    if (!validWheelDescription(updated))
+    {
+        setError("Vehicle.SetWheelSuspensionModel received suspension data outside the supported range.");
+        return false;
+    }
+
+    slot->record.wheels[wheelIndex].description = updated;
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::wheelSuspensionModel(
+    VehicleHandle handle,
+    std::size_t wheelIndex,
+    SuspensionModelDescription& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle.GetWheelSuspensionModel received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+
+    const WheelDescription& description =
+        slot->record.wheels[wheelIndex].description;
+    value.provider = description.suspensionProvider;
+    value.springPreloadN = description.springPreload;
+    value.springRateNPerM = description.springRate;
+    value.springProgressionNPerM2 = description.springProgression;
+    value.bumpDampingNsPerM = description.bumpDamping;
+    value.bumpHighSpeedDampingNsPerM = description.bumpHighSpeedDamping;
+    value.bumpDampingKneeVelocityMps =
+        description.bumpDampingKneeVelocity;
+    value.reboundDampingNsPerM = description.reboundDamping;
+    value.reboundHighSpeedDampingNsPerM =
+        description.reboundHighSpeedDamping;
+    value.reboundDampingKneeVelocityMps =
+        description.reboundDampingKneeVelocity;
+    value.bumpStopEngagementM = description.bumpStopEngagement;
+    value.bumpStopRateNPerM = description.bumpStopRate;
+    value.bumpStopProgressionNPerM2 = description.bumpStopProgression;
+    value.droopStopEngagementM = description.droopStopEngagement;
+    value.droopStopRateNPerM = description.droopStopRate;
+    value.motionRatio = description.suspensionMotionRatio;
+    value.maximumForceN = description.maximumSuspensionForce;
+    clearError();
+    return true;
+}
+
 bool VehicleSystem::setInputs(
     VehicleHandle handle,
     float throttle,
