@@ -144,8 +144,9 @@ function ApplyVehicleSuspensionModelToAllWheels()
     return true
 end
 
-function RestoreVehicleSuspensionDefinition()
+local function CopyDefinitionSuspensionToEditor(wheel)
     local suspension = PrototypeCarDefinition.wheelPhysics
+    local steeringAxis = wheel.steeringAxis or suspension.steeringAxis
     vehicleSuspension.springPreloadN = suspension.springPreloadN
     vehicleSuspension.springRateNPerM = suspension.springRateNPerM
     vehicleSuspension.springProgressionNPerM2 =
@@ -166,19 +167,23 @@ function RestoreVehicleSuspensionDefinition()
         suspension.bumpStopProgressionNPerM2
     vehicleSuspension.droopStopEngagementM = suspension.droopStopEngagementM
     vehicleSuspension.droopStopRateNPerM = suspension.droopStopRateNPerM
-    vehicleSuspension.steeringAxisX = suspension.steeringAxis[1]
-    vehicleSuspension.steeringAxisY = suspension.steeringAxis[2]
-    vehicleSuspension.steeringAxisZ = suspension.steeringAxis[3]
+    vehicleSuspension.steeringAxisX = steeringAxis[1]
+    vehicleSuspension.steeringAxisY = steeringAxis[2]
+    vehicleSuspension.steeringAxisZ = steeringAxis[3]
     vehicleSuspension.staticCamberDegrees =
-        suspension.staticCamberDegrees
+        wheel.staticCamberDegrees or suspension.staticCamberDegrees
     vehicleSuspension.camberGainDegreesPerM =
-        suspension.camberGainDegreesPerM
+        wheel.camberGainDegreesPerM or suspension.camberGainDegreesPerM
     vehicleSuspension.camberProgressionDegreesPerM2 =
-        suspension.camberProgressionDegreesPerM2
-    vehicleSuspension.staticToeDegrees = suspension.staticToeDegrees
-    vehicleSuspension.toeGainDegreesPerM = suspension.toeGainDegreesPerM
+        wheel.camberProgressionDegreesPerM2
+            or suspension.camberProgressionDegreesPerM2
+    vehicleSuspension.staticToeDegrees =
+        wheel.staticToeDegrees or suspension.staticToeDegrees
+    vehicleSuspension.toeGainDegreesPerM =
+        wheel.toeGainDegreesPerM or suspension.toeGainDegreesPerM
     vehicleSuspension.toeProgressionDegreesPerM2 =
-        suspension.toeProgressionDegreesPerM2
+        wheel.toeProgressionDegreesPerM2
+            or suspension.toeProgressionDegreesPerM2
     vehicleSuspension.motionRatio = suspension.motionRatio
     vehicleSuspension.maximumForceN = suspension.maximumForceN
     vehicleSuspension.effectiveUnsprungMassKg =
@@ -191,9 +196,25 @@ function RestoreVehicleSuspensionDefinition()
         suspension.maximumTireDeflectionM
     vehicleSuspension.maximumTireNormalForceN =
         suspension.maximumTireNormalForceN
-    if ApplyVehicleSuspensionModelToAllWheels() then
-        vehicleMessage = "Restored the prototype suspension and unsprung tune"
-        return true
+end
+
+function RestoreVehicleSuspensionDefinition()
+    if not VehicleSuspensionAvailable() then
+        return false
     end
-    return false
+
+    local selectedWheel = vehicleSuspension.selectedWheel
+    for index, wheel in ipairs(PrototypeCarDefinition.wheels) do
+        CopyDefinitionSuspensionToEditor(wheel)
+        if not ApplyVehicleSuspensionModel(index) then
+            return false
+        end
+    end
+
+    if not ReadVehicleSuspensionModel(selectedWheel) then
+        return false
+    end
+    vehicleMessage =
+        "Restored prototype suspension, unsprung tune and per-corner alignment"
+    return true
 end

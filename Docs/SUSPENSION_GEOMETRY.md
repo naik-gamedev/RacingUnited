@@ -52,3 +52,22 @@ produce camber thrust.
 MacPherson and double-wishbone providers come after the Workshop can author and
 inspect hardpoints. Those providers must preserve this output contract so tire,
 telemetry and presentation code do not depend on a particular linkage family.
+
+## Peugeot-oriented prototype seed
+
+Step 29P.1 gives the temporary Peugeot-oriented car a provisional 206-family
+workshop alignment seed: nominal zero front camber, approximately 7 arcminutes
+toe-out per front wheel, approximately one degree negative rear camber and 16
+arcminutes toe-in per rear wheel. The front steering axes also carry the family
+reference values of approximately 3 degrees 16 minutes caster and 9 degrees 42
+minutes steering-axis inclination.
+
+These values are mirrored explicitly per corner using the engine's signed local
+coordinate convention. They are useful for exercising the authoritative pose
+path, but are not represented as measured 206 RC suspension curves. Camber gain,
+bump steer and progression remain zero until measured traces or authored
+hardpoints can replace that honest placeholder.
+
+Reference: public mirrors of the Peugeot 206 repair-data pages for
+[front-axle geometry](https://www.peugeot206cc.co.uk/repair-206/206/info/gb/b3cb0ik3.htm)
+and [front/rear axle geometry](https://www.peugeot206cc.co.uk/repair-206/206/info/gb/b3bf05k3.htm).

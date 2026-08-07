@@ -1,4 +1,12 @@
 -- Racing United split runtime file. Loaded by Scripts/Main.lua through Script.Include.
+local function EnterDefaultPlayerWorld()
+    if not LoadPlayerWorld() then
+        -- Keep the laboratory usable when a creator asset is temporarily missing
+        -- or malformed instead of leaving the prototype with no environment.
+        SetPrototypeScenePreset("vehicle")
+    end
+end
+
 function OnStart()
     Engine.Log("Racing United Lua runtime started")
 
@@ -10,7 +18,7 @@ function OnStart()
         RefreshSceneEntityHandles()
         CreatePhysicsDemo()
         VehicleOnPrototypeEnter()
-        SetPrototypeScenePreset("vehicle")
+        EnterDefaultPlayerWorld()
     else
         ClearSceneEntityHandles()
         physicsProbeEntity = 0
@@ -32,10 +40,10 @@ function OnStart()
         ClearVehicleRuntimeHandles()
     end
 
-    -- The manifest also declares entry_scene = main_menu. This fallback makes
+    -- The manifest also declares entry_scene = prototype. This fallback makes
     -- the script robust if a creator later removes that manifest line.
     if Scene.GetCurrent() == "" then
-        LoadScene("main_menu")
+        LoadScene("prototype")
     end
 end
 
@@ -48,7 +56,7 @@ function OnSceneEnter(sceneName)
         SetVehicleDebugVisible(true)
         CreatePhysicsDemo()
         VehicleOnPrototypeEnter()
-        SetPrototypeScenePreset("vehicle")
+        EnterDefaultPlayerWorld()
     else
         VehicleOnPrototypeExit()
         ClearSceneEntityHandles()

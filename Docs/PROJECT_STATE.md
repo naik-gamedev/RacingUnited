@@ -3,7 +3,7 @@
 ## Milestone status
 
 **User-confirmed baseline:** Step 29J.6B — Adaptive Three-Column Topology Grid
-**Current candidate:** Step 29P — Authoritative Suspension Upright Pose
+**Current candidate:** Step 29P.1 — Default Player World and Alignment Seed
 
 Step 29F.1 was interactively confirmed in the prototype scene. Step 29G established the advanced road-tire provider. Step 29H moved tire descriptions to independent per-wheel data. Step 29I added the creator-owned player-car OBJ slot; Step 29I.1 hardened window-size recovery and the user confirmed an authored car renders and drives. Step 29J added optional independently animated wheel meshes. The user confirmed the wheels render and rotate, which exposed two presentation problems: temporary 2.10 m track / 2.60 m wheelbase mounts were far too wide/long for the imported Peugeot, and all four wheel meshes used the same side orientation. Step 29J.1 uses published 2003 Peugeot 206 RC wheelbase/track/tire dimensions as a visual/reference geometry baseline and places every rendered wheel at the exact native `WheelState.worldCenter`. Step 29J.2 established Blender-native content authoring coordinates (X left/right, Y forward/backward, Z height), authored 1:1 creator geometry and exact numeric entry. Steps 29J.3/29J.3a exposed limitations of the temporary OBJ box-proxy/spawn bridge on a real hilly scene. Step 29J.4 uses the user-supplied scene files as a regression fixture, corrects Blender default OBJ axis conversion, accepts SPAWN_PLAYER from either visual or collision OBJ, snaps spawn height to the actual terrain, and makes exact scene triangles participate in suspension/tire raycasts. Step 29J.4B adds a headless native vehicle regression suite, corrects handbrake wheel-torque overshoot at 1000 Hz, and adds a physically capacity-checked parked rest state that wakes on throttle or brake release. Step 29J.4C removes the repeated low-speed rear oscillation observed during turn-then-brake testing. Step 29J.5 adds the first native high-rate Vehicle Dynamics Laboratory. Step 29J.6 adds the first versioned topology-first Vehicle Workshop contract and module-isolated authoring/export workflow. Step 29J.6A makes its choices responsive in two-column rows so narrower debug panels retain every control. The user confirmed that layout works. Step 29J.6B promotes the topology chooser to three columns at the demonstrated panel width while retaining the two-column fallback. The user confirmed the corrected layout. Step 29K adds native definition compilation, stable-reference resolution, component-driven provider selection and the first runtime loader adapter. Step 29L adds resolved suspension components and the first native suspension force-provider contract. The current candidate includes:
 
@@ -30,6 +30,13 @@ The current provider evaluates per-contact 3D steering axes plus signed
 quadratic camber and toe curves from suspension travel. Existing definitions
 retain a vertical axis and zero curves until measured alignment data is
 authored.
+
+Step 29P.1 starts Racing United directly in the creator-authored Player World,
+enables the four authored wheel meshes by default and seeds the Peugeot-oriented
+prototype with explicitly mirrored, provisional 206-family workshop alignment.
+Only static alignment and steering-axis orientation are populated: dynamic
+camber and bump-steer curves remain zero until measured traces or hardpoints
+exist. Restoring the definition now preserves those per-corner values.
 
 - Deterministic 240 Hz general physics world with bounded catch-up.
 - Generation-checked entities, rigid bodies, colliders, constraints, and vehicles.

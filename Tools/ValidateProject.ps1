@@ -423,6 +423,20 @@ $prototypeDefinition = $visualDefinition
 Check ($prototypeDefinition.Contains("radiusScale = 1.0")) "creator wheel radius scale defaults to 1:1"
 Check ($prototypeDefinition.Contains("widthScale = 1.0")) "creator wheel width scale defaults to 1:1"
 Check ($prototypeDefinition.Contains("offset = { 0.0, 0.0, 0.0 }")) "creator body visual offset defaults to identity"
+Check ($prototypeDefinition.Contains("enabled = true")) "articulated player wheels are enabled by default"
+Check ($prototypeDefinition.Contains("referenceAlignment =")) "prototype records provisional alignment provenance"
+Check ($prototypeDefinition.Contains("staticCamberDegrees = -1.0")) "prototype seeds signed rear camber"
+Check ($prototypeDefinition.Contains("staticToeDegrees = -0.116667")) "prototype seeds signed front toe"
+
+$moduleManifestPath = Join-Path $Root "Modules\RacingUnited\module.ini"
+$moduleManifest = if (Test-Path $moduleManifestPath) { [IO.File]::ReadAllText($moduleManifestPath) } else { "" }
+Check ($moduleManifest.Contains("entry_scene = prototype")) "Racing United enters the driveable prototype scene"
+$lifecyclePath = Join-Path $Root "Modules\RacingUnited\Scripts\Runtime\Lifecycle.lua"
+$lifecycle = if (Test-Path $lifecyclePath) { [IO.File]::ReadAllText($lifecyclePath) } else { "" }
+Check ($lifecycle.Contains("EnterDefaultPlayerWorld()")) "prototype lifecycle loads the creator Player World by default"
+$scenePresetsPath = Join-Path $Root "Modules\RacingUnited\Scripts\Runtime\ScenePresets.lua"
+$scenePresets = if (Test-Path $scenePresetsPath) { [IO.File]::ReadAllText($scenePresetsPath) } else { "" }
+Check ($scenePresets.Contains("playerWorld.loaded")) "UI presets preserve an active creator Player World"
 
 $compiledMain = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\main.cpp"
 $obsoleteMain = Join-Path $Root "Engine\HeritageEngine\main.cpp"

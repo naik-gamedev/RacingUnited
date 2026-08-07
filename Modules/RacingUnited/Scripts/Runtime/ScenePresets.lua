@@ -35,6 +35,13 @@ function SetPhysicsDemoVisible(visible)
 end
 
 function SetPrototypeScenePreset(preset)
+    -- While the creator-authored world is loaded, UI tabs must not replace its
+    -- clean presentation with the laboratory's proxy/debug geometry. The
+    -- explicit Return to Prototype Lab action unloads the world first.
+    if playerWorld ~= nil and playerWorld.loaded and preset ~= "player_world" then
+        preset = "player_world"
+    end
+
     if preset == prototypeScenePreset then
         return
     end

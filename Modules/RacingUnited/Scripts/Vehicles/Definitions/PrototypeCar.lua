@@ -1,4 +1,4 @@
--- Racing United vehicle definition: Step 29J.4A Peugeot-oriented prototype.
+-- Racing United vehicle definition: Step 29P.1 Peugeot-oriented prototype.
 -- This file is data only. Native C++ systems perform the actual simulation.
 -- The visual/reference geometry below uses published 2003 Peugeot 206 RC
 -- dimensions so the imported player body has sensible wheel placement now.
@@ -6,7 +6,7 @@
 PrototypeCarDefinition = {
     schemaVersion = 2,
     id = "step29j4a_prototype_car",
-    displayName = "Step 29J.4A Peugeot-Oriented Prototype",
+    displayName = "Step 29P.1 Peugeot-Oriented Prototype",
     classification = "car",
 
     -- This compatibility summary lets the current handwritten prototype live
@@ -28,6 +28,24 @@ PrototypeCarDefinition = {
         rimSize = "17x7J",
         tireWidthM = 0.205,
         wheelRadiusM = 0.2979
+    },
+
+    -- Provisional Peugeot 206-family workshop alignment, not a claim of a
+    -- measured 206 RC setup. Peugeot repair data lists front toe-out near
+    -- 7 arcminutes per wheel, zero nominal front camber, roughly 3 deg 16 min
+    -- caster / 9 deg 42 min steering-axis inclination for power-steering cars,
+    -- and rear camber/toe near -1 deg / 16 arcminutes toe-in per wheel.
+    -- Static values are mirrored explicitly because geometry never assumes a
+    -- symmetric vehicle. Travel curves remain zero until measured traces or
+    -- hardpoints exist.
+    referenceAlignment = {
+        provenance = "provisional Peugeot 206-family workshop reference",
+        frontCasterDegrees = 3.266667,
+        frontSteeringAxisInclinationDegrees = 9.700000,
+        frontCamberDegrees = 0.0,
+        frontToeOutPerWheelDegrees = 0.116667,
+        rearCamberDegrees = -1.0,
+        rearToeInPerWheelDegrees = 0.266667
     },
 
     -- Visual presentation is deliberately separate from the physics chassis.
@@ -53,7 +71,7 @@ PrototypeCarDefinition = {
         hideProxyWheels = true,
 
         articulatedWheels = {
-            enabled = false,
+            enabled = true,
             defaultAsset = "Vehicles/Player/PlayerWheel.obj",
             normalize = false,
             doubleSided = false,
@@ -183,6 +201,9 @@ PrototypeCarDefinition = {
             steerFactor = 1.0,
             axle = "front",
             tireProfile = "prototype_road_front",
+            steeringAxis = { 0.16845, 0.98406, -0.05698 },
+            staticCamberDegrees = 0.0,
+            staticToeDegrees = -0.116667,
             visualAsset = "Vehicles/Player/PlayerWheel.obj",
             visualFaceYawDegrees = 180.0,
             visualSpinSign = -1.0
@@ -194,6 +215,9 @@ PrototypeCarDefinition = {
             steerFactor = 1.0,
             axle = "front",
             tireProfile = "prototype_road_front",
+            steeringAxis = { -0.16845, 0.98406, -0.05698 },
+            staticCamberDegrees = 0.0,
+            staticToeDegrees = 0.116667,
             visualAsset = "Vehicles/Player/PlayerWheel.obj",
             visualFaceYawDegrees = 0.0,
             visualSpinSign = 1.0
@@ -205,6 +229,9 @@ PrototypeCarDefinition = {
             steerFactor = 0.0,
             axle = "rear",
             tireProfile = "prototype_road_rear",
+            steeringAxis = { 0.0, 1.0, 0.0 },
+            staticCamberDegrees = -1.0,
+            staticToeDegrees = 0.266667,
             visualAsset = "Vehicles/Player/PlayerWheel.obj",
             visualFaceYawDegrees = 180.0,
             visualSpinSign = -1.0
@@ -216,6 +243,9 @@ PrototypeCarDefinition = {
             steerFactor = 0.0,
             axle = "rear",
             tireProfile = "prototype_road_rear",
+            steeringAxis = { 0.0, 1.0, 0.0 },
+            staticCamberDegrees = 1.0,
+            staticToeDegrees = -0.266667,
             visualAsset = "Vehicles/Player/PlayerWheel.obj",
             visualFaceYawDegrees = 0.0,
             visualSpinSign = 1.0
