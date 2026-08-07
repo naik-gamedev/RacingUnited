@@ -77,6 +77,6 @@ function DrawVehicleVisualWheelsPanel()
 
     UI.Spacing()
     UI.Separator()
-    UI.TextWrapped("Temporary wheel OBJ convention remains: origin on the wheel axle/center, local X along the axle. Step 29K will replace this bridge with named hierarchical glTF nodes and preserve creator transforms directly.")
+    UI.TextWrapped("Temporary wheel OBJ convention remains: origin on the wheel axle/center, local X along the axle. A later glTF import milestone will replace this bridge with named hierarchy nodes and preserve creator transforms directly.")
     UI.TextDisabled(vehicleWheelVisualMessage)
 end

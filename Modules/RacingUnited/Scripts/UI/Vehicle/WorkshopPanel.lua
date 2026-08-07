@@ -151,6 +151,9 @@ function DrawVehicleWorkshopPanel()
         SetVehicleWorkshopEngineLocation("distributed")
     end
 
+    UI.TextWrapped("Suspension request: "
+        .. string.upper(draft.suspensionProvider or "linear_raycast_v1"))
+
     draft.requiresLeanDynamics, changed = UI.Checkbox(
         "Requires lean / large-camber dynamics", draft.requiresLeanDynamics)
     WorkshopFieldChanged(changed)

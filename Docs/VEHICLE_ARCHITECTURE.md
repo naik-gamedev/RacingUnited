@@ -125,6 +125,14 @@ in provider selection. Workshop preview now uses this path rather than mutating
 drive factors and adding wheels in Lua. See `VEHICLE_DEFINITION_RUNTIME.md` and
 ADR-012.
 
+Step 29L makes suspension an explicit part of that graph. Contacts reference
+stable suspension IDs; the compiler resolves them and the loader selects a
+native `SuspensionModel` provider. The first `linear_raycast_v1` implementation
+preserves current behavior and evaluates spring/damper force, motion ratio, and
+the force ceiling behind a stable input/output contract. Requested linkage
+providers remain authored but unresolved until their native geometry solvers
+exist. See ADR-013.
+
 ## Dynamics instrumentation
 
 Step 29J.5 adds an opt-in `VehicleDynamicsLab` recorder owned by each native

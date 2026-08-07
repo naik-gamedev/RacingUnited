@@ -9,6 +9,7 @@
 #include "../Physics/CollisionSystem.hpp"
 #include "../Physics/RigidBodySystem.hpp"
 #include "TireModel.hpp"
+#include "SuspensionModel.hpp"
 #include "VehicleDynamicsLab.hpp"
 
 namespace heritage::vehicles {
@@ -105,6 +106,10 @@ struct WheelDescription
     float springRate = 35000.0f;
     float bumpDamping = 3200.0f;
     float reboundDamping = 4200.0f;
+    SuspensionProviderKind suspensionProvider =
+        SuspensionProviderKind::LinearRaycastV1;
+    float suspensionMotionRatio = 1.0f;
+    float maximumSuspensionForce = 250000.0f;
     float driveFactor = 0.0f;
     float steerFactor = 0.0f;
     float brakeFactor = 1.0f;

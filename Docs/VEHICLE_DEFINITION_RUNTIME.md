@@ -29,7 +29,7 @@ The first provider is `raycast_wheel_v1`. It currently accepts:
 - one manual or direct transmission with 1 to 16 forward ratios;
 - one drivetrain route reaching at least one contact;
 - exactly four wheel contacts;
-- `raycast_linear` suspension contacts;
+- resolved `linear_raycast_v1` suspension components;
 - `advanced_road` tire contacts; and
 - no requested lean, articulation or continuous-track capability.
 
@@ -67,9 +67,20 @@ The headless native suite verifies that:
 - classification metadata does not influence provider selection; and
 - all earlier 1000 Hz dynamics regressions continue to pass.
 
-## Next extension
+## Suspension provider graph
 
-The next vehicle milestone should replace the single `raycast_linear` choice
-with a suspension component/provider graph. Geometry, mass distribution and
-inertia tooling can then compile through the same boundary without changing
-the Workshop's versioned envelope.
+Step 29L adds `suspensions` as an explicit component collection. Each contact
+references a suspension by stable ID, and the native compiler resolves that
+reference into an index. `SuspensionModel` is the high-rate force boundary;
+the current `linear_raycast_v1` provider returns spring, damper, and bounded
+normal force while honoring an authored motion ratio.
+
+Formula, IndyCar, kart, sprint-car, ATV, motorcycle, and truck templates now
+retain honest provider requests such as pushrod double-wishbone, kart chassis
+flex, motorcycle linkage, and live-axle leaf suspension. These definitions are
+valid and exportable but remain unresolved until those native providers exist.
+
+The next extension is authoring and visualization of linkage anchors, steering
+axes, centers of mass, inertia, and collision volumes. That geometry will let
+the first non-linear provider calculate authoritative wheel pose, camber, toe,
+and motion ratio rather than approximating them in Lua.

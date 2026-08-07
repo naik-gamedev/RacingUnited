@@ -12,7 +12,6 @@ constexpr float kMinimumHighRateHertz = 120.0f;
 constexpr float kMaximumHighRateHertz = 2000.0f;
 constexpr int kMaximumHighRateStepsPerWorldStep = 32;
 constexpr float kVectorEpsilon = 1.0e-6f;
-constexpr float kMaximumSuspensionForce = 250000.0f;
 constexpr float kVehicleRestDelaySeconds = 0.75f;
 constexpr float kVehicleRestLinearSpeed = 0.04f;
 constexpr float kVehicleRestAngularSpeedDegrees = 1.0f;
@@ -250,6 +249,12 @@ bool validWheelDescription(const WheelDescription& value)
         && finiteFloat(value.springRate) && value.springRate >= 0.0f
         && finiteFloat(value.bumpDamping) && value.bumpDamping >= 0.0f
         && finiteFloat(value.reboundDamping) && value.reboundDamping >= 0.0f
+        && value.suspensionProvider == SuspensionProviderKind::LinearRaycastV1
+        && finiteFloat(value.suspensionMotionRatio)
+        && value.suspensionMotionRatio > 0.0f
+        && value.suspensionMotionRatio <= 10.0f
+        && finiteFloat(value.maximumSuspensionForce)
+        && value.maximumSuspensionForce > 0.0f
         && finiteFloat(value.driveFactor) && value.driveFactor >= 0.0f
         && finiteFloat(value.steerFactor) && value.steerFactor >= -1.0f && value.steerFactor <= 1.0f
         && finiteFloat(value.brakeFactor) && value.brakeFactor >= 0.0f
@@ -2256,14 +2261,19 @@ void VehicleSystem::simulateVehicleSubstep(
             subtract(mountVelocity, supportVelocity),
             suspensionDirection);
 
-        const float damping = state.compressionVelocity >= 0.0f
-            ? description.bumpDamping
-            : description.reboundDamping;
-        const float suspensionForce = std::clamp(
-            description.springRate * state.compression
-                + damping * state.compressionVelocity,
-            0.0f,
-            kMaximumSuspensionForce);
+        SuspensionModelDescription suspensionDescription;
+        suspensionDescription.provider = description.suspensionProvider;
+        suspensionDescription.springRateNPerM = description.springRate;
+        suspensionDescription.bumpDampingNsPerM = description.bumpDamping;
+        suspensionDescription.reboundDampingNsPerM = description.reboundDamping;
+        suspensionDescription.motionRatio = description.suspensionMotionRatio;
+        suspensionDescription.maximumForceN =
+            description.maximumSuspensionForce;
+        const SuspensionModelOutput suspensionOutput =
+            evaluateSuspensionModel(
+                suspensionDescription,
+                { state.compression, state.compressionVelocity });
+        const float suspensionForce = suspensionOutput.normalForceN;
         state.normalForce = suspensionForce;
         if (suspensionForce > 0.0f)
         {

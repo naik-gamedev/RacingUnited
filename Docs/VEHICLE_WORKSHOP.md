@@ -13,6 +13,7 @@ A complete `VehicleDefinitionV2` describes:
 - one or more rigid bodies;
 - zero or more power units;
 - zero or more transmissions;
+- one or more reusable suspension components;
 - wheel, track-patch, or other ground-contact units;
 - explicit transmission-to-contact drive connections; and
 - required provider capabilities such as lean dynamics, articulation, or
@@ -34,6 +35,12 @@ Step 29K sends every refreshed definition through the native compiler. The
 provider shown in the Workshop is therefore the engine's answer, and supported
 live preview is created by `VehicleDefinitionLoader` rather than by Lua-side
 drive-layout reconstruction.
+
+Step 29L moves spring, damper, travel, motion-ratio, and force-limit data into
+stable suspension components. Contact units reference those components by ID.
+Templates now request their intended suspension family; the Workshop does not
+silently run a Formula pushrod, kart-flex, motorcycle-linkage, or truck
+live-axle definition through the linear provider.
 
 ## Current workflow
 
@@ -59,8 +66,9 @@ module's `Scripts/Vehicles/Definitions/` content tree.
 
 ## Honest capability boundary
 
-The Step 29K `raycast_wheel_v1` provider can live-preview a single-body, single-power-unit,
-single-transmission, four-wheel configuration with 1 to 16 forward ratios.
+The Step 29L `raycast_wheel_v1` provider can live-preview a single-body,
+single-power-unit, single-transmission, four-wheel configuration with 1 to 16
+forward ratios. Its suspension components must request `linear_raycast_v1`.
 The preview uses the current raycast-wheel solver; changing a template does not
 pretend that Formula suspension, kart chassis flex, sprint-car stagger, or ATV
 tires have already been modeled.
@@ -88,11 +96,10 @@ module's Assets directory. `Module.WriteSaveText` writes only bounded `.lua`,
 
 ## Next extensions
 
-1. Promote the exported topology into a native definition compiler and loader.
-2. Add visual gizmos for centers of mass, wheel/contact centers, suspension
+1. Add visual gizmos for centers of mass, wheel/contact centers, suspension
    anchors, steering axes, and collision volumes.
+2. Implement the first linkage-geometry provider after its anchors can be
+   authored and inspected.
 3. Replace scalar engine torque with reusable measured torque-curve assets.
 4. Add component-graph native powertrain routing for multiple engines,
    transmissions, differentials, transfer cases, chains, and hub motors.
-5. Add selectable suspension and contact providers without changing the
-   versioned definition envelope.

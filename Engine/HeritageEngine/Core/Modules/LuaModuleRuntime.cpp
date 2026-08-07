@@ -518,6 +518,55 @@ bool parseLuaVehicleDefinitionV2(
         popLuaValues(api, state);
     }
 
+    if (pushLuaTableField(api, state, rootIndex, "suspensions"))
+    {
+        const int collectionIndex = api.lua_gettop(state);
+        std::size_t count = 0;
+        if (!luaArrayLength(
+                api, state, collectionIndex, 64, "Suspension collection",
+                count, errorMessage))
+        {
+            popLuaValues(api, state);
+            return false;
+        }
+        source.suspensions.reserve(count);
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            api.lua_rawgeti(
+                state, collectionIndex, static_cast<LuaInteger>(index + 1));
+            if (api.lua_type(state, -1) != kLuaTypeTable)
+            {
+                popLuaValues(api, state, 2);
+                errorMessage = "Every suspension entry must be a table.";
+                return false;
+            }
+            heritage::vehicles::VehicleSuspensionDefinition suspension;
+            suspension.id = luaFieldString(api, state, -1, "id");
+            suspension.provider = luaFieldString(api, state, -1, "provider");
+            suspension.mountBody = luaFieldString(
+                api, state, -1, "mountBody");
+            suspension.restLengthM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "restLengthM", 0.50));
+            suspension.maximumCompressionM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "maximumCompressionM", 0.18));
+            suspension.maximumDroopM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "maximumDroopM", 0.15));
+            suspension.springRateNPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "springRateNPerM", 35000.0));
+            suspension.bumpDampingNsPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "bumpDampingNsPerM", 3200.0));
+            suspension.reboundDampingNsPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "reboundDampingNsPerM", 4200.0));
+            suspension.motionRatio = static_cast<float>(luaFieldNumber(
+                api, state, -1, "motionRatio", 1.0));
+            suspension.maximumForceN = static_cast<float>(luaFieldNumber(
+                api, state, -1, "maximumForceN", 250000.0));
+            source.suspensions.push_back(std::move(suspension));
+            popLuaValues(api, state);
+        }
+        popLuaValues(api, state);
+    }
+
     if (pushLuaTableField(api, state, rootIndex, "contactUnits"))
     {
         const int collectionIndex = api.lua_gettop(state);
@@ -549,30 +598,18 @@ bool parseLuaVehicleDefinitionV2(
                 api, state, -1, "position", {});
             contact.suspensionDirection = luaFieldVector3(
                 api, state, -1, "suspensionDirection", { 0.0f, -1.0f, 0.0f });
+            contact.suspension = luaFieldString(
+                api, state, -1, "suspension");
             contact.steering = luaFieldBoolean(
                 api, state, -1, "steering", false);
             contact.serviceBrake = luaFieldBoolean(
                 api, state, -1, "serviceBrake", true);
             contact.parkingBrake = luaFieldBoolean(
                 api, state, -1, "parkingBrake", false);
-            contact.suspensionProvider = luaFieldString(
-                api, state, -1, "suspensionProvider");
             contact.tireProvider = luaFieldString(
                 api, state, -1, "tireProvider");
             contact.radiusM = static_cast<float>(luaFieldNumber(
                 api, state, -1, "radiusM", 0.35));
-            contact.restLengthM = static_cast<float>(luaFieldNumber(
-                api, state, -1, "restLengthM", 0.50));
-            contact.maximumCompressionM = static_cast<float>(luaFieldNumber(
-                api, state, -1, "maximumCompressionM", 0.18));
-            contact.maximumDroopM = static_cast<float>(luaFieldNumber(
-                api, state, -1, "maximumDroopM", 0.15));
-            contact.springRateNPerM = static_cast<float>(luaFieldNumber(
-                api, state, -1, "springRateNPerM", 35000.0));
-            contact.bumpDampingNsPerM = static_cast<float>(luaFieldNumber(
-                api, state, -1, "bumpDampingNsPerM", 3200.0));
-            contact.reboundDampingNsPerM = static_cast<float>(luaFieldNumber(
-                api, state, -1, "reboundDampingNsPerM", 4200.0));
             contact.serviceBrakeFactor = static_cast<float>(luaFieldNumber(
                 api, state, -1, "serviceBrakeFactor", 0.25));
             contact.parkingBrakeFactor = static_cast<float>(luaFieldNumber(

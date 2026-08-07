@@ -765,6 +765,18 @@ VehicleDefinitionV2Source makeCompiledRoadCarDefinition()
     };
     for (std::size_t index = 0; index < 4; ++index)
     {
+        heritage::vehicles::VehicleSuspensionDefinition suspension;
+        suspension.id = "suspension_" + std::to_string(index + 1);
+        suspension.provider = "linear_raycast_v1";
+        suspension.mountBody = "chassis";
+        suspension.restLengthM = 0.55f;
+        suspension.maximumCompressionM = 0.20f;
+        suspension.maximumDroopM = 0.15f;
+        suspension.springRateNPerM = 35000.0f;
+        suspension.bumpDampingNsPerM = 3200.0f;
+        suspension.reboundDampingNsPerM = 4200.0f;
+        source.suspensions.push_back(suspension);
+
         heritage::vehicles::VehicleContactUnitDefinition contact;
         contact.id = "wheel_" + std::to_string(index + 1);
         contact.kind = "wheel";
@@ -773,7 +785,7 @@ VehicleDefinitionV2Source makeCompiledRoadCarDefinition()
         contact.localMount = mounts[index];
         contact.steering = index < 2;
         contact.parkingBrake = index >= 2;
-        contact.suspensionProvider = "raycast_linear";
+        contact.suspension = suspension.id;
         contact.tireProvider = "advanced_road";
         contact.radiusM = 0.2979f;
         contact.serviceBrakeFactor = index < 2 ? 0.31f : 0.19f;
@@ -797,9 +809,12 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && compiled.definition.powerUnits[0].mountBodyIndex == 0
         && compiled.definition.transmissions.size() == 1
         && compiled.definition.transmissions[0].powerUnitIndex == 0
+        && compiled.definition.suspensions.size() == 4
+        && compiled.definition.suspensions[0].mountBodyIndex == 0
         && compiled.definition.driveConnections.size() == 1
         && compiled.definition.driveConnections[0].contactUnitIndices.size() == 2
         && compiled.definition.contactUnits.size() == 4
+        && compiled.definition.contactUnits[0].suspensionIndex == 0
         && std::abs(compiled.definition.contactUnits[0].driveFactor - 0.5f)
             <= 0.000001f
         && std::abs(compiled.definition.contactUnits[2].driveFactor)
@@ -829,6 +844,11 @@ bool vehicleDefinitionCompilerAndLoaderWork()
     broken.transmissions[0].powerUnit = "missing_engine";
     const auto brokenResult = VehicleDefinitionCompiler::compile(broken);
 
+    VehicleDefinitionV2Source brokenSuspension = source;
+    brokenSuspension.contactUnits[0].suspension = "missing_suspension";
+    const auto brokenSuspensionResult =
+        VehicleDefinitionCompiler::compile(brokenSuspension);
+
     VehicleDefinitionV2Source future = source;
     future.classification = "motorcycle";
     future.requirements.leanDynamics = true;
@@ -839,15 +859,40 @@ bool vehicleDefinitionCompilerAndLoaderWork()
     categoryOnly.classification = "fictional_hovering_potato";
     const auto categoryOnlyResult = VehicleDefinitionCompiler::compile(categoryOnly);
 
+    VehicleDefinitionV2Source futureSuspension = source;
+    futureSuspension.suspensions[0].provider = "double_wishbone_v1";
+    const auto futureSuspensionResult =
+        VehicleDefinitionCompiler::compile(futureSuspension);
+
+    heritage::vehicles::SuspensionModelDescription suspensionDescription;
+    suspensionDescription.springRateNPerM = 10000.0f;
+    suspensionDescription.bumpDampingNsPerM = 1000.0f;
+    suspensionDescription.reboundDampingNsPerM = 2000.0f;
+    suspensionDescription.motionRatio = 0.5f;
+    suspensionDescription.maximumForceN = 5000.0f;
+    const auto bumpOutput = heritage::vehicles::evaluateSuspensionModel(
+        suspensionDescription,
+        { 0.10f, 0.20f });
+    const auto reboundOutput = heritage::vehicles::evaluateSuspensionModel(
+        suspensionDescription,
+        { 0.10f, -0.20f });
+    const bool suspensionForcesWorked =
+        std::abs(bumpOutput.normalForceN - 300.0f) <= 0.0001f
+        && std::abs(reboundOutput.normalForceN - 150.0f) <= 0.0001f;
+
     std::cout
         << "definition_compiler provider="
         << compiled.definition.runtimeProvider
         << " wheels=" << vehicles.wheelCount(loaded)
         << " gears=" << vehicles.forwardGearCount(loaded)
         << " invalid_reference_rejected=" << (!brokenResult.valid)
+        << " suspension_reference_rejected=" << (!brokenSuspensionResult.valid)
         << " future_topology_valid=" << futureResult.valid
         << " future_topology_ready=" << futureResult.currentSolverReady
         << " category_ignored=" << categoryOnlyResult.currentSolverReady
+        << " future_suspension_ready="
+        << futureSuspensionResult.currentSolverReady
+        << " motion_ratio_force_n=" << bumpOutput.normalForceN
         << '\n';
 
     return compiled.valid
@@ -856,10 +901,16 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && referencesResolved
         && runtimeLoaded
         && !brokenResult.valid
+        && !brokenSuspensionResult.valid
         && futureResult.valid
         && !futureResult.currentSolverReady
         && futureResult.issueSummary().find("lean_dynamics") != std::string::npos
-        && categoryOnlyResult.currentSolverReady;
+        && categoryOnlyResult.currentSolverReady
+        && futureSuspensionResult.valid
+        && !futureSuspensionResult.currentSolverReady
+        && futureSuspensionResult.issueSummary().find("double_wishbone_v1")
+            != std::string::npos
+        && suspensionForcesWorked;
 }
 
 } // namespace

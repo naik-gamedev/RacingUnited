@@ -181,6 +181,8 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
         addError(result, "power_unit_count", "At most 8 power units are allowed.");
     if (source.transmissions.size() > 8)
         addError(result, "transmission_count", "At most 8 transmissions are allowed.");
+    if (source.suspensions.empty() || source.suspensions.size() > 32)
+        addError(result, "suspension_count", "A vehicle requires 1 to 32 suspension components.");
     if (source.contactUnits.empty() || source.contactUnits.size() > 32)
         addError(result, "contact_count", "A vehicle requires 1 to 32 contact units.");
     if (source.driveConnections.size() > 16)
@@ -190,6 +192,8 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
     const auto powerIndices = indexComponents(source.powerUnits, "Power unit", result);
     const auto transmissionIndices = indexComponents(
         source.transmissions, "Transmission", result);
+    const auto suspensionIndices = indexComponents(
+        source.suspensions, "Suspension", result);
     const auto contactIndices = indexComponents(
         source.contactUnits, "Contact unit", result);
     indexComponents(source.driveConnections, "Drive connection", result);
@@ -290,6 +294,43 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
         }
     }
 
+    for (const VehicleSuspensionDefinition& suspension : source.suspensions)
+    {
+        CompiledVehicleSuspension compiled;
+        compiled.authored = suspension;
+        compiled.mountBodyIndex = resolveReference(
+            bodyIndices,
+            suspension.mountBody,
+            "Suspension '" + suspension.id + "'",
+            "body",
+            result);
+        result.definition.suspensions.push_back(std::move(compiled));
+
+        if (!finite(suspension.restLengthM) || suspension.restLengthM <= 0.0f
+            || !finite(suspension.maximumCompressionM)
+            || suspension.maximumCompressionM < 0.0f
+            || suspension.maximumCompressionM >= suspension.restLengthM
+            || !finite(suspension.maximumDroopM)
+            || suspension.maximumDroopM < 0.0f
+            || !finite(suspension.springRateNPerM)
+            || suspension.springRateNPerM <= 0.0f
+            || !finite(suspension.bumpDampingNsPerM)
+            || suspension.bumpDampingNsPerM < 0.0f
+            || !finite(suspension.reboundDampingNsPerM)
+            || suspension.reboundDampingNsPerM < 0.0f
+            || !finite(suspension.motionRatio)
+            || suspension.motionRatio <= 0.0f
+            || suspension.motionRatio > 10.0f
+            || !finite(suspension.maximumForceN)
+            || suspension.maximumForceN <= 0.0f)
+        {
+            addError(
+                result,
+                "suspension_parameters",
+                "Suspension '" + suspension.id + "' has invalid runtime parameters.");
+        }
+    }
+
     for (const VehicleContactUnitDefinition& contact : source.contactUnits)
     {
         CompiledVehicleContactUnit compiled;
@@ -300,16 +341,16 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
             "Contact unit '" + contact.id + "'",
             "body",
             result);
+        compiled.suspensionIndex = resolveReference(
+            suspensionIndices,
+            contact.suspension,
+            "Contact unit '" + contact.id + "'",
+            "suspension",
+            result);
         result.definition.contactUnits.push_back(std::move(compiled));
 
         if (!finite(contact.localMount) || !finite(contact.suspensionDirection)
             || !finite(contact.radiusM) || contact.radiusM <= 0.0f
-            || !finite(contact.restLengthM) || contact.restLengthM <= 0.0f
-            || !finite(contact.maximumCompressionM) || contact.maximumCompressionM < 0.0f
-            || !finite(contact.maximumDroopM) || contact.maximumDroopM < 0.0f
-            || !finite(contact.springRateNPerM) || contact.springRateNPerM <= 0.0f
-            || !finite(contact.bumpDampingNsPerM) || contact.bumpDampingNsPerM < 0.0f
-            || !finite(contact.reboundDampingNsPerM) || contact.reboundDampingNsPerM < 0.0f
             || !finite(contact.serviceBrakeFactor) || contact.serviceBrakeFactor < 0.0f
             || !finite(contact.parkingBrakeFactor) || contact.parkingBrakeFactor < 0.0f)
         {
@@ -414,16 +455,19 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
             addReason(providerReasons, "1 to 16 native forward ratios");
         }
     }
+    for (const VehicleSuspensionDefinition& suspension : source.suspensions)
+    {
+        if (suspension.provider != "linear_raycast_v1")
+        {
+            addReason(
+                providerReasons,
+                "suspension provider '" + suspension.provider + "'");
+        }
+    }
     for (const VehicleContactUnitDefinition& contact : source.contactUnits)
     {
         if (contact.kind != "wheel")
             addReason(providerReasons, "contact provider '" + contact.kind + "'");
-        if (contact.suspensionProvider != "raycast_linear")
-        {
-            addReason(
-                providerReasons,
-                "suspension provider '" + contact.suspensionProvider + "'");
-        }
         if (contact.tireProvider != "advanced_road")
             addReason(providerReasons, "tire provider '" + contact.tireProvider + "'");
     }
@@ -461,6 +505,7 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
         << " | " << source.bodies.size() << " bodies"
         << " | " << source.powerUnits.size() << " power units"
         << " | " << source.transmissions.size() << " transmissions"
+        << " | " << source.suspensions.size() << " suspensions"
         << " | " << source.contactUnits.size() << " contacts"
         << " | provider " << result.definition.runtimeProvider;
     result.summary = summary.str();

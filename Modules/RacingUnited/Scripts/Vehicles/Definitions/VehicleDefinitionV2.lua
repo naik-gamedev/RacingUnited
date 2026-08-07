@@ -14,6 +14,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 1, transmissionCount = 1,
             contactUnitCount = 4, forwardGearCount = 6,
             driveLayout = "fwd", engineLocation = "front",
+            suspensionProvider = "linear_raycast_v1",
             maximumTorqueNm = 250.0
         },
         formula = {
@@ -21,6 +22,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 1, transmissionCount = 1,
             contactUnitCount = 4, forwardGearCount = 8,
             driveLayout = "rwd", engineLocation = "mid",
+            suspensionProvider = "pushrod_double_wishbone_v1",
             maximumTorqueNm = 500.0
         },
         indycar = {
@@ -28,6 +30,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 1, transmissionCount = 1,
             contactUnitCount = 4, forwardGearCount = 6,
             driveLayout = "rwd", engineLocation = "mid",
+            suspensionProvider = "pushrod_double_wishbone_v1",
             maximumTorqueNm = 530.0
         },
         kart = {
@@ -35,6 +38,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 1, transmissionCount = 1,
             contactUnitCount = 4, forwardGearCount = 1,
             driveLayout = "rwd", engineLocation = "rear",
+            suspensionProvider = "kart_chassis_flex_v1",
             maximumTorqueNm = 22.0
         },
         sprint_car = {
@@ -42,6 +46,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 1, transmissionCount = 1,
             contactUnitCount = 4, forwardGearCount = 1,
             driveLayout = "rwd", engineLocation = "front",
+            suspensionProvider = "live_axle_torsion_v1",
             maximumTorqueNm = 900.0
         },
         atv = {
@@ -49,6 +54,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 1, transmissionCount = 1,
             contactUnitCount = 4, forwardGearCount = 5,
             driveLayout = "awd", engineLocation = "mid",
+            suspensionProvider = "double_wishbone_v1",
             maximumTorqueNm = 65.0
         },
         motorcycle = {
@@ -56,6 +62,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 1, transmissionCount = 1,
             contactUnitCount = 2, forwardGearCount = 6,
             driveLayout = "rwd", engineLocation = "mid",
+            suspensionProvider = "motorcycle_linkage_v1",
             maximumTorqueNm = 120.0, requiresLeanDynamics = true
         },
         truck = {
@@ -63,6 +70,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 1, transmissionCount = 1,
             contactUnitCount = 6, forwardGearCount = 12,
             driveLayout = "rwd", engineLocation = "front",
+            suspensionProvider = "live_axle_leaf_v1",
             maximumTorqueNm = 2200.0
         },
         twin_engine = {
@@ -70,6 +78,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 2, transmissionCount = 2,
             contactUnitCount = 4, forwardGearCount = 4,
             driveLayout = "split", engineLocation = "distributed",
+            suspensionProvider = "linear_raycast_v1",
             maximumTorqueNm = 54.0
         },
         custom = {
@@ -77,6 +86,7 @@ VehicleDefinitionV2 = {
             bodyCount = 1, powerUnitCount = 1, transmissionCount = 1,
             contactUnitCount = 4, forwardGearCount = 5,
             driveLayout = "rwd", engineLocation = "front",
+            suspensionProvider = "linear_raycast_v1",
             maximumTorqueNm = 200.0
         }
     }
@@ -181,6 +191,7 @@ function BuildVehicleDefinitionV2(draft)
         bodies = {},
         powerUnits = {},
         transmissions = {},
+        suspensions = {},
         contactUnits = {},
         driveConnections = {}
     }
@@ -241,22 +252,11 @@ function BuildVehicleDefinitionV2(draft)
         if contactCount == 4 then
             serviceBrakeFactor = axle == "front" and 0.31 or 0.19
         end
-        definition.contactUnits[index] = {
-            id = "contact_" .. tostring(index),
-            kind = draft.requiresTrackContacts and "track_patch" or "wheel",
+        local suspensionId = "suspension_" .. tostring(index)
+        definition.suspensions[index] = {
+            id = suspensionId,
+            provider = draft.suspensionProvider or "linear_raycast_v1",
             mountBody = "chassis",
-            axle = axle,
-            position = WorkshopContactPosition(index, contactCount),
-            steering = axle == "front",
-            driven = WorkshopContactDriven(draft.driveLayout, axle),
-            serviceBrake = true,
-            parkingBrake = axle == "rear",
-            suspensionProvider = "raycast_linear",
-            tireProvider = draft.requiresLeanDynamics
-                and "motorcycle_profile" or "advanced_road",
-            suspensionDirection = { 0.0, -1.0, 0.0 },
-            radiusM = source and source.radiusM
-                or prototypeWheelPhysics.radiusM or 0.35,
             restLengthM = source and source.restLengthM
                 or prototypeWheelPhysics.restLengthM or 0.50,
             maximumCompressionM = source and source.maximumCompressionM
@@ -269,6 +269,25 @@ function BuildVehicleDefinitionV2(draft)
                 or prototypeWheelPhysics.bumpDampingNsPerM or 3200.0,
             reboundDampingNsPerM = source and source.reboundDampingNsPerM
                 or prototypeWheelPhysics.reboundDampingNsPerM or 4200.0,
+            motionRatio = 1.0,
+            maximumForceN = 250000.0
+        }
+        definition.contactUnits[index] = {
+            id = "contact_" .. tostring(index),
+            kind = draft.requiresTrackContacts and "track_patch" or "wheel",
+            mountBody = "chassis",
+            axle = axle,
+            position = WorkshopContactPosition(index, contactCount),
+            steering = axle == "front",
+            driven = WorkshopContactDriven(draft.driveLayout, axle),
+            serviceBrake = true,
+            parkingBrake = axle == "rear",
+            suspension = suspensionId,
+            tireProvider = draft.requiresLeanDynamics
+                and "motorcycle_profile" or "advanced_road",
+            suspensionDirection = { 0.0, -1.0, 0.0 },
+            radiusM = source and source.radiusM
+                or prototypeWheelPhysics.radiusM or 0.35,
             serviceBrakeFactor = serviceBrakeFactor,
             parkingBrakeFactor = axle == "rear"
                 and (contactCount == 2 and 1.0 or 0.5) or 0.0
@@ -358,6 +377,7 @@ function ValidateVehicleDefinitionV2(definition)
     local bodies = definition.bodies or {}
     local powerUnits = definition.powerUnits or {}
     local transmissions = definition.transmissions or {}
+    local suspensions = definition.suspensions or {}
     local contacts = definition.contactUnits or {}
     local connections = definition.driveConnections or {}
     if #bodies < 1 or #bodies > 16 then
@@ -373,6 +393,11 @@ function ValidateVehicleDefinitionV2(definition)
             report, "error", "transmission_count",
             "At most 8 transmissions are allowed")
     end
+    if #suspensions < 1 or #suspensions > 32 then
+        AddVehicleDefinitionIssue(
+            report, "error", "suspension_count",
+            "A ground vehicle requires 1 to 32 suspension components")
+    end
     if #contacts < 1 or #contacts > 32 then
         AddVehicleDefinitionIssue(
             report, "error", "contact_count",
@@ -383,6 +408,8 @@ function ValidateVehicleDefinitionV2(definition)
     local powerIds = ValidateUniqueComponentIds(report, powerUnits, "Power unit")
     local transmissionIds = ValidateUniqueComponentIds(
         report, transmissions, "Transmission")
+    local suspensionIds = ValidateUniqueComponentIds(
+        report, suspensions, "Suspension")
     local contactIds = ValidateUniqueComponentIds(report, contacts, "Contact unit")
     for _, body in ipairs(bodies) do
         if type(body.massKg) ~= "number" or body.massKg <= 0.0 then
@@ -410,11 +437,32 @@ function ValidateVehicleDefinitionV2(definition)
                 report, "error", "gear_count", "A transmission supports at most 32 forward ratios")
         end
     end
+    for _, suspension in ipairs(suspensions) do
+        if not bodyIds[suspension.mountBody] then
+            AddVehicleDefinitionIssue(
+                report, "error", "suspension_body_ref",
+                "Suspension '" .. tostring(suspension.id)
+                    .. "' references a missing body")
+        end
+        if type(suspension.motionRatio) ~= "number"
+            or suspension.motionRatio <= 0.0 then
+            AddVehicleDefinitionIssue(
+                report, "error", "suspension_motion_ratio",
+                "Suspension '" .. tostring(suspension.id)
+                    .. "' needs a positive motion ratio")
+        end
+    end
     for _, contact in ipairs(contacts) do
         if not bodyIds[contact.mountBody] then
             AddVehicleDefinitionIssue(
                 report, "error", "contact_body_ref",
                 "Contact unit '" .. tostring(contact.id) .. "' references a missing body")
+        end
+        if not suspensionIds[contact.suspension] then
+            AddVehicleDefinitionIssue(
+                report, "error", "contact_suspension_ref",
+                "Contact unit '" .. tostring(contact.id)
+                    .. "' references a missing suspension")
         end
     end
     for _, connection in ipairs(connections) do
@@ -461,6 +509,15 @@ function ValidateVehicleDefinitionV2(definition)
             or #(transmissions[1].forwardRatios or {}) > 16) then
         table.insert(currentReasons, "1 to 16 native forward ratios")
     end
+    local suspensionReasons = {}
+    for _, suspension in ipairs(suspensions) do
+        if suspension.provider ~= "linear_raycast_v1"
+            and not suspensionReasons[suspension.provider] then
+            suspensionReasons[suspension.provider] = true
+            table.insert(currentReasons,
+                "suspension provider '" .. tostring(suspension.provider) .. "'")
+        end
+    end
     if requirements.leanDynamics then
         table.insert(currentReasons, "motorcycle lean/camber dynamics")
     end
@@ -491,8 +548,8 @@ function ValidateVehicleDefinitionV2(definition)
     report.valid = report.errorCount == 0
     report.currentSolverReady = report.valid and report.currentSolverReady
     report.summary = string.format(
-        "schema v2 | %d bodies | %d power units | %d transmissions | %d contacts",
-        #bodies, #powerUnits, #transmissions, #contacts)
+        "schema v2 | %d bodies | %d power units | %d transmissions | %d suspensions | %d contacts",
+        #bodies, #powerUnits, #transmissions, #suspensions, #contacts)
     return report
 end
 

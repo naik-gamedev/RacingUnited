@@ -43,6 +43,7 @@ $required = @(
     "Docs\Decisions\ADR-009-Wheel-Coordinate-Contract.md",
     "Docs\Decisions\ADR-010-Blender-Authoring-Player-Scene.md",
     "Docs\Decisions\ADR-012-Native-Vehicle-Definition-Compiler.md",
+    "Docs\Decisions\ADR-013-Suspension-Provider-Contract.md",
     "Docs\LuaApiAnnotations.json",
     "Engine\HeritageEngine\Core\Diagnostics\BuildIdentity.hpp",
     "Engine\HeritageEngine\Core\Diagnostics\GeneratedBuildIdentity.hpp",
@@ -50,6 +51,8 @@ $required = @(
     "Engine\HeritageEngine\Core\Modules\LuaModuleRuntime.hpp",
     "Engine\HeritageEngine\Vehicles\TireModel.hpp",
     "Engine\HeritageEngine\Vehicles\TireModel.cpp",
+    "Engine\HeritageEngine\Vehicles\SuspensionModel.hpp",
+    "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp",
     "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp",
     "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.cpp",
     "Engine\HeritageEngine\Vehicles\VehicleDefinition.hpp",
@@ -171,6 +174,8 @@ Check ($collisionHeader.Contains("float surfaceWetness")) "physics collider wetn
 
 $vehicleHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleSystem.hpp"
 $vehicleHeader = if (Test-Path $vehicleHeaderPath) { [IO.File]::ReadAllText($vehicleHeaderPath) } else { "" }
+$vehicleCppPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleSystem.cpp"
+$vehicleCpp = if (Test-Path $vehicleCppPath) { [IO.File]::ReadAllText($vehicleCppPath) } else { "" }
 Check ($vehicleHeader.Contains("contactCollider")) "wheel telemetry retains exact contacted collider"
 Check ($vehicleHeader.Contains("surfaceMaterial")) "wheel telemetry retains contacted surface material"
 Check ($vehicleHeader.Contains("TireModelDescription tireModel")) "each wheel record owns independent native tire data"
@@ -186,12 +191,15 @@ Check ($physicsRegression.Contains("unbrakedVehicleRollsOnSlope")) "headless reg
 Check ($physicsRegression.Contains("flatRestSleepsAndThrottleWakes")) "headless regression covers parked sleep and throttle wake"
 Check ($physicsRegression.Contains("dynamicsLabCapturesHighRateTelemetry")) "headless regression verifies exact high-rate dynamics capture"
 Check ($physicsRegression.Contains("vehicleDefinitionCompilerAndLoaderWork")) "headless regression verifies native definition compilation and loading"
+Check ($physicsRegression.Contains("motion_ratio_force_n")) "headless regression verifies suspension motion-ratio force evaluation"
 
 $definitionV2Path = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Definitions\VehicleDefinitionV2.lua"
 $definitionV2 = if (Test-Path $definitionV2Path) { [IO.File]::ReadAllText($definitionV2Path) } else { "" }
 Check ($definitionV2.Contains("schemaVersion = 2")) "VehicleDefinitionV2 has an explicit schema version"
 Check ($definitionV2.Contains("powerUnits = {}")) "VehicleDefinitionV2 stores arbitrary power units"
 Check ($definitionV2.Contains("transmissions = {}")) "VehicleDefinitionV2 stores arbitrary transmissions"
+Check ($definitionV2.Contains("suspensions = {}")) "VehicleDefinitionV2 stores reusable suspension components"
+Check ($definitionV2.Contains("suspension = suspensionId")) "contact units reference stable suspension IDs"
 Check ($definitionV2.Contains("driveConnections = {}")) "VehicleDefinitionV2 stores explicit drive connections"
 Check ($definitionV2.Contains("ValidateVehicleDefinitionV2")) "VehicleDefinitionV2 has structural validation"
 Check ($definitionV2.Contains("currentSolverReady")) "definition validity remains separate from current solver support"
@@ -222,11 +230,22 @@ Check ($tireHeader.Contains("struct TireForceResult")) "advanced tire provider h
 Check ($tireCpp.Contains("evaluateAdvancedRoadTire")) "advanced road-tire provider implementation exists"
 Check ($tireCpp.Contains("generalizedTireCurve")) "advanced road-tire curve is isolated from VehicleSystem"
 
+$suspensionHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.hpp"
+$suspensionHeader = if (Test-Path $suspensionHeaderPath) { [IO.File]::ReadAllText($suspensionHeaderPath) } else { "" }
+$suspensionCppPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp"
+$suspensionCpp = if (Test-Path $suspensionCppPath) { [IO.File]::ReadAllText($suspensionCppPath) } else { "" }
+Check ($suspensionHeader.Contains("SuspensionModelInput")) "suspension provider has an explicit input contract"
+Check ($suspensionHeader.Contains("SuspensionModelOutput")) "suspension provider has an explicit output contract"
+Check ($suspensionCpp.Contains('"linear_raycast_v1"')) "linear raycast suspension provider exists"
+Check ($vehicleCpp.Contains("evaluateSuspensionModel")) "VehicleSystem evaluates suspension through the provider boundary"
+
 
 $vehicleProjectPath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj"
 $vehicleProject = if (Test-Path $vehicleProjectPath) { [IO.File]::ReadAllText($vehicleProjectPath) } else { "" }
 Check ($vehicleProject.Contains("..\Vehicles\TireModel.cpp")) "Visual Studio project compiles TireModel.cpp"
 Check ($vehicleProject.Contains("..\Vehicles\TireModel.hpp")) "Visual Studio project tracks TireModel.hpp"
+Check ($vehicleProject.Contains("..\Vehicles\SuspensionModel.cpp")) "Visual Studio project compiles SuspensionModel.cpp"
+Check ($vehicleProject.Contains("..\Vehicles\SuspensionModel.hpp")) "Visual Studio project tracks SuspensionModel.hpp"
 Check ($vehicleProject.Contains("..\Vehicles\VehicleDynamicsLab.cpp")) "Visual Studio project compiles VehicleDynamicsLab.cpp"
 Check ($vehicleProject.Contains("..\Vehicles\VehicleDynamicsLab.hpp")) "Visual Studio project tracks VehicleDynamicsLab.hpp"
 Check ($vehicleProject.Contains("..\Vehicles\VehicleDefinitionCompiler.cpp")) "Visual Studio project compiles VehicleDefinitionCompiler.cpp"

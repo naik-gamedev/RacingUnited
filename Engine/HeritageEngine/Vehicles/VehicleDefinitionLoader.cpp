@@ -64,16 +64,33 @@ VehicleHandle VehicleDefinitionLoader::create(
 
     for (const CompiledVehicleContactUnit& contact : definition.contactUnits)
     {
+        if (contact.suspensionIndex >= definition.suspensions.size())
+        {
+            errorMessage = "Compiled contact has no resolved suspension component.";
+            return rollback();
+        }
+        const VehicleSuspensionDefinition& suspension =
+            definition.suspensions[contact.suspensionIndex].authored;
+        SuspensionProviderKind suspensionProvider{};
+        if (!parseSuspensionProvider(suspension.provider, suspensionProvider))
+        {
+            errorMessage = "Compiled suspension provider is not available.";
+            return rollback();
+        }
+
         WheelDescription wheel;
         wheel.localMount = contact.authored.localMount;
         wheel.localSuspensionDirection = contact.authored.suspensionDirection;
         wheel.radius = contact.authored.radiusM;
-        wheel.restLength = contact.authored.restLengthM;
-        wheel.maximumCompression = contact.authored.maximumCompressionM;
-        wheel.maximumDroop = contact.authored.maximumDroopM;
-        wheel.springRate = contact.authored.springRateNPerM;
-        wheel.bumpDamping = contact.authored.bumpDampingNsPerM;
-        wheel.reboundDamping = contact.authored.reboundDampingNsPerM;
+        wheel.restLength = suspension.restLengthM;
+        wheel.maximumCompression = suspension.maximumCompressionM;
+        wheel.maximumDroop = suspension.maximumDroopM;
+        wheel.springRate = suspension.springRateNPerM;
+        wheel.bumpDamping = suspension.bumpDampingNsPerM;
+        wheel.reboundDamping = suspension.reboundDampingNsPerM;
+        wheel.suspensionProvider = suspensionProvider;
+        wheel.suspensionMotionRatio = suspension.motionRatio;
+        wheel.maximumSuspensionForce = suspension.maximumForceN;
         wheel.driveFactor = contact.driveFactor;
         wheel.steerFactor = contact.authored.steering ? 1.0f : 0.0f;
         wheel.brakeFactor = contact.authored.serviceBrake

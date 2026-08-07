@@ -45,6 +45,21 @@ struct VehicleTransmissionDefinition
     float clutchEngagementRate = 5.0f;
 };
 
+struct VehicleSuspensionDefinition
+{
+    std::string id;
+    std::string provider;
+    std::string mountBody;
+    float restLengthM = 0.50f;
+    float maximumCompressionM = 0.18f;
+    float maximumDroopM = 0.15f;
+    float springRateNPerM = 35000.0f;
+    float bumpDampingNsPerM = 3200.0f;
+    float reboundDampingNsPerM = 4200.0f;
+    float motionRatio = 1.0f;
+    float maximumForceN = 250000.0f;
+};
+
 struct VehicleContactUnitDefinition
 {
     std::string id;
@@ -53,18 +68,12 @@ struct VehicleContactUnitDefinition
     std::string axle;
     heritage::math::Vec3 localMount{};
     heritage::math::Vec3 suspensionDirection{ 0.0f, -1.0f, 0.0f };
+    std::string suspension;
     bool steering = false;
     bool serviceBrake = true;
     bool parkingBrake = false;
-    std::string suspensionProvider;
     std::string tireProvider;
     float radiusM = 0.35f;
-    float restLengthM = 0.50f;
-    float maximumCompressionM = 0.18f;
-    float maximumDroopM = 0.15f;
-    float springRateNPerM = 35000.0f;
-    float bumpDampingNsPerM = 3200.0f;
-    float reboundDampingNsPerM = 4200.0f;
     float serviceBrakeFactor = 0.25f;
     float parkingBrakeFactor = 0.0f;
 };
@@ -96,6 +105,7 @@ struct VehicleDefinitionV2Source
     std::vector<VehicleBodyDefinition> bodies;
     std::vector<VehiclePowerUnitDefinition> powerUnits;
     std::vector<VehicleTransmissionDefinition> transmissions;
+    std::vector<VehicleSuspensionDefinition> suspensions;
     std::vector<VehicleContactUnitDefinition> contactUnits;
     std::vector<VehicleDriveConnectionDefinition> driveConnections;
 };
@@ -126,10 +136,17 @@ struct CompiledVehicleTransmission
     std::size_t powerUnitIndex = kInvalidVehicleComponentIndex;
 };
 
+struct CompiledVehicleSuspension
+{
+    VehicleSuspensionDefinition authored;
+    std::size_t mountBodyIndex = kInvalidVehicleComponentIndex;
+};
+
 struct CompiledVehicleContactUnit
 {
     VehicleContactUnitDefinition authored;
     std::size_t mountBodyIndex = kInvalidVehicleComponentIndex;
+    std::size_t suspensionIndex = kInvalidVehicleComponentIndex;
     float driveFactor = 0.0f;
 };
 
@@ -151,6 +168,7 @@ struct CompiledVehicleDefinition
     std::vector<VehicleBodyDefinition> bodies;
     std::vector<CompiledVehiclePowerUnit> powerUnits;
     std::vector<CompiledVehicleTransmission> transmissions;
+    std::vector<CompiledVehicleSuspension> suspensions;
     std::vector<CompiledVehicleContactUnit> contactUnits;
     std::vector<CompiledVehicleDriveConnection> driveConnections;
     std::string runtimeProvider;

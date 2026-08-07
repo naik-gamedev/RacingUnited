@@ -18,9 +18,14 @@ assert(roadReport.valid, "road-car topology must be structurally valid")
 assert(roadReport.currentSolverReady, "road-car template must preview today")
 assert(#road.bodies == 1 and #road.contactUnits == 4,
     "road-car topology counts changed")
+assert(#road.suspensions == 4
+    and road.contactUnits[1].suspension == road.suspensions[1].id,
+    "contacts must reference reusable suspension components")
 assert(road.contactUnits[1].radiusM > 0.0
-    and road.contactUnits[1].springRateNPerM > 0.0,
+    and road.suspensions[1].springRateNPerM > 0.0,
     "runtime wheel/suspension parameters were not authored")
+assert(road.suspensions[1].provider == "linear_raycast_v1",
+    "road-car draft must name the current native suspension provider")
 assert(road.transmissions[1].finalDriveRatio > 0.0,
     "runtime transmission parameters were not authored")
 
@@ -47,6 +52,17 @@ broken.contactUnits[1].mountBody = "missing_body"
 local brokenReport = ValidateVehicleDefinitionV2(broken)
 assert(not brokenReport.valid,
     "invalid component references must fail structural validation")
+
+local brokenSuspension = BuildVehicleDefinitionV2(
+    CreateVehicleWorkshopDraft("road_car"))
+brokenSuspension.contactUnits[1].suspension = "missing_suspension"
+assert(not ValidateVehicleDefinitionV2(brokenSuspension).valid,
+    "invalid suspension references must fail structural validation")
+
+local formula = BuildVehicleDefinitionV2(CreateVehicleWorkshopDraft("formula"))
+local formulaReport = ValidateVehicleDefinitionV2(formula)
+assert(formulaReport.valid and not formulaReport.currentSolverReady,
+    "formula pushrod suspension must remain authored without fake support")
 
 local serialized = SerializeVehicleDefinitionV2(twin)
 assert(string.find(serialized, "schemaVersion = 2", 1, true),
