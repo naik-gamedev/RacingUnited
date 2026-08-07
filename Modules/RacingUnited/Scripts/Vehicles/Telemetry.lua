@@ -147,5 +147,30 @@ function RefreshVehicleTelemetry()
             tireRadialDissipationWatts =
                 tireRadialDissipationWatts or 0.0
         }
+        local camberAngleDegrees, toeAngleDegrees,
+            uprightRotationX, uprightRotationY, uprightRotationZ,
+            steeringAxisX, steeringAxisY, steeringAxisZ,
+            wheelForwardX, wheelForwardY, wheelForwardZ,
+            wheelRightX, wheelRightY, wheelRightZ,
+            wheelUpX, wheelUpY, wheelUpZ =
+            Vehicle.GetWheelUprightPose(nativeVehicle, index)
+        local telemetry = vehicleWheelTelemetry[index]
+        telemetry.camberAngleDegrees = camberAngleDegrees or 0.0
+        telemetry.toeAngleDegrees = toeAngleDegrees or 0.0
+        telemetry.uprightRotationX = uprightRotationX or 0.0
+        telemetry.uprightRotationY = uprightRotationY or 0.0
+        telemetry.uprightRotationZ = uprightRotationZ or 0.0
+        telemetry.steeringAxisX = steeringAxisX or 0.0
+        telemetry.steeringAxisY = steeringAxisY or 1.0
+        telemetry.steeringAxisZ = steeringAxisZ or 0.0
+        telemetry.wheelForwardX = wheelForwardX or 0.0
+        telemetry.wheelForwardY = wheelForwardY or 0.0
+        telemetry.wheelForwardZ = wheelForwardZ or 1.0
+        telemetry.wheelRightX = wheelRightX or 1.0
+        telemetry.wheelRightY = wheelRightY or 0.0
+        telemetry.wheelRightZ = wheelRightZ or 0.0
+        telemetry.wheelUpX = wheelUpX or 0.0
+        telemetry.wheelUpY = wheelUpY or 1.0
+        telemetry.wheelUpZ = wheelUpZ or 0.0
     end
 end

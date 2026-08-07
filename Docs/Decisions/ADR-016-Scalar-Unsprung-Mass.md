@@ -31,6 +31,5 @@ coupled axle and rigid upright providers can reuse or supersede it cleanly.
   separate arcade vehicle implementation.
 - This is not yet a free upright rigid body and does not calculate camber, toe,
   scrub, caster, bump steer, axle coupling or linkage loads.
-- Geometry providers and authoritative upright pose remain the next suspension
-  milestone; anti-roll and cross-linked systems follow those foundations.
-
+- Step 29P subsequently adds the geometry-provider boundary and authoritative
+  upright pose; hardpoint linkages, anti-roll and cross-linked systems follow.

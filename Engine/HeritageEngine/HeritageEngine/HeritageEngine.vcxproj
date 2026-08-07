@@ -196,6 +196,7 @@ user32.lib
     <ClCompile Include="..\Physics\RigidBodySystem.cpp" />
       <ClCompile Include="..\Vehicles\TireModel.cpp" />
       <ClCompile Include="..\Vehicles\SuspensionModel.cpp" />
+      <ClCompile Include="..\Vehicles\SuspensionGeometry.cpp" />
       <ClCompile Include="..\Vehicles\UnsprungMassModel.cpp" />
     <ClCompile Include="..\Vehicles\VehicleDefinitionCompiler.cpp" />
     <ClCompile Include="..\Vehicles\VehicleDefinitionLoader.cpp" />
@@ -253,6 +254,7 @@ user32.lib
     <ClInclude Include="..\Physics\RigidBodySystem.hpp" />
       <ClInclude Include="..\Vehicles\TireModel.hpp" />
       <ClInclude Include="..\Vehicles\SuspensionModel.hpp" />
+      <ClInclude Include="..\Vehicles\SuspensionGeometry.hpp" />
       <ClInclude Include="..\Vehicles\UnsprungMassModel.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDefinition.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDefinitionCompiler.hpp" />

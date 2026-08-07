@@ -9,6 +9,7 @@
 #include "../Physics/CollisionSystem.hpp"
 #include "../Physics/RigidBodySystem.hpp"
 #include "TireModel.hpp"
+#include "SuspensionGeometry.hpp"
 #include "SuspensionModel.hpp"
 #include "UnsprungMassModel.hpp"
 #include "VehicleDynamicsLab.hpp"
@@ -120,6 +121,13 @@ struct WheelDescription
     float droopStopRate = 0.0f;
     SuspensionProviderKind suspensionProvider =
         SuspensionProviderKind::LinearRaycastV1;
+    heritage::math::Vec3 localSteeringAxis{ 0.0f, 1.0f, 0.0f };
+    float staticCamberDegrees = 0.0f;
+    float camberGainDegreesPerM = 0.0f;
+    float camberProgressionDegreesPerM2 = 0.0f;
+    float staticToeDegrees = 0.0f;
+    float toeGainDegreesPerM = 0.0f;
+    float toeProgressionDegreesPerM2 = 0.0f;
     float suspensionMotionRatio = 1.0f;
     float maximumSuspensionForce = 250000.0f;
     float effectiveUnsprungMass = 0.0f;
@@ -193,6 +201,13 @@ struct WheelState
     float longitudinalForce = 0.0f;
     float lateralForce = 0.0f;
     float steerAngleDegrees = 0.0f;
+    float camberAngleDegrees = 0.0f;
+    float toeAngleDegrees = 0.0f;
+    heritage::math::Vec3 localUprightRotationDegrees{};
+    heritage::math::Vec3 worldSteeringAxis{ 0.0f, 1.0f, 0.0f };
+    heritage::math::Vec3 worldWheelForward{ 0.0f, 0.0f, 1.0f };
+    heritage::math::Vec3 worldWheelRight{ 1.0f, 0.0f, 0.0f };
+    heritage::math::Vec3 worldWheelUp{ 0.0f, 1.0f, 0.0f };
     float wheelAngularVelocity = 0.0f;
     float appliedDriveTorque = 0.0f;
     float appliedBrakeTorque = 0.0f;
@@ -258,6 +273,14 @@ public:
         VehicleHandle handle,
         std::size_t wheelIndex,
         SuspensionModelDescription& value) const;
+    bool setWheelSuspensionGeometry(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const SuspensionGeometryDescription& value);
+    bool wheelSuspensionGeometry(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        SuspensionGeometryDescription& value) const;
     bool setWheelUnsprungMassModel(
         VehicleHandle handle,
         std::size_t wheelIndex,

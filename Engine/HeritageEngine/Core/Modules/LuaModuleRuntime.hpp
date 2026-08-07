@@ -387,6 +387,8 @@ private:
     static int luaVehicleGetWheelCount(lua_State* state);
     static int luaVehicleSetWheelSuspensionModel(lua_State* state);
     static int luaVehicleGetWheelSuspensionModel(lua_State* state);
+    static int luaVehicleSetWheelSuspensionGeometry(lua_State* state);
+    static int luaVehicleGetWheelSuspensionGeometry(lua_State* state);
     static int luaVehicleSetWheelUnsprungMassModel(lua_State* state);
     static int luaVehicleGetWheelUnsprungMassModel(lua_State* state);
     static int luaVehicleSetInputs(lua_State* state);
@@ -422,6 +424,7 @@ private:
     static int luaVehicleGetDynamicsLabSeries(lua_State* state);
     static int luaVehicleExportDynamicsLabCsv(lua_State* state);
     static int luaVehicleGetWheelState(lua_State* state);
+    static int luaVehicleGetWheelUprightPose(lua_State* state);
     static int luaVehicleGetLastError(lua_State* state);
 
 

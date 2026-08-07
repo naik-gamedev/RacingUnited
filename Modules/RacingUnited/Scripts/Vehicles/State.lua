@@ -144,7 +144,7 @@ vehicleSelectedGearRatio = vehicleForwardRatios[1]
 vehicleOutputTorque = 0.0
 vehicleDrivenWheelSpeedDifferenceRpm = 0.0
 vehicleForwardGearCount = #vehicleForwardRatios
-vehicleMessage = "Step 29O scalar unsprung mass and wheel hop are ready"
+vehicleMessage = "Step 29P suspension geometry and upright pose are ready"
 vehicleWheelTelemetry = {}
 vehicleWheelTireProfileNames = {}
 for index, wheel in ipairs(definition.wheels) do
@@ -175,6 +175,16 @@ vehicleSuspension = {
     bumpStopProgressionNPerM2 = suspension.bumpStopProgressionNPerM2,
     droopStopEngagementM = suspension.droopStopEngagementM,
     droopStopRateNPerM = suspension.droopStopRateNPerM,
+    steeringAxisX = suspension.steeringAxis[1],
+    steeringAxisY = suspension.steeringAxis[2],
+    steeringAxisZ = suspension.steeringAxis[3],
+    staticCamberDegrees = suspension.staticCamberDegrees,
+    camberGainDegreesPerM = suspension.camberGainDegreesPerM,
+    camberProgressionDegreesPerM2 =
+        suspension.camberProgressionDegreesPerM2,
+    staticToeDegrees = suspension.staticToeDegrees,
+    toeGainDegreesPerM = suspension.toeGainDegreesPerM,
+    toeProgressionDegreesPerM2 = suspension.toeProgressionDegreesPerM2,
     motionRatio = suspension.motionRatio,
     maximumForceN = suspension.maximumForceN,
     effectiveUnsprungMassKg = suspension.effectiveUnsprungMassKg,

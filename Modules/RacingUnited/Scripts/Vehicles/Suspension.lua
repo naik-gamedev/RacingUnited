@@ -42,6 +42,26 @@ function ReadVehicleSuspensionModel(wheelIndex)
     vehicleSuspension.droopStopRateNPerM = droopStopRateNPerM
     vehicleSuspension.motionRatio = motionRatio
     vehicleSuspension.maximumForceN = maximumForceN
+    local geometryProvider, steeringAxisX, steeringAxisY, steeringAxisZ,
+        staticCamberDegrees, camberGainDegreesPerM,
+        camberProgressionDegreesPerM2, staticToeDegrees,
+        toeGainDegreesPerM, toeProgressionDegreesPerM2 =
+        Vehicle.GetWheelSuspensionGeometry(nativeVehicle, wheelIndex)
+    if geometryProvider == nil then
+        vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
+        return false
+    end
+    vehicleSuspension.steeringAxisX = steeringAxisX
+    vehicleSuspension.steeringAxisY = steeringAxisY
+    vehicleSuspension.steeringAxisZ = steeringAxisZ
+    vehicleSuspension.staticCamberDegrees = staticCamberDegrees
+    vehicleSuspension.camberGainDegreesPerM = camberGainDegreesPerM
+    vehicleSuspension.camberProgressionDegreesPerM2 =
+        camberProgressionDegreesPerM2
+    vehicleSuspension.staticToeDegrees = staticToeDegrees
+    vehicleSuspension.toeGainDegreesPerM = toeGainDegreesPerM
+    vehicleSuspension.toeProgressionDegreesPerM2 =
+        toeProgressionDegreesPerM2
     local effectiveUnsprungMassKg, tireRadialStiffnessNPerM,
         tireRadialDampingNsPerM, maximumTireDeflectionM,
         maximumTireNormalForceN =
@@ -81,6 +101,20 @@ function ApplyVehicleSuspensionModel(wheelIndex)
         vehicleSuspension.droopStopRateNPerM,
         vehicleSuspension.motionRatio,
         vehicleSuspension.maximumForceN)
+    if success then
+        success = Vehicle.SetWheelSuspensionGeometry(
+            nativeVehicle,
+            wheelIndex,
+            vehicleSuspension.steeringAxisX,
+            vehicleSuspension.steeringAxisY,
+            vehicleSuspension.steeringAxisZ,
+            vehicleSuspension.staticCamberDegrees,
+            vehicleSuspension.camberGainDegreesPerM,
+            vehicleSuspension.camberProgressionDegreesPerM2,
+            vehicleSuspension.staticToeDegrees,
+            vehicleSuspension.toeGainDegreesPerM,
+            vehicleSuspension.toeProgressionDegreesPerM2)
+    end
     if success then
         success = Vehicle.SetWheelUnsprungMassModel(
             nativeVehicle,
@@ -132,6 +166,19 @@ function RestoreVehicleSuspensionDefinition()
         suspension.bumpStopProgressionNPerM2
     vehicleSuspension.droopStopEngagementM = suspension.droopStopEngagementM
     vehicleSuspension.droopStopRateNPerM = suspension.droopStopRateNPerM
+    vehicleSuspension.steeringAxisX = suspension.steeringAxis[1]
+    vehicleSuspension.steeringAxisY = suspension.steeringAxis[2]
+    vehicleSuspension.steeringAxisZ = suspension.steeringAxis[3]
+    vehicleSuspension.staticCamberDegrees =
+        suspension.staticCamberDegrees
+    vehicleSuspension.camberGainDegreesPerM =
+        suspension.camberGainDegreesPerM
+    vehicleSuspension.camberProgressionDegreesPerM2 =
+        suspension.camberProgressionDegreesPerM2
+    vehicleSuspension.staticToeDegrees = suspension.staticToeDegrees
+    vehicleSuspension.toeGainDegreesPerM = suspension.toeGainDegreesPerM
+    vehicleSuspension.toeProgressionDegreesPerM2 =
+        suspension.toeProgressionDegreesPerM2
     vehicleSuspension.motionRatio = suspension.motionRatio
     vehicleSuspension.maximumForceN = suspension.maximumForceN
     vehicleSuspension.effectiveUnsprungMassKg =

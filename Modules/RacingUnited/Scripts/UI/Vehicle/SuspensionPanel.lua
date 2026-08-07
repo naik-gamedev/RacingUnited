@@ -1,4 +1,4 @@
--- Step 29O: live nonlinear suspension, unsprung-mass and radial-tire tuning.
+-- Step 29P: live force, unsprung-mass and upright-geometry tuning.
 local function DrawSuspensionWheelSelector()
     local changed = false
     local requested = vehicleSuspension.selectedWheel
@@ -134,6 +134,52 @@ local function DrawSuspensionUnsprungControls()
     UI.TextDisabled("Zero mass restores the legacy massless raycast wheel for compatibility or low-cost simulation.")
 end
 
+local function DrawSuspensionGeometryControls()
+    local changed, fieldChanged = false, false
+    vehicleSuspension.steeringAxisX, fieldChanged = UI.SliderFloat(
+        "Steering axis X", vehicleSuspension.steeringAxisX,
+        -1.0, 1.0, "%.4f")
+    changed = changed or fieldChanged
+    vehicleSuspension.steeringAxisY, fieldChanged = UI.SliderFloat(
+        "Steering axis Y", vehicleSuspension.steeringAxisY,
+        -1.0, 1.0, "%.4f")
+    changed = changed or fieldChanged
+    vehicleSuspension.steeringAxisZ, fieldChanged = UI.SliderFloat(
+        "Steering axis Z", vehicleSuspension.steeringAxisZ,
+        -1.0, 1.0, "%.4f")
+    changed = changed or fieldChanged
+    vehicleSuspension.staticCamberDegrees, fieldChanged = UI.SliderFloat(
+        "Static local camber", vehicleSuspension.staticCamberDegrees,
+        -15.0, 15.0, "%.3f deg")
+    changed = changed or fieldChanged
+    vehicleSuspension.camberGainDegreesPerM, fieldChanged = UI.SliderFloat(
+        "Camber gain", vehicleSuspension.camberGainDegreesPerM,
+        -100.0, 100.0, "%.3f deg/m")
+    changed = changed or fieldChanged
+    vehicleSuspension.camberProgressionDegreesPerM2, fieldChanged =
+        UI.SliderFloat(
+            "Camber progression",
+            vehicleSuspension.camberProgressionDegreesPerM2,
+            -1000.0, 1000.0, "%.3f deg/m^2")
+    changed = changed or fieldChanged
+    vehicleSuspension.staticToeDegrees, fieldChanged = UI.SliderFloat(
+        "Static local toe", vehicleSuspension.staticToeDegrees,
+        -10.0, 10.0, "%.3f deg")
+    changed = changed or fieldChanged
+    vehicleSuspension.toeGainDegreesPerM, fieldChanged = UI.SliderFloat(
+        "Toe gain / bump steer", vehicleSuspension.toeGainDegreesPerM,
+        -100.0, 100.0, "%.3f deg/m")
+    changed = changed or fieldChanged
+    vehicleSuspension.toeProgressionDegreesPerM2, fieldChanged =
+        UI.SliderFloat(
+            "Toe progression",
+            vehicleSuspension.toeProgressionDegreesPerM2,
+            -1000.0, 1000.0, "%.3f deg/m^2")
+    changed = changed or fieldChanged
+    ApplySelectedSuspensionWhenChanged(changed)
+    UI.TextDisabled("Signed local curves approximate measured kinematics now; future hardpoint providers will calculate them directly.")
+end
+
 local function DrawSuspensionLiveTelemetry()
     local wheel = vehicleWheelTelemetry[vehicleSuspension.selectedWheel]
     if wheel == nil then
@@ -156,6 +202,11 @@ local function DrawSuspensionLiveTelemetry()
         wheel.tireDeflection, wheel.tireDeflectionVelocity))
     UI.Text(string.format("Tire radial heat generation: %.1f W",
         wheel.tireRadialDissipationWatts))
+    UI.Text(string.format("Camber / toe: %.3f deg / %.3f deg",
+        wheel.camberAngleDegrees, wheel.toeAngleDegrees))
+    UI.Text(string.format("Native upright XYZ: %.3f / %.3f / %.3f deg",
+        wheel.uprightRotationX, wheel.uprightRotationY,
+        wheel.uprightRotationZ))
     UI.TextDisabled("Damper watts will later feed oil/gas temperature, fade, cavitation and wear.")
 end
 
@@ -195,6 +246,10 @@ function DrawVehicleSuspensionPanel()
         end
         if UI.BeginTabItem("UNSPRUNG") then
             DrawSuspensionUnsprungControls()
+            UI.EndTabItem()
+        end
+        if UI.BeginTabItem("GEOMETRY") then
+            DrawSuspensionGeometryControls()
             UI.EndTabItem()
         end
         if UI.BeginTabItem("LIVE") then

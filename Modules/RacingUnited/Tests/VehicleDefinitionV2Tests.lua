@@ -30,6 +30,13 @@ assert(road.suspensions[1].bumpHighSpeedDampingNsPerM >= 0.0
     and road.suspensions[1].bumpStopRateNPerM > 0.0
     and road.suspensions[1].droopStopRateNPerM > 0.0,
     "non-linear damper and travel-limit parameters were not authored")
+assert(#road.suspensions[1].steeringAxis == 3
+    and road.suspensions[1].steeringAxis[2] == 1.0
+    and type(road.suspensions[1].staticCamberDegrees) == "number"
+    and type(road.suspensions[1].camberGainDegreesPerM) == "number"
+    and type(road.suspensions[1].staticToeDegrees) == "number"
+    and type(road.suspensions[1].toeGainDegreesPerM) == "number",
+    "authoritative steering-axis and alignment curves were not authored")
 assert(road.contactUnits[1].effectiveUnsprungMassKg > 0.0
     and road.contactUnits[1].tireRadialStiffnessNPerM > 0.0
     and road.contactUnits[1].tireRadialDampingNsPerM >= 0.0
@@ -69,6 +76,12 @@ brokenSuspension.contactUnits[1].suspension = "missing_suspension"
 assert(not ValidateVehicleDefinitionV2(brokenSuspension).valid,
     "invalid suspension references must fail structural validation")
 
+local brokenGeometry = BuildVehicleDefinitionV2(
+    CreateVehicleWorkshopDraft("road_car"))
+brokenGeometry.suspensions[1].steeringAxis = { 0.0, 0.0, 0.0 }
+assert(not ValidateVehicleDefinitionV2(brokenGeometry).valid,
+    "a zero steering axis must fail structural validation")
+
 local formula = BuildVehicleDefinitionV2(CreateVehicleWorkshopDraft("formula"))
 local formulaReport = ValidateVehicleDefinitionV2(formula)
 assert(formulaReport.valid and not formulaReport.currentSolverReady,
@@ -79,5 +92,10 @@ assert(string.find(serialized, "schemaVersion = 2", 1, true),
     "serializer omitted the schema version")
 assert(string.find(serialized, "power_unit_2", 1, true),
     "serializer omitted the second power unit")
+local roadSerialized = SerializeVehicleDefinitionV2(road)
+assert(string.find(roadSerialized, "steeringAxis", 1, true)
+    and string.find(roadSerialized, "camberGainDegreesPerM", 1, true)
+    and string.find(roadSerialized, "toeGainDegreesPerM", 1, true),
+    "serializer omitted suspension geometry data")
 
 print("PASS VehicleDefinitionV2 semantic regression")

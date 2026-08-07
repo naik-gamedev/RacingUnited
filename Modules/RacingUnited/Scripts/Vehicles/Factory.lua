@@ -102,7 +102,22 @@ function AddNativeVehicleWheel(
         wheel.maximumTireDeflectionM
             or physics.maximumTireDeflectionM,
         wheel.maximumTireNormalForceN
-            or physics.maximumTireNormalForceN)
+            or physics.maximumTireNormalForceN,
+        (wheel.steeringAxis or physics.steeringAxis)[1],
+        (wheel.steeringAxis or physics.steeringAxis)[2],
+        (wheel.steeringAxis or physics.steeringAxis)[3],
+        wheel.staticCamberDegrees
+            or physics.staticCamberDegrees,
+        wheel.camberGainDegreesPerM
+            or physics.camberGainDegreesPerM,
+        wheel.camberProgressionDegreesPerM2
+            or physics.camberProgressionDegreesPerM2,
+        wheel.staticToeDegrees
+            or physics.staticToeDegrees,
+        wheel.toeGainDegreesPerM
+            or physics.toeGainDegreesPerM,
+        wheel.toeProgressionDegreesPerM2
+            or physics.toeProgressionDegreesPerM2)
 end
 
 function CreateNativeVehicleDemo(compiledSourceDefinition)
@@ -287,7 +302,7 @@ function CreateNativeVehicleDemo(compiledSourceDefinition)
 
     ResetNativeVehicle()
     vehicleMessage = compiledSourceDefinition
-        and ("Step 29O native definition loaded: " .. nativeProvider)
-        or "Step 29O online: unsprung mass + radial tire compliance"
+        and ("Step 29P native definition loaded: " .. nativeProvider)
+        or "Step 29P online: authoritative suspension upright pose"
     return true
 end

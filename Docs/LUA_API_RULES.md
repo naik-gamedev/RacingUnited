@@ -89,3 +89,8 @@ changing the selected wheel. `Vehicle.GetWheelSuspensionModel` returns the exact
 native description in the canonical order documented by
 `LuaApiAnnotations.json`. Tools must read native state when switching wheels;
 they must not assume a shared vehicle-wide tune.
+
+`Vehicle.SetWheelSuspensionGeometry` follows the same atomic per-wheel rule for
+steering axis and alignment curves. `Vehicle.GetWheelSuspensionGeometry` is the
+configuration readback, while `Vehicle.GetWheelUprightPose` is the evaluated
+high-rate result consumed by telemetry and presentation.

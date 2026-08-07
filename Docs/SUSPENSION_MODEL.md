@@ -74,6 +74,18 @@ solver. Future geometry providers will determine authoritative wheel paths,
 motion ratios, camber, toe and upright pose while continuing to use this
 force/inertia layer where appropriate. See `UNSPRUNG_MASS_MODEL.md` and ADR-016.
 
+## Upright geometry
+
+Step 29P adds that geometry boundary without pretending the first curve
+provider is a complete linkage. Each contact now owns a local 3D steering axis
+and signed quadratic camber/toe curves versus wheel compression. Native code
+composes those values with Ackermann steering into one orthonormal upright pose
+used by tire direction, telemetry and articulated wheel presentation.
+
+The curve provider can fit measured alignment traces while Workshop hardpoint
+authoring is built. MacPherson, double-wishbone and later layout providers must
+produce the same output contract. See `SUSPENSION_GEOMETRY.md` and ADR-017.
+
 ## Damage and wear ordering
 
 Damage is intentionally not simulated yet. A defensible later model can build

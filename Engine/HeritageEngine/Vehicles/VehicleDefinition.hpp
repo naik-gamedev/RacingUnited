@@ -67,6 +67,13 @@ struct VehicleSuspensionDefinition
     float bumpStopProgressionNPerM2 = 0.0f;
     float droopStopEngagementM = 0.15f;
     float droopStopRateNPerM = 0.0f;
+    heritage::math::Vec3 localSteeringAxis{ 0.0f, 1.0f, 0.0f };
+    float staticCamberDegrees = 0.0f;
+    float camberGainDegreesPerM = 0.0f;
+    float camberProgressionDegreesPerM2 = 0.0f;
+    float staticToeDegrees = 0.0f;
+    float toeGainDegreesPerM = 0.0f;
+    float toeProgressionDegreesPerM2 = 0.0f;
     float motionRatio = 1.0f;
     float maximumForceN = 250000.0f;
 };

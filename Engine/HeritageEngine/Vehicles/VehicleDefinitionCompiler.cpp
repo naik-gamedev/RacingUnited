@@ -352,6 +352,23 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
             || !finite(suspension.droopStopRateNPerM)
             || suspension.droopStopRateNPerM < 0.0f
             || suspension.droopStopRateNPerM > 1000000000.0f
+            || !finite(suspension.localSteeringAxis)
+            || suspension.localSteeringAxis.x * suspension.localSteeringAxis.x
+                + suspension.localSteeringAxis.y * suspension.localSteeringAxis.y
+                + suspension.localSteeringAxis.z * suspension.localSteeringAxis.z
+                <= 0.000001f
+            || !finite(suspension.staticCamberDegrees)
+            || std::abs(suspension.staticCamberDegrees) > 45.0f
+            || !finite(suspension.camberGainDegreesPerM)
+            || std::abs(suspension.camberGainDegreesPerM) > 1000.0f
+            || !finite(suspension.camberProgressionDegreesPerM2)
+            || std::abs(suspension.camberProgressionDegreesPerM2) > 10000.0f
+            || !finite(suspension.staticToeDegrees)
+            || std::abs(suspension.staticToeDegrees) > 45.0f
+            || !finite(suspension.toeGainDegreesPerM)
+            || std::abs(suspension.toeGainDegreesPerM) > 1000.0f
+            || !finite(suspension.toeProgressionDegreesPerM2)
+            || std::abs(suspension.toeProgressionDegreesPerM2) > 10000.0f
             || !finite(suspension.motionRatio)
             || suspension.motionRatio <= 0.0f
             || suspension.motionRatio > 10.0f

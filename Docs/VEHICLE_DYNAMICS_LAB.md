@@ -40,7 +40,8 @@ torque. Step 29M additionally records separate spring, damper, bump-stop and
 droop-stop forces plus instantaneous damper dissipation in watts. Step 29O adds
 unsprung velocity, radial tire deflection and velocity, and radial damping
 dissipation. Its summary reports peak wheel-hop speed, tire deflection and
-radial damping power.
+radial damping power. Step 29P records authoritative camber and toe per contact,
+adds peak absolute values to the summary, and exposes both plot and CSV channels.
 
 Graphs are downsampled with a peak-preserving bucket selection. CSV retains
 every captured sample and should be used for detailed offline analysis.
@@ -59,7 +60,7 @@ every captured sample and should be used for detailed offline analysis.
    replacement is intentional.
 
 The present laboratory is the instrumentation foundation. Hardpoint motion,
-camber/toe, wheel rate, tire temperature, pressure, damper velocity histograms,
-thermal state and suspension-geometry channels will be added as those production
-systems exist. Scalar unsprung-mass motion and radial-tire forces are now
-captured; full upright pose and linkage loads remain later work.
+wheel rate, tire temperature, pressure, damper velocity histograms, thermal
+state and linkage-load channels will be added as those production systems
+exist. Scalar unsprung-mass motion, radial-tire forces, camber and toe are now
+captured; full hardpoint motion and linkage loads remain later work.

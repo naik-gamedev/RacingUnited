@@ -268,6 +268,20 @@ bool validWheelDescription(const WheelDescription& value)
         && value.droopStopEngagement >= 0.0f
         && finiteFloat(value.droopStopRate) && value.droopStopRate >= 0.0f
         && value.suspensionProvider == SuspensionProviderKind::LinearRaycastV1
+        && finiteVec3(value.localSteeringAxis)
+        && lengthSquared(value.localSteeringAxis) > kVectorEpsilon
+        && finiteFloat(value.staticCamberDegrees)
+        && std::abs(value.staticCamberDegrees) <= 45.0f
+        && finiteFloat(value.camberGainDegreesPerM)
+        && std::abs(value.camberGainDegreesPerM) <= 1000.0f
+        && finiteFloat(value.camberProgressionDegreesPerM2)
+        && std::abs(value.camberProgressionDegreesPerM2) <= 10000.0f
+        && finiteFloat(value.staticToeDegrees)
+        && std::abs(value.staticToeDegrees) <= 45.0f
+        && finiteFloat(value.toeGainDegreesPerM)
+        && std::abs(value.toeGainDegreesPerM) <= 1000.0f
+        && finiteFloat(value.toeProgressionDegreesPerM2)
+        && std::abs(value.toeProgressionDegreesPerM2) <= 10000.0f
         && finiteFloat(value.suspensionMotionRatio)
         && value.suspensionMotionRatio > 0.0f
         && value.suspensionMotionRatio <= 10.0f
@@ -317,6 +331,23 @@ SuspensionModelDescription suspensionModelDescription(
     result.droopStopRateNPerM = value.droopStopRate;
     result.motionRatio = value.suspensionMotionRatio;
     result.maximumForceN = value.maximumSuspensionForce;
+    return result;
+}
+
+SuspensionGeometryDescription suspensionGeometryDescription(
+    const WheelDescription& value)
+{
+    SuspensionGeometryDescription result;
+    result.provider = value.suspensionProvider;
+    result.localSteeringAxis = value.localSteeringAxis;
+    result.staticCamberDegrees = value.staticCamberDegrees;
+    result.camberGainDegreesPerM = value.camberGainDegreesPerM;
+    result.camberProgressionDegreesPerM2 =
+        value.camberProgressionDegreesPerM2;
+    result.staticToeDegrees = value.staticToeDegrees;
+    result.toeGainDegreesPerM = value.toeGainDegreesPerM;
+    result.toeProgressionDegreesPerM2 =
+        value.toeProgressionDegreesPerM2;
     return result;
 }
 
@@ -746,6 +777,9 @@ bool VehicleSystem::addWheel(
     wheel.description.localSuspensionDirection = normalized(
         description.localSuspensionDirection,
         { 0.0f, -1.0f, 0.0f });
+    wheel.description.localSteeringAxis = normalized(
+        description.localSteeringAxis,
+        { 0.0f, 1.0f, 0.0f });
     wheel.state.suspensionLength = description.restLength;
     wheel.state.antiLockModulation = 1.0f;
     wheel.state.tractionControlModulation = 1.0f;
@@ -856,6 +890,61 @@ bool VehicleSystem::wheelSuspensionModel(
     value.droopStopRateNPerM = description.droopStopRate;
     value.motionRatio = description.suspensionMotionRatio;
     value.maximumForceN = description.maximumSuspensionForce;
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::setWheelSuspensionGeometry(
+    VehicleHandle handle,
+    std::size_t wheelIndex,
+    const SuspensionGeometryDescription& value)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle.SetWheelSuspensionGeometry received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+
+    WheelDescription updated = slot->record.wheels[wheelIndex].description;
+    updated.suspensionProvider = value.provider;
+    updated.localSteeringAxis = value.localSteeringAxis;
+    updated.staticCamberDegrees = value.staticCamberDegrees;
+    updated.camberGainDegreesPerM = value.camberGainDegreesPerM;
+    updated.camberProgressionDegreesPerM2 =
+        value.camberProgressionDegreesPerM2;
+    updated.staticToeDegrees = value.staticToeDegrees;
+    updated.toeGainDegreesPerM = value.toeGainDegreesPerM;
+    updated.toeProgressionDegreesPerM2 =
+        value.toeProgressionDegreesPerM2;
+    if (!validWheelDescription(updated))
+    {
+        setError("Vehicle.SetWheelSuspensionGeometry received geometry data outside the supported range.");
+        return false;
+    }
+
+    updated.localSteeringAxis = normalized(
+        updated.localSteeringAxis,
+        { 0.0f, 1.0f, 0.0f });
+    slot->record.wheels[wheelIndex].description = updated;
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::wheelSuspensionGeometry(
+    VehicleHandle handle,
+    std::size_t wheelIndex,
+    SuspensionGeometryDescription& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle.GetWheelSuspensionGeometry received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+
+    value = suspensionGeometryDescription(
+        slot->record.wheels[wheelIndex].description);
     clearError();
     return true;
 }
@@ -2293,6 +2382,36 @@ void VehicleSystem::simulateVehicleSubstep(
                 * steerFactorMagnitude;
         }
 
+        const auto updateUprightGeometry = [&]() {
+            const SuspensionGeometryOutput geometryOutput =
+                evaluateSuspensionGeometry(
+                    suspensionGeometryDescription(description),
+                    { state.compression, state.steerAngleDegrees });
+            state.camberAngleDegrees = geometryOutput.camberDegrees;
+            state.toeAngleDegrees = geometryOutput.toeDegrees;
+            state.localUprightRotationDegrees =
+                geometryOutput.localUprightRotationDegrees;
+            state.worldSteeringAxis = normalized(
+                rotateVector(
+                    chassisRotation,
+                    geometryOutput.localSteeringAxis),
+                { 0.0f, 1.0f, 0.0f });
+            state.worldWheelForward = normalized(
+                rotateVector(
+                    chassisRotation,
+                    geometryOutput.localWheelForward),
+                { 0.0f, 0.0f, 1.0f });
+            state.worldWheelRight = normalized(
+                rotateVector(
+                    chassisRotation,
+                    geometryOutput.localWheelRight),
+                { 1.0f, 0.0f, 0.0f });
+            state.worldWheelUp = normalized(
+                rotateVector(
+                    chassisRotation,
+                    geometryOutput.localWheelUp),
+                { 0.0f, 1.0f, 0.0f });
+        };
         const float gearDirection = signOrZero(vehicle.selectedGearRatio);
         const float drivenSlip = previousSlipRatio * gearDirection;
         float tractionTargetModulation = 1.0f;
@@ -2398,6 +2517,7 @@ void VehicleSystem::simulateVehicleSubstep(
                     state.worldCenter,
                     scale(suspensionDirection, description.radius));
                 wheel.previousSuspensionLength = maximumLength;
+                updateUprightGeometry();
                 advanceFreeWheelRotation();
                 continue;
             }
@@ -2412,6 +2532,7 @@ void VehicleSystem::simulateVehicleSubstep(
                     scale(suspensionDirection, maximumLength));
                 state.contactPoint = hit.point;
                 wheel.previousSuspensionLength = maximumLength;
+                updateUprightGeometry();
                 continue;
             }
 
@@ -2656,10 +2777,15 @@ void VehicleSystem::simulateVehicleSubstep(
             }
             if (!state.grounded)
             {
+                updateUprightGeometry();
                 advanceFreeWheelRotation();
                 continue;
             }
         }
+
+        // Contact resolution may have changed suspension compression. Refresh
+        // the authoritative upright pose before constructing the tire basis.
+        updateUprightGeometry();
 
         // Refresh velocities because earlier wheels in this same 1 ms substep
         // may already have applied impulses to the chassis.
@@ -2673,13 +2799,7 @@ void VehicleSystem::simulateVehicleSubstep(
             pose.position,
             state.contactPoint);
 
-        const float steerRadians = radians(state.steerAngleDegrees);
-        const heritage::math::Vec3 localForward{
-            std::sin(steerRadians), 0.0f, std::cos(steerRadians)
-        };
-        heritage::math::Vec3 wheelForward = rotateVector(
-            chassisRotation,
-            localForward);
+        heritage::math::Vec3 wheelForward = state.worldWheelForward;
         wheelForward = subtract(
             wheelForward,
             scale(state.contactNormal, dot(wheelForward, state.contactNormal)));
@@ -2911,6 +3031,8 @@ void VehicleSystem::captureDynamicsLabFrame(
         wheel.tireDeflectionVelocity = state.tireDeflectionVelocity;
         wheel.tireRadialDissipationWatts =
             state.tireRadialDissipationWatts;
+        wheel.camberDegrees = state.camberAngleDegrees;
+        wheel.toeDegrees = state.toeAngleDegrees;
         wheel.normalForce = state.normalForce;
         wheel.longitudinalForce = state.longitudinalForce;
         wheel.lateralForce = state.lateralForce;

@@ -33,6 +33,8 @@ enum class DynamicsLabMetric
     WheelTireDeflectionMillimeters,
     WheelTireDeflectionVelocityMps,
     WheelTireRadialDissipationWatts,
+    WheelCamberDegrees,
+    WheelToeDegrees,
     WheelNormalForceNewtons,
     WheelLongitudinalForceNewtons,
     WheelLateralForceNewtons,
@@ -56,6 +58,8 @@ struct DynamicsLabWheelSample
     float tireDeflection = 0.0f;
     float tireDeflectionVelocity = 0.0f;
     float tireRadialDissipationWatts = 0.0f;
+    float camberDegrees = 0.0f;
+    float toeDegrees = 0.0f;
     float normalForce = 0.0f;
     float longitudinalForce = 0.0f;
     float lateralForce = 0.0f;
@@ -109,6 +113,8 @@ struct DynamicsLabSummary
     float peakAbsoluteUnsprungVelocityMps = 0.0f;
     float peakTireDeflectionMillimeters = 0.0f;
     float peakTireRadialDissipationWatts = 0.0f;
+    float peakAbsoluteCamberDegrees = 0.0f;
+    float peakAbsoluteToeDegrees = 0.0f;
     float peakAbsoluteSlipRatio = 0.0f;
     float peakAbsoluteSlipAngleDegrees = 0.0f;
     float peakGripUtilizationPercent = 0.0f;

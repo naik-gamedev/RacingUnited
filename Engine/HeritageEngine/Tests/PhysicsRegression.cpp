@@ -3,6 +3,7 @@
 #include "../Vehicles/VehicleDefinitionCompiler.hpp"
 #include "../Vehicles/VehicleDefinitionLoader.hpp"
 #include "../Vehicles/VehicleSystem.hpp"
+#include "../Vehicles/SuspensionGeometry.hpp"
 #include "../Vehicles/UnsprungMassModel.hpp"
 
 #include <algorithm>
@@ -716,6 +717,8 @@ bool dynamicsLabCapturesHighRateTelemetry()
     std::vector<float> damperPowerSeries;
     std::vector<float> unsprungVelocitySeries;
     std::vector<float> tireDeflectionSeries;
+    std::vector<float> camberSeries;
+    std::vector<float> toeSeries;
     const bool speedWorked = world.vehicles.dynamicsLabMetricSeries(
         world.vehicle,
         heritage::vehicles::DynamicsLabMetric::SpeedKph,
@@ -746,6 +749,18 @@ bool dynamicsLabCapturesHighRateTelemetry()
         0,
         64,
         tireDeflectionSeries);
+    const bool camberWorked = world.vehicles.dynamicsLabMetricSeries(
+        world.vehicle,
+        heritage::vehicles::DynamicsLabMetric::WheelCamberDegrees,
+        0,
+        64,
+        camberSeries);
+    const bool toeWorked = world.vehicles.dynamicsLabMetricSeries(
+        world.vehicle,
+        heritage::vehicles::DynamicsLabMetric::WheelToeDegrees,
+        0,
+        64,
+        toeSeries);
 
     std::cout
         << "dynamics_lab samples=" << summary.sampleCount
@@ -775,6 +790,8 @@ bool dynamicsLabCapturesHighRateTelemetry()
         && damperPowerWorked
         && unsprungVelocityWorked
         && tireDeflectionWorked
+        && camberWorked
+        && toeWorked
         && summary.peakAbsoluteUnsprungVelocityMps > 0.0f
         && summary.peakTireDeflectionMillimeters > 0.0f
         && !speedSeries.empty()
@@ -782,7 +799,9 @@ bool dynamicsLabCapturesHighRateTelemetry()
         && wheelLoadSeries.size() == speedSeries.size()
         && damperPowerSeries.size() == speedSeries.size()
         && unsprungVelocitySeries.size() == speedSeries.size()
-        && tireDeflectionSeries.size() == speedSeries.size();
+        && tireDeflectionSeries.size() == speedSeries.size()
+        && camberSeries.size() == speedSeries.size()
+        && toeSeries.size() == speedSeries.size();
 }
 
 VehicleDefinitionV2Source makeCompiledRoadCarDefinition()
@@ -827,6 +846,9 @@ VehicleDefinitionV2Source makeCompiledRoadCarDefinition()
         suspension.springRateNPerM = 35000.0f;
         suspension.bumpDampingNsPerM = 3200.0f;
         suspension.reboundDampingNsPerM = 4200.0f;
+        suspension.staticCamberDegrees = index % 2 == 0 ? -0.75f : 0.75f;
+        suspension.camberGainDegreesPerM = index % 2 == 0 ? -4.0f : 4.0f;
+        suspension.staticToeDegrees = index % 2 == 0 ? 0.10f : -0.10f;
         source.suspensions.push_back(suspension);
 
         heritage::vehicles::VehicleContactUnitDefinition contact;
@@ -872,6 +894,9 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && compiled.definition.driveConnections[0].contactUnitIndices.size() == 2
         && compiled.definition.contactUnits.size() == 4
         && compiled.definition.contactUnits[0].suspensionIndex == 0
+        && std::abs(
+            compiled.definition.suspensions[0].authored.staticCamberDegrees
+                + 0.75f) <= 0.000001f
         && std::abs(compiled.definition.contactUnits[0].driveFactor - 0.5f)
             <= 0.000001f
         && std::abs(compiled.definition.contactUnits[2].driveFactor)
@@ -917,6 +942,11 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         -1.0f;
     const auto invalidUnsprungParametersResult =
         VehicleDefinitionCompiler::compile(invalidUnsprungParameters);
+
+    VehicleDefinitionV2Source invalidGeometryParameters = source;
+    invalidGeometryParameters.suspensions[0].localSteeringAxis = {};
+    const auto invalidGeometryParametersResult =
+        VehicleDefinitionCompiler::compile(invalidGeometryParameters);
 
     VehicleDefinitionV2Source future = source;
     future.classification = "motorcycle";
@@ -1029,6 +1059,37 @@ bool vehicleDefinitionCompilerAndLoaderWork()
             <= 0.0001f
         && invalidLiveUnsprungRejected;
 
+    heritage::vehicles::SuspensionGeometryDescription geometryReadback;
+    heritage::vehicles::SuspensionGeometryDescription liveGeometry;
+    liveGeometry.localSteeringAxis = { 0.10f, 0.98f, -0.12f };
+    liveGeometry.staticCamberDegrees = -1.25f;
+    liveGeometry.camberGainDegreesPerM = -8.0f;
+    liveGeometry.camberProgressionDegreesPerM2 = 25.0f;
+    liveGeometry.staticToeDegrees = 0.15f;
+    liveGeometry.toeGainDegreesPerM = 2.5f;
+    liveGeometry.toeProgressionDegreesPerM2 = -12.0f;
+    const bool liveGeometrySet = vehicles.setWheelSuspensionGeometry(
+        loaded, 0, liveGeometry);
+    const bool liveGeometryRead = vehicles.wheelSuspensionGeometry(
+        loaded, 0, geometryReadback);
+    heritage::vehicles::SuspensionGeometryDescription invalidLiveGeometry =
+        liveGeometry;
+    invalidLiveGeometry.localSteeringAxis = {};
+    const bool invalidLiveGeometryRejected =
+        !vehicles.setWheelSuspensionGeometry(
+            loaded, 0, invalidLiveGeometry);
+    const bool liveGeometryRoundTrip = liveGeometrySet
+        && liveGeometryRead
+        && std::abs(geometryReadback.staticCamberDegrees + 1.25f)
+            <= 0.0001f
+        && std::abs(geometryReadback.camberGainDegreesPerM + 8.0f)
+            <= 0.0001f
+        && std::abs(geometryReadback.toeProgressionDegreesPerM2 + 12.0f)
+            <= 0.0001f
+        && std::abs(magnitude(geometryReadback.localSteeringAxis) - 1.0f)
+            <= 0.0001f
+        && invalidLiveGeometryRejected;
+
     std::cout
         << "definition_compiler provider="
         << compiled.definition.runtimeProvider
@@ -1040,6 +1101,8 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         << (!invalidSuspensionParametersResult.valid)
         << " unsprung_parameters_rejected="
         << (!invalidUnsprungParametersResult.valid)
+        << " geometry_parameters_rejected="
+        << (!invalidGeometryParametersResult.valid)
         << " future_topology_valid=" << futureResult.valid
         << " future_topology_ready=" << futureResult.currentSolverReady
         << " category_ignored=" << categoryOnlyResult.currentSolverReady
@@ -1050,6 +1113,7 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         << " damper_power_w=" << nonlinearBump.damperDissipationW
         << " live_suspension_roundtrip=" << liveSuspensionRoundTrip
         << " live_unsprung_roundtrip=" << liveUnsprungRoundTrip
+        << " live_geometry_roundtrip=" << liveGeometryRoundTrip
         << '\n';
 
     return compiled.valid
@@ -1061,6 +1125,7 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && !brokenSuspensionResult.valid
         && !invalidSuspensionParametersResult.valid
         && !invalidUnsprungParametersResult.valid
+        && !invalidGeometryParametersResult.valid
         && futureResult.valid
         && !futureResult.currentSolverReady
         && futureResult.issueSummary().find("lean_dynamics") != std::string::npos
@@ -1072,7 +1137,53 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && suspensionForcesWorked
         && nonlinearSuspensionWorked
         && liveSuspensionRoundTrip
-        && liveUnsprungRoundTrip;
+        && liveUnsprungRoundTrip
+        && liveGeometryRoundTrip;
+}
+
+bool suspensionGeometryProducesAuthoritativePose()
+{
+    heritage::vehicles::SuspensionGeometryDescription description;
+    description.localSteeringAxis = { 0.0f, 1.0f, 0.0f };
+    description.staticCamberDegrees = 1.5f;
+    description.camberGainDegreesPerM = -5.0f;
+    description.camberProgressionDegreesPerM2 = 20.0f;
+    description.staticToeDegrees = -0.25f;
+    description.toeGainDegreesPerM = 3.0f;
+    description.toeProgressionDegreesPerM2 = -10.0f;
+    const auto output = heritage::vehicles::evaluateSuspensionGeometry(
+        description,
+        { 0.10f, 12.0f });
+    const float forwardLength = magnitude(output.localWheelForward);
+    const float rightLength = magnitude(output.localWheelRight);
+    const float upLength = magnitude(output.localWheelUp);
+    const float forwardRightDot =
+        output.localWheelForward.x * output.localWheelRight.x
+        + output.localWheelForward.y * output.localWheelRight.y
+        + output.localWheelForward.z * output.localWheelRight.z;
+    const float expectedForwardX = std::sin(12.0f
+        * 3.14159265358979323846f / 180.0f);
+    const bool poseWorked =
+        std::abs(output.camberDegrees - 1.10f) <= 0.0001f
+        && std::abs(output.toeDegrees) <= 0.0001f
+        && std::abs(forwardLength - 1.0f) <= 0.0001f
+        && std::abs(rightLength - 1.0f) <= 0.0001f
+        && std::abs(upLength - 1.0f) <= 0.0001f
+        && std::abs(forwardRightDot) <= 0.0001f
+        && std::abs(output.localWheelForward.x - expectedForwardX)
+            <= 0.0001f
+        && std::abs(output.localUprightRotationDegrees.z - 1.10f)
+            <= 0.05f;
+    std::cout
+        << "suspension_geometry camber_deg=" << output.camberDegrees
+        << " toe_deg=" << output.toeDegrees
+        << " upright_xyz_deg="
+        << output.localUprightRotationDegrees.x << ','
+        << output.localUprightRotationDegrees.y << ','
+        << output.localUprightRotationDegrees.z
+        << " orthogonality=" << forwardRightDot
+        << '\n';
+    return poseWorked;
 }
 
 bool unsprungMassSettlesAndRespondsToRoadStep()
@@ -1187,6 +1298,12 @@ int main()
     std::cout << (unsprungMassPassed ? "PASS" : "FAIL")
         << " scalar unsprung-mass wheel-hop response\n";
     failed += unsprungMassPassed ? 0 : 1;
+
+    const bool suspensionGeometryPassed =
+        suspensionGeometryProducesAuthoritativePose();
+    std::cout << (suspensionGeometryPassed ? "PASS" : "FAIL")
+        << " authoritative suspension upright pose\n";
+    failed += suspensionGeometryPassed ? 0 : 1;
 
     const bool definitionCompilerPassed =
         vehicleDefinitionCompilerAndLoaderWork();

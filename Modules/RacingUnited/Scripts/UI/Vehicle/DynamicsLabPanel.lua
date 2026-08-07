@@ -47,7 +47,7 @@ function DrawVehicleDynamicsLabPanel()
         peakSuspensionSpeed, peakSlipRatio, peakSlipAngle, peakGrip,
         minimumLoad, maximumLoad, contactLosses, peakTravelStopForce,
         peakDamperDissipation, peakUnsprungSpeed, peakTireDeflection,
-        peakTireRadialDissipation =
+        peakTireRadialDissipation, peakCamber, peakToe =
         Vehicle.GetDynamicsLabSummary(nativeVehicle)
 
     samples = samples or 0
@@ -72,6 +72,8 @@ function DrawVehicleDynamicsLabPanel()
     UI.Text(string.format("Wheel-hop peak %.3f m/s | tire deflection %.2f mm | radial heat %.0f W",
         peakUnsprungSpeed or 0.0, peakTireDeflection or 0.0,
         peakTireRadialDissipation or 0.0))
+    UI.Text(string.format("Upright geometry peak: camber %.3f deg | toe %.3f deg",
+        peakCamber or 0.0, peakToe or 0.0))
     UI.TextDisabled(vehicleDynamicsLab.message)
 
     if samples < 2 then
@@ -98,6 +100,8 @@ function DrawVehicleDynamicsLabPanel()
     local tireDeflection = DynamicsLabSeries("wheel_tire_deflection_mm")
     local tireRadialPower = DynamicsLabSeries(
         "wheel_tire_radial_dissipation_w")
+    local camber = DynamicsLabSeries("wheel_camber_deg")
+    local toe = DynamicsLabSeries("wheel_toe_deg")
     local slip = DynamicsLabSeries("wheel_slip_ratio")
     local grip = DynamicsLabSeries("wheel_grip_percent")
 
@@ -113,6 +117,8 @@ function DrawVehicleDynamicsLabPanel()
     UI.PlotLines("Selected-wheel unsprung velocity (m/s)", 72.0, table.unpack(unsprungSpeed))
     UI.PlotLines("Selected-wheel tire deflection (mm)", 72.0, table.unpack(tireDeflection))
     UI.PlotLines("Selected-wheel tire radial dissipation (W)", 72.0, table.unpack(tireRadialPower))
+    UI.PlotLines("Selected-wheel camber (deg)", 72.0, table.unpack(camber))
+    UI.PlotLines("Selected-wheel toe / bump steer (deg)", 72.0, table.unpack(toe))
     UI.PlotLines("Selected-wheel slip ratio", 72.0, table.unpack(slip))
     UI.PlotLines("Selected-wheel grip utilization (%)", 72.0, table.unpack(grip))
 end

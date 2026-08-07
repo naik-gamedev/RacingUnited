@@ -154,6 +154,14 @@ scalability tier. This is deliberately independent of category and linkage
 type; future geometry providers may reuse or replace it. See
 `UNSPRUNG_MASS_MODEL.md` and ADR-016.
 
+Step 29P adds `SuspensionGeometry` as the native upright-kinematics boundary.
+Every contact owns a 3D steering axis and signed camber/toe travel curves. The
+provider's orthonormal upright basis is shared by tire force direction,
+telemetry and articulated wheel presentation; Lua no longer reconstructs
+steering orientation. Zero curves preserve existing definitions. Full
+hardpoint linkage, track change, caster/scrub, jacking and camber thrust remain
+explicit later providers. See `SUSPENSION_GEOMETRY.md` and ADR-017.
+
 ## Dynamics instrumentation
 
 Step 29J.5 adds an opt-in `VehicleDynamicsLab` recorder owned by each native

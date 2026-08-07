@@ -588,6 +588,22 @@ bool parseLuaVehicleDefinitionV2(
                 suspension.maximumDroopM));
             suspension.droopStopRateNPerM = static_cast<float>(luaFieldNumber(
                 api, state, -1, "droopStopRateNPerM", 0.0));
+            suspension.localSteeringAxis = luaFieldVector3(
+                api, state, -1, "steeringAxis", { 0.0f, 1.0f, 0.0f });
+            suspension.staticCamberDegrees = static_cast<float>(luaFieldNumber(
+                api, state, -1, "staticCamberDegrees", 0.0));
+            suspension.camberGainDegreesPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "camberGainDegreesPerM", 0.0));
+            suspension.camberProgressionDegreesPerM2 = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "camberProgressionDegreesPerM2", 0.0));
+            suspension.staticToeDegrees = static_cast<float>(luaFieldNumber(
+                api, state, -1, "staticToeDegrees", 0.0));
+            suspension.toeGainDegreesPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "toeGainDegreesPerM", 0.0));
+            suspension.toeProgressionDegreesPerM2 = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "toeProgressionDegreesPerM2", 0.0));
             suspension.motionRatio = static_cast<float>(luaFieldNumber(
                 api, state, -1, "motionRatio", 1.0));
             suspension.maximumForceN = static_cast<float>(luaFieldNumber(
@@ -1367,6 +1383,8 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("Vehicle", "GetWheelCount", &LuaModuleRuntime::luaVehicleGetWheelCount);
     registerFunction("Vehicle", "SetWheelSuspensionModel", &LuaModuleRuntime::luaVehicleSetWheelSuspensionModel);
     registerFunction("Vehicle", "GetWheelSuspensionModel", &LuaModuleRuntime::luaVehicleGetWheelSuspensionModel);
+    registerFunction("Vehicle", "SetWheelSuspensionGeometry", &LuaModuleRuntime::luaVehicleSetWheelSuspensionGeometry);
+    registerFunction("Vehicle", "GetWheelSuspensionGeometry", &LuaModuleRuntime::luaVehicleGetWheelSuspensionGeometry);
     registerFunction("Vehicle", "SetWheelUnsprungMassModel", &LuaModuleRuntime::luaVehicleSetWheelUnsprungMassModel);
     registerFunction("Vehicle", "GetWheelUnsprungMassModel", &LuaModuleRuntime::luaVehicleGetWheelUnsprungMassModel);
     registerFunction("Vehicle", "SetInputs", &LuaModuleRuntime::luaVehicleSetInputs);
@@ -1402,6 +1420,7 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("Vehicle", "GetDynamicsLabSeries", &LuaModuleRuntime::luaVehicleGetDynamicsLabSeries);
     registerFunction("Vehicle", "ExportDynamicsLabCsv", &LuaModuleRuntime::luaVehicleExportDynamicsLabCsv);
     registerFunction("Vehicle", "GetWheelState", &LuaModuleRuntime::luaVehicleGetWheelState);
+    registerFunction("Vehicle", "GetWheelUprightPose", &LuaModuleRuntime::luaVehicleGetWheelUprightPose);
     registerFunction("Vehicle", "GetLastError", &LuaModuleRuntime::luaVehicleGetLastError);
 
     registerFunction("Entity", "IsAvailable", &LuaModuleRuntime::luaEntityIsAvailable);
@@ -6761,6 +6780,22 @@ int LuaModuleRuntime::luaVehicleAddWheel(lua_State* state)
         numberArgument(*runtime, state, 35, 0.08));
     description.maximumTireNormalForce = static_cast<float>(
         numberArgument(*runtime, state, 36, 250000.0));
+    description.localSteeringAxis = {
+        static_cast<float>(numberArgument(*runtime, state, 37, 0.0)),
+        static_cast<float>(numberArgument(*runtime, state, 38, 1.0)),
+        static_cast<float>(numberArgument(*runtime, state, 39, 0.0)) };
+    description.staticCamberDegrees = static_cast<float>(
+        numberArgument(*runtime, state, 40, 0.0));
+    description.camberGainDegreesPerM = static_cast<float>(
+        numberArgument(*runtime, state, 41, 0.0));
+    description.camberProgressionDegreesPerM2 = static_cast<float>(
+        numberArgument(*runtime, state, 42, 0.0));
+    description.staticToeDegrees = static_cast<float>(
+        numberArgument(*runtime, state, 43, 0.0));
+    description.toeGainDegreesPerM = static_cast<float>(
+        numberArgument(*runtime, state, 44, 0.0));
+    description.toeProgressionDegreesPerM2 = static_cast<float>(
+        numberArgument(*runtime, state, 45, 0.0));
     const bool result = runtime->m_physics && runtime->m_physics->vehicles().addWheel(
         vehicleHandleArgument(*runtime, state, 1), description);
     runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
@@ -6867,6 +6902,74 @@ int LuaModuleRuntime::luaVehicleGetWheelSuspensionModel(lua_State* state)
     runtime->m_api.lua_pushnumber(state, value.motionRatio);
     runtime->m_api.lua_pushnumber(state, value.maximumForceN);
     return 17;
+}
+
+int LuaModuleRuntime::luaVehicleSetWheelSuspensionGeometry(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime) return 0;
+    int converted = 0;
+    const LuaInteger luaIndex = runtime->m_api.lua_tointegerx(
+        state, 2, &converted);
+    const std::size_t wheelIndex = converted && luaIndex >= 1
+        ? static_cast<std::size_t>(luaIndex - 1)
+        : static_cast<std::size_t>(-1);
+    heritage::vehicles::SuspensionGeometryDescription value;
+    value.localSteeringAxis = {
+        static_cast<float>(numberArgument(*runtime, state, 3, 0.0)),
+        static_cast<float>(numberArgument(*runtime, state, 4, 1.0)),
+        static_cast<float>(numberArgument(*runtime, state, 5, 0.0)) };
+    value.staticCamberDegrees = static_cast<float>(
+        numberArgument(*runtime, state, 6, 0.0));
+    value.camberGainDegreesPerM = static_cast<float>(
+        numberArgument(*runtime, state, 7, 0.0));
+    value.camberProgressionDegreesPerM2 = static_cast<float>(
+        numberArgument(*runtime, state, 8, 0.0));
+    value.staticToeDegrees = static_cast<float>(
+        numberArgument(*runtime, state, 9, 0.0));
+    value.toeGainDegreesPerM = static_cast<float>(
+        numberArgument(*runtime, state, 10, 0.0));
+    value.toeProgressionDegreesPerM2 = static_cast<float>(
+        numberArgument(*runtime, state, 11, 0.0));
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().setWheelSuspensionGeometry(
+            vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaModuleRuntime::luaVehicleGetWheelSuspensionGeometry(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime) return 0;
+    int converted = 0;
+    const LuaInteger luaIndex = runtime->m_api.lua_tointegerx(
+        state, 2, &converted);
+    const std::size_t wheelIndex = converted && luaIndex >= 1
+        ? static_cast<std::size_t>(luaIndex - 1)
+        : static_cast<std::size_t>(-1);
+    heritage::vehicles::SuspensionGeometryDescription value;
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().wheelSuspensionGeometry(
+            vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
+    if (!result)
+    {
+        for (int index = 0; index < 10; ++index)
+            runtime->m_api.lua_pushnil(state);
+        return 10;
+    }
+    runtime->m_api.lua_pushstring(state, heritage::vehicles::suspensionProviderId(
+        value.provider));
+    runtime->m_api.lua_pushnumber(state, value.localSteeringAxis.x);
+    runtime->m_api.lua_pushnumber(state, value.localSteeringAxis.y);
+    runtime->m_api.lua_pushnumber(state, value.localSteeringAxis.z);
+    runtime->m_api.lua_pushnumber(state, value.staticCamberDegrees);
+    runtime->m_api.lua_pushnumber(state, value.camberGainDegreesPerM);
+    runtime->m_api.lua_pushnumber(state, value.camberProgressionDegreesPerM2);
+    runtime->m_api.lua_pushnumber(state, value.staticToeDegrees);
+    runtime->m_api.lua_pushnumber(state, value.toeGainDegreesPerM);
+    runtime->m_api.lua_pushnumber(state, value.toeProgressionDegreesPerM2);
+    return 10;
 }
 
 int LuaModuleRuntime::luaVehicleSetWheelUnsprungMassModel(lua_State* state)
@@ -7461,9 +7564,9 @@ int LuaModuleRuntime::luaVehicleGetDynamicsLabSummary(lua_State* state)
             value);
     if (!result)
     {
-        for (int index = 0; index < 23; ++index)
+        for (int index = 0; index < 25; ++index)
             runtime->m_api.lua_pushnil(state);
-        return 23;
+        return 25;
     }
 
     runtime->m_api.lua_pushboolean(state, value.recording ? 1 : 0);
@@ -7505,7 +7608,11 @@ int LuaModuleRuntime::luaVehicleGetDynamicsLabSummary(lua_State* state)
         state, value.peakTireDeflectionMillimeters);
     runtime->m_api.lua_pushnumber(
         state, value.peakTireRadialDissipationWatts);
-    return 23;
+    runtime->m_api.lua_pushnumber(
+        state, value.peakAbsoluteCamberDegrees);
+    runtime->m_api.lua_pushnumber(
+        state, value.peakAbsoluteToeDegrees);
+    return 25;
 }
 
 int LuaModuleRuntime::luaVehicleGetDynamicsLabSeries(lua_State* state)
@@ -7669,6 +7776,49 @@ int LuaModuleRuntime::luaVehicleGetWheelState(lua_State* state)
     runtime->m_api.lua_pushnumber(state, value.tireDeflectionVelocity);
     runtime->m_api.lua_pushnumber(state, value.tireRadialDissipationWatts);
     return 51;
+}
+
+int LuaModuleRuntime::luaVehicleGetWheelUprightPose(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime) return 0;
+    heritage::vehicles::WheelState value;
+    int converted = 0;
+    const LuaInteger luaIndex = runtime->m_api.lua_tointegerx(
+        state, 2, &converted);
+    const std::size_t wheelIndex = converted && luaIndex >= 1
+        ? static_cast<std::size_t>(luaIndex - 1)
+        : static_cast<std::size_t>(-1);
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().wheelState(
+            vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
+    if (!result)
+    {
+        for (int index = 0; index < 17; ++index)
+            runtime->m_api.lua_pushnil(state);
+        return 17;
+    }
+    runtime->m_api.lua_pushnumber(state, value.camberAngleDegrees);
+    runtime->m_api.lua_pushnumber(state, value.toeAngleDegrees);
+    runtime->m_api.lua_pushnumber(
+        state, value.localUprightRotationDegrees.x);
+    runtime->m_api.lua_pushnumber(
+        state, value.localUprightRotationDegrees.y);
+    runtime->m_api.lua_pushnumber(
+        state, value.localUprightRotationDegrees.z);
+    runtime->m_api.lua_pushnumber(state, value.worldSteeringAxis.x);
+    runtime->m_api.lua_pushnumber(state, value.worldSteeringAxis.y);
+    runtime->m_api.lua_pushnumber(state, value.worldSteeringAxis.z);
+    runtime->m_api.lua_pushnumber(state, value.worldWheelForward.x);
+    runtime->m_api.lua_pushnumber(state, value.worldWheelForward.y);
+    runtime->m_api.lua_pushnumber(state, value.worldWheelForward.z);
+    runtime->m_api.lua_pushnumber(state, value.worldWheelRight.x);
+    runtime->m_api.lua_pushnumber(state, value.worldWheelRight.y);
+    runtime->m_api.lua_pushnumber(state, value.worldWheelRight.z);
+    runtime->m_api.lua_pushnumber(state, value.worldWheelUp.x);
+    runtime->m_api.lua_pushnumber(state, value.worldWheelUp.y);
+    runtime->m_api.lua_pushnumber(state, value.worldWheelUp.z);
+    return 17;
 }
 
 int LuaModuleRuntime::luaVehicleGetLastError(lua_State* state)

@@ -282,6 +282,22 @@ function BuildVehicleDefinitionV2(draft)
             droopStopEngagementM = (source and source.maximumDroopM
                 or prototypeWheelPhysics.maximumDroopM or 0.15) * 0.85,
             droopStopRateNPerM = 35000.0,
+            steeringAxis = source and source.steeringAxis
+                or prototypeWheelPhysics.steeringAxis or { 0.0, 1.0, 0.0 },
+            staticCamberDegrees = source and source.staticCamberDegrees
+                or prototypeWheelPhysics.staticCamberDegrees or 0.0,
+            camberGainDegreesPerM = source and source.camberGainDegreesPerM
+                or prototypeWheelPhysics.camberGainDegreesPerM or 0.0,
+            camberProgressionDegreesPerM2 = source
+                and source.camberProgressionDegreesPerM2
+                or prototypeWheelPhysics.camberProgressionDegreesPerM2 or 0.0,
+            staticToeDegrees = source and source.staticToeDegrees
+                or prototypeWheelPhysics.staticToeDegrees or 0.0,
+            toeGainDegreesPerM = source and source.toeGainDegreesPerM
+                or prototypeWheelPhysics.toeGainDegreesPerM or 0.0,
+            toeProgressionDegreesPerM2 = source
+                and source.toeProgressionDegreesPerM2
+                or prototypeWheelPhysics.toeProgressionDegreesPerM2 or 0.0,
             motionRatio = 1.0,
             maximumForceN = 250000.0
         }
@@ -369,6 +385,20 @@ local function ValidateUniqueComponentIds(report, collection, label)
         end
     end
     return seen
+end
+
+local function ValidFiniteVector3(value)
+    if type(value) ~= "table" then return false end
+    local lengthSquared = 0.0
+    for index = 1, 3 do
+        local component = value[index]
+        if type(component) ~= "number" or component ~= component
+            or component <= -math.huge or component >= math.huge then
+            return false
+        end
+        lengthSquared = lengthSquared + component * component
+    end
+    return lengthSquared > 0.000001
 end
 
 function ValidateVehicleDefinitionV2(definition)
@@ -478,6 +508,33 @@ function ValidateVehicleDefinitionV2(definition)
                 report, "error", "suspension_motion_ratio",
                 "Suspension '" .. tostring(suspension.id)
                     .. "' needs a positive motion ratio")
+        end
+        if not ValidFiniteVector3(suspension.steeringAxis) then
+            AddVehicleDefinitionIssue(
+                report, "error", "suspension_steering_axis",
+                "Suspension '" .. tostring(suspension.id)
+                    .. "' needs a finite non-zero steering axis")
+        end
+        local signedGeometryFields = {
+            { "staticCamberDegrees", 45.0 },
+            { "camberGainDegreesPerM", 1000.0 },
+            { "camberProgressionDegreesPerM2", 10000.0 },
+            { "staticToeDegrees", 45.0 },
+            { "toeGainDegreesPerM", 1000.0 },
+            { "toeProgressionDegreesPerM2", 10000.0 }
+        }
+        for _, fieldLimit in ipairs(signedGeometryFields) do
+            local field = fieldLimit[1]
+            local limit = fieldLimit[2]
+            local value = suspension[field]
+            if type(value) ~= "number" or value ~= value
+                or math.abs(value) > limit then
+                AddVehicleDefinitionIssue(
+                    report, "error", "suspension_geometry_parameter",
+                    "Suspension '" .. tostring(suspension.id)
+                        .. "' has invalid " .. field)
+                break
+            end
         end
         local nonNegativeFields = {
             "springPreloadN", "springRateNPerM",

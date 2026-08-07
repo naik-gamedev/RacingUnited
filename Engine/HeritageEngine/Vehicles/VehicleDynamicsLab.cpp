@@ -250,6 +250,8 @@ bool VehicleDynamicsLab::exportCsv(const std::filesystem::path& path)
             << prefix << "_tire_deflection_m"
             << prefix << "_tire_deflection_velocity_mps"
             << prefix << "_tire_radial_dissipation_w"
+            << prefix << "_camber_deg"
+            << prefix << "_toe_deg"
             << prefix << "_normal_force_n"
             << prefix << "_longitudinal_force_n"
             << prefix << "_lateral_force_n"
@@ -295,6 +297,8 @@ bool VehicleDynamicsLab::exportCsv(const std::filesystem::path& path)
                 << ',' << wheel.tireDeflection
                 << ',' << wheel.tireDeflectionVelocity
                 << ',' << wheel.tireRadialDissipationWatts
+                << ',' << wheel.camberDegrees
+                << ',' << wheel.toeDegrees
                 << ',' << wheel.normalForce
                 << ',' << wheel.longitudinalForce
                 << ',' << wheel.lateralForce
@@ -380,6 +384,10 @@ float VehicleDynamicsLab::metricValue(
         return wheel.tireDeflectionVelocity;
     case DynamicsLabMetric::WheelTireRadialDissipationWatts:
         return wheel.tireRadialDissipationWatts;
+    case DynamicsLabMetric::WheelCamberDegrees:
+        return wheel.camberDegrees;
+    case DynamicsLabMetric::WheelToeDegrees:
+        return wheel.toeDegrees;
     case DynamicsLabMetric::WheelNormalForceNewtons:
         return wheel.normalForce;
     case DynamicsLabMetric::WheelLongitudinalForceNewtons:
@@ -437,6 +445,12 @@ void VehicleDynamicsLab::updateSummary(const DynamicsLabSample& sample)
         m_summary.peakTireRadialDissipationWatts = std::max(
             m_summary.peakTireRadialDissipationWatts,
             wheel.tireRadialDissipationWatts);
+        m_summary.peakAbsoluteCamberDegrees = std::max(
+            m_summary.peakAbsoluteCamberDegrees,
+            absolute(wheel.camberDegrees));
+        m_summary.peakAbsoluteToeDegrees = std::max(
+            m_summary.peakAbsoluteToeDegrees,
+            absolute(wheel.toeDegrees));
         m_summary.peakAbsoluteSlipRatio = std::max(
             m_summary.peakAbsoluteSlipRatio,
             absolute(wheel.slipRatio));
@@ -499,6 +513,8 @@ const char* dynamicsLabMetricName(DynamicsLabMetric metric)
     case DynamicsLabMetric::WheelTireDeflectionMillimeters: return "wheel_tire_deflection_mm";
     case DynamicsLabMetric::WheelTireDeflectionVelocityMps: return "wheel_tire_deflection_velocity_mps";
     case DynamicsLabMetric::WheelTireRadialDissipationWatts: return "wheel_tire_radial_dissipation_w";
+    case DynamicsLabMetric::WheelCamberDegrees: return "wheel_camber_deg";
+    case DynamicsLabMetric::WheelToeDegrees: return "wheel_toe_deg";
     case DynamicsLabMetric::WheelNormalForceNewtons: return "wheel_normal_force_n";
     case DynamicsLabMetric::WheelLongitudinalForceNewtons: return "wheel_longitudinal_force_n";
     case DynamicsLabMetric::WheelLateralForceNewtons: return "wheel_lateral_force_n";

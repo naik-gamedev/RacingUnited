@@ -4,9 +4,9 @@
 
 namespace heritage::vehicles {
 
-// Native suspension providers share this bounded force contract. Geometry
-// providers will eventually calculate wheel pose and motion ratio from linkage
-// points; the first provider uses the existing massless linear raycast path.
+// Native suspension providers share this bounded force contract. Upright
+// kinematics use the separate SuspensionGeometry contract; a provider ID names
+// a compatible force/geometry implementation pair.
 enum class SuspensionProviderKind
 {
     LinearRaycastV1 = 0

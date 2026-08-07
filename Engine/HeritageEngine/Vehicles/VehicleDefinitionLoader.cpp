@@ -103,6 +103,15 @@ VehicleHandle VehicleDefinitionLoader::create(
         wheel.bumpStopProgression = suspension.bumpStopProgressionNPerM2;
         wheel.droopStopEngagement = suspension.droopStopEngagementM;
         wheel.droopStopRate = suspension.droopStopRateNPerM;
+        wheel.localSteeringAxis = suspension.localSteeringAxis;
+        wheel.staticCamberDegrees = suspension.staticCamberDegrees;
+        wheel.camberGainDegreesPerM = suspension.camberGainDegreesPerM;
+        wheel.camberProgressionDegreesPerM2 =
+            suspension.camberProgressionDegreesPerM2;
+        wheel.staticToeDegrees = suspension.staticToeDegrees;
+        wheel.toeGainDegreesPerM = suspension.toeGainDegreesPerM;
+        wheel.toeProgressionDegreesPerM2 =
+            suspension.toeProgressionDegreesPerM2;
         wheel.suspensionProvider = suspensionProvider;
         wheel.suspensionMotionRatio = suspension.motionRatio;
         wheel.maximumSuspensionForce = suspension.maximumForceN;

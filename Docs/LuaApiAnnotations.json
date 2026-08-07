@@ -84,6 +84,11 @@
     "returns": "51 values; inspect Vehicles/Telemetry.lua for the canonical unpack order",
     "description": "Returns wheel suspension force components, damper dissipation, unsprung velocity, radial tire deflection/power, advanced tire force telemetry, brake/driver-aid state, contact collider, and detected surface data."
   },
+  "Vehicle.GetWheelUprightPose": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "camberDegrees, toeDegrees, localRotationXDegrees, localRotationYDegrees, localRotationZDegrees, worldSteeringAxisX, worldSteeringAxisY, worldSteeringAxisZ, worldForwardX, worldForwardY, worldForwardZ, worldRightX, worldRightY, worldRightZ, worldUpX, worldUpY, worldUpZ",
+    "description": "Returns the authoritative native upright orientation evaluated at the current suspension travel and Ackermann steering angle."
+  },
   "Vehicle.SetWheelSuspensionModel": {
     "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, springPreloadN: number, springRateNPerM: number, springProgressionNPerM2: number, bumpDampingNsPerM: number, bumpHighSpeedDampingNsPerM: number, bumpDampingKneeVelocityMps: number, reboundDampingNsPerM: number, reboundHighSpeedDampingNsPerM: number, reboundDampingKneeVelocityMps: number, bumpStopEngagementM: number, bumpStopRateNPerM: number, bumpStopProgressionNPerM2: number, droopStopEngagementM: number, droopStopRateNPerM: number, motionRatio: number, maximumForceN: number)",
     "returns": "boolean",
@@ -93,6 +98,16 @@
     "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
     "returns": "provider, springPreloadN, springRateNPerM, springProgressionNPerM2, bumpDampingNsPerM, bumpHighSpeedDampingNsPerM, bumpDampingKneeVelocityMps, reboundDampingNsPerM, reboundHighSpeedDampingNsPerM, reboundDampingKneeVelocityMps, bumpStopEngagementM, bumpStopRateNPerM, bumpStopProgressionNPerM2, droopStopEngagementM, droopStopRateNPerM, motionRatio, maximumForceN",
     "description": "Reads the exact native nonlinear suspension description assigned to one wheel so live tools never infer state from Lua defaults."
+  },
+  "Vehicle.SetWheelSuspensionGeometry": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, steeringAxisX: number, steeringAxisY: number, steeringAxisZ: number, staticCamberDegrees: number, camberGainDegreesPerM: number, camberProgressionDegreesPerM2: number, staticToeDegrees: number, toeGainDegreesPerM: number, toeProgressionDegreesPerM2: number)",
+    "returns": "boolean",
+    "description": "Atomically validates and applies the selected contact unit's local steering axis plus signed quadratic camber and toe curves."
+  },
+  "Vehicle.GetWheelSuspensionGeometry": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "provider, steeringAxisX, steeringAxisY, steeringAxisZ, staticCamberDegrees, camberGainDegreesPerM, camberProgressionDegreesPerM2, staticToeDegrees, toeGainDegreesPerM, toeProgressionDegreesPerM2",
+    "description": "Reads the exact native steering-axis and alignment-curve description assigned to one contact unit."
   },
   "Vehicle.SetWheelUnsprungMassModel": {
     "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, effectiveMassKg: number, tireRadialStiffnessNPerM: number, tireRadialDampingNsPerM: number, maximumTireDeflectionM: number, maximumNormalForceN: number)",
@@ -226,8 +241,8 @@
   },
   "Vehicle.GetDynamicsLabSummary": {
     "arguments": "(vehicle: VehicleHandle)",
-    "returns": "recording, complete, samples, capacity, wheels, durationSeconds, captureHertz, peakSpeedKph, peakRollDegps, peakPitchDegps, peakYawDegps, peakSuspensionSpeedMps, peakSlipRatio, peakSlipAngleDeg, peakGripPercent, minimumGroundedLoadN, maximumGroundedLoadN, contactLossEvents, peakTravelStopForceN, peakDamperDissipationW, peakUnsprungVelocityMps, peakTireDeflectionMm, peakTireRadialDissipationW",
-    "description": "Returns bounded-capture status and extrema, including suspension travel-stop loads, damper energy rate, wheel-hop speed, radial tire deflection and radial damping power calculated from authoritative native high-rate samples."
+    "returns": "recording, complete, samples, capacity, wheels, durationSeconds, captureHertz, peakSpeedKph, peakRollDegps, peakPitchDegps, peakYawDegps, peakSuspensionSpeedMps, peakSlipRatio, peakSlipAngleDeg, peakGripPercent, minimumGroundedLoadN, maximumGroundedLoadN, contactLossEvents, peakTravelStopForceN, peakDamperDissipationW, peakUnsprungVelocityMps, peakTireDeflectionMm, peakTireRadialDissipationW, peakAbsoluteCamberDeg, peakAbsoluteToeDeg",
+    "description": "Returns bounded-capture status and extrema, including suspension travel-stop loads, damper energy rate, wheel-hop speed, radial tire deflection, radial damping power, camber and toe calculated from authoritative native high-rate samples."
   },
   "Vehicle.GetDynamicsLabSeries": {
     "arguments": "(vehicle: VehicleHandle, metricName: string, oneBasedWheelIndex?: integer, maximumPoints?: integer)",

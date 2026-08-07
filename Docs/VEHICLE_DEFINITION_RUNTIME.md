@@ -96,3 +96,10 @@ stiffness/damping, maximum tire deflection and maximum tire normal load. The
 compiler validates these values and the loader configures the independent
 native `UnsprungMassModel`. Effective mass zero is valid and selects the legacy
 massless contact path. See `UNSPRUNG_MASS_MODEL.md`.
+
+Step 29P extends suspension components with a local three-dimensional steering
+axis and signed static/gain/progression data for camber and toe. The compiler
+rejects non-finite or zero axes and out-of-range curve values before the loader
+copies them into `SuspensionGeometry`. The current `linear_raycast_v1` provider
+uses those curves to produce authoritative upright pose while preserving
+existing zero-curve definitions. See `SUSPENSION_GEOMETRY.md`.

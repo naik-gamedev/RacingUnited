@@ -52,6 +52,12 @@ deflection and load bounds per contact unit. The live Vehicle `SUSP. > UNSPRUNG`
 page can tune these values on the running prototype, while the Workshop remains
 the topology-first source for exported definitions.
 
+Step 29P definitions also retain a local steering axis plus signed quadratic
+camber and toe curves in each suspension component. The live Vehicle
+`SUSP. > GEOMETRY` page tunes those values against authoritative native pose.
+The prototype keeps zero alignment curves until measured data is available;
+Workshop hardpoint fields and gizmos remain the next editor extension.
+
 ## Current workflow
 
 1. Run `Tools/LaunchExactFreshRelease.cmd`.
@@ -106,10 +112,10 @@ module's Assets directory. `Module.WriteSaveText` writes only bounded `.lua`,
 
 ## Next extensions
 
-1. Add visual gizmos for centers of mass, wheel/contact centers, suspension
-   anchors, steering axes, and collision volumes.
-2. Implement the first linkage-geometry provider after its anchors can be
-   authored and inspected.
+1. Add numeric hardpoint/steering-axis controls plus visual gizmos for centers
+   of mass, wheel/contact centers, suspension anchors and collision volumes.
+2. Implement MacPherson and double-wishbone geometry providers after their
+   anchors can be authored and inspected.
 3. Replace scalar engine torque with reusable measured torque-curve assets.
 4. Add component-graph native powertrain routing for multiple engines,
    transmissions, differentials, transfer cases, chains, and hub motors.

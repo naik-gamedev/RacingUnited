@@ -48,7 +48,9 @@ $required = @(
     "Docs\Decisions\ADR-014-Nonlinear-Suspension-Forces.md",
     "Docs\Decisions\ADR-015-Live-Per-Wheel-Suspension-Tuning.md",
     "Docs\Decisions\ADR-016-Scalar-Unsprung-Mass.md",
+    "Docs\Decisions\ADR-017-Authoritative-Suspension-Upright-Pose.md",
     "Docs\UNSPRUNG_MASS_MODEL.md",
+    "Docs\SUSPENSION_GEOMETRY.md",
     "Docs\LuaApiAnnotations.json",
     "Engine\HeritageEngine\Core\Diagnostics\BuildIdentity.hpp",
     "Engine\HeritageEngine\Core\Diagnostics\GeneratedBuildIdentity.hpp",
@@ -58,6 +60,8 @@ $required = @(
     "Engine\HeritageEngine\Vehicles\TireModel.cpp",
     "Engine\HeritageEngine\Vehicles\SuspensionModel.hpp",
     "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp",
+    "Engine\HeritageEngine\Vehicles\SuspensionGeometry.hpp",
+    "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp",
     "Engine\HeritageEngine\Vehicles\UnsprungMassModel.hpp",
     "Engine\HeritageEngine\Vehicles\UnsprungMassModel.cpp",
     "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp",
@@ -122,6 +126,9 @@ if (Test-Path $manifestPath) {
         "Vehicle.GetWheelTireModel",
         "Vehicle.SetWheelSuspensionModel",
         "Vehicle.GetWheelSuspensionModel",
+        "Vehicle.SetWheelSuspensionGeometry",
+        "Vehicle.GetWheelSuspensionGeometry",
+        "Vehicle.GetWheelUprightPose",
         "Vehicle.SetWheelUnsprungMassModel",
         "Vehicle.GetWheelUnsprungMassModel",
         "Vehicle.StartDynamicsLab",
@@ -158,7 +165,7 @@ Check ($runtimeCpp.Contains("m_registeredLuaFunctions")) "runtime records exact 
 Check ($runtimeCpp.Contains("runSafetySmokeTests")) "runtime contains lifetime safety smoke tests"
 Check ($runtimeCpp.Contains("LuaAPI_Runtime.json")) "runtime writes a live API manifest"
 Check ($runtimeCpp.Contains("return 51;")) "wheel-state Lua bridge includes unsprung-mass telemetry"
-Check ($runtimeCpp.Contains("return 23;")) "Dynamics Lab summary includes wheel-hop extrema"
+Check ($runtimeCpp.Contains("return 25;")) "Dynamics Lab summary includes geometry extrema"
 Check ($runtimeCpp.Contains("OFN_FILEMUSTEXIST")) "Windows module asset picker requires an existing file"
 Check ($runtimeCpp.Contains("resolveSavePath(relative)")) "bounded text export resolves through the active module save root"
 
@@ -198,6 +205,9 @@ Check ($vehicleHeader.Contains("setWheelTireModel")) "per-wheel tire setter cont
 Check ($vehicleHeader.Contains("wheelTireModel")) "per-wheel tire readback contract exists"
 Check ($vehicleHeader.Contains("setWheelSuspensionModel")) "per-wheel suspension setter contract exists"
 Check ($vehicleHeader.Contains("wheelSuspensionModel")) "per-wheel suspension readback contract exists"
+Check ($vehicleHeader.Contains("setWheelSuspensionGeometry")) "per-wheel suspension-geometry setter contract exists"
+Check ($vehicleHeader.Contains("wheelSuspensionGeometry")) "per-wheel suspension-geometry readback contract exists"
+Check ($vehicleHeader.Contains("localUprightRotationDegrees")) "wheel state exposes authoritative upright pose"
 Check ($vehicleHeader.Contains("setWheelUnsprungMassModel")) "per-wheel unsprung-mass setter contract exists"
 Check ($vehicleHeader.Contains("wheelUnsprungMassModel")) "per-wheel unsprung-mass readback contract exists"
 Check ($vehicleHeader.Contains("struct VehicleRestState")) "vehicle parked-rest diagnostic contract exists"
@@ -216,6 +226,8 @@ Check ($physicsRegression.Contains("nonlinear_force_n")) "headless regression ve
 Check ($physicsRegression.Contains("live_suspension_roundtrip")) "headless regression verifies live suspension tuning roundtrip"
 Check ($physicsRegression.Contains("scalar unsprung-mass wheel-hop response")) "headless regression verifies scalar wheel-hop response"
 Check ($physicsRegression.Contains("live_unsprung_roundtrip")) "headless regression verifies live unsprung-mass tuning roundtrip"
+Check ($physicsRegression.Contains("authoritative suspension upright pose")) "headless regression verifies authoritative suspension geometry"
+Check ($physicsRegression.Contains("live_geometry_roundtrip")) "headless regression verifies live suspension-geometry tuning roundtrip"
 
 $definitionV2Path = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Definitions\VehicleDefinitionV2.lua"
 $definitionV2 = if (Test-Path $definitionV2Path) { [IO.File]::ReadAllText($definitionV2Path) } else { "" }
@@ -228,6 +240,9 @@ Check ($definitionV2.Contains("bumpHighSpeedDampingNsPerM")) "suspension definit
 Check ($definitionV2.Contains("bumpStopProgressionNPerM2")) "suspension definitions author progressive travel stops"
 Check ($definitionV2.Contains("effectiveUnsprungMassKg")) "contact definitions author effective unsprung mass"
 Check ($definitionV2.Contains("tireRadialStiffnessNPerM")) "contact definitions author radial tire stiffness"
+Check ($definitionV2.Contains("steeringAxis =")) "suspension definitions author a local steering axis"
+Check ($definitionV2.Contains("camberGainDegreesPerM")) "suspension definitions author camber travel curves"
+Check ($definitionV2.Contains("toeGainDegreesPerM")) "suspension definitions author toe/bump-steer curves"
 Check ($definitionV2.Contains("driveConnections = {}")) "VehicleDefinitionV2 stores explicit drive connections"
 Check ($definitionV2.Contains("ValidateVehicleDefinitionV2")) "VehicleDefinitionV2 has structural validation"
 Check ($definitionV2.Contains("currentSolverReady")) "definition validity remains separate from current solver support"
@@ -279,6 +294,16 @@ Check ($unsprungHeader.Contains("struct UnsprungMassOutput")) "unsprung-mass pro
 Check ($unsprungCpp.Contains("advanceUnsprungMassModel")) "scalar unsprung-mass provider implementation exists"
 Check ($runtimeCpp.Contains("luaVehicleGetWheelUnsprungMassModel")) "Lua exposes exact unsprung-mass readback"
 
+$geometryHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.hpp"
+$geometryHeader = if (Test-Path $geometryHeaderPath) { [IO.File]::ReadAllText($geometryHeaderPath) } else { "" }
+$geometryCppPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp"
+$geometryCpp = if (Test-Path $geometryCppPath) { [IO.File]::ReadAllText($geometryCppPath) } else { "" }
+Check ($geometryHeader.Contains("struct SuspensionGeometryInput")) "suspension geometry has an explicit input contract"
+Check ($geometryHeader.Contains("struct SuspensionGeometryOutput")) "suspension geometry has an authoritative output contract"
+Check ($geometryCpp.Contains("evaluateSuspensionGeometry")) "suspension geometry provider implementation exists"
+Check ($vehicleCpp.Contains("state.worldWheelForward")) "VehicleSystem consumes the authoritative upright basis"
+Check ($runtimeCpp.Contains("luaVehicleGetWheelUprightPose")) "Lua exposes authoritative upright telemetry"
+
 $suspensionRuntimePath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Suspension.lua"
 $suspensionRuntime = if (Test-Path $suspensionRuntimePath) { [IO.File]::ReadAllText($suspensionRuntimePath) } else { "" }
 Check ($suspensionRuntime.Contains("ApplyVehicleSuspensionModelToAllWheels")) "module can explicitly copy a selected suspension tune"
@@ -286,11 +311,14 @@ $suspensionPanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\
 $suspensionPanel = if (Test-Path $suspensionPanelPath) { [IO.File]::ReadAllText($suspensionPanelPath) } else { "" }
 Check ($suspensionPanel.Contains("DrawSuspensionLiveTelemetry")) "vehicle suspension panel exposes live force telemetry"
 Check ($suspensionPanel.Contains("DrawSuspensionUnsprungControls")) "vehicle suspension panel exposes unsprung-mass tuning"
+Check ($suspensionPanel.Contains("DrawSuspensionGeometryControls")) "vehicle suspension panel exposes upright-geometry tuning"
 
 $dynamicsLabHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp"
 $dynamicsLabHeader = if (Test-Path $dynamicsLabHeaderPath) { [IO.File]::ReadAllText($dynamicsLabHeaderPath) } else { "" }
 Check ($dynamicsLabHeader.Contains("WheelDamperDissipationWatts")) "Dynamics Lab records damper energy rate"
 Check ($dynamicsLabHeader.Contains("WheelUnsprungVelocityMps")) "Dynamics Lab records wheel-hop velocity"
+Check ($dynamicsLabHeader.Contains("WheelCamberDegrees")) "Dynamics Lab records authoritative camber"
+Check ($dynamicsLabHeader.Contains("WheelToeDegrees")) "Dynamics Lab records authoritative toe"
 
 
 $vehicleProjectPath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj"
@@ -299,6 +327,8 @@ Check ($vehicleProject.Contains("..\Vehicles\TireModel.cpp")) "Visual Studio pro
 Check ($vehicleProject.Contains("..\Vehicles\TireModel.hpp")) "Visual Studio project tracks TireModel.hpp"
 Check ($vehicleProject.Contains("..\Vehicles\SuspensionModel.cpp")) "Visual Studio project compiles SuspensionModel.cpp"
 Check ($vehicleProject.Contains("..\Vehicles\SuspensionModel.hpp")) "Visual Studio project tracks SuspensionModel.hpp"
+Check ($vehicleProject.Contains("..\Vehicles\SuspensionGeometry.cpp")) "Visual Studio project compiles SuspensionGeometry.cpp"
+Check ($vehicleProject.Contains("..\Vehicles\SuspensionGeometry.hpp")) "Visual Studio project tracks SuspensionGeometry.hpp"
 Check ($vehicleProject.Contains("..\Vehicles\UnsprungMassModel.cpp")) "Visual Studio project compiles UnsprungMassModel.cpp"
 Check ($vehicleProject.Contains("..\Vehicles\UnsprungMassModel.hpp")) "Visual Studio project tracks UnsprungMassModel.hpp"
 Check ($vehicleProject.Contains("..\Vehicles\VehicleDynamicsLab.cpp")) "Visual Studio project compiles VehicleDynamicsLab.cpp"
@@ -360,7 +390,8 @@ $visualWheelsRuntime = if (Test-Path $visualWheelsRuntimePath) { [IO.File]::Read
 Check ($visualWheelsRuntime.Contains("UpdateVehicleWheelPresentation")) "articulated-wheel presentation runtime exists"
 Check ($visualWheelsRuntime.Contains("Entity.SetWorldPosition")) "wheel presentation consumes authoritative native world centers"
 Check ($visualWheelsRuntime.Contains("telemetry.centerX")) "wheel presentation reads native center telemetry"
-Check ($visualWheelsRuntime.Contains("telemetry.steerAngle")) "articulated-wheel presentation consumes native steering telemetry"
+Check ($visualWheelsRuntime.Contains("telemetry.uprightRotationX")) "articulated-wheel presentation consumes native upright telemetry"
+Check ($visualWheelsRuntime.Contains("VehicleWheelVisualRotation")) "wheel presentation composes mesh orientation after native upright pose"
 Check ($visualWheelsRuntime.Contains("telemetry.rotationDegrees")) "articulated-wheel presentation consumes native wheel rotation telemetry"
 Check ($visualWheelsRuntime.Contains("visualFaceYawDegrees")) "wheel presentation supports independent left/right mesh facing"
 Check ($visualWheelsRuntime.Contains("visualSpinSign")) "wheel presentation compensates spin for per-side mesh facing"
