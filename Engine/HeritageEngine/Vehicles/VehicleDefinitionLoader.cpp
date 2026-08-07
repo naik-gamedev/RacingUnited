@@ -85,9 +85,24 @@ VehicleHandle VehicleDefinitionLoader::create(
         wheel.restLength = suspension.restLengthM;
         wheel.maximumCompression = suspension.maximumCompressionM;
         wheel.maximumDroop = suspension.maximumDroopM;
+        wheel.springPreload = suspension.springPreloadN;
         wheel.springRate = suspension.springRateNPerM;
+        wheel.springProgression = suspension.springProgressionNPerM2;
         wheel.bumpDamping = suspension.bumpDampingNsPerM;
+        wheel.bumpHighSpeedDamping =
+            suspension.bumpHighSpeedDampingNsPerM;
+        wheel.bumpDampingKneeVelocity =
+            suspension.bumpDampingKneeVelocityMps;
         wheel.reboundDamping = suspension.reboundDampingNsPerM;
+        wheel.reboundHighSpeedDamping =
+            suspension.reboundHighSpeedDampingNsPerM;
+        wheel.reboundDampingKneeVelocity =
+            suspension.reboundDampingKneeVelocityMps;
+        wheel.bumpStopEngagement = suspension.bumpStopEngagementM;
+        wheel.bumpStopRate = suspension.bumpStopRateNPerM;
+        wheel.bumpStopProgression = suspension.bumpStopProgressionNPerM2;
+        wheel.droopStopEngagement = suspension.droopStopEngagementM;
+        wheel.droopStopRate = suspension.droopStopRateNPerM;
         wheel.suspensionProvider = suspensionProvider;
         wheel.suspensionMotionRatio = suspension.motionRatio;
         wheel.maximumSuspensionForce = suspension.maximumForceN;

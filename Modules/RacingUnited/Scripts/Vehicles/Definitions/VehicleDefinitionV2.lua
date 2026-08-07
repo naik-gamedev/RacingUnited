@@ -263,12 +263,25 @@ function BuildVehicleDefinitionV2(draft)
                 or prototypeWheelPhysics.maximumCompressionM or 0.18,
             maximumDroopM = source and source.maximumDroopM
                 or prototypeWheelPhysics.maximumDroopM or 0.15,
+            springPreloadN = 0.0,
             springRateNPerM = source and source.springRateNPerM
                 or prototypeWheelPhysics.springRateNPerM or 35000.0,
+            springProgressionNPerM2 = 15000.0,
             bumpDampingNsPerM = source and source.bumpDampingNsPerM
                 or prototypeWheelPhysics.bumpDampingNsPerM or 3200.0,
+            bumpHighSpeedDampingNsPerM = 1800.0,
+            bumpDampingKneeVelocityMps = 0.25,
             reboundDampingNsPerM = source and source.reboundDampingNsPerM
                 or prototypeWheelPhysics.reboundDampingNsPerM or 4200.0,
+            reboundHighSpeedDampingNsPerM = 2600.0,
+            reboundDampingKneeVelocityMps = 0.30,
+            bumpStopEngagementM = (source and source.maximumCompressionM
+                or prototypeWheelPhysics.maximumCompressionM or 0.18) * 0.75,
+            bumpStopRateNPerM = 120000.0,
+            bumpStopProgressionNPerM2 = 1000000.0,
+            droopStopEngagementM = (source and source.maximumDroopM
+                or prototypeWheelPhysics.maximumDroopM or 0.15) * 0.85,
+            droopStopRateNPerM = 35000.0,
             motionRatio = 1.0,
             maximumForceN = 250000.0
         }
@@ -450,6 +463,25 @@ function ValidateVehicleDefinitionV2(definition)
                 report, "error", "suspension_motion_ratio",
                 "Suspension '" .. tostring(suspension.id)
                     .. "' needs a positive motion ratio")
+        end
+        local nonNegativeFields = {
+            "springPreloadN", "springRateNPerM",
+            "springProgressionNPerM2", "bumpDampingNsPerM",
+            "bumpHighSpeedDampingNsPerM", "bumpDampingKneeVelocityMps",
+            "reboundDampingNsPerM", "reboundHighSpeedDampingNsPerM",
+            "reboundDampingKneeVelocityMps", "bumpStopEngagementM",
+            "bumpStopRateNPerM", "bumpStopProgressionNPerM2",
+            "droopStopEngagementM", "droopStopRateNPerM"
+        }
+        for _, field in ipairs(nonNegativeFields) do
+            local value = suspension[field]
+            if type(value) ~= "number" or value < 0.0 or value ~= value then
+                AddVehicleDefinitionIssue(
+                    report, "error", "suspension_parameter",
+                    "Suspension '" .. tostring(suspension.id)
+                        .. "' has invalid " .. field)
+                break
+            end
         end
     end
     for _, contact in ipairs(contacts) do

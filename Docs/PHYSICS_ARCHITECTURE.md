@@ -23,6 +23,11 @@ Changing render FPS must not change simulated time. The fixed-step accumulator h
 
 Specialized vehicle calculations apply forces at contact and attachment points to the general chassis body. Tire and suspension substeps must not force the entire world to run at 1000 Hz.
 
+Suspension force providers return explicit spring, damping, travel-stop and
+energy-dissipation terms. The linear-raycast provider remains a massless contact
+approximation; future linkage/unsprung-mass providers must preserve the same
+observable force contract rather than hiding tuning inside vehicle categories.
+
 ## Parked contact and sleeping
 
 Raycast suspension impulses are support/contact impulses and therefore keep an

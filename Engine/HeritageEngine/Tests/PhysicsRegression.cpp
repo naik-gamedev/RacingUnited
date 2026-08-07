@@ -694,6 +694,7 @@ bool dynamicsLabCapturesHighRateTelemetry()
 
     std::vector<float> speedSeries;
     std::vector<float> wheelLoadSeries;
+    std::vector<float> damperPowerSeries;
     const bool speedWorked = world.vehicles.dynamicsLabMetricSeries(
         world.vehicle,
         heritage::vehicles::DynamicsLabMetric::SpeedKph,
@@ -706,6 +707,12 @@ bool dynamicsLabCapturesHighRateTelemetry()
         0,
         64,
         wheelLoadSeries);
+    const bool damperPowerWorked = world.vehicles.dynamicsLabMetricSeries(
+        world.vehicle,
+        heritage::vehicles::DynamicsLabMetric::WheelDamperDissipationWatts,
+        0,
+        64,
+        damperPowerSeries);
 
     std::cout
         << "dynamics_lab samples=" << summary.sampleCount
@@ -728,9 +735,11 @@ bool dynamicsLabCapturesHighRateTelemetry()
         && summary.peakSpeedKph > 0.1f
         && speedWorked
         && wheelLoadWorked
+        && damperPowerWorked
         && !speedSeries.empty()
         && speedSeries.size() <= 64
-        && wheelLoadSeries.size() == speedSeries.size();
+        && wheelLoadSeries.size() == speedSeries.size()
+        && damperPowerSeries.size() == speedSeries.size();
 }
 
 VehicleDefinitionV2Source makeCompiledRoadCarDefinition()
@@ -849,6 +858,12 @@ bool vehicleDefinitionCompilerAndLoaderWork()
     const auto brokenSuspensionResult =
         VehicleDefinitionCompiler::compile(brokenSuspension);
 
+    VehicleDefinitionV2Source invalidSuspensionParameters = source;
+    invalidSuspensionParameters.suspensions[0].bumpHighSpeedDampingNsPerM =
+        -1.0f;
+    const auto invalidSuspensionParametersResult =
+        VehicleDefinitionCompiler::compile(invalidSuspensionParameters);
+
     VehicleDefinitionV2Source future = source;
     future.classification = "motorcycle";
     future.requirements.leanDynamics = true;
@@ -880,6 +895,38 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         std::abs(bumpOutput.normalForceN - 300.0f) <= 0.0001f
         && std::abs(reboundOutput.normalForceN - 150.0f) <= 0.0001f;
 
+    heritage::vehicles::SuspensionModelDescription nonlinearSuspension;
+    nonlinearSuspension.springPreloadN = 100.0f;
+    nonlinearSuspension.springRateNPerM = 1000.0f;
+    nonlinearSuspension.springProgressionNPerM2 = 2000.0f;
+    nonlinearSuspension.bumpDampingNsPerM = 100.0f;
+    nonlinearSuspension.bumpHighSpeedDampingNsPerM = 50.0f;
+    nonlinearSuspension.bumpDampingKneeVelocityMps = 0.10f;
+    nonlinearSuspension.reboundDampingNsPerM = 200.0f;
+    nonlinearSuspension.reboundHighSpeedDampingNsPerM = 100.0f;
+    nonlinearSuspension.reboundDampingKneeVelocityMps = 0.10f;
+    nonlinearSuspension.bumpStopEngagementM = 0.10f;
+    nonlinearSuspension.bumpStopRateNPerM = 1000.0f;
+    nonlinearSuspension.bumpStopProgressionNPerM2 = 2000.0f;
+    nonlinearSuspension.droopStopEngagementM = 0.10f;
+    nonlinearSuspension.droopStopRateNPerM = 500.0f;
+    nonlinearSuspension.motionRatio = 1.0f;
+    nonlinearSuspension.maximumForceN = 10000.0f;
+    const auto nonlinearBump = heritage::vehicles::evaluateSuspensionModel(
+        nonlinearSuspension,
+        { 0.20f, 0.30f });
+    const auto nonlinearRebound = heritage::vehicles::evaluateSuspensionModel(
+        nonlinearSuspension,
+        { -0.20f, -0.30f });
+    const bool nonlinearSuspensionWorked =
+        std::abs(nonlinearBump.springForceN - 340.0f) <= 0.0001f
+        && std::abs(nonlinearBump.dampingForceN - 20.0f) <= 0.0001f
+        && std::abs(nonlinearBump.bumpStopForceN - 110.0f) <= 0.0001f
+        && std::abs(nonlinearBump.normalForceN - 470.0f) <= 0.0001f
+        && std::abs(nonlinearBump.damperDissipationW - 6.0f) <= 0.0001f
+        && std::abs(nonlinearRebound.droopStopForceN - 50.0f) <= 0.0001f
+        && nonlinearRebound.normalForceN == 0.0f;
+
     std::cout
         << "definition_compiler provider="
         << compiled.definition.runtimeProvider
@@ -887,12 +934,16 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         << " gears=" << vehicles.forwardGearCount(loaded)
         << " invalid_reference_rejected=" << (!brokenResult.valid)
         << " suspension_reference_rejected=" << (!brokenSuspensionResult.valid)
+        << " suspension_parameters_rejected="
+        << (!invalidSuspensionParametersResult.valid)
         << " future_topology_valid=" << futureResult.valid
         << " future_topology_ready=" << futureResult.currentSolverReady
         << " category_ignored=" << categoryOnlyResult.currentSolverReady
         << " future_suspension_ready="
         << futureSuspensionResult.currentSolverReady
         << " motion_ratio_force_n=" << bumpOutput.normalForceN
+        << " nonlinear_force_n=" << nonlinearBump.normalForceN
+        << " damper_power_w=" << nonlinearBump.damperDissipationW
         << '\n';
 
     return compiled.valid
@@ -902,6 +953,7 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && runtimeLoaded
         && !brokenResult.valid
         && !brokenSuspensionResult.valid
+        && !invalidSuspensionParametersResult.valid
         && futureResult.valid
         && !futureResult.currentSolverReady
         && futureResult.issueSummary().find("lean_dynamics") != std::string::npos
@@ -910,7 +962,8 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && !futureSuspensionResult.currentSolverReady
         && futureSuspensionResult.issueSummary().find("double_wishbone_v1")
             != std::string::npos
-        && suspensionForcesWorked;
+        && suspensionForcesWorked
+        && nonlinearSuspensionWorked;
 }
 
 } // namespace

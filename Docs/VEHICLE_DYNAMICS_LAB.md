@@ -36,7 +36,8 @@ Every native sample contains vehicle-local velocity and angular rates, position,
 driver inputs, steering state and engine speed. Every wheel contributes ground
 contact, suspension compression and velocity, normal/longitudinal/lateral
 forces, steering, angular velocity, relaxed slip, grip utilization and aligning
-torque.
+torque. Step 29M additionally records separate spring, damper, bump-stop and
+droop-stop forces plus instantaneous damper dissipation in watts.
 
 Graphs are downsampled with a peak-preserving bucket selection. CSV retains
 every captured sample and should be used for detailed offline analysis.
@@ -55,5 +56,6 @@ every captured sample and should be used for detailed offline analysis.
    replacement is intentional.
 
 The present laboratory is the instrumentation foundation. Hardpoint motion,
-camber/toe, wheel rate, tire temperature, pressure, damper histograms and
-suspension-constraint forces will be added as those production systems exist.
+camber/toe, wheel rate, tire temperature, pressure, damper velocity histograms,
+thermal state and constrained unsprung-mass forces will be added as those
+production systems exist.

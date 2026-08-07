@@ -3,9 +3,14 @@
 ## Milestone status
 
 **User-confirmed baseline:** Step 29J.6B — Adaptive Three-Column Topology Grid
-**Current candidate:** Step 29L — Native Suspension Component and Provider Graph
+**Current candidate:** Step 29M — Non-linear Suspension Forces and Energy Telemetry
 
 Step 29F.1 was interactively confirmed in the prototype scene. Step 29G established the advanced road-tire provider. Step 29H moved tire descriptions to independent per-wheel data. Step 29I added the creator-owned player-car OBJ slot; Step 29I.1 hardened window-size recovery and the user confirmed an authored car renders and drives. Step 29J added optional independently animated wheel meshes. The user confirmed the wheels render and rotate, which exposed two presentation problems: temporary 2.10 m track / 2.60 m wheelbase mounts were far too wide/long for the imported Peugeot, and all four wheel meshes used the same side orientation. Step 29J.1 uses published 2003 Peugeot 206 RC wheelbase/track/tire dimensions as a visual/reference geometry baseline and places every rendered wheel at the exact native `WheelState.worldCenter`. Step 29J.2 established Blender-native content authoring coordinates (X left/right, Y forward/backward, Z height), authored 1:1 creator geometry and exact numeric entry. Steps 29J.3/29J.3a exposed limitations of the temporary OBJ box-proxy/spawn bridge on a real hilly scene. Step 29J.4 uses the user-supplied scene files as a regression fixture, corrects Blender default OBJ axis conversion, accepts SPAWN_PLAYER from either visual or collision OBJ, snaps spawn height to the actual terrain, and makes exact scene triangles participate in suspension/tire raycasts. Step 29J.4B adds a headless native vehicle regression suite, corrects handbrake wheel-torque overshoot at 1000 Hz, and adds a physically capacity-checked parked rest state that wakes on throttle or brake release. Step 29J.4C removes the repeated low-speed rear oscillation observed during turn-then-brake testing. Step 29J.5 adds the first native high-rate Vehicle Dynamics Laboratory. Step 29J.6 adds the first versioned topology-first Vehicle Workshop contract and module-isolated authoring/export workflow. Step 29J.6A makes its choices responsive in two-column rows so narrower debug panels retain every control. The user confirmed that layout works. Step 29J.6B promotes the topology chooser to three columns at the demonstrated panel width while retaining the two-column fallback. The user confirmed the corrected layout. Step 29K adds native definition compilation, stable-reference resolution, component-driven provider selection and the first runtime loader adapter. Step 29L adds resolved suspension components and the first native suspension force-provider contract. The current candidate includes:
+
+Step 29M keeps the work suspension-only: healthy suspension components now
+support preload, progression, digressive damping and travel stops, while native
+telemetry exposes force components and damper energy rate for later thermal,
+wear and damage models.
 
 - Deterministic 240 Hz general physics world with bounded catch-up.
 - Generation-checked entities, rigid bodies, colliders, constraints, and vehicles.
@@ -17,6 +22,7 @@ Step 29F.1 was interactively confirmed in the prototype scene. Step 29G establis
 - A `VehicleDefinitionV2` component graph for bodies, power units, transmissions, contact units and explicit drive connections, with category templates that do not select duplicated solvers.
 - A native `VehicleDefinitionCompiler` and `VehicleDefinitionLoader`; Workshop preview now uses resolved component indices and the `raycast_wheel_v1` provider instead of reconstructing drive layout in Lua.
 - A native `SuspensionModel` provider boundary; contact units resolve stable suspension IDs and the current `linear_raycast_v1` implementation owns spring, damper, motion-ratio and force-limit evaluation.
+- Non-linear healthy suspension forces with separate low/high-speed bump and rebound damping, progressive springs/stops, droop stops, live force breakdown and damper-dissipation telemetry.
 - A persistent Vehicle `WORKSHOP` tab with Windows module-asset selection, structural validation, honest current-solver capability reporting, supported live preview and module-private definition export.
 - An adaptive three-column Workshop topology grid with a two-column fallback; longer actions retain the proven two-column layout without horizontal scrolling.
 - Capacity-checked parked-vehicle sleep plus non-overshooting service/parking-brake wheel constraints.
@@ -75,15 +81,14 @@ These are future content definitions, not hard-coded assumptions in the vehicle 
 
 ## Immediate roadmap
 
-1. Add Workshop gizmos for center of mass, inertia, wheel/contact centers, steering axes, suspension anchors and collision volumes.
-2. Move production chassis collision and mass-property descriptions into the compiled definition envelope.
-3. Author linkage anchors and implement the first non-linear suspension geometry provider, followed by MacPherson, double-wishbone, trailing-arm, live-axle, leaf-spring, pushrod/pullrod and motorcycle layouts.
-4. Use the Vehicle Dynamics Laboratory to establish repeatable suspension and braking baselines for the current prototype.
-5. Expand the headless Physics Regression project with braking-distance, split-grip, deterministic replay and multi-vehicle performance cases.
-6. Establish measured chassis mass properties, center of mass, wheel/tire data, and suspension geometry for the first reference vehicle.
-7. Add force-feedback architecture driven by the high-rate contact/steering path.
-8. Add production-oriented glTF 2.0 vehicle/scene hierarchy and named nodes, followed by PBR materials and lighting.
-9. Add motorcycle-specific tire profile, large-camber contact, steering geometry and rider dynamics.
+1. Add suspension-only Workshop controls and gizmos for wheel centers, steering axes, linkage anchors, travel and motion ratio.
+2. Add constrained unsprung mass, wheel hop and authoritative upright pose.
+3. Implement MacPherson and double-wishbone geometry providers, then trailing-arm, live-axle, leaf-spring, pushrod/pullrod, kart-flex and motorcycle layouts.
+4. Add anti-roll bars, third/heave springs, cross-linked/hydropneumatic systems and bump-steer/camber/toe curves.
+5. Use the Vehicle Dynamics Laboratory to establish measured suspension baselines and damper velocity/energy histograms.
+6. Add damper oil/gas thermal state and physically derived fade/cavitation.
+7. Add wear and damage only after the healthy load, temperature, travel-impact and geometry histories are authoritative.
+8. Establish measured mass, wheel/tire data and suspension geometry for the first reference vehicle.
 
 ## Recovery procedure for a new conversation or contributor
 

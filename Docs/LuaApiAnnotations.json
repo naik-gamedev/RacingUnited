@@ -81,8 +81,8 @@
   },
   "Vehicle.GetWheelState": {
     "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
-    "returns": "41 values; inspect Vehicles/Telemetry.lua for the canonical unpack order",
-    "description": "Returns wheel suspension, advanced tire pure/combined-force telemetry, brake/driver-aid state, contact collider, and per-wheel detected surface data."
+    "returns": "47 values; inspect Vehicles/Telemetry.lua for the canonical unpack order",
+    "description": "Returns wheel suspension force components and damper dissipation, advanced tire pure/combined-force telemetry, brake/driver-aid state, contact collider, and per-wheel detected surface data."
   },
   "Vehicle.SetTireModel": {
     "arguments": "(vehicle: VehicleHandle, nominalLoad: number, peakFriction: number, longitudinalStiffness: number, corneringStiffness: number, loadSensitivity: number, longitudinalRelaxationLength: number, lateralRelaxationLength: number, wheelInertia: number, pneumaticTrail: number, stiffnessLoadExponent?: number, longitudinalShapeFactor?: number, lateralShapeFactor?: number, longitudinalCurvatureFactor?: number, lateralCurvatureFactor?: number, combinedSlipExponent?: number, pneumaticTrailFalloff?: number)",
@@ -206,8 +206,8 @@
   },
   "Vehicle.GetDynamicsLabSummary": {
     "arguments": "(vehicle: VehicleHandle)",
-    "returns": "recording, complete, samples, capacity, wheels, durationSeconds, captureHertz, peakSpeedKph, peakRollDegps, peakPitchDegps, peakYawDegps, peakSuspensionSpeedMps, peakSlipRatio, peakSlipAngleDeg, peakGripPercent, minimumGroundedLoadN, maximumGroundedLoadN, contactLossEvents",
-    "description": "Returns bounded-capture status and extrema calculated from authoritative native high-rate samples."
+    "returns": "recording, complete, samples, capacity, wheels, durationSeconds, captureHertz, peakSpeedKph, peakRollDegps, peakPitchDegps, peakYawDegps, peakSuspensionSpeedMps, peakSlipRatio, peakSlipAngleDeg, peakGripPercent, minimumGroundedLoadN, maximumGroundedLoadN, contactLossEvents, peakTravelStopForceN, peakDamperDissipationW",
+    "description": "Returns bounded-capture status and extrema, including suspension travel-stop loads and damper energy rate, calculated from authoritative native high-rate samples."
   },
   "Vehicle.GetDynamicsLabSeries": {
     "arguments": "(vehicle: VehicleHandle, metricName: string, oneBasedWheelIndex?: integer, maximumPoints?: integer)",

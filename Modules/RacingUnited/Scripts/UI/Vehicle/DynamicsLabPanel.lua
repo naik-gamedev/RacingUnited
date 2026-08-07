@@ -45,7 +45,8 @@ function DrawVehicleDynamicsLabPanel()
     local recording, complete, samples, capacity, wheelCount,
         duration, captureHertz, peakSpeed, peakRoll, peakPitch, peakYaw,
         peakSuspensionSpeed, peakSlipRatio, peakSlipAngle, peakGrip,
-        minimumLoad, maximumLoad, contactLosses =
+        minimumLoad, maximumLoad, contactLosses, peakTravelStopForce,
+        peakDamperDissipation =
         Vehicle.GetDynamicsLabSummary(nativeVehicle)
 
     samples = samples or 0
@@ -65,6 +66,8 @@ function DrawVehicleDynamicsLabPanel()
         peakSlipAngle or 0.0, peakGrip or 0.0))
     UI.Text(string.format("Grounded load %.0f..%.0f N | contact-loss events %d",
         minimumLoad or 0.0, maximumLoad or 0.0, contactLosses or 0))
+    UI.Text(string.format("Travel-stop peak %.0f N | damper dissipation peak %.0f W",
+        peakTravelStopForce or 0.0, peakDamperDissipation or 0.0))
     UI.TextDisabled(vehicleDynamicsLab.message)
 
     if samples < 2 then
@@ -82,6 +85,11 @@ function DrawVehicleDynamicsLabPanel()
     local roll = DynamicsLabSeries("roll_rate_degps", 1)
     local load = DynamicsLabSeries("wheel_normal_force_n")
     local travel = DynamicsLabSeries("wheel_compression_mm")
+    local springForce = DynamicsLabSeries("wheel_suspension_spring_force_n")
+    local damperForce = DynamicsLabSeries("wheel_suspension_damping_force_n")
+    local bumpStopForce = DynamicsLabSeries(
+        "wheel_suspension_bump_stop_force_n")
+    local damperPower = DynamicsLabSeries("wheel_damper_dissipation_w")
     local slip = DynamicsLabSeries("wheel_slip_ratio")
     local grip = DynamicsLabSeries("wheel_grip_percent")
 
@@ -90,6 +98,10 @@ function DrawVehicleDynamicsLabPanel()
     UI.PlotLines("Roll rate (deg/s)", 72.0, table.unpack(roll))
     UI.PlotLines("Selected-wheel normal load (N)", 72.0, table.unpack(load))
     UI.PlotLines("Selected-wheel compression (mm)", 72.0, table.unpack(travel))
+    UI.PlotLines("Selected-wheel spring force (N)", 72.0, table.unpack(springForce))
+    UI.PlotLines("Selected-wheel damper force (N)", 72.0, table.unpack(damperForce))
+    UI.PlotLines("Selected-wheel bump-stop force (N)", 72.0, table.unpack(bumpStopForce))
+    UI.PlotLines("Selected-wheel damper dissipation (W)", 72.0, table.unpack(damperPower))
     UI.PlotLines("Selected-wheel slip ratio", 72.0, table.unpack(slip))
     UI.PlotLines("Selected-wheel grip utilization (%)", 72.0, table.unpack(grip))
 end

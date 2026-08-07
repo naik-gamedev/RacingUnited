@@ -34,6 +34,7 @@ $required = @(
     "Docs\PHYSICS_ARCHITECTURE.md",
     "Docs\VEHICLE_ARCHITECTURE.md",
     "Docs\VEHICLE_DYNAMICS_LAB.md",
+    "Docs\SUSPENSION_MODEL.md",
     "Docs\VEHICLE_WORKSHOP.md",
     "Docs\VEHICLE_DEFINITION_RUNTIME.md",
     "Docs\Decisions\ADR-005-Advanced-Road-Tire-Provider.md",
@@ -44,6 +45,7 @@ $required = @(
     "Docs\Decisions\ADR-010-Blender-Authoring-Player-Scene.md",
     "Docs\Decisions\ADR-012-Native-Vehicle-Definition-Compiler.md",
     "Docs\Decisions\ADR-013-Suspension-Provider-Contract.md",
+    "Docs\Decisions\ADR-014-Nonlinear-Suspension-Forces.md",
     "Docs\LuaApiAnnotations.json",
     "Engine\HeritageEngine\Core\Diagnostics\BuildIdentity.hpp",
     "Engine\HeritageEngine\Core\Diagnostics\GeneratedBuildIdentity.hpp",
@@ -144,6 +146,8 @@ $runtimeCpp = if (Test-Path $runtimeCppPath) { [IO.File]::ReadAllText($runtimeCp
 Check ($runtimeCpp.Contains("m_registeredLuaFunctions")) "runtime records exact registered Lua names"
 Check ($runtimeCpp.Contains("runSafetySmokeTests")) "runtime contains lifetime safety smoke tests"
 Check ($runtimeCpp.Contains("LuaAPI_Runtime.json")) "runtime writes a live API manifest"
+Check ($runtimeCpp.Contains("return 47;")) "wheel-state Lua bridge includes suspension force telemetry"
+Check ($runtimeCpp.Contains("return 20;")) "Dynamics Lab summary includes suspension energy extrema"
 Check ($runtimeCpp.Contains("OFN_FILEMUSTEXIST")) "Windows module asset picker requires an existing file"
 Check ($runtimeCpp.Contains("resolveSavePath(relative)")) "bounded text export resolves through the active module save root"
 
@@ -183,6 +187,7 @@ Check ($vehicleHeader.Contains("setWheelTireModel")) "per-wheel tire setter cont
 Check ($vehicleHeader.Contains("wheelTireModel")) "per-wheel tire readback contract exists"
 Check ($vehicleHeader.Contains("struct VehicleRestState")) "vehicle parked-rest diagnostic contract exists"
 Check ($vehicleHeader.Contains("startDynamicsLabCapture")) "vehicle exposes opt-in native dynamics capture"
+Check ($vehicleHeader.Contains("damperDissipationWatts")) "wheel state exposes damper energy-rate telemetry"
 
 $physicsRegressionPath = Join-Path $Root "Engine\HeritageEngine\Tests\PhysicsRegression.cpp"
 $physicsRegression = if (Test-Path $physicsRegressionPath) { [IO.File]::ReadAllText($physicsRegressionPath) } else { "" }
@@ -192,6 +197,7 @@ Check ($physicsRegression.Contains("flatRestSleepsAndThrottleWakes")) "headless 
 Check ($physicsRegression.Contains("dynamicsLabCapturesHighRateTelemetry")) "headless regression verifies exact high-rate dynamics capture"
 Check ($physicsRegression.Contains("vehicleDefinitionCompilerAndLoaderWork")) "headless regression verifies native definition compilation and loading"
 Check ($physicsRegression.Contains("motion_ratio_force_n")) "headless regression verifies suspension motion-ratio force evaluation"
+Check ($physicsRegression.Contains("nonlinear_force_n")) "headless regression verifies non-linear suspension force components"
 
 $definitionV2Path = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Definitions\VehicleDefinitionV2.lua"
 $definitionV2 = if (Test-Path $definitionV2Path) { [IO.File]::ReadAllText($definitionV2Path) } else { "" }
@@ -200,6 +206,8 @@ Check ($definitionV2.Contains("powerUnits = {}")) "VehicleDefinitionV2 stores ar
 Check ($definitionV2.Contains("transmissions = {}")) "VehicleDefinitionV2 stores arbitrary transmissions"
 Check ($definitionV2.Contains("suspensions = {}")) "VehicleDefinitionV2 stores reusable suspension components"
 Check ($definitionV2.Contains("suspension = suspensionId")) "contact units reference stable suspension IDs"
+Check ($definitionV2.Contains("bumpHighSpeedDampingNsPerM")) "suspension definitions author digressive damping"
+Check ($definitionV2.Contains("bumpStopProgressionNPerM2")) "suspension definitions author progressive travel stops"
 Check ($definitionV2.Contains("driveConnections = {}")) "VehicleDefinitionV2 stores explicit drive connections"
 Check ($definitionV2.Contains("ValidateVehicleDefinitionV2")) "VehicleDefinitionV2 has structural validation"
 Check ($definitionV2.Contains("currentSolverReady")) "definition validity remains separate from current solver support"
@@ -237,7 +245,13 @@ $suspensionCpp = if (Test-Path $suspensionCppPath) { [IO.File]::ReadAllText($sus
 Check ($suspensionHeader.Contains("SuspensionModelInput")) "suspension provider has an explicit input contract"
 Check ($suspensionHeader.Contains("SuspensionModelOutput")) "suspension provider has an explicit output contract"
 Check ($suspensionCpp.Contains('"linear_raycast_v1"')) "linear raycast suspension provider exists"
+Check ($suspensionCpp.Contains("digressiveDamperForce")) "suspension provider implements low/high-speed damping"
+Check ($suspensionCpp.Contains("damperDissipationW")) "suspension provider reports dissipated damper power"
 Check ($vehicleCpp.Contains("evaluateSuspensionModel")) "VehicleSystem evaluates suspension through the provider boundary"
+
+$dynamicsLabHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp"
+$dynamicsLabHeader = if (Test-Path $dynamicsLabHeaderPath) { [IO.File]::ReadAllText($dynamicsLabHeaderPath) } else { "" }
+Check ($dynamicsLabHeader.Contains("WheelDamperDissipationWatts")) "Dynamics Lab records damper energy rate"
 
 
 $vehicleProjectPath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj"

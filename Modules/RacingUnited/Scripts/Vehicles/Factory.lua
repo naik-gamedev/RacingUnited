@@ -256,7 +256,7 @@ function CreateNativeVehicleDemo(compiledSourceDefinition)
 
     ResetNativeVehicle()
     vehicleMessage = compiledSourceDefinition
-        and ("Step 29L native definition loaded: " .. nativeProvider)
+        and ("Step 29M native definition loaded: " .. nativeProvider)
         or "Step 29J.1 online: Peugeot-reference wheel centers + articulated wheel presentation"
     return true
 end

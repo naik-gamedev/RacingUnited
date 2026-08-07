@@ -17,5 +17,7 @@ Read these documents before changing an interconnected system:
 
 Step 29L contributors must also read `VEHICLE_DEFINITION_RUNTIME.md` for the
 native compiler, suspension-provider and runtime-loader contract.
+Step 29M suspension work must also follow `SUSPENSION_MODEL.md` for force,
+telemetry, and future damage/wear conventions.
 
 Generated reports are written to `Build/Reports/`. Runtime diagnostics are written to `UserData/Diagnostics/`.

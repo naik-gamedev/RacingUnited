@@ -312,17 +312,52 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
             || suspension.maximumCompressionM >= suspension.restLengthM
             || !finite(suspension.maximumDroopM)
             || suspension.maximumDroopM < 0.0f
+            || !finite(suspension.springPreloadN)
+            || suspension.springPreloadN < 0.0f
+            || suspension.springPreloadN > 10000000.0f
             || !finite(suspension.springRateNPerM)
             || suspension.springRateNPerM <= 0.0f
+            || suspension.springRateNPerM > 1000000000.0f
+            || !finite(suspension.springProgressionNPerM2)
+            || suspension.springProgressionNPerM2 < 0.0f
+            || suspension.springProgressionNPerM2 > 10000000000.0f
             || !finite(suspension.bumpDampingNsPerM)
             || suspension.bumpDampingNsPerM < 0.0f
+            || suspension.bumpDampingNsPerM > 100000000.0f
+            || !finite(suspension.bumpHighSpeedDampingNsPerM)
+            || suspension.bumpHighSpeedDampingNsPerM < 0.0f
+            || suspension.bumpHighSpeedDampingNsPerM > 100000000.0f
+            || !finite(suspension.bumpDampingKneeVelocityMps)
+            || suspension.bumpDampingKneeVelocityMps < 0.0f
+            || suspension.bumpDampingKneeVelocityMps > 100.0f
             || !finite(suspension.reboundDampingNsPerM)
             || suspension.reboundDampingNsPerM < 0.0f
+            || suspension.reboundDampingNsPerM > 100000000.0f
+            || !finite(suspension.reboundHighSpeedDampingNsPerM)
+            || suspension.reboundHighSpeedDampingNsPerM < 0.0f
+            || suspension.reboundHighSpeedDampingNsPerM > 100000000.0f
+            || !finite(suspension.reboundDampingKneeVelocityMps)
+            || suspension.reboundDampingKneeVelocityMps < 0.0f
+            || suspension.reboundDampingKneeVelocityMps > 100.0f
+            || !finite(suspension.bumpStopEngagementM)
+            || suspension.bumpStopEngagementM < 0.0f
+            || !finite(suspension.bumpStopRateNPerM)
+            || suspension.bumpStopRateNPerM < 0.0f
+            || suspension.bumpStopRateNPerM > 1000000000.0f
+            || !finite(suspension.bumpStopProgressionNPerM2)
+            || suspension.bumpStopProgressionNPerM2 < 0.0f
+            || suspension.bumpStopProgressionNPerM2 > 10000000000.0f
+            || !finite(suspension.droopStopEngagementM)
+            || suspension.droopStopEngagementM < 0.0f
+            || !finite(suspension.droopStopRateNPerM)
+            || suspension.droopStopRateNPerM < 0.0f
+            || suspension.droopStopRateNPerM > 1000000000.0f
             || !finite(suspension.motionRatio)
             || suspension.motionRatio <= 0.0f
             || suspension.motionRatio > 10.0f
             || !finite(suspension.maximumForceN)
-            || suspension.maximumForceN <= 0.0f)
+            || suspension.maximumForceN <= 0.0f
+            || suspension.maximumForceN > 100000000.0f)
         {
             addError(
                 result,

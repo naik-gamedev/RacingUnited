@@ -246,9 +246,27 @@ bool validWheelDescription(const WheelDescription& value)
         && finiteFloat(value.maximumCompression) && value.maximumCompression >= 0.0f
         && finiteFloat(value.maximumDroop) && value.maximumDroop >= 0.0f
         && value.maximumCompression < value.restLength
+        && finiteFloat(value.springPreload) && value.springPreload >= 0.0f
         && finiteFloat(value.springRate) && value.springRate >= 0.0f
+        && finiteFloat(value.springProgression) && value.springProgression >= 0.0f
         && finiteFloat(value.bumpDamping) && value.bumpDamping >= 0.0f
+        && finiteFloat(value.bumpHighSpeedDamping)
+        && value.bumpHighSpeedDamping >= 0.0f
+        && finiteFloat(value.bumpDampingKneeVelocity)
+        && value.bumpDampingKneeVelocity >= 0.0f
         && finiteFloat(value.reboundDamping) && value.reboundDamping >= 0.0f
+        && finiteFloat(value.reboundHighSpeedDamping)
+        && value.reboundHighSpeedDamping >= 0.0f
+        && finiteFloat(value.reboundDampingKneeVelocity)
+        && value.reboundDampingKneeVelocity >= 0.0f
+        && finiteFloat(value.bumpStopEngagement)
+        && value.bumpStopEngagement >= 0.0f
+        && finiteFloat(value.bumpStopRate) && value.bumpStopRate >= 0.0f
+        && finiteFloat(value.bumpStopProgression)
+        && value.bumpStopProgression >= 0.0f
+        && finiteFloat(value.droopStopEngagement)
+        && value.droopStopEngagement >= 0.0f
+        && finiteFloat(value.droopStopRate) && value.droopStopRate >= 0.0f
         && value.suspensionProvider == SuspensionProviderKind::LinearRaycastV1
         && finiteFloat(value.suspensionMotionRatio)
         && value.suspensionMotionRatio > 0.0f
@@ -2050,6 +2068,12 @@ void VehicleSystem::simulateVehicleSubstep(
         state.antiLockActive = false;
         state.tractionControlActive = false;
         state.compressionVelocity = 0.0f;
+        state.suspensionSpringForce = 0.0f;
+        state.suspensionDampingForce = 0.0f;
+        state.suspensionBumpStopForce = 0.0f;
+        state.suspensionDroopStopForce = 0.0f;
+        state.suspensionUnclampedForce = 0.0f;
+        state.damperDissipationWatts = 0.0f;
         state.longitudinalSpeed = 0.0f;
         state.lateralSpeed = 0.0f;
         state.slipRatio = 0.0f;
@@ -2263,9 +2287,28 @@ void VehicleSystem::simulateVehicleSubstep(
 
         SuspensionModelDescription suspensionDescription;
         suspensionDescription.provider = description.suspensionProvider;
+        suspensionDescription.springPreloadN = description.springPreload;
         suspensionDescription.springRateNPerM = description.springRate;
+        suspensionDescription.springProgressionNPerM2 =
+            description.springProgression;
         suspensionDescription.bumpDampingNsPerM = description.bumpDamping;
+        suspensionDescription.bumpHighSpeedDampingNsPerM =
+            description.bumpHighSpeedDamping;
+        suspensionDescription.bumpDampingKneeVelocityMps =
+            description.bumpDampingKneeVelocity;
         suspensionDescription.reboundDampingNsPerM = description.reboundDamping;
+        suspensionDescription.reboundHighSpeedDampingNsPerM =
+            description.reboundHighSpeedDamping;
+        suspensionDescription.reboundDampingKneeVelocityMps =
+            description.reboundDampingKneeVelocity;
+        suspensionDescription.bumpStopEngagementM =
+            description.bumpStopEngagement;
+        suspensionDescription.bumpStopRateNPerM = description.bumpStopRate;
+        suspensionDescription.bumpStopProgressionNPerM2 =
+            description.bumpStopProgression;
+        suspensionDescription.droopStopEngagementM =
+            description.droopStopEngagement;
+        suspensionDescription.droopStopRateNPerM = description.droopStopRate;
         suspensionDescription.motionRatio = description.suspensionMotionRatio;
         suspensionDescription.maximumForceN =
             description.maximumSuspensionForce;
@@ -2274,6 +2317,13 @@ void VehicleSystem::simulateVehicleSubstep(
                 suspensionDescription,
                 { state.compression, state.compressionVelocity });
         const float suspensionForce = suspensionOutput.normalForceN;
+        state.suspensionSpringForce = suspensionOutput.springForceN;
+        state.suspensionDampingForce = suspensionOutput.dampingForceN;
+        state.suspensionBumpStopForce = suspensionOutput.bumpStopForceN;
+        state.suspensionDroopStopForce = suspensionOutput.droopStopForceN;
+        state.suspensionUnclampedForce = suspensionOutput.unclampedForceN;
+        state.damperDissipationWatts =
+            suspensionOutput.damperDissipationW;
         state.normalForce = suspensionForce;
         if (suspensionForce > 0.0f)
         {
@@ -2526,6 +2576,11 @@ void VehicleSystem::captureDynamicsLabFrame(
         wheel.grounded = state.grounded;
         wheel.compression = state.compression;
         wheel.suspensionVelocity = state.compressionVelocity;
+        wheel.suspensionSpringForce = state.suspensionSpringForce;
+        wheel.suspensionDampingForce = state.suspensionDampingForce;
+        wheel.suspensionBumpStopForce = state.suspensionBumpStopForce;
+        wheel.suspensionDroopStopForce = state.suspensionDroopStopForce;
+        wheel.damperDissipationWatts = state.damperDissipationWatts;
         wheel.normalForce = state.normalForce;
         wheel.longitudinalForce = state.longitudinalForce;
         wheel.lateralForce = state.lateralForce;

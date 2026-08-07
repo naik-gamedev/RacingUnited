@@ -133,6 +133,13 @@ the force ceiling behind a stable input/output contract. Requested linkage
 providers remain authored but unresolved until their native geometry solvers
 exist. See ADR-013.
 
+Step 29M expands the healthy `linear_raycast_v1` force law with preload,
+progressive springs, digressive low/high-speed bump and rebound damping,
+progressive bump stops, droop stops and native damper-power telemetry. Force
+components remain visible separately in `WheelState` and the Dynamics Lab.
+Damage and wear are deferred until linkage, unsprung-mass, load-cycle and
+thermal state exist. See `SUSPENSION_MODEL.md` and ADR-014.
+
 ## Dynamics instrumentation
 
 Step 29J.5 adds an opt-in `VehicleDynamicsLab` recorder owned by each native

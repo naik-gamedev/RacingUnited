@@ -84,3 +84,9 @@ The next extension is authoring and visualization of linkage anchors, steering
 axes, centers of mass, inertia, and collision volumes. That geometry will let
 the first non-linear provider calculate authoritative wheel pose, camber, toe,
 and motion ratio rather than approximating them in Lua.
+
+Step 29M extends every suspension component with healthy non-linear force data:
+preload, spring progression, low/high-speed bump and rebound damping, velocity
+knees, bump/droop stops, and travel-limit progression. The compiler validates
+bounded finite parameters before the loader copies them into the selected
+native provider. See `SUSPENSION_MODEL.md`.

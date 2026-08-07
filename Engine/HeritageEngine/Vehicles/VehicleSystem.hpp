@@ -103,9 +103,20 @@ struct WheelDescription
     float restLength = 0.50f;
     float maximumCompression = 0.18f;
     float maximumDroop = 0.15f;
+    float springPreload = 0.0f;
     float springRate = 35000.0f;
+    float springProgression = 0.0f;
     float bumpDamping = 3200.0f;
+    float bumpHighSpeedDamping = 3200.0f;
+    float bumpDampingKneeVelocity = 1.0f;
     float reboundDamping = 4200.0f;
+    float reboundHighSpeedDamping = 4200.0f;
+    float reboundDampingKneeVelocity = 1.0f;
+    float bumpStopEngagement = 0.18f;
+    float bumpStopRate = 0.0f;
+    float bumpStopProgression = 0.0f;
+    float droopStopEngagement = 0.15f;
+    float droopStopRate = 0.0f;
     SuspensionProviderKind suspensionProvider =
         SuspensionProviderKind::LinearRaycastV1;
     float suspensionMotionRatio = 1.0f;
@@ -162,6 +173,12 @@ struct WheelState
     float suspensionLength = 0.0f;
     float compression = 0.0f;
     float compressionVelocity = 0.0f;
+    float suspensionSpringForce = 0.0f;
+    float suspensionDampingForce = 0.0f;
+    float suspensionBumpStopForce = 0.0f;
+    float suspensionDroopStopForce = 0.0f;
+    float suspensionUnclampedForce = 0.0f;
+    float damperDissipationWatts = 0.0f;
     float normalForce = 0.0f;
     float longitudinalForce = 0.0f;
     float lateralForce = 0.0f;

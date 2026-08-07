@@ -551,12 +551,43 @@ bool parseLuaVehicleDefinitionV2(
                 api, state, -1, "maximumCompressionM", 0.18));
             suspension.maximumDroopM = static_cast<float>(luaFieldNumber(
                 api, state, -1, "maximumDroopM", 0.15));
+            suspension.springPreloadN = static_cast<float>(luaFieldNumber(
+                api, state, -1, "springPreloadN", 0.0));
             suspension.springRateNPerM = static_cast<float>(luaFieldNumber(
                 api, state, -1, "springRateNPerM", 35000.0));
+            suspension.springProgressionNPerM2 = static_cast<float>(luaFieldNumber(
+                api, state, -1, "springProgressionNPerM2", 0.0));
             suspension.bumpDampingNsPerM = static_cast<float>(luaFieldNumber(
                 api, state, -1, "bumpDampingNsPerM", 3200.0));
+            suspension.bumpHighSpeedDampingNsPerM = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "bumpHighSpeedDampingNsPerM",
+                    suspension.bumpDampingNsPerM));
+            suspension.bumpDampingKneeVelocityMps = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "bumpDampingKneeVelocityMps", 1.0));
             suspension.reboundDampingNsPerM = static_cast<float>(luaFieldNumber(
                 api, state, -1, "reboundDampingNsPerM", 4200.0));
+            suspension.reboundHighSpeedDampingNsPerM = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "reboundHighSpeedDampingNsPerM",
+                    suspension.reboundDampingNsPerM));
+            suspension.reboundDampingKneeVelocityMps = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "reboundDampingKneeVelocityMps", 1.0));
+            suspension.bumpStopEngagementM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "bumpStopEngagementM",
+                suspension.maximumCompressionM));
+            suspension.bumpStopRateNPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "bumpStopRateNPerM", 0.0));
+            suspension.bumpStopProgressionNPerM2 = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "bumpStopProgressionNPerM2", 0.0));
+            suspension.droopStopEngagementM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "droopStopEngagementM",
+                suspension.maximumDroopM));
+            suspension.droopStopRateNPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "droopStopRateNPerM", 0.0));
             suspension.motionRatio = static_cast<float>(luaFieldNumber(
                 api, state, -1, "motionRatio", 1.0));
             suspension.maximumForceN = static_cast<float>(luaFieldNumber(
@@ -7227,9 +7258,9 @@ int LuaModuleRuntime::luaVehicleGetDynamicsLabSummary(lua_State* state)
             value);
     if (!result)
     {
-        for (int index = 0; index < 18; ++index)
+        for (int index = 0; index < 20; ++index)
             runtime->m_api.lua_pushnil(state);
-        return 18;
+        return 20;
     }
 
     runtime->m_api.lua_pushboolean(state, value.recording ? 1 : 0);
@@ -7261,7 +7292,11 @@ int LuaModuleRuntime::luaVehicleGetDynamicsLabSummary(lua_State* state)
         state, value.maximumGroundedNormalForceNewtons);
     runtime->m_api.lua_pushinteger(
         state, static_cast<LuaInteger>(value.groundContactLossEvents));
-    return 18;
+    runtime->m_api.lua_pushnumber(
+        state, value.peakSuspensionTravelStopForceNewtons);
+    runtime->m_api.lua_pushnumber(
+        state, value.peakDamperDissipationWatts);
+    return 20;
 }
 
 int LuaModuleRuntime::luaVehicleGetDynamicsLabSeries(lua_State* state)
@@ -7361,8 +7396,8 @@ int LuaModuleRuntime::luaVehicleGetWheelState(lua_State* state)
         vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
     if (!result)
     {
-        for (int index = 0; index < 41; ++index) runtime->m_api.lua_pushnil(state);
-        return 41;
+        for (int index = 0; index < 47; ++index) runtime->m_api.lua_pushnil(state);
+        return 47;
     }
     runtime->m_api.lua_pushboolean(state, value.grounded ? 1 : 0);
     runtime->m_api.lua_pushnumber(state, value.suspensionLength);
@@ -7414,7 +7449,13 @@ int LuaModuleRuntime::luaVehicleGetWheelState(lua_State* state)
     runtime->m_api.lua_pushnumber(
         state,
         static_cast<LuaNumber>(value.surfaceWetness));
-    return 41;
+    runtime->m_api.lua_pushnumber(state, value.suspensionSpringForce);
+    runtime->m_api.lua_pushnumber(state, value.suspensionDampingForce);
+    runtime->m_api.lua_pushnumber(state, value.suspensionBumpStopForce);
+    runtime->m_api.lua_pushnumber(state, value.suspensionDroopStopForce);
+    runtime->m_api.lua_pushnumber(state, value.suspensionUnclampedForce);
+    runtime->m_api.lua_pushnumber(state, value.damperDissipationWatts);
+    return 47;
 }
 
 int LuaModuleRuntime::luaVehicleGetLastError(lua_State* state)

@@ -13,6 +13,10 @@ function DrawVehicleTelemetryPanel()
             VehicleDetectedSurfaceLabel(wheel), wheel.surfaceWetness * 100.0, tostring(wheel.grounded)))
         UI.Text(string.format("load=%.0f N | Fx/Fy=%.0f / %.0f N | steer=%.1f deg",
             wheel.normalForce, wheel.longitudinalForce, wheel.lateralForce, wheel.steerAngle))
+        UI.Text(string.format("spring/damper=%.0f / %.0f N | stops +%.0f / -%.0f N | damper %.0f W",
+            wheel.suspensionSpringForce, wheel.suspensionDampingForce,
+            wheel.suspensionBumpStopForce, wheel.suspensionDroopStopForce,
+            wheel.damperDissipationWatts))
         UI.Text(string.format("slip=%.3f / %.2f deg | grip=%.1f%% | Mz=%.1f Nm",
             wheel.relaxedSlipRatio, wheel.relaxedSlipAngleDegrees,
             wheel.gripUtilization * 100.0, wheel.aligningTorque))

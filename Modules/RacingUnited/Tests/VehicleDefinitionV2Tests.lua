@@ -26,6 +26,10 @@ assert(road.contactUnits[1].radiusM > 0.0
     "runtime wheel/suspension parameters were not authored")
 assert(road.suspensions[1].provider == "linear_raycast_v1",
     "road-car draft must name the current native suspension provider")
+assert(road.suspensions[1].bumpHighSpeedDampingNsPerM >= 0.0
+    and road.suspensions[1].bumpStopRateNPerM > 0.0
+    and road.suspensions[1].droopStopRateNPerM > 0.0,
+    "non-linear damper and travel-limit parameters were not authored")
 assert(road.transmissions[1].finalDriveRatio > 0.0,
     "runtime transmission parameters were not authored")
 

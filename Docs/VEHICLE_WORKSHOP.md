@@ -42,6 +42,11 @@ Templates now request their intended suspension family; the Workshop does not
 silently run a Formula pushrod, kart-flex, motorcycle-linkage, or truck
 live-axle definition through the linear provider.
 
+Step 29M definitions also retain non-linear spring, damper and travel-stop
+parameters. The first values are authored defaults rather than measured vehicle
+data; the Dynamics Lab force and damper-power channels exist so they can be
+replaced through repeatable testing instead of visual guesswork.
+
 ## Current workflow
 
 1. Run `Tools/LaunchExactFreshRelease.cmd`.

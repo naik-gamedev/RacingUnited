@@ -241,6 +241,11 @@ bool VehicleDynamicsLab::exportCsv(const std::filesystem::path& path)
         output << prefix << "_grounded"
             << prefix << "_compression_m"
             << prefix << "_suspension_velocity_mps"
+            << prefix << "_suspension_spring_force_n"
+            << prefix << "_suspension_damping_force_n"
+            << prefix << "_suspension_bump_stop_force_n"
+            << prefix << "_suspension_droop_stop_force_n"
+            << prefix << "_damper_dissipation_w"
             << prefix << "_normal_force_n"
             << prefix << "_longitudinal_force_n"
             << prefix << "_lateral_force_n"
@@ -277,6 +282,11 @@ bool VehicleDynamicsLab::exportCsv(const std::filesystem::path& path)
             output << ',' << (wheel.grounded ? 1 : 0)
                 << ',' << wheel.compression
                 << ',' << wheel.suspensionVelocity
+                << ',' << wheel.suspensionSpringForce
+                << ',' << wheel.suspensionDampingForce
+                << ',' << wheel.suspensionBumpStopForce
+                << ',' << wheel.suspensionDroopStopForce
+                << ',' << wheel.damperDissipationWatts
                 << ',' << wheel.normalForce
                 << ',' << wheel.longitudinalForce
                 << ',' << wheel.lateralForce
@@ -344,6 +354,16 @@ float VehicleDynamicsLab::metricValue(
         return wheel.compression * 1000.0f;
     case DynamicsLabMetric::WheelSuspensionVelocityMps:
         return wheel.suspensionVelocity;
+    case DynamicsLabMetric::WheelSuspensionSpringForceNewtons:
+        return wheel.suspensionSpringForce;
+    case DynamicsLabMetric::WheelSuspensionDampingForceNewtons:
+        return wheel.suspensionDampingForce;
+    case DynamicsLabMetric::WheelSuspensionBumpStopForceNewtons:
+        return wheel.suspensionBumpStopForce;
+    case DynamicsLabMetric::WheelSuspensionDroopStopForceNewtons:
+        return wheel.suspensionDroopStopForce;
+    case DynamicsLabMetric::WheelDamperDissipationWatts:
+        return wheel.damperDissipationWatts;
     case DynamicsLabMetric::WheelNormalForceNewtons:
         return wheel.normalForce;
     case DynamicsLabMetric::WheelLongitudinalForceNewtons:
@@ -384,6 +404,14 @@ void VehicleDynamicsLab::updateSummary(const DynamicsLabSample& sample)
         m_summary.peakAbsoluteSuspensionVelocityMps = std::max(
             m_summary.peakAbsoluteSuspensionVelocityMps,
             absolute(wheel.suspensionVelocity));
+        m_summary.peakSuspensionTravelStopForceNewtons = std::max(
+            m_summary.peakSuspensionTravelStopForceNewtons,
+            std::max(
+                wheel.suspensionBumpStopForce,
+                wheel.suspensionDroopStopForce));
+        m_summary.peakDamperDissipationWatts = std::max(
+            m_summary.peakDamperDissipationWatts,
+            wheel.damperDissipationWatts);
         m_summary.peakAbsoluteSlipRatio = std::max(
             m_summary.peakAbsoluteSlipRatio,
             absolute(wheel.slipRatio));
@@ -437,6 +465,11 @@ const char* dynamicsLabMetricName(DynamicsLabMetric metric)
     case DynamicsLabMetric::EngineRpm: return "engine_rpm";
     case DynamicsLabMetric::WheelCompressionMillimeters: return "wheel_compression_mm";
     case DynamicsLabMetric::WheelSuspensionVelocityMps: return "wheel_suspension_velocity_mps";
+    case DynamicsLabMetric::WheelSuspensionSpringForceNewtons: return "wheel_suspension_spring_force_n";
+    case DynamicsLabMetric::WheelSuspensionDampingForceNewtons: return "wheel_suspension_damping_force_n";
+    case DynamicsLabMetric::WheelSuspensionBumpStopForceNewtons: return "wheel_suspension_bump_stop_force_n";
+    case DynamicsLabMetric::WheelSuspensionDroopStopForceNewtons: return "wheel_suspension_droop_stop_force_n";
+    case DynamicsLabMetric::WheelDamperDissipationWatts: return "wheel_damper_dissipation_w";
     case DynamicsLabMetric::WheelNormalForceNewtons: return "wheel_normal_force_n";
     case DynamicsLabMetric::WheelLongitudinalForceNewtons: return "wheel_longitudinal_force_n";
     case DynamicsLabMetric::WheelLateralForceNewtons: return "wheel_lateral_force_n";

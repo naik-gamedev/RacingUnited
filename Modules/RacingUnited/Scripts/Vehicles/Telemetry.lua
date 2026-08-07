@@ -86,7 +86,10 @@ function RefreshVehicleTelemetry()
             serviceBrakeTorque, handbrakeTorque, antiLockModulation,
             tractionControlModulation, antiLockActive,
             tractionControlActive, contactCollider, surfaceName, surfaceId,
-            surfaceWetness = Vehicle.GetWheelState(nativeVehicle, index)
+            surfaceWetness, suspensionSpringForce, suspensionDampingForce,
+            suspensionBumpStopForce, suspensionDroopStopForce,
+            suspensionUnclampedForce, damperDissipationWatts =
+            Vehicle.GetWheelState(nativeVehicle, index)
         vehicleWheelTelemetry[index] = {
             grounded = grounded,
             length = length or 0.0,
@@ -129,7 +132,13 @@ function RefreshVehicleTelemetry()
             contactCollider = contactCollider or 0,
             surfaceName = surfaceName or "default",
             surfaceId = surfaceId or 0,
-            surfaceWetness = surfaceWetness or 0.0
+            surfaceWetness = surfaceWetness or 0.0,
+            suspensionSpringForce = suspensionSpringForce or 0.0,
+            suspensionDampingForce = suspensionDampingForce or 0.0,
+            suspensionBumpStopForce = suspensionBumpStopForce or 0.0,
+            suspensionDroopStopForce = suspensionDroopStopForce or 0.0,
+            suspensionUnclampedForce = suspensionUnclampedForce or 0.0,
+            damperDissipationWatts = damperDissipationWatts or 0.0
         }
     end
 end
