@@ -263,7 +263,11 @@ void PhysicsWorld::performStep(const StepCallback& callback)
     if (callback)
         callback(fixedDeltaTime);
 
-    m_vehicles.simulate(m_rigidBodies, m_collisions, fixedDeltaTime);
+    m_vehicles.simulate(
+        m_rigidBodies,
+        m_collisions,
+        fixedDeltaTime,
+        m_gravity);
     m_constraints.simulate(m_rigidBodies, fixedDeltaTime);
     m_rigidBodies.integrate(fixedDeltaTime, m_gravity);
     m_collisions.simulate(m_rigidBodies, fixedDeltaTime);

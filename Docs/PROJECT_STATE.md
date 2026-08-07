@@ -3,14 +3,16 @@
 ## Milestone status
 
 **User-confirmed baseline:** Step 29J.1 — Exact Native Wheel Centers
-**Current candidate:** Step 29J.4 — Exact Player-Scene Triangle Drive Surface
+**Current candidate:** Step 29J.4B — Deterministic Parked-Vehicle Stability
 
-Step 29F.1 was interactively confirmed in the prototype scene. Step 29G established the advanced road-tire provider. Step 29H moved tire descriptions to independent per-wheel data. Step 29I added the creator-owned player-car OBJ slot; Step 29I.1 hardened window-size recovery and the user confirmed an authored car renders and drives. Step 29J added optional independently animated wheel meshes. The user confirmed the wheels render and rotate, which exposed two presentation problems: temporary 2.10 m track / 2.60 m wheelbase mounts were far too wide/long for the imported Peugeot, and all four wheel meshes used the same side orientation. Step 29J.1 uses published 2003 Peugeot 206 RC wheelbase/track/tire dimensions as a visual/reference geometry baseline and places every rendered wheel at the exact native `WheelState.worldCenter`. Step 29J.2 established Blender-native content authoring coordinates (X left/right, Y forward/backward, Z height), authored 1:1 creator geometry and exact numeric entry. Steps 29J.3/29J.3a exposed limitations of the temporary OBJ box-proxy/spawn bridge on a real hilly scene. Step 29J.4 uses the user-supplied scene files as a regression fixture, corrects Blender default OBJ axis conversion, accepts SPAWN_PLAYER from either visual or collision OBJ, snaps spawn height to the actual terrain, and makes exact scene triangles participate in suspension/tire raycasts. The current candidate includes:
+Step 29F.1 was interactively confirmed in the prototype scene. Step 29G established the advanced road-tire provider. Step 29H moved tire descriptions to independent per-wheel data. Step 29I added the creator-owned player-car OBJ slot; Step 29I.1 hardened window-size recovery and the user confirmed an authored car renders and drives. Step 29J added optional independently animated wheel meshes. The user confirmed the wheels render and rotate, which exposed two presentation problems: temporary 2.10 m track / 2.60 m wheelbase mounts were far too wide/long for the imported Peugeot, and all four wheel meshes used the same side orientation. Step 29J.1 uses published 2003 Peugeot 206 RC wheelbase/track/tire dimensions as a visual/reference geometry baseline and places every rendered wheel at the exact native `WheelState.worldCenter`. Step 29J.2 established Blender-native content authoring coordinates (X left/right, Y forward/backward, Z height), authored 1:1 creator geometry and exact numeric entry. Steps 29J.3/29J.3a exposed limitations of the temporary OBJ box-proxy/spawn bridge on a real hilly scene. Step 29J.4 uses the user-supplied scene files as a regression fixture, corrects Blender default OBJ axis conversion, accepts SPAWN_PLAYER from either visual or collision OBJ, snaps spawn height to the actual terrain, and makes exact scene triangles participate in suspension/tire raycasts. Step 29J.4B adds a headless native vehicle regression suite, corrects handbrake wheel-torque overshoot at 1000 Hz, and adds a physically capacity-checked parked rest state that wakes on throttle or brake release. The current candidate includes:
 
 - Deterministic 240 Hz general physics world with bounded catch-up.
 - Generation-checked entities, rigid bodies, colliders, constraints, and vehicles.
 - Collision detection, angular response, sleeping, islands, queries, CCD, and springs.
 - A driveable arbitrary-wheel vehicle with a 1000 Hz tire/suspension loop.
+- Deterministic headless physics regressions for flat rest, sleep/wake, high-rate timing, braked slope hold, and unbraked slope roll.
+- Capacity-checked parked-vehicle sleep plus non-overshooting service/parking-brake wheel constraints.
 - Ackermann steering, drivetrain, reverse/neutral/gears, differential modes.
 - Dedicated native `Vehicles/TireModel.*` provider boundary.
 - Independent native tire description per wheel/contact unit, with named Lua presets and exact per-wheel API readback.
@@ -66,15 +68,13 @@ These are future content definitions, not hard-coded assumptions in the vehicle 
 
 ## Immediate roadmap
 
-1. Confirm Step 29J.4 loads the user Player Scene at SPAWN_PLAYER and the suspension/tires follow its real terrain triangles.
-2. Step 29K: production-oriented glTF 2.0 vehicle/scene hierarchy and named nodes, preserving Blender authoring transforms instead of expanding temporary OBJ slots.
-3. Step 29L: PBR material foundation.
-4. Step 29M: serious lighting/shadow/exposure foundation.
-5. Step 29N: environment lighting, sky and reflections.
-6. Step 29O: attractive small proving-ground scene using the production asset path.
-7. Return to deeper suspension/tire/aero work once the creator-visible rendering foundation is established.
-8. Motorcycle-specific profile, large-camber contact and rider dynamics.
-9. Force feedback architecture.
+1. Confirm the parked vehicle becomes visually still on the Player Scene and that throttle/parking-brake release wake it naturally.
+2. Expand the headless Physics Regression project with controlled suspension, braking-distance, split-grip, and deterministic replay cases.
+3. Establish measured chassis mass properties, center of mass, wheel/tire data, and suspension geometry for the first reference vehicle.
+4. Replace the temporary ray-wheel approximations incrementally with production suspension kinematics, unsprung mass, dampers, bump stops, and tire load inputs.
+5. Add force-feedback architecture driven by the high-rate contact/steering path.
+6. Add production-oriented glTF 2.0 vehicle/scene hierarchy and named nodes, followed by PBR materials and lighting.
+7. Motorcycle-specific tire profile, large-camber contact, steering geometry, and rider dynamics.
 
 ## Recovery procedure for a new conversation or contributor
 

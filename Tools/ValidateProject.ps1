@@ -50,6 +50,8 @@ $required = @(
     "Engine\HeritageEngine\Physics\StaticBoxSceneImporter.cpp",
     "Engine\HeritageEngine\Physics\StaticTriangleSceneImporter.hpp",
     "Engine\HeritageEngine\Physics\StaticTriangleSceneImporter.cpp",
+    "Engine\HeritageEngine\Tests\HeritagePhysicsTests.vcxproj",
+    "Engine\HeritageEngine\Tests\PhysicsRegression.cpp",
     "Engine\HeritageEngine\HeritageEngine\main.cpp",
     "Modules\RacingUnited\Scripts\Main.lua",
     "Modules\RacingUnited\Scripts\Runtime\SurfaceDemo.lua",
@@ -65,7 +67,8 @@ $required = @(
     "Modules\RacingUnited\Assets\Scenes\Player\PlayerScene.obj",
     "Modules\RacingUnited\Assets\Scenes\Player\PlayerScene_Collision.obj",
     "Modules\RacingUnited\Assets\Scenes\Player\README_IMPORT.txt",
-    "Modules\RacingUnited\Scripts\UI\VehicleDebugPanel.lua"
+    "Modules\RacingUnited\Scripts\UI\VehicleDebugPanel.lua",
+    "Tools\RunPhysicsTests.cmd"
 )
 foreach ($relative in $required) {
     Check (Test-Path (Join-Path $Root $relative)) "required file exists: $relative"
@@ -142,6 +145,13 @@ Check ($vehicleHeader.Contains("surfaceMaterial")) "wheel telemetry retains cont
 Check ($vehicleHeader.Contains("TireModelDescription tireModel")) "each wheel record owns independent native tire data"
 Check ($vehicleHeader.Contains("setWheelTireModel")) "per-wheel tire setter contract exists"
 Check ($vehicleHeader.Contains("wheelTireModel")) "per-wheel tire readback contract exists"
+Check ($vehicleHeader.Contains("struct VehicleRestState")) "vehicle parked-rest diagnostic contract exists"
+
+$physicsRegressionPath = Join-Path $Root "Engine\HeritageEngine\Tests\PhysicsRegression.cpp"
+$physicsRegression = if (Test-Path $physicsRegressionPath) { [IO.File]::ReadAllText($physicsRegressionPath) } else { "" }
+Check ($physicsRegression.Contains("parkingBrakeHoldsOnSlope")) "headless regression covers parking-brake slope hold"
+Check ($physicsRegression.Contains("unbrakedVehicleRollsOnSlope")) "headless regression preserves unbraked slope roll"
+Check ($physicsRegression.Contains("flatRestSleepsAndThrottleWakes")) "headless regression covers parked sleep and throttle wake"
 
 
 $tireHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\TireModel.hpp"

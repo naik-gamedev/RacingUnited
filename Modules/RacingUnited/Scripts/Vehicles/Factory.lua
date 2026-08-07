@@ -100,7 +100,7 @@ function CreateNativeVehicleDemo()
         nativeVehicleBody, PrototypeCarDefinition.chassis.linearDamping)
     Physics.SetBodyAngularDamping(
         nativeVehicleBody, PrototypeCarDefinition.chassis.angularDamping)
-    Physics.SetBodyAllowSleep(nativeVehicleBody, false)
+    Physics.SetBodyAllowSleep(nativeVehicleBody, true)
 
     nativeVehicleCollider = Physics.CreateBoxCollider(
         nativeVehicleBody,

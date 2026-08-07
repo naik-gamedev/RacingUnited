@@ -140,6 +140,16 @@ struct DrivetrainState
     DifferentialMode differentialMode = DifferentialMode::LimitedSlip;
 };
 
+struct VehicleRestState
+{
+    bool resting = false;
+    bool candidate = false;
+    bool requiresBrake = false;
+    float quietTimeSeconds = 0.0f;
+    float requiredHoldForce = 0.0f;
+    float availableBrakeHoldForce = 0.0f;
+};
+
 struct WheelState
 {
     bool grounded = false;
@@ -322,11 +332,13 @@ public:
     std::uint64_t totalHighRateStepCount(VehicleHandle handle) const;
     float highRateHertz(VehicleHandle handle) const;
     heritage::physics::BodyHandle chassisBody(VehicleHandle handle) const;
+    bool restState(VehicleHandle handle, VehicleRestState& value) const;
 
     void simulate(
         heritage::physics::RigidBodySystem& bodies,
         const heritage::physics::CollisionSystem& collisions,
-        float worldDeltaTime);
+        float worldDeltaTime,
+        const heritage::math::Vec3& gravity = { 0.0f, -9.80665f, 0.0f });
 
     const std::string& lastError() const { return m_lastError; }
 
@@ -377,6 +389,14 @@ private:
         int tractionControlActiveWheelCount = 0;
         int lastHighRateStepCount = 0;
         std::uint64_t totalHighRateStepCount = 0;
+        float restTimer = 0.0f;
+        bool parkedResting = false;
+        bool parkedRestRequiresBrake = false;
+        float parkedRestBrakeInput = 0.0f;
+        float parkedRestHandbrakeInput = 0.0f;
+        bool restCandidate = false;
+        float requiredHoldForce = 0.0f;
+        float availableBrakeHoldForce = 0.0f;
     };
 
     struct Slot

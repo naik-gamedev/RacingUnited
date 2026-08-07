@@ -13,6 +13,11 @@ constexpr float kMaximumHighRateHertz = 2000.0f;
 constexpr int kMaximumHighRateStepsPerWorldStep = 32;
 constexpr float kVectorEpsilon = 1.0e-6f;
 constexpr float kMaximumSuspensionForce = 250000.0f;
+constexpr float kVehicleRestDelaySeconds = 0.75f;
+constexpr float kVehicleRestLinearSpeed = 0.04f;
+constexpr float kVehicleRestAngularSpeedDegrees = 1.0f;
+constexpr float kVehicleRestWheelSpeed = 0.15f;
+constexpr float kVehicleRestFlatSlopeDegrees = 0.5f;
 
 bool finiteFloat(float value)
 {
@@ -480,6 +485,14 @@ void VehicleSystem::resetClock()
         slot.record.drivenWheelSpeedDifferenceRpm = 0.0f;
         slot.record.antiLockActiveWheelCount = 0;
         slot.record.tractionControlActiveWheelCount = 0;
+        slot.record.restTimer = 0.0f;
+        slot.record.parkedResting = false;
+        slot.record.parkedRestRequiresBrake = false;
+        slot.record.parkedRestBrakeInput = 0.0f;
+        slot.record.parkedRestHandbrakeInput = 0.0f;
+        slot.record.restCandidate = false;
+        slot.record.requiredHoldForce = 0.0f;
+        slot.record.availableBrakeHoldForce = 0.0f;
         for (WheelRecord& wheel : slot.record.wheels)
         {
             wheel.state.wheelRotationDegrees = 0.0f;
@@ -1346,12 +1359,35 @@ heritage::physics::BodyHandle VehicleSystem::chassisBody(VehicleHandle handle) c
         : heritage::physics::InvalidBody;
 }
 
+bool VehicleSystem::restState(
+    VehicleHandle handle,
+    VehicleRestState& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Vehicle rest-state query received an invalid or stale handle.");
+        return false;
+    }
+
+    value.resting = slot->record.parkedResting;
+    value.candidate = slot->record.restCandidate;
+    value.requiresBrake = slot->record.parkedRestRequiresBrake;
+    value.quietTimeSeconds = slot->record.restTimer;
+    value.requiredHoldForce = slot->record.requiredHoldForce;
+    value.availableBrakeHoldForce = slot->record.availableBrakeHoldForce;
+    clearError();
+    return true;
+}
+
 void VehicleSystem::simulate(
     heritage::physics::RigidBodySystem& bodies,
     const heritage::physics::CollisionSystem& collisions,
-    float worldDeltaTime)
+    float worldDeltaTime,
+    const heritage::math::Vec3& gravity)
 {
-    if (!finiteFloat(worldDeltaTime) || worldDeltaTime <= 0.0f)
+    if (!finiteFloat(worldDeltaTime) || worldDeltaTime <= 0.0f
+        || !finiteVec3(gravity))
         return;
 
     removeInvalidBodies(bodies);
@@ -1362,6 +1398,44 @@ void VehicleSystem::simulate(
 
         Record& vehicle = slot.record;
         vehicle.lastHighRateStepCount = 0;
+
+        bool chassisSleeping = false;
+        bodies.sleeping(vehicle.description.chassisBody, chassisSleeping);
+        if (vehicle.parkedResting && !chassisSleeping)
+        {
+            // A reset, impulse, collision, or authored pose change woke the
+            // chassis. The parked lock is no longer authoritative.
+            vehicle.parkedResting = false;
+            vehicle.parkedRestRequiresBrake = false;
+            vehicle.parkedRestBrakeInput = 0.0f;
+            vehicle.parkedRestHandbrakeInput = 0.0f;
+            vehicle.restTimer = 0.0f;
+        }
+        if (chassisSleeping)
+        {
+            const bool requiredBrakeReleased =
+                vehicle.brake + 0.001f < vehicle.parkedRestBrakeInput
+                || vehicle.handbrake + 0.001f
+                    < vehicle.parkedRestHandbrakeInput;
+            const bool shouldWake = vehicle.throttle > 0.001f
+                || (vehicle.parkedResting
+                    && vehicle.parkedRestRequiresBrake
+                    && requiredBrakeReleased);
+            if (!shouldWake)
+            {
+                vehicle.highRateAccumulator = 0.0;
+                vehicle.speed = 0.0f;
+                continue;
+            }
+
+            bodies.wake(vehicle.description.chassisBody);
+            vehicle.parkedResting = false;
+            vehicle.parkedRestRequiresBrake = false;
+            vehicle.parkedRestBrakeInput = 0.0f;
+            vehicle.parkedRestHandbrakeInput = 0.0f;
+            vehicle.restTimer = 0.0f;
+        }
+
         const double highRateDelta = 1.0
             / static_cast<double>(vehicle.description.highRateHertz);
         vehicle.highRateAccumulator += static_cast<double>(worldDeltaTime);
@@ -1390,11 +1464,106 @@ void VehicleSystem::simulate(
                 highRateDelta);
 
         heritage::math::Vec3 linearVelocity{};
+        heritage::math::Vec3 angularVelocityDegrees{};
         if (bodies.linearVelocity(
                 vehicle.description.chassisBody,
                 linearVelocity))
         {
             vehicle.speed = length(linearVelocity);
+        }
+        bodies.angularVelocityDegrees(
+            vehicle.description.chassisBody,
+            angularVelocityDegrees);
+
+        // A tire is a static-friction contact while it is parked, not merely a
+        // velocity-dependent force curve. High-rate suspension/tire impulses
+        // intentionally wake the rigid body, so the generic collision-island
+        // sleep timer cannot settle a raycast-supported vehicle by itself.
+        // Detect a physically supportable rest state here, then let the rigid
+        // body sleep until propulsion, brake release on a slope, an impact, or
+        // an authored transform wakes it.
+        const bool allWheelsGrounded = !vehicle.wheels.empty()
+            && vehicle.groundedWheelCount == vehicle.wheels.size();
+        heritage::math::Vec3 weightedNormal{};
+        float normalLoadTotal = 0.0f;
+        float availableBrakeHoldForce = 0.0f;
+        float maximumWheelSpeed = 0.0f;
+        for (const WheelRecord& wheel : vehicle.wheels)
+        {
+            maximumWheelSpeed = std::max(
+                maximumWheelSpeed,
+                std::abs(wheel.state.wheelAngularVelocity));
+            if (!wheel.state.grounded || wheel.state.normalForce <= 0.0f)
+                continue;
+
+            weightedNormal = add(
+                weightedNormal,
+                scale(wheel.state.contactNormal, wheel.state.normalForce));
+            normalLoadTotal += wheel.state.normalForce;
+            if (wheel.state.appliedBrakeTorque > 0.0f)
+            {
+                const float tireHoldLimit = wheel.state.effectiveFriction
+                    * wheel.state.normalForce;
+                const float brakeHoldLimit = wheel.state.appliedBrakeTorque
+                    / std::max(wheel.description.radius, 0.01f);
+                availableBrakeHoldForce += std::min(
+                    tireHoldLimit,
+                    brakeHoldLimit);
+            }
+        }
+
+        float chassisMass = 0.0f;
+        float gravityFactor = 0.0f;
+        bodies.mass(vehicle.description.chassisBody, chassisMass);
+        bodies.gravityFactor(vehicle.description.chassisBody, gravityFactor);
+        const heritage::math::Vec3 supportNormal = normalized(
+            weightedNormal,
+            { 0.0f, 1.0f, 0.0f });
+        const heritage::math::Vec3 bodyGravity = scale(gravity, gravityFactor);
+        const heritage::math::Vec3 predictedLinearVelocity = add(
+            linearVelocity,
+            scale(bodyGravity, worldDeltaTime));
+        const float predictedSpeed = length(predictedLinearVelocity);
+        vehicle.speed = predictedSpeed;
+        const heritage::math::Vec3 tangentialGravity = subtract(
+            bodyGravity,
+            scale(supportNormal, dot(bodyGravity, supportNormal)));
+        const float gravityMagnitude = length(bodyGravity);
+        const float tangentialGravityMagnitude = length(tangentialGravity);
+        const float flatSlopeLimit = gravityMagnitude * std::sin(
+            radians(kVehicleRestFlatSlopeDegrees));
+        const bool effectivelyFlat = tangentialGravityMagnitude
+            <= flatSlopeLimit + 0.001f;
+        const float requiredHoldForce = chassisMass
+            * tangentialGravityMagnitude;
+        const bool brakesCanHold = availableBrakeHoldForce
+            >= requiredHoldForce * 1.05f;
+        const bool quietEnough = predictedSpeed <= kVehicleRestLinearSpeed
+            && length(angularVelocityDegrees)
+                <= kVehicleRestAngularSpeedDegrees
+            && maximumWheelSpeed <= kVehicleRestWheelSpeed;
+        const bool canRest = allWheelsGrounded
+            && normalLoadTotal > 0.0f
+            && vehicle.throttle <= 0.001f
+            && quietEnough
+            && (effectivelyFlat || brakesCanHold);
+        vehicle.restCandidate = canRest;
+        vehicle.requiredHoldForce = requiredHoldForce;
+        vehicle.availableBrakeHoldForce = availableBrakeHoldForce;
+
+        if (canRest)
+            vehicle.restTimer += worldDeltaTime;
+        else
+            vehicle.restTimer = 0.0f;
+
+        if (vehicle.restTimer >= kVehicleRestDelaySeconds
+            && bodies.setSleeping(vehicle.description.chassisBody, true))
+        {
+            vehicle.speed = 0.0f;
+            vehicle.parkedResting = true;
+            vehicle.parkedRestRequiresBrake = !effectivelyFlat;
+            vehicle.parkedRestBrakeInput = vehicle.brake;
+            vehicle.parkedRestHandbrakeInput = vehicle.handbrake;
         }
     }
 }
@@ -1857,10 +2026,16 @@ void VehicleSystem::simulateVehicleSubstep(
                 scale(suspensionDirection, description.radius));
             wheel.previousSuspensionLength = maximumLength;
 
-            const float rotationSign = std::abs(state.wheelAngularVelocity) > 0.05f
-                ? signOrZero(state.wheelAngularVelocity)
-                : signOrZero(driveTorque);
-            const float brakeTorque = -rotationSign * brakeTorqueMagnitude;
+            const float projectedAngularVelocity = state.wheelAngularVelocity
+                + (driveTorque / wheel.tireModel.wheelInertia)
+                    * substepDeltaTime;
+            const float brakeTorque = brakeTorqueMagnitude > 0.0f
+                ? std::clamp(
+                    -projectedAngularVelocity * wheel.tireModel.wheelInertia
+                        / substepDeltaTime,
+                    -brakeTorqueMagnitude,
+                    brakeTorqueMagnitude)
+                : 0.0f;
             const float angularAcceleration = (driveTorque + brakeTorque)
                 / wheel.tireModel.wheelInertia;
             state.wheelAngularVelocity += angularAcceleration * substepDeltaTime;
@@ -2057,25 +2232,32 @@ void VehicleSystem::simulateVehicleSubstep(
             scale(tireForce, substepDeltaTime),
             state.contactPoint);
 
-        const float rotationSign = std::abs(state.wheelAngularVelocity) > 0.05f
-            ? signOrZero(state.wheelAngularVelocity)
-            : (std::abs(longitudinalSpeed) > 0.05f
-                ? signOrZero(longitudinalSpeed)
-                : signOrZero(driveTorque));
-        const float brakeTorque = -rotationSign * brakeTorqueMagnitude;
         const float tireReactionTorque = -longitudinalForce
             * description.radius;
-        const float netWheelTorque = driveTorque
+        const float torqueWithoutBrake = driveTorque
             + differentialLockTorque
-            + brakeTorque
             + tireReactionTorque;
+        const float projectedAngularVelocity = state.wheelAngularVelocity
+            + (torqueWithoutBrake / wheel.tireModel.wheelInertia)
+                * substepDeltaTime;
+        // A brake is a bounded constraint, not a torque that is allowed to
+        // overshoot zero and reverse the wheel every millisecond. Clamp the
+        // requested reaction to exactly the torque needed to stop this step.
+        const float brakeTorque = brakeTorqueMagnitude > 0.0f
+            ? std::clamp(
+                -projectedAngularVelocity * wheel.tireModel.wheelInertia
+                    / substepDeltaTime,
+                -brakeTorqueMagnitude,
+                brakeTorqueMagnitude)
+            : 0.0f;
+        const float netWheelTorque = torqueWithoutBrake + brakeTorque;
         state.wheelAngularVelocity += (netWheelTorque
             / wheel.tireModel.wheelInertia) * substepDeltaTime;
         state.wheelAngularVelocity = std::clamp(
             state.wheelAngularVelocity,
             -4000.0f,
             4000.0f);
-        if (vehicle.brake > 0.0f
+        if (brakeTorqueMagnitude > 0.0f
             && std::abs(state.wheelAngularVelocity) < 0.03f
             && std::abs(longitudinalSpeed) < 0.10f)
         {

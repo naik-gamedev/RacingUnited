@@ -53,6 +53,20 @@ The tire API must support replaceable providers:
 
 All providers return forces, moments, and telemetry through a stable contact interface.
 
+### Near-zero-speed and parked behavior
+
+Slip curves describe a rolling/sliding contact; they are not sufficient by
+themselves to represent a parked tire. The vehicle layer therefore has an
+explicit, capacity-checked rest state. It uses per-wheel normal load, friction,
+brake torque, chassis mass, gravity, and contact normals. This is not a blanket
+velocity clamp: flat quiet vehicles may rest, a braked vehicle may hold only a
+slope its brakes and tires can support, and an unbraked vehicle still rolls.
+
+Service and parking brakes share the same non-overshooting zero-speed wheel
+constraint. Do not restore sign-flipping fixed brake torque near zero angular
+velocity; at a 1000 Hz substep it can reverse a stopped wheel repeatedly and
+inject false tire forces into the chassis.
+
 ### Per-wheel tire ownership
 
 Step 29H makes the tire description a property of each wheel/contact unit. A

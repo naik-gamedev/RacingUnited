@@ -13,8 +13,13 @@ Studio using the Windows SDK and the v145 C++ platform toolset. GLFW, GLAD and
 Dear ImGui are included in the repository.
 
 Open `Engine/HeritageEngine/HeritageEngine.slnx`, select an x64 configuration,
-and build the solution. The solution contains both Heritage Engine and the
-Racing United launcher.
+and build the solution. The solution contains Heritage Engine, the Racing
+United launcher, and a headless physics regression executable.
+
+Run `Tools\RunPhysicsTests.cmd` to build and execute deterministic vehicle
+tests without opening the game. They cover quiet flat-ground rest, parked-body
+sleep/wake behavior, 1000 Hz suspension timing, handbrake holding on a 5-degree
+slope, and legitimate downhill motion when the car is not braked.
 
 Linux is not a supported build target during the current prototype phase. It
 may return after the Windows engine, module API and racing simulation have
