@@ -225,6 +225,8 @@ void CollisionSystem::clear()
 {
     m_slots.clear();
     m_staticSceneTriangles.clear();
+    m_staticSceneBounds = {};
+    m_staticSceneBoundsValid = false;
     m_freeIndices.clear();
     m_contacts.clear();
     m_aliveCount = 0;
@@ -242,6 +244,7 @@ void CollisionSystem::clear()
     m_continuousCollisionUnsupportedBodyCount = 0;
     m_lastQueryCandidateCount = 0;
     m_lastQueryExactTestCount = 0;
+    m_lastRaycastDiagnostics = {};
     m_simulationSequence = 0;
     m_contactCache.clear();
     ++m_topologyRevision;
@@ -256,12 +259,42 @@ void CollisionSystem::setStaticSceneTriangles(
     std::vector<StaticSceneTriangle> triangles)
 {
     m_staticSceneTriangles = std::move(triangles);
+    m_staticSceneBounds = {};
+    m_staticSceneBoundsValid = !m_staticSceneTriangles.empty();
+    if (m_staticSceneBoundsValid)
+    {
+        const float maximum = (std::numeric_limits<float>::max)();
+        const float minimum = (std::numeric_limits<float>::lowest)();
+        m_staticSceneBounds.minimum = { maximum, maximum, maximum };
+        m_staticSceneBounds.maximum = { minimum, minimum, minimum };
+        for (const StaticSceneTriangle& triangle : m_staticSceneTriangles)
+        {
+            for (const heritage::math::Vec3& point : {
+                triangle.a, triangle.b, triangle.c })
+            {
+                m_staticSceneBounds.minimum.x = std::min(
+                    m_staticSceneBounds.minimum.x, point.x);
+                m_staticSceneBounds.minimum.y = std::min(
+                    m_staticSceneBounds.minimum.y, point.y);
+                m_staticSceneBounds.minimum.z = std::min(
+                    m_staticSceneBounds.minimum.z, point.z);
+                m_staticSceneBounds.maximum.x = std::max(
+                    m_staticSceneBounds.maximum.x, point.x);
+                m_staticSceneBounds.maximum.y = std::max(
+                    m_staticSceneBounds.maximum.y, point.y);
+                m_staticSceneBounds.maximum.z = std::max(
+                    m_staticSceneBounds.maximum.z, point.z);
+            }
+        }
+    }
     clearError();
 }
 
 void CollisionSystem::clearStaticSceneTriangles()
 {
     m_staticSceneTriangles.clear();
+    m_staticSceneBounds = {};
+    m_staticSceneBoundsValid = false;
     clearError();
 }
 
@@ -824,6 +857,7 @@ bool CollisionSystem::raycast(
 {
     m_lastQueryCandidateCount = 0;
     m_lastQueryExactTestCount = 0;
+    m_lastRaycastDiagnostics = {};
     hit = {};
 
     if (!finiteVec3(origin) || !finiteVec3(direction)
@@ -860,6 +894,18 @@ bool CollisionSystem::raycast(
             (std::max)(origin.z, end.z)
         }
     };
+    m_lastRaycastDiagnostics.staticSceneLoaded =
+        m_staticSceneBoundsValid;
+    if (m_staticSceneBoundsValid)
+    {
+        m_lastRaycastDiagnostics.originInsideStaticSceneHorizontalBounds =
+            origin.x >= m_staticSceneBounds.minimum.x - kContactEpsilon
+            && origin.x <= m_staticSceneBounds.maximum.x + kContactEpsilon
+            && origin.z >= m_staticSceneBounds.minimum.z - kContactEpsilon
+            && origin.z <= m_staticSceneBounds.maximum.z + kContactEpsilon;
+        m_lastRaycastDiagnostics.rayBoundsOverlapStaticScene =
+            aabbOverlap(rayBounds, m_staticSceneBounds);
+    }
 
     bool found = false;
     RaycastHit closest;
@@ -881,6 +927,8 @@ bool CollisionSystem::raycast(
 
         ++m_lastQueryCandidateCount;
         ++m_lastQueryExactTestCount;
+        ++m_lastRaycastDiagnostics.colliderCandidateCount;
+        ++m_lastRaycastDiagnostics.exactTestCount;
         RaycastHit candidate;
         const bool candidateHit = slot.record.shapeType == ColliderShapeType::Sphere
             ? raySphere(
@@ -931,6 +979,8 @@ bool CollisionSystem::raycast(
 
             ++m_lastQueryCandidateCount;
             ++m_lastQueryExactTestCount;
+            ++m_lastRaycastDiagnostics.staticTriangleCandidateCount;
+            ++m_lastRaycastDiagnostics.exactTestCount;
             RaycastHit candidate;
             if (!rayStaticSceneTriangle(
                     origin,
@@ -941,6 +991,7 @@ bool CollisionSystem::raycast(
             {
                 continue;
             }
+            m_lastRaycastDiagnostics.staticTriangleHit = true;
 
             if (!found || candidate.distance < closest.distance - kContactEpsilon)
             {
@@ -951,7 +1002,12 @@ bool CollisionSystem::raycast(
     }
 
     if (found)
+    {
         hit = closest;
+        m_lastRaycastDiagnostics.selectedHitWasStaticTriangle =
+            closest.collider == InvalidCollider
+            && closest.body == InvalidBody;
+    }
     clearError();
     return found;
 }

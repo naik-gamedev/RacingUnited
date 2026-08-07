@@ -107,6 +107,21 @@ struct RaycastHit
     bool trigger = false;
 };
 
+// Read-only accounting for the most recently completed closest-hit raycast.
+// Vehicle contact diagnostics copy this immediately after their support query;
+// it is diagnostic state only and never changes the query result.
+struct RaycastQueryDiagnostics
+{
+    std::size_t colliderCandidateCount = 0;
+    std::size_t staticTriangleCandidateCount = 0;
+    std::size_t exactTestCount = 0;
+    bool staticSceneLoaded = false;
+    bool originInsideStaticSceneHorizontalBounds = false;
+    bool rayBoundsOverlapStaticScene = false;
+    bool staticTriangleHit = false;
+    bool selectedHitWasStaticTriangle = false;
+};
+
 // Closest hit produced by sweeping a sphere through the world. point is the
 // contact point on the swept sphere at impact, while normal points outward
 // from the hit collider toward the swept sphere centre.
@@ -222,6 +237,10 @@ public:
 
     std::size_t lastQueryCandidateCount() const { return m_lastQueryCandidateCount; }
     std::size_t lastQueryExactTestCount() const { return m_lastQueryExactTestCount; }
+    const RaycastQueryDiagnostics& lastRaycastDiagnostics() const
+    {
+        return m_lastRaycastDiagnostics;
+    }
 
     // Read-only creator/world triangle scene used by suspension/tire raycasts.
     // This is deliberately not yet a full rigid-body triangle-mesh collider.
@@ -481,6 +500,8 @@ private:
 
     std::vector<Slot> m_slots;
     std::vector<StaticSceneTriangle> m_staticSceneTriangles;
+    Aabb m_staticSceneBounds;
+    bool m_staticSceneBoundsValid = false;
     std::vector<std::uint32_t> m_freeIndices;
     std::vector<CollisionContact> m_contacts;
     std::size_t m_aliveCount = 0;
@@ -498,6 +519,7 @@ private:
     std::size_t m_continuousCollisionUnsupportedBodyCount = 0;
     mutable std::size_t m_lastQueryCandidateCount = 0;
     mutable std::size_t m_lastQueryExactTestCount = 0;
+    mutable RaycastQueryDiagnostics m_lastRaycastDiagnostics;
     std::uint64_t m_simulationSequence = 0;
     std::unordered_map<ContactPairKey, CachedContact, ContactPairKeyHash> m_contactCache;
     std::uint64_t m_topologyRevision = 1;

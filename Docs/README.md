@@ -15,12 +15,15 @@ Read these documents before changing an interconnected system:
 9. `VEHICLE_WORKSHOP.md` — versioned topology authoring, validation, live preview and module-owned exports.
 10. `UNSPRUNG_MASS_MODEL.md` — scalable wheel/upright inertia, radial tire compliance and wheel-hop rules.
 11. `SUSPENSION_GEOMETRY.md` — authoritative steering-axis, camber, toe and upright-pose rules.
-12. `Decisions/` — architecture decision records that must not be silently reversed.
+12. `TERRAIN_CONTACT_DIAGNOSTICS.md` — native wheel support status, query evidence and terrain-loss regressions.
+13. `Decisions/` — architecture decision records that must not be silently reversed.
 
 Step 29L contributors must also read `VEHICLE_DEFINITION_RUNTIME.md` for the
 native compiler, suspension-provider and runtime-loader contract.
 Step 29P suspension work must also follow `SUSPENSION_MODEL.md`,
 `UNSPRUNG_MASS_MODEL.md`, and `SUSPENSION_GEOMETRY.md` for force, wheel-hop,
 upright pose, telemetry, scalability, and future geometry/damage conventions.
+Step 29Q terrain and collision work must preserve the observable wheel-contact
+contract in `TERRAIN_CONTACT_DIAGNOSTICS.md` and ADR-018.
 
 Generated reports are written to `Build/Reports/`. Runtime diagnostics are written to `UserData/Diagnostics/`.

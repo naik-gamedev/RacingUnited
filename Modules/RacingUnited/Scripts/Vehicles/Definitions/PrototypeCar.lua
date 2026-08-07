@@ -1,4 +1,4 @@
--- Racing United vehicle definition: Step 29P.1 Peugeot-oriented prototype.
+-- Racing United vehicle definition: Step 29Q Peugeot-oriented prototype.
 -- This file is data only. Native C++ systems perform the actual simulation.
 -- The visual/reference geometry below uses published 2003 Peugeot 206 RC
 -- dimensions so the imported player body has sensible wheel placement now.
@@ -6,7 +6,7 @@
 PrototypeCarDefinition = {
     schemaVersion = 2,
     id = "step29j4a_prototype_car",
-    displayName = "Step 29P.1 Peugeot-Oriented Prototype",
+    displayName = "Step 29Q Peugeot-Oriented Prototype",
     classification = "car",
 
     -- This compatibility summary lets the current handwritten prototype live

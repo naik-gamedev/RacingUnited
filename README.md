@@ -21,7 +21,9 @@ tests without opening the game. They cover quiet flat-ground rest, parked-body
 sleep/wake behavior, 1000 Hz suspension timing, handbrake holding on a 5-degree
 slope, legitimate downhill motion when the car is not braked, nonlinear
 suspension forces, scalar unsprung-mass wheel hop and vehicle-definition
-compilation.
+compilation. Step 29Q also covers static triangle seams, reversed winding,
+steep slopes, tiny gaps, bottom-out, support beyond droop, high-speed surface
+crossing, scene bounds and airborne landing diagnostics.
 
 Linux is not a supported build target during the current prototype phase. It
 may return after the Windows engine, module API and racing simulation have

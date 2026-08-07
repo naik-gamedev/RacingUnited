@@ -1420,6 +1420,10 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("Vehicle", "GetDynamicsLabSeries", &LuaModuleRuntime::luaVehicleGetDynamicsLabSeries);
     registerFunction("Vehicle", "ExportDynamicsLabCsv", &LuaModuleRuntime::luaVehicleExportDynamicsLabCsv);
     registerFunction("Vehicle", "GetWheelState", &LuaModuleRuntime::luaVehicleGetWheelState);
+    registerFunction(
+        "Vehicle",
+        "GetWheelContactDiagnostic",
+        &LuaModuleRuntime::luaVehicleGetWheelContactDiagnostic);
     registerFunction("Vehicle", "GetWheelUprightPose", &LuaModuleRuntime::luaVehicleGetWheelUprightPose);
     registerFunction("Vehicle", "GetLastError", &LuaModuleRuntime::luaVehicleGetLastError);
 
@@ -7776,6 +7780,57 @@ int LuaModuleRuntime::luaVehicleGetWheelState(lua_State* state)
     runtime->m_api.lua_pushnumber(state, value.tireDeflectionVelocity);
     runtime->m_api.lua_pushnumber(state, value.tireRadialDissipationWatts);
     return 51;
+}
+
+int LuaModuleRuntime::luaVehicleGetWheelContactDiagnostic(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime) return 0;
+    heritage::vehicles::WheelState value;
+    int converted = 0;
+    const LuaInteger luaIndex = runtime->m_api.lua_tointegerx(
+        state, 2, &converted);
+    const std::size_t wheelIndex = converted && luaIndex >= 1
+        ? static_cast<std::size_t>(luaIndex - 1)
+        : static_cast<std::size_t>(-1);
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().wheelState(
+            vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
+    if (!result)
+    {
+        for (int index = 0; index < 13; ++index)
+            runtime->m_api.lua_pushnil(state);
+        return 13;
+    }
+
+    runtime->m_api.lua_pushstring(
+        state,
+        heritage::vehicles::wheelContactStatusName(value.contactStatus));
+    runtime->m_api.lua_pushinteger(
+        state, static_cast<LuaInteger>(value.contactStatus));
+    runtime->m_api.lua_pushinteger(
+        state,
+        static_cast<LuaInteger>(value.contactLossTransitionCount));
+    runtime->m_api.lua_pushinteger(
+        state, static_cast<LuaInteger>(value.rayCandidateCount));
+    runtime->m_api.lua_pushinteger(
+        state, static_cast<LuaInteger>(value.rayExactTestCount));
+    runtime->m_api.lua_pushinteger(
+        state,
+        static_cast<LuaInteger>(value.staticTriangleCandidateCount));
+    runtime->m_api.lua_pushboolean(
+        state, value.staticSceneLoaded ? 1 : 0);
+    runtime->m_api.lua_pushboolean(
+        state, value.originInsideStaticSceneBounds ? 1 : 0);
+    runtime->m_api.lua_pushboolean(
+        state, value.rayBoundsOverlapStaticScene ? 1 : 0);
+    runtime->m_api.lua_pushboolean(
+        state, value.selectedHitWasStaticTriangle ? 1 : 0);
+    runtime->m_api.lua_pushnumber(state, value.rawSupportDistance);
+    runtime->m_api.lua_pushboolean(
+        state, value.suspensionBottomed ? 1 : 0);
+    runtime->m_api.lua_pushnumber(state, value.bottomOutPenetration);
+    return 13;
 }
 
 int LuaModuleRuntime::luaVehicleGetWheelUprightPose(lua_State* state)

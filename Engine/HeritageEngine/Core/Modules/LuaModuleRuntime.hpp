@@ -424,6 +424,7 @@ private:
     static int luaVehicleGetDynamicsLabSeries(lua_State* state);
     static int luaVehicleExportDynamicsLabCsv(lua_State* state);
     static int luaVehicleGetWheelState(lua_State* state);
+    static int luaVehicleGetWheelContactDiagnostic(lua_State* state);
     static int luaVehicleGetWheelUprightPose(lua_State* state);
     static int luaVehicleGetLastError(lua_State* state);
 

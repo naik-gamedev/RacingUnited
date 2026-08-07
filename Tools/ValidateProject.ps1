@@ -32,6 +32,7 @@ $required = @(
     "Docs\MEMORY_OWNERSHIP.md",
     "Docs\LUA_API_RULES.md",
     "Docs\PHYSICS_ARCHITECTURE.md",
+    "Docs\TERRAIN_CONTACT_DIAGNOSTICS.md",
     "Docs\VEHICLE_ARCHITECTURE.md",
     "Docs\VEHICLE_DYNAMICS_LAB.md",
     "Docs\SUSPENSION_MODEL.md",
@@ -49,6 +50,7 @@ $required = @(
     "Docs\Decisions\ADR-015-Live-Per-Wheel-Suspension-Tuning.md",
     "Docs\Decisions\ADR-016-Scalar-Unsprung-Mass.md",
     "Docs\Decisions\ADR-017-Authoritative-Suspension-Upright-Pose.md",
+    "Docs\Decisions\ADR-018-Observable-Wheel-Contact-Loss.md",
     "Docs\UNSPRUNG_MASS_MODEL.md",
     "Docs\SUSPENSION_GEOMETRY.md",
     "Docs\LuaApiAnnotations.json",
@@ -153,6 +155,7 @@ if (Test-Path $manifestPath) {
         "Physics.UnloadStaticTriangleScene",
         "Physics.GetStaticTriangleSceneCount",
         "Vehicle.GetWheelState",
+        "Vehicle.GetWheelContactDiagnostic",
         "Entity.Destroy"
     )) {
         Check ($qualified -contains $name) "Lua API contains $name"
@@ -165,6 +168,7 @@ Check ($runtimeCpp.Contains("m_registeredLuaFunctions")) "runtime records exact 
 Check ($runtimeCpp.Contains("runSafetySmokeTests")) "runtime contains lifetime safety smoke tests"
 Check ($runtimeCpp.Contains("LuaAPI_Runtime.json")) "runtime writes a live API manifest"
 Check ($runtimeCpp.Contains("return 51;")) "wheel-state Lua bridge includes unsprung-mass telemetry"
+Check ($runtimeCpp.Contains("luaVehicleGetWheelContactDiagnostic")) "Lua exposes wheel contact-loss diagnostics"
 Check ($runtimeCpp.Contains("return 25;")) "Dynamics Lab summary includes geometry extrema"
 Check ($runtimeCpp.Contains("OFN_FILEMUSTEXIST")) "Windows module asset picker requires an existing file"
 Check ($runtimeCpp.Contains("resolveSavePath(relative)")) "bounded text export resolves through the active module save root"
@@ -213,6 +217,9 @@ Check ($vehicleHeader.Contains("wheelUnsprungMassModel")) "per-wheel unsprung-ma
 Check ($vehicleHeader.Contains("struct VehicleRestState")) "vehicle parked-rest diagnostic contract exists"
 Check ($vehicleHeader.Contains("startDynamicsLabCapture")) "vehicle exposes opt-in native dynamics capture"
 Check ($vehicleHeader.Contains("damperDissipationWatts")) "wheel state exposes damper energy-rate telemetry"
+Check ($vehicleHeader.Contains("enum class WheelContactStatus")) "wheel state classifies support and contact-loss outcomes"
+Check ($vehicleHeader.Contains("contactLossTransitionCount")) "wheel state counts grounded-to-airborne transitions"
+Check ($collisionHeader.Contains("RaycastQueryDiagnostics")) "raycasts expose static-scene diagnostic evidence"
 
 $physicsRegressionPath = Join-Path $Root "Engine\HeritageEngine\Tests\PhysicsRegression.cpp"
 $physicsRegression = if (Test-Path $physicsRegressionPath) { [IO.File]::ReadAllText($physicsRegressionPath) } else { "" }
@@ -228,6 +235,7 @@ Check ($physicsRegression.Contains("scalar unsprung-mass wheel-hop response")) "
 Check ($physicsRegression.Contains("live_unsprung_roundtrip")) "headless regression verifies live unsprung-mass tuning roundtrip"
 Check ($physicsRegression.Contains("authoritative suspension upright pose")) "headless regression verifies authoritative suspension geometry"
 Check ($physicsRegression.Contains("live_geometry_roundtrip")) "headless regression verifies live suspension-geometry tuning roundtrip"
+Check ($physicsRegression.Contains("terrainContactDiagnosticsClassifyFailureModes")) "headless regression diagnoses terrain seams, gaps, bottom-out, tunnelling and bounds"
 
 $definitionV2Path = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Definitions\VehicleDefinitionV2.lua"
 $definitionV2 = if (Test-Path $definitionV2Path) { [IO.File]::ReadAllText($definitionV2Path) } else { "" }
@@ -312,6 +320,7 @@ $suspensionPanel = if (Test-Path $suspensionPanelPath) { [IO.File]::ReadAllText(
 Check ($suspensionPanel.Contains("DrawSuspensionLiveTelemetry")) "vehicle suspension panel exposes live force telemetry"
 Check ($suspensionPanel.Contains("DrawSuspensionUnsprungControls")) "vehicle suspension panel exposes unsprung-mass tuning"
 Check ($suspensionPanel.Contains("DrawSuspensionGeometryControls")) "vehicle suspension panel exposes upright-geometry tuning"
+Check ($suspensionPanel.Contains("contactLossTransitions")) "vehicle suspension panel exposes live contact-loss diagnostics"
 
 $dynamicsLabHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp"
 $dynamicsLabHeader = if (Test-Path $dynamicsLabHeaderPath) { [IO.File]::ReadAllText($dynamicsLabHeaderPath) } else { "" }

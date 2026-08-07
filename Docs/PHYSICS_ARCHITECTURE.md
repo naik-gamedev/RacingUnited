@@ -74,3 +74,17 @@ contact solver; full chassis-vs-static-mesh collision requires a production
 static-mesh/convex contact system plus spatial acceleration and belongs to later
 world-physics work. Do not mistake the read-only query bridge for final mesh
 collision.
+
+## Observable terrain contact loss (Step 29Q)
+
+Every wheel now records a native contact status instead of reducing all support
+failures to `grounded = false`. The statuses distinguish supported load,
+bottom-out, road-without-load, a surface behind the ray origin, static scene
+bounds, missing geometry, zero query candidates, exact-test misses and support
+beyond droop. The collision query also reports primitive/static candidate counts
+and cached scene-bound evidence.
+
+Only a grounded-to-airborne transition performs a reverse diagnostic probe.
+This identifies the characteristic query-only tunnelling case without doubling
+the ordinary 1000 Hz query cost. It does not apply a corrective impulse. See
+`TERRAIN_CONTACT_DIAGNOSTICS.md` and ADR-018.

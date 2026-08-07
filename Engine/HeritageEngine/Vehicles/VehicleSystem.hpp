@@ -181,9 +181,39 @@ struct VehicleRestState
     float availableBrakeHoldForce = 0.0f;
 };
 
+// Authoritative result of the latest wheel support query. These values make a
+// lost road contact distinguishable from suspension travel limits, an unloaded
+// tire, missing world geometry, scene boundaries and tunnelling behind the ray
+// origin without changing the force solver itself.
+enum class WheelContactStatus
+{
+    Supported = 0,
+    SuspensionBottomed = 1,
+    RoadDetectedNoLoad = 2,
+    SurfaceBehindRayOrigin = 3,
+    OutsideStaticSceneBounds = 4,
+    NoWorldGeometry = 5,
+    NoRayCandidates = 6,
+    RayCandidatesMissed = 7,
+    BeyondSuspensionReach = 8,
+    NoSupportHit = 9
+};
+
 struct WheelState
 {
     bool grounded = false;
+    WheelContactStatus contactStatus = WheelContactStatus::NoSupportHit;
+    std::uint64_t contactLossTransitionCount = 0;
+    std::size_t rayCandidateCount = 0;
+    std::size_t rayExactTestCount = 0;
+    std::size_t staticTriangleCandidateCount = 0;
+    bool staticSceneLoaded = false;
+    bool originInsideStaticSceneBounds = false;
+    bool rayBoundsOverlapStaticScene = false;
+    bool selectedHitWasStaticTriangle = false;
+    float rawSupportDistance = 0.0f;
+    bool suspensionBottomed = false;
+    float bottomOutPenetration = 0.0f;
     float suspensionLength = 0.0f;
     float compression = 0.0f;
     float compressionVelocity = 0.0f;
@@ -240,6 +270,8 @@ struct WheelState
     heritage::math::Vec3 contactPoint{};
     heritage::math::Vec3 contactNormal{ 0.0f, 1.0f, 0.0f };
 };
+
+const char* wheelContactStatusName(WheelContactStatus value);
 
 // Step 29H: generation-checked arbitrary-wheel vehicle foundation with
 // Ackermann steering, powertrain, per-wheel advanced transient road-tire data,

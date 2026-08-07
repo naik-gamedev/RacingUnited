@@ -563,6 +563,33 @@ float engineTorqueCurveFactor(
 
 } // namespace
 
+const char* wheelContactStatusName(WheelContactStatus value)
+{
+    switch (value)
+    {
+    case WheelContactStatus::Supported: return "supported";
+    case WheelContactStatus::SuspensionBottomed:
+        return "suspension_bottomed";
+    case WheelContactStatus::RoadDetectedNoLoad:
+        return "road_detected_no_load";
+    case WheelContactStatus::SurfaceBehindRayOrigin:
+        return "surface_behind_ray_origin";
+    case WheelContactStatus::OutsideStaticSceneBounds:
+        return "outside_static_scene_bounds";
+    case WheelContactStatus::NoWorldGeometry:
+        return "no_world_geometry";
+    case WheelContactStatus::NoRayCandidates:
+        return "no_ray_candidates";
+    case WheelContactStatus::RayCandidatesMissed:
+        return "ray_candidates_missed";
+    case WheelContactStatus::BeyondSuspensionReach:
+        return "beyond_suspension_reach";
+    case WheelContactStatus::NoSupportHit:
+        return "no_support_hit";
+    }
+    return "unknown";
+}
+
 void VehicleSystem::clear()
 {
     m_slots.clear();
@@ -2293,6 +2320,9 @@ void VehicleSystem::simulateVehicleSubstep(
         WheelRecord& wheel = vehicle.wheels[wheelIndex];
         WheelState& state = wheel.state;
         const WheelDescription& description = wheel.description;
+        const bool wasGrounded = state.grounded;
+        const WheelContactStatus previousContactStatus =
+            state.contactStatus;
         const float previousSlipRatio = state.slipRatio;
         const float previousLongitudinalSpeed = state.longitudinalSpeed;
 
@@ -2323,8 +2353,28 @@ void VehicleSystem::simulateVehicleSubstep(
             filter,
             bodies,
             hit);
+        const heritage::physics::RaycastQueryDiagnostics rayDiagnostics =
+            collisions.lastRaycastDiagnostics();
 
         state.grounded = false;
+        state.contactStatus = WheelContactStatus::NoSupportHit;
+        state.rayCandidateCount = rayDiagnostics.colliderCandidateCount
+            + rayDiagnostics.staticTriangleCandidateCount;
+        state.rayExactTestCount = rayDiagnostics.exactTestCount;
+        state.staticTriangleCandidateCount =
+            rayDiagnostics.staticTriangleCandidateCount;
+        state.staticSceneLoaded = rayDiagnostics.staticSceneLoaded;
+        state.originInsideStaticSceneBounds =
+            rayDiagnostics.originInsideStaticSceneHorizontalBounds;
+        state.rayBoundsOverlapStaticScene =
+            rayDiagnostics.rayBoundsOverlapStaticScene;
+        state.selectedHitWasStaticTriangle =
+            rayDiagnostics.selectedHitWasStaticTriangle;
+        state.rawSupportDistance = hitGround
+            ? hit.distance - description.radius
+            : 0.0f;
+        state.suspensionBottomed = false;
+        state.bottomOutPenetration = 0.0f;
         state.normalForce = 0.0f;
         state.longitudinalForce = 0.0f;
         state.lateralForce = 0.0f;
@@ -2360,6 +2410,85 @@ void VehicleSystem::simulateVehicleSubstep(
         state.surfaceMaterial = heritage::physics::SurfaceMaterial::Default;
         state.surfaceWetness = 0.0f;
         state.contactNormal = { 0.0f, 1.0f, 0.0f };
+        const auto classifyMissingSupport = [&]() {
+            if (hitGround)
+                return;
+
+            if (rayDiagnostics.staticSceneLoaded
+                && !rayDiagnostics.originInsideStaticSceneHorizontalBounds)
+            {
+                state.contactStatus =
+                    WheelContactStatus::OutsideStaticSceneBounds;
+            }
+            else if (collisions.count()
+                    <= collisions.countForBody(
+                        vehicle.description.chassisBody)
+                && !rayDiagnostics.staticSceneLoaded)
+            {
+                state.contactStatus = WheelContactStatus::NoWorldGeometry;
+            }
+            else if (previousContactStatus
+                    == WheelContactStatus::SurfaceBehindRayOrigin
+                || previousContactStatus
+                    == WheelContactStatus::BeyondSuspensionReach)
+            {
+                state.contactStatus = previousContactStatus;
+            }
+            // Only a grounded-to-airborne transition earns the extra query.
+            // A hit opposite the suspension direction means the support plane
+            // crossed behind the ray origin between fixed steps.
+            else if (wasGrounded)
+            {
+                heritage::physics::RaycastHit reverseHit;
+                if (collisions.raycast(
+                        mountWorld,
+                        scale(suspensionDirection, -1.0f),
+                        rayDistance * 2.0f,
+                        filter,
+                        bodies,
+                        reverseHit))
+                {
+                    state.contactStatus =
+                        WheelContactStatus::SurfaceBehindRayOrigin;
+                    return;
+                }
+                heritage::physics::RaycastHit extendedHit;
+                if (collisions.raycast(
+                        mountWorld,
+                        suspensionDirection,
+                        rayDistance
+                            + std::max(description.radius, 0.50f),
+                        filter,
+                        bodies,
+                        extendedHit)
+                    && extendedHit.distance - description.radius
+                        > maximumLength)
+                {
+                    state.rawSupportDistance =
+                        extendedHit.distance - description.radius;
+                    state.contactStatus =
+                        WheelContactStatus::BeyondSuspensionReach;
+                    return;
+                }
+                state.contactStatus = state.rayCandidateCount == 0
+                    ? WheelContactStatus::NoRayCandidates
+                    : WheelContactStatus::RayCandidatesMissed;
+            }
+            else if (state.rayCandidateCount == 0)
+            {
+                state.contactStatus = WheelContactStatus::NoRayCandidates;
+            }
+            else
+            {
+                state.contactStatus =
+                    WheelContactStatus::RayCandidatesMissed;
+            }
+        };
+        const auto finalizeContactState = [&]() {
+            if (wasGrounded && !state.grounded)
+                ++state.contactLossTransitionCount;
+        };
+        classifyMissingSupport();
         const float steerFactorMagnitude = std::abs(
             description.steerFactor);
         const float steerFactorSign = signOrZero(description.steerFactor);
@@ -2519,12 +2648,15 @@ void VehicleSystem::simulateVehicleSubstep(
                 wheel.previousSuspensionLength = maximumLength;
                 updateUprightGeometry();
                 advanceFreeWheelRotation();
+                finalizeContactState();
                 continue;
             }
 
             float suspensionLength = hit.distance - description.radius;
             if (suspensionLength > maximumLength)
             {
+                state.contactStatus =
+                    WheelContactStatus::BeyondSuspensionReach;
                 state.suspensionLength = maximumLength;
                 state.compression = description.restLength - maximumLength;
                 state.worldCenter = add(
@@ -2533,9 +2665,22 @@ void VehicleSystem::simulateVehicleSubstep(
                 state.contactPoint = hit.point;
                 wheel.previousSuspensionLength = maximumLength;
                 updateUprightGeometry();
+                finalizeContactState();
                 continue;
             }
 
+            if (suspensionLength < minimumLength)
+            {
+                state.suspensionBottomed = true;
+                state.bottomOutPenetration =
+                    minimumLength - suspensionLength;
+                state.contactStatus =
+                    WheelContactStatus::SuspensionBottomed;
+            }
+            else
+            {
+                state.contactStatus = WheelContactStatus::Supported;
+            }
             suspensionLength = std::clamp(
                 suspensionLength,
                 minimumLength,
@@ -2657,6 +2802,12 @@ void VehicleSystem::simulateVehicleSubstep(
             const float roadHubLength = hitGround
                 ? hit.distance - description.radius
                 : maximumLength;
+            if (hitGround && roadHubLength < minimumLength)
+            {
+                state.suspensionBottomed = true;
+                state.bottomOutPenetration =
+                    minimumLength - roadHubLength;
+            }
             const float geometricCompressionVelocity = hitGround
                 ? dot(
                     subtract(mountVelocity, supportVelocity),
@@ -2741,6 +2892,18 @@ void VehicleSystem::simulateVehicleSubstep(
             state.normalForce = unsprungOutput.normalForceN;
             suspensionForce = state.normalForce;
             state.grounded = hitGround && unsprungOutput.grounded;
+            if (state.grounded)
+            {
+                state.contactStatus = state.suspensionBottomed
+                    ? WheelContactStatus::SuspensionBottomed
+                    : WheelContactStatus::Supported;
+            }
+            else if (hitGround)
+            {
+                state.contactStatus = state.suspensionBottomed
+                    ? WheelContactStatus::SuspensionBottomed
+                    : WheelContactStatus::RoadDetectedNoLoad;
+            }
             state.worldCenter = add(
                 mountWorld,
                 scale(suspensionDirection, state.suspensionLength));
@@ -2779,9 +2942,12 @@ void VehicleSystem::simulateVehicleSubstep(
             {
                 updateUprightGeometry();
                 advanceFreeWheelRotation();
+                finalizeContactState();
                 continue;
             }
         }
+
+        finalizeContactState();
 
         // Contact resolution may have changed suspension compression. Refresh
         // the authoritative upright pose before constructing the tire basis.

@@ -302,7 +302,7 @@ function CreateNativeVehicleDemo(compiledSourceDefinition)
 
     ResetNativeVehicle()
     vehicleMessage = compiledSourceDefinition
-        and ("Step 29P.1 native definition loaded: " .. nativeProvider)
-        or "Step 29P.1 online: default world and Peugeot alignment seed"
+        and ("Step 29Q native definition loaded: " .. nativeProvider)
+        or "Step 29Q online: observable terrain contact loss"
     return true
 end

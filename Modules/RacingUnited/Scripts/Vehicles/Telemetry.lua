@@ -147,6 +147,33 @@ function RefreshVehicleTelemetry()
             tireRadialDissipationWatts =
                 tireRadialDissipationWatts or 0.0
         }
+        local contactStatus, contactStatusId, contactLossTransitions,
+            rayCandidates, rayExactTests, staticTriangleCandidates,
+            staticSceneLoaded, originInsideStaticSceneBounds,
+            rayBoundsOverlapStaticScene, selectedHitWasStaticTriangle,
+            rawSupportDistance, suspensionBottomed,
+            bottomOutPenetration =
+            Vehicle.GetWheelContactDiagnostic(nativeVehicle, index)
+        local contactTelemetry = vehicleWheelTelemetry[index]
+        contactTelemetry.contactStatus = contactStatus or "unavailable"
+        contactTelemetry.contactStatusId = contactStatusId or -1
+        contactTelemetry.contactLossTransitions =
+            contactLossTransitions or 0
+        contactTelemetry.rayCandidates = rayCandidates or 0
+        contactTelemetry.rayExactTests = rayExactTests or 0
+        contactTelemetry.staticTriangleCandidates =
+            staticTriangleCandidates or 0
+        contactTelemetry.staticSceneLoaded = staticSceneLoaded or false
+        contactTelemetry.originInsideStaticSceneBounds =
+            originInsideStaticSceneBounds or false
+        contactTelemetry.rayBoundsOverlapStaticScene =
+            rayBoundsOverlapStaticScene or false
+        contactTelemetry.selectedHitWasStaticTriangle =
+            selectedHitWasStaticTriangle or false
+        contactTelemetry.rawSupportDistance = rawSupportDistance or 0.0
+        contactTelemetry.suspensionBottomed = suspensionBottomed or false
+        contactTelemetry.bottomOutPenetration =
+            bottomOutPenetration or 0.0
         local camberAngleDegrees, toeAngleDegrees,
             uprightRotationX, uprightRotationY, uprightRotationZ,
             steeringAxisX, steeringAxisY, steeringAxisZ,

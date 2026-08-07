@@ -144,7 +144,7 @@ vehicleSelectedGearRatio = vehicleForwardRatios[1]
 vehicleOutputTorque = 0.0
 vehicleDrivenWheelSpeedDifferenceRpm = 0.0
 vehicleForwardGearCount = #vehicleForwardRatios
-vehicleMessage = "Step 29P.1 default Player World and alignment seed are ready"
+vehicleMessage = "Step 29Q terrain contact diagnostics are ready"
 vehicleWheelTelemetry = {}
 vehicleWheelTireProfileNames = {}
 for index, wheel in ipairs(definition.wheels) do

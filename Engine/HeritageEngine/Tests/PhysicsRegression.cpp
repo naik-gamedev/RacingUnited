@@ -31,6 +31,7 @@ using heritage::vehicles::VehicleDefinitionV2Source;
 using heritage::vehicles::VehicleHandle;
 using heritage::vehicles::VehicleRestState;
 using heritage::vehicles::VehicleSystem;
+using heritage::vehicles::WheelContactStatus;
 using heritage::vehicles::WheelDescription;
 using heritage::vehicles::WheelState;
 
@@ -688,6 +689,233 @@ bool turnThenBrakeRemainsStableAtLowSpeed()
         && lowSpeedRollReversals <= 1;
 }
 
+bool terrainContactDiagnosticsClassifyFailureModes()
+{
+    CollisionSystem queryCollisions;
+    RigidBodySystem queryBodies;
+    StaticSceneTriangle first;
+    first.a = { -2.0f, 0.0f, -2.0f };
+    first.b = { -2.0f, 0.0f, 2.0f };
+    first.c = { 2.0f, 0.0f, 2.0f };
+    first.normal = { 0.0f, 1.0f, 0.0f };
+    first.surfaceMaterial = heritage::physics::SurfaceMaterial::Asphalt;
+    StaticSceneTriangle reversed;
+    reversed.a = { -2.0f, 0.0f, -2.0f };
+    reversed.b = { 2.0f, 0.0f, 2.0f };
+    reversed.c = { 2.0f, 0.0f, -2.0f };
+    reversed.normal = { 0.0f, -1.0f, 0.0f };
+    reversed.surfaceMaterial = heritage::physics::SurfaceMaterial::Asphalt;
+    queryCollisions.setStaticSceneTriangles({ first, reversed });
+
+    heritage::physics::CollisionQueryFilter queryFilter;
+    heritage::physics::RaycastHit seamHit;
+    const bool seamWorked = queryCollisions.raycast(
+        { 0.0f, 2.0f, 0.0f },
+        { 0.0f, -1.0f, 0.0f },
+        4.0f,
+        queryFilter,
+        queryBodies,
+        seamHit);
+    const auto seamDiagnostics = queryCollisions.lastRaycastDiagnostics();
+    heritage::physics::RaycastHit reversedHit;
+    const bool reversedWindingWorked = queryCollisions.raycast(
+        { 1.0f, 2.0f, -1.0f },
+        { 0.0f, -1.0f, 0.0f },
+        4.0f,
+        queryFilter,
+        queryBodies,
+        reversedHit)
+        && reversedHit.normal.y > 0.99f;
+
+    StaticSceneTriangle steep;
+    steep.a = { -2.0f, -2.0f, -2.0f };
+    steep.b = { -2.0f, -2.0f, 2.0f };
+    steep.c = { 2.0f, 2.0f, 2.0f };
+    steep.normal = { -0.70710678f, 0.70710678f, 0.0f };
+    queryCollisions.setStaticSceneTriangles({ steep });
+    heritage::physics::RaycastHit steepHit;
+    const bool steepSlopeWorked = queryCollisions.raycast(
+        { 1.0f, 3.0f, 1.5f },
+        { 0.0f, -1.0f, 0.0f },
+        4.0f,
+        queryFilter,
+        queryBodies,
+        steepHit)
+        && std::abs(steepHit.point.y - 1.0f) < 0.0001f
+        && steepHit.normal.y > 0.70f;
+
+    StaticSceneTriangle leftA;
+    leftA.a = { -2.0f, 0.0f, -2.0f };
+    leftA.b = { -2.0f, 0.0f, 2.0f };
+    leftA.c = { -0.01f, 0.0f, 2.0f };
+    leftA.normal = { 0.0f, 1.0f, 0.0f };
+    StaticSceneTriangle leftB;
+    leftB.a = { -2.0f, 0.0f, -2.0f };
+    leftB.b = { -0.01f, 0.0f, 2.0f };
+    leftB.c = { -0.01f, 0.0f, -2.0f };
+    leftB.normal = { 0.0f, 1.0f, 0.0f };
+    StaticSceneTriangle rightA;
+    rightA.a = { 0.01f, 0.0f, -2.0f };
+    rightA.b = { 0.01f, 0.0f, 2.0f };
+    rightA.c = { 2.0f, 0.0f, 2.0f };
+    rightA.normal = { 0.0f, 1.0f, 0.0f };
+    StaticSceneTriangle rightB;
+    rightB.a = { 0.01f, 0.0f, -2.0f };
+    rightB.b = { 2.0f, 0.0f, 2.0f };
+    rightB.c = { 2.0f, 0.0f, -2.0f };
+    rightB.normal = { 0.0f, 1.0f, 0.0f };
+    queryCollisions.setStaticSceneTriangles({
+        leftA, leftB, rightA, rightB });
+    heritage::physics::RaycastHit gapHit;
+    const bool gapMissed = !queryCollisions.raycast(
+        { 0.0f, 2.0f, 0.0f },
+        { 0.0f, -1.0f, 0.0f },
+        4.0f,
+        queryFilter,
+        queryBodies,
+        gapHit);
+    const auto gapDiagnostics = queryCollisions.lastRaycastDiagnostics();
+    const bool realGapIdentified = gapMissed
+        && gapDiagnostics.staticSceneLoaded
+        && gapDiagnostics.originInsideStaticSceneHorizontalBounds
+        && gapDiagnostics.rayBoundsOverlapStaticScene
+        && gapDiagnostics.staticTriangleCandidateCount == 0;
+
+    auto settleOnStaticScene = [](PrototypeWorld& world) {
+        if (!createPrototypeWorld(world, 1000.0f)
+            || !replaceFloorWithSlope(world, 0.0f))
+        {
+            return false;
+        }
+        for (int index = 0; index < 240; ++index)
+            stepWorld(world);
+        WheelState state;
+        return world.vehicles.wheelState(world.vehicle, 0, state)
+            && state.grounded
+            && (state.contactStatus == WheelContactStatus::Supported
+                || state.contactStatus
+                    == WheelContactStatus::SuspensionBottomed);
+    };
+    auto moveChassis = [](PrototypeWorld& world, const Vec3& position) {
+        RigidBodyPose pose;
+        if (!world.bodies.pose(world.chassis, pose))
+            return false;
+        pose.position = position;
+        return world.bodies.setPose(world.chassis, pose)
+            && world.bodies.setLinearVelocity(world.chassis, {})
+            && world.bodies.setAngularVelocityDegrees(world.chassis, {});
+    };
+    auto queryVehicleOnce = [](PrototypeWorld& world, WheelState& state) {
+        world.vehicles.resetClock();
+        world.vehicles.simulate(
+            world.bodies,
+            world.collisions,
+            0.001f,
+            kGravity);
+        return world.vehicles.wheelState(world.vehicle, 0, state);
+    };
+
+    PrototypeWorld bottomedWorld;
+    WheelState bottomedState;
+    const bool bottomedWorked = settleOnStaticScene(bottomedWorld)
+        && moveChassis(bottomedWorld, { 0.0f, -0.55f, 0.0f })
+        && queryVehicleOnce(bottomedWorld, bottomedState)
+        && bottomedState.suspensionBottomed
+        && bottomedState.bottomOutPenetration > 0.0f
+        && bottomedState.contactStatus
+            == WheelContactStatus::SuspensionBottomed;
+
+    PrototypeWorld descentWorld;
+    WheelState supportedState;
+    WheelState descentState;
+    bool descentWorked = settleOnStaticScene(descentWorld)
+        && descentWorld.vehicles.wheelState(
+            descentWorld.vehicle, 0, supportedState)
+        && moveChassis(descentWorld, { 0.0f, -1.0f, 0.0f });
+    if (descentWorked)
+    {
+        descentWorld.bodies.setLinearVelocity(
+            descentWorld.chassis, { 0.0f, -120.0f, 0.0f });
+        descentWorked = queryVehicleOnce(descentWorld, descentState)
+            && !descentState.grounded
+            && descentState.contactStatus
+                == WheelContactStatus::SurfaceBehindRayOrigin
+            && descentState.contactLossTransitionCount
+                == supportedState.contactLossTransitionCount + 1;
+    }
+
+    PrototypeWorld boundaryWorld;
+    WheelState boundaryState;
+    const bool boundaryWorked = settleOnStaticScene(boundaryWorld)
+        && moveChassis(boundaryWorld, { 75.0f, 0.05f, 0.0f })
+        && queryVehicleOnce(boundaryWorld, boundaryState)
+        && !boundaryState.grounded
+        && boundaryState.contactStatus
+            == WheelContactStatus::OutsideStaticSceneBounds;
+
+    PrototypeWorld reachWorld;
+    WheelState reachState;
+    const bool reachWorked = settleOnStaticScene(reachWorld)
+        && moveChassis(reachWorld, { 0.0f, 0.50f, 0.0f })
+        && queryVehicleOnce(reachWorld, reachState)
+        && !reachState.grounded
+        && reachState.contactStatus
+            == WheelContactStatus::BeyondSuspensionReach
+        && reachState.rawSupportDistance > 0.70f;
+
+    PrototypeWorld landingWorld;
+    bool landingWorked = createPrototypeWorld(landingWorld, 1000.0f)
+        && replaceFloorWithSlope(landingWorld, 0.0f)
+        && moveChassis(landingWorld, { 0.0f, 2.0f, 0.0f });
+    WheelState landingState;
+    if (landingWorked)
+    {
+        for (int index = 0; index < 360; ++index)
+            stepWorld(landingWorld);
+        landingWorked = landingWorld.vehicles.wheelState(
+                landingWorld.vehicle, 0, landingState)
+            && landingState.grounded
+            && landingState.selectedHitWasStaticTriangle;
+    }
+
+    std::cout
+        << "terrain_contact seam=" << (seamWorked ? "hit" : "miss")
+        << " seam_static_candidates="
+        << seamDiagnostics.staticTriangleCandidateCount
+        << " reversed_winding="
+        << (reversedWindingWorked ? "hit" : "miss")
+        << " steep_slope=" << (steepSlopeWorked ? "hit" : "miss")
+        << " real_gap=" << (realGapIdentified ? "identified" : "wrong")
+        << " bottomed_status="
+        << heritage::vehicles::wheelContactStatusName(
+            bottomedState.contactStatus)
+        << " descent_status="
+        << heritage::vehicles::wheelContactStatusName(
+            descentState.contactStatus)
+        << " boundary_status="
+        << heritage::vehicles::wheelContactStatusName(
+            boundaryState.contactStatus)
+        << " reach_status="
+        << heritage::vehicles::wheelContactStatusName(
+            reachState.contactStatus)
+        << " landing_status="
+        << heritage::vehicles::wheelContactStatusName(
+            landingState.contactStatus)
+        << '\n';
+
+    return seamWorked
+        && seamDiagnostics.selectedHitWasStaticTriangle
+        && seamDiagnostics.staticTriangleCandidateCount >= 1
+        && reversedWindingWorked
+        && steepSlopeWorked
+        && realGapIdentified
+        && bottomedWorked
+        && descentWorked
+        && boundaryWorked
+        && reachWorked
+        && landingWorked;
+}
+
 bool dynamicsLabCapturesHighRateTelemetry()
 {
     PrototypeWorld world;
@@ -1287,6 +1515,12 @@ int main()
     std::cout << (turnBrakePassed ? "PASS" : "FAIL")
         << " turn-then-brake low-speed stability\n";
     failed += turnBrakePassed ? 0 : 1;
+
+    const bool terrainDiagnosticsPassed =
+        terrainContactDiagnosticsClassifyFailureModes();
+    std::cout << (terrainDiagnosticsPassed ? "PASS" : "FAIL")
+        << " terrain contact diagnostics and boundaries\n";
+    failed += terrainDiagnosticsPassed ? 0 : 1;
 
     const bool dynamicsLabPassed = dynamicsLabCapturesHighRateTelemetry();
     std::cout << (dynamicsLabPassed ? "PASS" : "FAIL")

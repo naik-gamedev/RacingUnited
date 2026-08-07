@@ -84,6 +84,11 @@
     "returns": "51 values; inspect Vehicles/Telemetry.lua for the canonical unpack order",
     "description": "Returns wheel suspension force components, damper dissipation, unsprung velocity, radial tire deflection/power, advanced tire force telemetry, brake/driver-aid state, contact collider, and detected surface data."
   },
+  "Vehicle.GetWheelContactDiagnostic": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "statusName, statusId, lossTransitionCount, rayCandidateCount, exactTestCount, staticTriangleCandidateCount, staticSceneLoaded, originInsideStaticSceneBounds, rayBoundsOverlapStaticScene, selectedHitWasStaticTriangle, rawSupportDistanceM, suspensionBottomed, bottomOutPenetrationM",
+    "description": "Returns the native reason and query evidence for the wheel's latest support result. Diagnostics distinguish valid support, bottom-out, detected road with zero load, a surface behind the ray origin, scene-boundary exits, missing geometry, broadphase misses, narrowphase misses and support beyond suspension travel."
+  },
   "Vehicle.GetWheelUprightPose": {
     "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
     "returns": "camberDegrees, toeDegrees, localRotationXDegrees, localRotationYDegrees, localRotationZDegrees, worldSteeringAxisX, worldSteeringAxisY, worldSteeringAxisZ, worldForwardX, worldForwardY, worldForwardZ, worldRightX, worldRightY, worldRightZ, worldUpX, worldUpY, worldUpZ",

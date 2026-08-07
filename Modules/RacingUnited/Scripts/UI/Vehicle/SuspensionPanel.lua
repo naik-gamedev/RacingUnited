@@ -1,4 +1,4 @@
--- Step 29P: live force, unsprung-mass and upright-geometry tuning.
+-- Step 29Q: live suspension, upright and terrain-contact diagnostics.
 local function DrawSuspensionWheelSelector()
     local changed = false
     local requested = vehicleSuspension.selectedWheel
@@ -194,6 +194,21 @@ local function DrawSuspensionLiveTelemetry()
         wheel.suspensionBumpStopForce, wheel.suspensionDroopStopForce))
     UI.Text(string.format("Unclamped / contact load: %.0f N / %.0f N",
         wheel.suspensionUnclampedForce, wheel.normalForce))
+    UI.Text(string.format("Contact: %s | losses: %d",
+        wheel.contactStatus, wheel.contactLossTransitions))
+    UI.Text(string.format("Ray candidates / exact / triangles: %d / %d / %d",
+        wheel.rayCandidates, wheel.rayExactTests,
+        wheel.staticTriangleCandidates))
+    if wheel.suspensionBottomed then
+        UI.Text(string.format("Bottom-out penetration: %.4f m",
+            wheel.bottomOutPenetration))
+    end
+    UI.TextDisabled(string.format(
+        "Static scene: %s | inside XZ: %s | ray overlaps: %s | static hit: %s",
+        tostring(wheel.staticSceneLoaded),
+        tostring(wheel.originInsideStaticSceneBounds),
+        tostring(wheel.rayBoundsOverlapStaticScene),
+        tostring(wheel.selectedHitWasStaticTriangle)))
     UI.Text(string.format("Damper heat generation: %.1f W",
         wheel.damperDissipationWatts))
     UI.Text(string.format("Unsprung velocity: %.4f m/s",
