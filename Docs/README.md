@@ -15,4 +15,7 @@ Read these documents before changing an interconnected system:
 9. `VEHICLE_WORKSHOP.md` — versioned topology authoring, validation, live preview and module-owned exports.
 10. `Decisions/` — architecture decision records that must not be silently reversed.
 
+Step 29K contributors must also read `VEHICLE_DEFINITION_RUNTIME.md` for the
+native compiler, provider-selection and runtime-loader contract.
+
 Generated reports are written to `Build/Reports/`. Runtime diagnostics are written to `UserData/Diagnostics/`.

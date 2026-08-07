@@ -73,3 +73,11 @@ Racing United creator content is authored as X left/right, Y forward/backward, Z
 at 1 Blender unit = 1 metre. APIs/importers that opt into Blender-coordinate mode convert
 that content at the engine boundary; scripts must not manually rotate or rescale creator
 assets to compensate for native engine axes.
+
+## Versioned definition tables
+
+Step 29K permits bounded structured tables at the vehicle-definition boundary.
+The bridge copies values during `Vehicle.CompileDefinitionV2` or
+`Vehicle.CreateFromDefinitionV2`; native systems must not retain Lua table
+indices or pointers. Component IDs are resolved and validated by the native
+compiler before a runtime provider can create anything.

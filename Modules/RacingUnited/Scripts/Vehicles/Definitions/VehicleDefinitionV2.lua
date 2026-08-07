@@ -155,6 +155,10 @@ local function WorkshopContactDriven(layout, axle)
 end
 
 function BuildVehicleDefinitionV2(draft)
+    local prototypePowertrain = PrototypeCarDefinition
+        and PrototypeCarDefinition.powertrain or {}
+    local prototypeWheelPhysics = PrototypeCarDefinition
+        and PrototypeCarDefinition.wheelPhysics or {}
     local definition = {
         schemaVersion = VehicleDefinitionV2.schemaVersion,
         id = draft.id,
@@ -203,7 +207,9 @@ function BuildVehicleDefinitionV2(draft)
             location = location,
             maximumTorqueNm = draft.maximumTorqueNm,
             idleRpm = 900.0,
-            redlineRpm = 7000.0
+            redlineRpm = 7000.0,
+            engineBrakingTorqueNm =
+                prototypePowertrain.engineBrakingTorque or 70.0
         }
     end
 
@@ -215,15 +221,26 @@ function BuildVehicleDefinitionV2(draft)
             kind = (draft.forwardGearCount or 0) <= 1 and "direct" or "manual",
             powerUnit = powerCount > 0
                 and ("power_unit_" .. tostring(math.min(index, powerCount))) or "",
-            reverseRatio = -3.20,
+            reverseRatio = prototypePowertrain.reverseRatio or -3.20,
             forwardRatios = WorkshopGearRatios(
-                math.max(0, math.floor(draft.forwardGearCount or 0)))
+                math.max(0, math.floor(draft.forwardGearCount or 0))),
+            finalDriveRatio = prototypePowertrain.finalDriveRatio or 3.90,
+            efficiency = prototypePowertrain.efficiency or 0.88,
+            shiftDurationSeconds = prototypePowertrain.shiftDuration or 0.22,
+            clutchEngagementRate =
+                prototypePowertrain.clutchEngagementRate or 5.0
         }
     end
 
     local contactCount = math.max(0, math.floor(draft.contactUnitCount or 0))
     for index = 1, contactCount do
         local axle = WorkshopContactAxle(index, contactCount)
+        local source = PrototypeCarDefinition
+            and PrototypeCarDefinition.wheels[index] or nil
+        local serviceBrakeFactor = contactCount > 0 and 1.0 / contactCount or 0.0
+        if contactCount == 4 then
+            serviceBrakeFactor = axle == "front" and 0.31 or 0.19
+        end
         definition.contactUnits[index] = {
             id = "contact_" .. tostring(index),
             kind = draft.requiresTrackContacts and "track_patch" or "wheel",
@@ -236,7 +253,25 @@ function BuildVehicleDefinitionV2(draft)
             parkingBrake = axle == "rear",
             suspensionProvider = "raycast_linear",
             tireProvider = draft.requiresLeanDynamics
-                and "motorcycle_profile" or "advanced_road"
+                and "motorcycle_profile" or "advanced_road",
+            suspensionDirection = { 0.0, -1.0, 0.0 },
+            radiusM = source and source.radiusM
+                or prototypeWheelPhysics.radiusM or 0.35,
+            restLengthM = source and source.restLengthM
+                or prototypeWheelPhysics.restLengthM or 0.50,
+            maximumCompressionM = source and source.maximumCompressionM
+                or prototypeWheelPhysics.maximumCompressionM or 0.18,
+            maximumDroopM = source and source.maximumDroopM
+                or prototypeWheelPhysics.maximumDroopM or 0.15,
+            springRateNPerM = source and source.springRateNPerM
+                or prototypeWheelPhysics.springRateNPerM or 35000.0,
+            bumpDampingNsPerM = source and source.bumpDampingNsPerM
+                or prototypeWheelPhysics.bumpDampingNsPerM or 3200.0,
+            reboundDampingNsPerM = source and source.reboundDampingNsPerM
+                or prototypeWheelPhysics.reboundDampingNsPerM or 4200.0,
+            serviceBrakeFactor = serviceBrakeFactor,
+            parkingBrakeFactor = axle == "rear"
+                and (contactCount == 2 and 1.0 or 0.5) or 0.0
         }
     end
 

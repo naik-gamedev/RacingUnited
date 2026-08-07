@@ -1,5 +1,7 @@
 #include "../Physics/CollisionSystem.hpp"
 #include "../Physics/RigidBodySystem.hpp"
+#include "../Vehicles/VehicleDefinitionCompiler.hpp"
+#include "../Vehicles/VehicleDefinitionLoader.hpp"
 #include "../Vehicles/VehicleSystem.hpp"
 
 #include <algorithm>
@@ -20,6 +22,10 @@ using heritage::physics::RigidBodyPose;
 using heritage::physics::RigidBodySystem;
 using heritage::physics::StaticSceneTriangle;
 using heritage::vehicles::VehicleDescription;
+using heritage::vehicles::VehicleDefinitionCompiler;
+using heritage::vehicles::VehicleDefinitionLoadSettings;
+using heritage::vehicles::VehicleDefinitionLoader;
+using heritage::vehicles::VehicleDefinitionV2Source;
 using heritage::vehicles::VehicleHandle;
 using heritage::vehicles::VehicleRestState;
 using heritage::vehicles::VehicleSystem;
@@ -727,6 +733,135 @@ bool dynamicsLabCapturesHighRateTelemetry()
         && wheelLoadSeries.size() == speedSeries.size();
 }
 
+VehicleDefinitionV2Source makeCompiledRoadCarDefinition()
+{
+    VehicleDefinitionV2Source source;
+    source.id = "native_compiler_test";
+    source.displayName = "Native Compiler Test";
+    source.classification = "car";
+    source.bodyAsset = "Vehicles/Player/PlayerCar.obj";
+    source.bodies.push_back({ "chassis", "primary", 1100.0f });
+
+    heritage::vehicles::VehiclePowerUnitDefinition power;
+    power.id = "engine";
+    power.kind = "combustion";
+    power.mountBody = "chassis";
+    power.location = "front";
+    power.maximumTorqueNm = 250.0f;
+    source.powerUnits.push_back(power);
+
+    heritage::vehicles::VehicleTransmissionDefinition transmission;
+    transmission.id = "gearbox";
+    transmission.kind = "manual";
+    transmission.powerUnit = "engine";
+    transmission.forwardRatios = { 3.40f, 2.10f, 1.45f, 1.12f, 0.89f, 0.74f };
+    source.transmissions.push_back(transmission);
+
+    const Vec3 mounts[] = {
+        { -0.7185f, 0.85f, 1.221f },
+        { 0.7185f, 0.85f, 1.221f },
+        { -0.7140f, 0.85f, -1.221f },
+        { 0.7140f, 0.85f, -1.221f }
+    };
+    for (std::size_t index = 0; index < 4; ++index)
+    {
+        heritage::vehicles::VehicleContactUnitDefinition contact;
+        contact.id = "wheel_" + std::to_string(index + 1);
+        contact.kind = "wheel";
+        contact.mountBody = "chassis";
+        contact.axle = index < 2 ? "front" : "rear";
+        contact.localMount = mounts[index];
+        contact.steering = index < 2;
+        contact.parkingBrake = index >= 2;
+        contact.suspensionProvider = "raycast_linear";
+        contact.tireProvider = "advanced_road";
+        contact.radiusM = 0.2979f;
+        contact.serviceBrakeFactor = index < 2 ? 0.31f : 0.19f;
+        contact.parkingBrakeFactor = index >= 2 ? 0.50f : 0.0f;
+        source.contactUnits.push_back(contact);
+    }
+
+    heritage::vehicles::VehicleDriveConnectionDefinition drive;
+    drive.id = "front_drive";
+    drive.transmission = "gearbox";
+    drive.contactUnits = { "wheel_1", "wheel_2" };
+    source.driveConnections.push_back(std::move(drive));
+    return source;
+}
+
+bool vehicleDefinitionCompilerAndLoaderWork()
+{
+    const VehicleDefinitionV2Source source = makeCompiledRoadCarDefinition();
+    const auto compiled = VehicleDefinitionCompiler::compile(source);
+    const bool referencesResolved = compiled.definition.powerUnits.size() == 1
+        && compiled.definition.powerUnits[0].mountBodyIndex == 0
+        && compiled.definition.transmissions.size() == 1
+        && compiled.definition.transmissions[0].powerUnitIndex == 0
+        && compiled.definition.driveConnections.size() == 1
+        && compiled.definition.driveConnections[0].contactUnitIndices.size() == 2
+        && compiled.definition.contactUnits.size() == 4
+        && std::abs(compiled.definition.contactUnits[0].driveFactor - 0.5f)
+            <= 0.000001f
+        && std::abs(compiled.definition.contactUnits[2].driveFactor)
+            <= 0.000001f;
+
+    RigidBodySystem bodies;
+    RigidBodyDescription bodyDescription;
+    bodyDescription.motionType = BodyMotionType::Dynamic;
+    bodyDescription.mass = 1100.0f;
+    const BodyHandle chassis = bodies.create(bodyDescription);
+    VehicleSystem vehicles;
+    VehicleDefinitionLoadSettings loadSettings;
+    loadSettings.vehicle.chassisBody = chassis;
+    loadSettings.vehicle.highRateHertz = 1000.0f;
+    std::string loadMessage;
+    const VehicleHandle loaded = VehicleDefinitionLoader::create(
+        compiled.definition,
+        loadSettings,
+        bodies,
+        vehicles,
+        loadMessage);
+    const bool runtimeLoaded = loaded != heritage::vehicles::InvalidVehicle
+        && vehicles.wheelCount(loaded) == 4
+        && vehicles.forwardGearCount(loaded) == 6;
+
+    VehicleDefinitionV2Source broken = source;
+    broken.transmissions[0].powerUnit = "missing_engine";
+    const auto brokenResult = VehicleDefinitionCompiler::compile(broken);
+
+    VehicleDefinitionV2Source future = source;
+    future.classification = "motorcycle";
+    future.requirements.leanDynamics = true;
+    future.contactUnits.resize(2);
+    const auto futureResult = VehicleDefinitionCompiler::compile(future);
+
+    VehicleDefinitionV2Source categoryOnly = source;
+    categoryOnly.classification = "fictional_hovering_potato";
+    const auto categoryOnlyResult = VehicleDefinitionCompiler::compile(categoryOnly);
+
+    std::cout
+        << "definition_compiler provider="
+        << compiled.definition.runtimeProvider
+        << " wheels=" << vehicles.wheelCount(loaded)
+        << " gears=" << vehicles.forwardGearCount(loaded)
+        << " invalid_reference_rejected=" << (!brokenResult.valid)
+        << " future_topology_valid=" << futureResult.valid
+        << " future_topology_ready=" << futureResult.currentSolverReady
+        << " category_ignored=" << categoryOnlyResult.currentSolverReady
+        << '\n';
+
+    return compiled.valid
+        && compiled.currentSolverReady
+        && compiled.definition.runtimeProvider == "raycast_wheel_v1"
+        && referencesResolved
+        && runtimeLoaded
+        && !brokenResult.valid
+        && futureResult.valid
+        && !futureResult.currentSolverReady
+        && futureResult.issueSummary().find("lean_dynamics") != std::string::npos
+        && categoryOnlyResult.currentSolverReady;
+}
+
 } // namespace
 
 int main()
@@ -768,6 +903,12 @@ int main()
     std::cout << (dynamicsLabPassed ? "PASS" : "FAIL")
         << " high-rate vehicle dynamics laboratory\n";
     failed += dynamicsLabPassed ? 0 : 1;
+
+    const bool definitionCompilerPassed =
+        vehicleDefinitionCompilerAndLoaderWork();
+    std::cout << (definitionCompilerPassed ? "PASS" : "FAIL")
+        << " native vehicle-definition compiler and loader\n";
+    failed += definitionCompilerPassed ? 0 : 1;
 
     std::cout << (failed == 0 ? "ALL TESTS PASSED" : "TESTS FAILED")
         << " count=" << failed << '\n';

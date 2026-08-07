@@ -2,6 +2,8 @@
 #include "../Diagnostics/BuildIdentity.hpp"
 #include "../../Physics/StaticBoxSceneImporter.hpp"
 #include "../../Physics/StaticTriangleSceneImporter.hpp"
+#include "../../Vehicles/VehicleDefinitionCompiler.hpp"
+#include "../../Vehicles/VehicleDefinitionLoader.hpp"
 
 #include <algorithm>
 #include <cfloat>
@@ -43,6 +45,7 @@ constexpr int kLuaTypeNil = 0;
 constexpr int kLuaTypeBoolean = 1;
 constexpr int kLuaTypeNumber = 3;
 constexpr int kLuaTypeString = 4;
+constexpr int kLuaTypeTable = 5;
 constexpr int kLuaTypeFunction = 6;
 
 std::unordered_map<lua_State*, LuaModuleRuntime*> g_runtimeByState;
@@ -162,6 +165,459 @@ std::string jsonEscape(const std::string& value)
         }
     }
     return output.str();
+}
+
+int absoluteLuaIndex(const LuaApi& api, lua_State* state, int index)
+{
+    return index > 0 ? index : api.lua_gettop(state) + index + 1;
+}
+
+void popLuaValues(const LuaApi& api, lua_State* state, int count = 1)
+{
+    if (count > 0)
+        api.lua_settop(state, -count - 1);
+}
+
+std::string luaFieldString(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    const char* field,
+    const std::string& fallback = {})
+{
+    const int absoluteTable = absoluteLuaIndex(api, state, tableIndex);
+    api.lua_getfield(state, absoluteTable, field);
+    std::string value = fallback;
+    if (api.lua_type(state, -1) == kLuaTypeString)
+    {
+        std::size_t length = 0;
+        const char* text = api.lua_tolstring(state, -1, &length);
+        if (text)
+            value.assign(text, length);
+    }
+    popLuaValues(api, state);
+    return value;
+}
+
+double luaFieldNumber(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    const char* field,
+    double fallback)
+{
+    const int absoluteTable = absoluteLuaIndex(api, state, tableIndex);
+    api.lua_getfield(state, absoluteTable, field);
+    int converted = 0;
+    const LuaNumber candidate = api.lua_tonumberx(state, -1, &converted);
+    popLuaValues(api, state);
+    return converted ? static_cast<double>(candidate) : fallback;
+}
+
+bool luaFieldBoolean(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    const char* field,
+    bool fallback)
+{
+    const int absoluteTable = absoluteLuaIndex(api, state, tableIndex);
+    api.lua_getfield(state, absoluteTable, field);
+    const bool value = api.lua_type(state, -1) == kLuaTypeBoolean
+        ? api.lua_toboolean(state, -1) != 0
+        : fallback;
+    popLuaValues(api, state);
+    return value;
+}
+
+bool pushLuaTableField(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    const char* field)
+{
+    const int absoluteTable = absoluteLuaIndex(api, state, tableIndex);
+    api.lua_getfield(state, absoluteTable, field);
+    if (api.lua_type(state, -1) == kLuaTypeTable)
+        return true;
+    popLuaValues(api, state);
+    return false;
+}
+
+heritage::math::Vec3 luaFieldVector3(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    const char* field,
+    const heritage::math::Vec3& fallback)
+{
+    if (!pushLuaTableField(api, state, tableIndex, field))
+        return fallback;
+
+    const int vectorIndex = api.lua_gettop(state);
+    heritage::math::Vec3 value = fallback;
+    float* components[] = { &value.x, &value.y, &value.z };
+    for (LuaInteger component = 1; component <= 3; ++component)
+    {
+        api.lua_rawgeti(state, vectorIndex, component);
+        int converted = 0;
+        const LuaNumber candidate = api.lua_tonumberx(state, -1, &converted);
+        if (converted)
+            *components[static_cast<std::size_t>(component - 1)] =
+                static_cast<float>(candidate);
+        popLuaValues(api, state);
+    }
+    popLuaValues(api, state);
+    return value;
+}
+
+bool luaArrayLength(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    std::size_t maximum,
+    const char* label,
+    std::size_t& length,
+    std::string& errorMessage)
+{
+    length = api.lua_rawlen(state, tableIndex);
+    if (length <= maximum)
+        return true;
+
+    errorMessage = std::string(label) + " exceeds the native bridge limit of "
+        + std::to_string(maximum) + ".";
+    return false;
+}
+
+std::vector<float> luaNumberArrayField(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    const char* field,
+    std::size_t maximum)
+{
+    std::vector<float> values;
+    if (!pushLuaTableField(api, state, tableIndex, field))
+        return values;
+
+    const int arrayIndex = api.lua_gettop(state);
+    const std::size_t count = (std::min)(api.lua_rawlen(state, arrayIndex), maximum);
+    values.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        api.lua_rawgeti(
+            state,
+            arrayIndex,
+            static_cast<LuaInteger>(index + 1));
+        int converted = 0;
+        const LuaNumber value = api.lua_tonumberx(state, -1, &converted);
+        values.push_back(converted ? static_cast<float>(value) : 0.0f);
+        popLuaValues(api, state);
+    }
+    popLuaValues(api, state);
+    return values;
+}
+
+std::vector<std::string> luaStringArrayField(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    const char* field,
+    std::size_t maximum)
+{
+    std::vector<std::string> values;
+    if (!pushLuaTableField(api, state, tableIndex, field))
+        return values;
+
+    const int arrayIndex = api.lua_gettop(state);
+    const std::size_t count = (std::min)(api.lua_rawlen(state, arrayIndex), maximum);
+    values.reserve(count);
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        api.lua_rawgeti(
+            state,
+            arrayIndex,
+            static_cast<LuaInteger>(index + 1));
+        std::string value;
+        if (api.lua_type(state, -1) == kLuaTypeString)
+        {
+            std::size_t length = 0;
+            const char* text = api.lua_tolstring(state, -1, &length);
+            if (text)
+                value.assign(text, length);
+        }
+        values.push_back(std::move(value));
+        popLuaValues(api, state);
+    }
+    popLuaValues(api, state);
+    return values;
+}
+
+bool parseLuaVehicleDefinitionV2(
+    const LuaApi& api,
+    lua_State* state,
+    int definitionIndex,
+    heritage::vehicles::VehicleDefinitionV2Source& source,
+    std::string& errorMessage)
+{
+    errorMessage.clear();
+    const int rootIndex = absoluteLuaIndex(api, state, definitionIndex);
+    if (api.lua_type(state, rootIndex) != kLuaTypeTable)
+    {
+        errorMessage = "VehicleDefinitionV2 must be passed as a Lua table.";
+        return false;
+    }
+
+    source.schemaVersion = static_cast<int>(luaFieldNumber(
+        api, state, rootIndex, "schemaVersion", 0.0));
+    source.id = luaFieldString(api, state, rootIndex, "id");
+    source.displayName = luaFieldString(api, state, rootIndex, "displayName");
+    source.classification = luaFieldString(
+        api, state, rootIndex, "classification");
+
+    if (pushLuaTableField(api, state, rootIndex, "presentation"))
+    {
+        source.bodyAsset = luaFieldString(api, state, -1, "bodyAsset");
+        popLuaValues(api, state);
+    }
+    if (pushLuaTableField(api, state, rootIndex, "requirements"))
+    {
+        source.requirements.leanDynamics = luaFieldBoolean(
+            api, state, -1, "leanDynamics", false);
+        source.requirements.articulation = luaFieldBoolean(
+            api, state, -1, "articulation", false);
+        source.requirements.trackContacts = luaFieldBoolean(
+            api, state, -1, "trackContacts", false);
+        popLuaValues(api, state);
+    }
+    if (pushLuaTableField(api, state, rootIndex, "topologyIntent"))
+    {
+        source.driveLayoutIntent = luaFieldString(
+            api, state, -1, "driveLayout");
+        source.powerUnitPlacementIntent = luaFieldString(
+            api, state, -1, "powerUnitPlacement");
+        popLuaValues(api, state);
+    }
+
+    if (pushLuaTableField(api, state, rootIndex, "bodies"))
+    {
+        const int collectionIndex = api.lua_gettop(state);
+        std::size_t count = 0;
+        if (!luaArrayLength(
+                api, state, collectionIndex, 64, "Body collection",
+                count, errorMessage))
+        {
+            popLuaValues(api, state);
+            return false;
+        }
+        source.bodies.reserve(count);
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            api.lua_rawgeti(
+                state, collectionIndex, static_cast<LuaInteger>(index + 1));
+            if (api.lua_type(state, -1) != kLuaTypeTable)
+            {
+                popLuaValues(api, state, 2);
+                errorMessage = "Every body entry must be a table.";
+                return false;
+            }
+            heritage::vehicles::VehicleBodyDefinition body;
+            body.id = luaFieldString(api, state, -1, "id");
+            body.role = luaFieldString(api, state, -1, "role");
+            body.massKg = static_cast<float>(luaFieldNumber(
+                api, state, -1, "massKg", 0.0));
+            source.bodies.push_back(std::move(body));
+            popLuaValues(api, state);
+        }
+        popLuaValues(api, state);
+    }
+
+    if (pushLuaTableField(api, state, rootIndex, "powerUnits"))
+    {
+        const int collectionIndex = api.lua_gettop(state);
+        std::size_t count = 0;
+        if (!luaArrayLength(
+                api, state, collectionIndex, 32, "Power-unit collection",
+                count, errorMessage))
+        {
+            popLuaValues(api, state);
+            return false;
+        }
+        source.powerUnits.reserve(count);
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            api.lua_rawgeti(
+                state, collectionIndex, static_cast<LuaInteger>(index + 1));
+            if (api.lua_type(state, -1) != kLuaTypeTable)
+            {
+                popLuaValues(api, state, 2);
+                errorMessage = "Every power-unit entry must be a table.";
+                return false;
+            }
+            heritage::vehicles::VehiclePowerUnitDefinition power;
+            power.id = luaFieldString(api, state, -1, "id");
+            power.kind = luaFieldString(api, state, -1, "kind");
+            power.mountBody = luaFieldString(api, state, -1, "mountBody");
+            power.location = luaFieldString(api, state, -1, "location");
+            power.maximumTorqueNm = static_cast<float>(luaFieldNumber(
+                api, state, -1, "maximumTorqueNm", 0.0));
+            power.idleRpm = static_cast<float>(luaFieldNumber(
+                api, state, -1, "idleRpm", 900.0));
+            power.redlineRpm = static_cast<float>(luaFieldNumber(
+                api, state, -1, "redlineRpm", 7000.0));
+            power.engineBrakingTorqueNm = static_cast<float>(luaFieldNumber(
+                api, state, -1, "engineBrakingTorqueNm", 70.0));
+            source.powerUnits.push_back(std::move(power));
+            popLuaValues(api, state);
+        }
+        popLuaValues(api, state);
+    }
+
+    if (pushLuaTableField(api, state, rootIndex, "transmissions"))
+    {
+        const int collectionIndex = api.lua_gettop(state);
+        std::size_t count = 0;
+        if (!luaArrayLength(
+                api, state, collectionIndex, 32, "Transmission collection",
+                count, errorMessage))
+        {
+            popLuaValues(api, state);
+            return false;
+        }
+        source.transmissions.reserve(count);
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            api.lua_rawgeti(
+                state, collectionIndex, static_cast<LuaInteger>(index + 1));
+            if (api.lua_type(state, -1) != kLuaTypeTable)
+            {
+                popLuaValues(api, state, 2);
+                errorMessage = "Every transmission entry must be a table.";
+                return false;
+            }
+            heritage::vehicles::VehicleTransmissionDefinition transmission;
+            transmission.id = luaFieldString(api, state, -1, "id");
+            transmission.kind = luaFieldString(api, state, -1, "kind");
+            transmission.powerUnit = luaFieldString(
+                api, state, -1, "powerUnit");
+            transmission.reverseRatio = static_cast<float>(luaFieldNumber(
+                api, state, -1, "reverseRatio", -3.20));
+            transmission.forwardRatios = luaNumberArrayField(
+                api, state, -1, "forwardRatios", 64);
+            transmission.finalDriveRatio = static_cast<float>(luaFieldNumber(
+                api, state, -1, "finalDriveRatio", 3.90));
+            transmission.efficiency = static_cast<float>(luaFieldNumber(
+                api, state, -1, "efficiency", 0.88));
+            transmission.shiftDurationSeconds = static_cast<float>(luaFieldNumber(
+                api, state, -1, "shiftDurationSeconds", 0.22));
+            transmission.clutchEngagementRate = static_cast<float>(luaFieldNumber(
+                api, state, -1, "clutchEngagementRate", 5.0));
+            source.transmissions.push_back(std::move(transmission));
+            popLuaValues(api, state);
+        }
+        popLuaValues(api, state);
+    }
+
+    if (pushLuaTableField(api, state, rootIndex, "contactUnits"))
+    {
+        const int collectionIndex = api.lua_gettop(state);
+        std::size_t count = 0;
+        if (!luaArrayLength(
+                api, state, collectionIndex, 64, "Contact-unit collection",
+                count, errorMessage))
+        {
+            popLuaValues(api, state);
+            return false;
+        }
+        source.contactUnits.reserve(count);
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            api.lua_rawgeti(
+                state, collectionIndex, static_cast<LuaInteger>(index + 1));
+            if (api.lua_type(state, -1) != kLuaTypeTable)
+            {
+                popLuaValues(api, state, 2);
+                errorMessage = "Every contact-unit entry must be a table.";
+                return false;
+            }
+            heritage::vehicles::VehicleContactUnitDefinition contact;
+            contact.id = luaFieldString(api, state, -1, "id");
+            contact.kind = luaFieldString(api, state, -1, "kind");
+            contact.mountBody = luaFieldString(api, state, -1, "mountBody");
+            contact.axle = luaFieldString(api, state, -1, "axle");
+            contact.localMount = luaFieldVector3(
+                api, state, -1, "position", {});
+            contact.suspensionDirection = luaFieldVector3(
+                api, state, -1, "suspensionDirection", { 0.0f, -1.0f, 0.0f });
+            contact.steering = luaFieldBoolean(
+                api, state, -1, "steering", false);
+            contact.serviceBrake = luaFieldBoolean(
+                api, state, -1, "serviceBrake", true);
+            contact.parkingBrake = luaFieldBoolean(
+                api, state, -1, "parkingBrake", false);
+            contact.suspensionProvider = luaFieldString(
+                api, state, -1, "suspensionProvider");
+            contact.tireProvider = luaFieldString(
+                api, state, -1, "tireProvider");
+            contact.radiusM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "radiusM", 0.35));
+            contact.restLengthM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "restLengthM", 0.50));
+            contact.maximumCompressionM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "maximumCompressionM", 0.18));
+            contact.maximumDroopM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "maximumDroopM", 0.15));
+            contact.springRateNPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "springRateNPerM", 35000.0));
+            contact.bumpDampingNsPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "bumpDampingNsPerM", 3200.0));
+            contact.reboundDampingNsPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "reboundDampingNsPerM", 4200.0));
+            contact.serviceBrakeFactor = static_cast<float>(luaFieldNumber(
+                api, state, -1, "serviceBrakeFactor", 0.25));
+            contact.parkingBrakeFactor = static_cast<float>(luaFieldNumber(
+                api, state, -1, "parkingBrakeFactor", 0.0));
+            source.contactUnits.push_back(std::move(contact));
+            popLuaValues(api, state);
+        }
+        popLuaValues(api, state);
+    }
+
+    if (pushLuaTableField(api, state, rootIndex, "driveConnections"))
+    {
+        const int collectionIndex = api.lua_gettop(state);
+        std::size_t count = 0;
+        if (!luaArrayLength(
+                api, state, collectionIndex, 32, "Drive-connection collection",
+                count, errorMessage))
+        {
+            popLuaValues(api, state);
+            return false;
+        }
+        source.driveConnections.reserve(count);
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            api.lua_rawgeti(
+                state, collectionIndex, static_cast<LuaInteger>(index + 1));
+            if (api.lua_type(state, -1) != kLuaTypeTable)
+            {
+                popLuaValues(api, state, 2);
+                errorMessage = "Every drive-connection entry must be a table.";
+                return false;
+            }
+            heritage::vehicles::VehicleDriveConnectionDefinition connection;
+            connection.id = luaFieldString(api, state, -1, "id");
+            connection.transmission = luaFieldString(
+                api, state, -1, "transmission");
+            connection.contactUnits = luaStringArrayField(
+                api, state, -1, "contactUnits", 64);
+            source.driveConnections.push_back(std::move(connection));
+            popLuaValues(api, state);
+        }
+        popLuaValues(api, state);
+    }
+
+    return true;
 }
 
 } // namespace
@@ -818,6 +1274,8 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("Physics", "GetLastError", &LuaModuleRuntime::luaPhysicsGetLastError);
 
     registerFunction("Vehicle", "IsAvailable", &LuaModuleRuntime::luaVehicleIsAvailable);
+    registerFunction("Vehicle", "CompileDefinitionV2", &LuaModuleRuntime::luaVehicleCompileDefinitionV2);
+    registerFunction("Vehicle", "CreateFromDefinitionV2", &LuaModuleRuntime::luaVehicleCreateFromDefinitionV2);
     registerFunction("Vehicle", "Create", &LuaModuleRuntime::luaVehicleCreate);
     registerFunction("Vehicle", "Destroy", &LuaModuleRuntime::luaVehicleDestroy);
     registerFunction("Vehicle", "Exists", &LuaModuleRuntime::luaVehicleExists);
@@ -5986,6 +6444,119 @@ int LuaModuleRuntime::luaVehicleIsAvailable(lua_State* state)
         return 0;
     runtime->m_api.lua_pushboolean(state, runtime->m_physics ? 1 : 0);
     return 1;
+}
+
+int LuaModuleRuntime::luaVehicleCompileDefinitionV2(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    heritage::vehicles::VehicleDefinitionV2Source source;
+    std::string bridgeError;
+    if (!parseLuaVehicleDefinitionV2(
+            runtime->m_api, state, 1, source, bridgeError))
+    {
+        runtime->m_api.lua_pushboolean(state, 0);
+        runtime->m_api.lua_pushboolean(state, 0);
+        runtime->m_api.lua_pushstring(state, "unresolved");
+        runtime->m_api.lua_pushstring(state, "Native definition bridge rejected the input.");
+        runtime->m_api.lua_pushlstring(
+            state, bridgeError.c_str(), bridgeError.size());
+        return 5;
+    }
+
+    const heritage::vehicles::VehicleDefinitionCompileResult result =
+        heritage::vehicles::VehicleDefinitionCompiler::compile(source);
+    const std::string issues = result.issueSummary();
+    runtime->m_api.lua_pushboolean(state, result.valid ? 1 : 0);
+    runtime->m_api.lua_pushboolean(state, result.currentSolverReady ? 1 : 0);
+    runtime->m_api.lua_pushlstring(
+        state,
+        result.definition.runtimeProvider.c_str(),
+        result.definition.runtimeProvider.size());
+    runtime->m_api.lua_pushlstring(
+        state, result.summary.c_str(), result.summary.size());
+    runtime->m_api.lua_pushlstring(state, issues.c_str(), issues.size());
+    return 5;
+}
+
+int LuaModuleRuntime::luaVehicleCreateFromDefinitionV2(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    if (!runtime->m_physics)
+    {
+        runtime->m_api.lua_pushinteger(state, 0);
+        runtime->m_api.lua_pushstring(state, "unresolved");
+        runtime->m_api.lua_pushstring(state, "Vehicle system is unavailable.");
+        return 3;
+    }
+
+    heritage::vehicles::VehicleDefinitionV2Source source;
+    std::string bridgeError;
+    if (!parseLuaVehicleDefinitionV2(
+            runtime->m_api, state, 1, source, bridgeError))
+    {
+        runtime->m_api.lua_pushinteger(state, 0);
+        runtime->m_api.lua_pushstring(state, "unresolved");
+        runtime->m_api.lua_pushlstring(
+            state, bridgeError.c_str(), bridgeError.size());
+        return 3;
+    }
+
+    const heritage::vehicles::VehicleDefinitionCompileResult compiled =
+        heritage::vehicles::VehicleDefinitionCompiler::compile(source);
+    if (!compiled.valid || !compiled.currentSolverReady)
+    {
+        std::string message = compiled.issueSummary();
+        if (message.empty())
+            message = compiled.summary;
+        runtime->m_api.lua_pushinteger(state, 0);
+        runtime->m_api.lua_pushlstring(
+            state,
+            compiled.definition.runtimeProvider.c_str(),
+            compiled.definition.runtimeProvider.size());
+        runtime->m_api.lua_pushlstring(
+            state, message.c_str(), message.size());
+        return 3;
+    }
+
+    heritage::vehicles::VehicleDefinitionLoadSettings settings;
+    settings.vehicle.chassisBody = bodyHandleArgument(*runtime, state, 2);
+    settings.vehicle.highRateHertz = static_cast<float>(
+        numberArgument(*runtime, state, 3, 1000.0));
+    settings.vehicle.maximumDriveForce = static_cast<float>(
+        numberArgument(*runtime, state, 4, 7000.0));
+    settings.vehicle.maximumBrakeForce = static_cast<float>(
+        numberArgument(*runtime, state, 5, 12000.0));
+    settings.vehicle.maximumSteerAngleDegrees = static_cast<float>(
+        numberArgument(*runtime, state, 6, 38.0));
+    settings.vehicle.tireFriction = static_cast<float>(
+        numberArgument(*runtime, state, 7, 1.15));
+    settings.vehicle.lateralStiffness = static_cast<float>(
+        numberArgument(*runtime, state, 8, 11000.0));
+    settings.vehicle.rollingResistance = static_cast<float>(
+        numberArgument(*runtime, state, 9, 90.0));
+
+    std::string loadMessage;
+    const heritage::vehicles::VehicleHandle handle =
+        heritage::vehicles::VehicleDefinitionLoader::create(
+            compiled.definition,
+            settings,
+            runtime->m_physics->rigidBodies(),
+            runtime->m_physics->vehicles(),
+            loadMessage);
+    runtime->m_api.lua_pushinteger(state, static_cast<LuaInteger>(handle));
+    runtime->m_api.lua_pushlstring(
+        state,
+        compiled.definition.runtimeProvider.c_str(),
+        compiled.definition.runtimeProvider.size());
+    runtime->m_api.lua_pushlstring(
+        state, loadMessage.c_str(), loadMessage.size());
+    return 3;
 }
 
 int LuaModuleRuntime::luaVehicleCreate(lua_State* state)

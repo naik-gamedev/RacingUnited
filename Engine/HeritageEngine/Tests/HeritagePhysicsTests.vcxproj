@@ -68,6 +68,8 @@
     <ClCompile Include="..\Physics\CollisionSystem.cpp" />
     <ClCompile Include="..\Physics\RigidBodySystem.cpp" />
     <ClCompile Include="..\Vehicles\TireModel.cpp" />
+    <ClCompile Include="..\Vehicles\VehicleDefinitionCompiler.cpp" />
+    <ClCompile Include="..\Vehicles\VehicleDefinitionLoader.cpp" />
     <ClCompile Include="..\Vehicles\VehicleDynamicsLab.cpp" />
     <ClCompile Include="..\Vehicles\VehicleSystem.cpp" />
   </ItemGroup>
@@ -77,6 +79,9 @@
     <ClInclude Include="..\Physics\CollisionSystem.hpp" />
     <ClInclude Include="..\Physics\RigidBodySystem.hpp" />
     <ClInclude Include="..\Vehicles\TireModel.hpp" />
+    <ClInclude Include="..\Vehicles\VehicleDefinition.hpp" />
+    <ClInclude Include="..\Vehicles\VehicleDefinitionCompiler.hpp" />
+    <ClInclude Include="..\Vehicles\VehicleDefinitionLoader.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDynamicsLab.hpp" />
     <ClInclude Include="..\Vehicles\VehicleSystem.hpp" />
   </ItemGroup>

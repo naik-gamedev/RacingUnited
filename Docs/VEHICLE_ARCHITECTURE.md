@@ -117,6 +117,14 @@ solver. Definition validation is separate from current-solver readiness so an
 honest twin-engine, articulated, tracked, or leaning definition can be retained
 before its native providers exist. See `VEHICLE_WORKSHOP.md`.
 
+Step 29K makes that envelope native. `VehicleDefinitionCompiler` resolves
+stable authored IDs into component indices and selects providers exclusively
+from topology and requested capabilities. `VehicleDefinitionLoader` consumes
+the compiled graph through `raycast_wheel_v1`; classification never participates
+in provider selection. Workshop preview now uses this path rather than mutating
+drive factors and adding wheels in Lua. See `VEHICLE_DEFINITION_RUNTIME.md` and
+ADR-012.
+
 ## Dynamics instrumentation
 
 Step 29J.5 adds an opt-in `VehicleDynamicsLab` recorder owned by each native

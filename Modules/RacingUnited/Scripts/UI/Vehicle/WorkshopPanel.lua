@@ -181,6 +181,7 @@ function DrawVehicleWorkshopPanel()
     end
     UI.Text(string.format(
         "%d errors | %d warnings", report.errorCount, report.warningCount))
+    UI.TextDisabled("Native provider: " .. report.nativeProvider)
     for _, issue in ipairs(report.issues) do
         if issue.severity == "error" then
             UI.TextColored("ERROR [" .. issue.code .. "] " .. issue.message,

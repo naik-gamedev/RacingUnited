@@ -35,12 +35,14 @@ $required = @(
     "Docs\VEHICLE_ARCHITECTURE.md",
     "Docs\VEHICLE_DYNAMICS_LAB.md",
     "Docs\VEHICLE_WORKSHOP.md",
+    "Docs\VEHICLE_DEFINITION_RUNTIME.md",
     "Docs\Decisions\ADR-005-Advanced-Road-Tire-Provider.md",
     "Docs\Decisions\ADR-006-Per-Wheel-Tire-Profiles.md",
     "Docs\Decisions\ADR-007-Player-Vehicle-Visual-Slot.md",
     "Docs\Decisions\ADR-008-Articulated-Wheel-Presentation.md",
     "Docs\Decisions\ADR-009-Wheel-Coordinate-Contract.md",
     "Docs\Decisions\ADR-010-Blender-Authoring-Player-Scene.md",
+    "Docs\Decisions\ADR-012-Native-Vehicle-Definition-Compiler.md",
     "Docs\LuaApiAnnotations.json",
     "Engine\HeritageEngine\Core\Diagnostics\BuildIdentity.hpp",
     "Engine\HeritageEngine\Core\Diagnostics\GeneratedBuildIdentity.hpp",
@@ -50,6 +52,11 @@ $required = @(
     "Engine\HeritageEngine\Vehicles\TireModel.cpp",
     "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp",
     "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.cpp",
+    "Engine\HeritageEngine\Vehicles\VehicleDefinition.hpp",
+    "Engine\HeritageEngine\Vehicles\VehicleDefinitionCompiler.hpp",
+    "Engine\HeritageEngine\Vehicles\VehicleDefinitionCompiler.cpp",
+    "Engine\HeritageEngine\Vehicles\VehicleDefinitionLoader.hpp",
+    "Engine\HeritageEngine\Vehicles\VehicleDefinitionLoader.cpp",
     "Engine\HeritageEngine\Physics\StaticBoxSceneImporter.hpp",
     "Engine\HeritageEngine\Physics\StaticBoxSceneImporter.cpp",
     "Engine\HeritageEngine\Physics\StaticTriangleSceneImporter.hpp",
@@ -105,6 +112,8 @@ if (Test-Path $manifestPath) {
         "Vehicle.GetDynamicsLabSummary",
         "Vehicle.GetDynamicsLabSeries",
         "Vehicle.ExportDynamicsLabCsv",
+        "Vehicle.CompileDefinitionV2",
+        "Vehicle.CreateFromDefinitionV2",
         "UI.InputText",
         "UI.GetAvailableWidth",
         "UI.PlotLines",
@@ -176,6 +185,7 @@ Check ($physicsRegression.Contains("parkingBrakeHoldsOnSlope")) "headless regres
 Check ($physicsRegression.Contains("unbrakedVehicleRollsOnSlope")) "headless regression preserves unbraked slope roll"
 Check ($physicsRegression.Contains("flatRestSleepsAndThrottleWakes")) "headless regression covers parked sleep and throttle wake"
 Check ($physicsRegression.Contains("dynamicsLabCapturesHighRateTelemetry")) "headless regression verifies exact high-rate dynamics capture"
+Check ($physicsRegression.Contains("vehicleDefinitionCompilerAndLoaderWork")) "headless regression verifies native definition compilation and loading"
 
 $definitionV2Path = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Definitions\VehicleDefinitionV2.lua"
 $definitionV2 = if (Test-Path $definitionV2Path) { [IO.File]::ReadAllText($definitionV2Path) } else { "" }
@@ -192,6 +202,8 @@ $workshop = if (Test-Path $workshopPath) { [IO.File]::ReadAllText($workshopPath)
 Check ($workshop.Contains("Module.SelectAssetFile")) "Workshop uses the module-isolated native asset picker"
 Check ($workshop.Contains("Module.WriteSaveText")) "Workshop exports through the bounded module save API"
 Check ($workshop.Contains("ApplyVehicleWorkshopPreview")) "Workshop has an explicit current-solver preview bridge"
+Check ($workshop.Contains("Vehicle.CompileDefinitionV2")) "Workshop uses authoritative native definition compilation"
+Check (-not $workshop.Contains("ApplyWorkshopDriveLayout")) "Workshop no longer reconstructs drivetrain routing in Lua"
 
 $workshopPanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\WorkshopPanel.lua"
 $workshopPanel = if (Test-Path $workshopPanelPath) { [IO.File]::ReadAllText($workshopPanelPath) } else { "" }
@@ -217,6 +229,8 @@ Check ($vehicleProject.Contains("..\Vehicles\TireModel.cpp")) "Visual Studio pro
 Check ($vehicleProject.Contains("..\Vehicles\TireModel.hpp")) "Visual Studio project tracks TireModel.hpp"
 Check ($vehicleProject.Contains("..\Vehicles\VehicleDynamicsLab.cpp")) "Visual Studio project compiles VehicleDynamicsLab.cpp"
 Check ($vehicleProject.Contains("..\Vehicles\VehicleDynamicsLab.hpp")) "Visual Studio project tracks VehicleDynamicsLab.hpp"
+Check ($vehicleProject.Contains("..\Vehicles\VehicleDefinitionCompiler.cpp")) "Visual Studio project compiles VehicleDefinitionCompiler.cpp"
+Check ($vehicleProject.Contains("..\Vehicles\VehicleDefinitionLoader.cpp")) "Visual Studio project compiles VehicleDefinitionLoader.cpp"
 Check ($vehicleProject.Contains("..\Physics\StaticBoxSceneImporter.cpp")) "Visual Studio project compiles StaticBoxSceneImporter.cpp"
 Check ($vehicleProject.Contains("..\Physics\StaticBoxSceneImporter.hpp")) "Visual Studio project tracks StaticBoxSceneImporter.hpp"
 Check ($vehicleProject.Contains("..\Physics\StaticTriangleSceneImporter.cpp")) "Visual Studio project compiles StaticTriangleSceneImporter.cpp"

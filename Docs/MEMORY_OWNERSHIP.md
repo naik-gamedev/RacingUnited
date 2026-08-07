@@ -41,6 +41,14 @@ On Lua reload:
 - The old Lua state is destroyed.
 - Native scene/vehicle cleanup must be explicit through lifecycle functions or module reset paths.
 
+## Compiled vehicle definitions
+
+`Vehicle.CompileDefinitionV2` and `Vehicle.CreateFromDefinitionV2` copy bounded
+Lua table data into native value types during the call. The compiler and loader
+never retain a `lua_State*`, table index, Lua string pointer, or other borrowed
+Lua memory. A created vehicle is owned by `VehicleSystem` and follows the normal
+generation-handle and chassis-body cascade rules.
+
 ## Diagnostics
 
 Use `Engine.RunSafetySmokeTests()` to verify generation invalidation and body-dependent cascade cleanup. AddressSanitizer is available through `Tools/BuildAddressSanitizerDebug.cmd` for deeper native lifetime errors.

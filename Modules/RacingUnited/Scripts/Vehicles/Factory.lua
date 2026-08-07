@@ -77,7 +77,7 @@ function AddNativeVehicleWheel(
         handbrakeFactor)
 end
 
-function CreateNativeVehicleDemo()
+function CreateNativeVehicleDemo(compiledSourceDefinition)
     DestroyVehicleDemo()
     if playerEntity == 0 or not Entity.Exists(playerEntity) then
         vehicleMessage = "VEHICLE ERROR: Player Vehicle Root is missing"
@@ -118,17 +118,35 @@ function CreateNativeVehicleDemo()
         return false
     end
 
-    nativeVehicle = Vehicle.Create(
-        nativeVehicleBody,
-        vehicleHighRateHertz,
-        vehicleMaximumDriveForce,
-        vehicleMaximumBrakeForce,
-        vehicleMaximumSteerAngle,
-        vehicleTireFriction,
-        vehicleLateralStiffness,
-        vehicleRollingResistance)
+    local nativeProvider = "handwritten_prototype"
+    local nativeLoadMessage = ""
+    if compiledSourceDefinition then
+        nativeVehicle, nativeProvider, nativeLoadMessage =
+            Vehicle.CreateFromDefinitionV2(
+                compiledSourceDefinition,
+                nativeVehicleBody,
+                vehicleHighRateHertz,
+                vehicleMaximumDriveForce,
+                vehicleMaximumBrakeForce,
+                vehicleMaximumSteerAngle,
+                vehicleTireFriction,
+                vehicleLateralStiffness,
+                vehicleRollingResistance)
+    else
+        nativeVehicle = Vehicle.Create(
+            nativeVehicleBody,
+            vehicleHighRateHertz,
+            vehicleMaximumDriveForce,
+            vehicleMaximumBrakeForce,
+            vehicleMaximumSteerAngle,
+            vehicleTireFriction,
+            vehicleLateralStiffness,
+            vehicleRollingResistance)
+    end
     if nativeVehicle == 0 then
-        vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
+        vehicleMessage = "VEHICLE ERROR: "
+            .. (nativeLoadMessage ~= "" and nativeLoadMessage
+                or Vehicle.GetLastError())
         return false
     end
 
@@ -170,26 +188,28 @@ function CreateNativeVehicleDemo()
         return false
     end
 
-    if not Vehicle.SetPowertrain(
-        nativeVehicle,
-        vehicleIdleRpm,
-        vehicleRedlineRpm,
-        vehicleMaximumEngineTorque,
-        vehicleEngineBrakingTorque,
-        vehicleFinalDriveRatio,
-        vehicleDrivetrainEfficiency,
-        vehicleShiftDuration,
-        vehicleClutchEngagementRate) then
-        vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
-        return false
-    end
+    if not compiledSourceDefinition then
+        if not Vehicle.SetPowertrain(
+            nativeVehicle,
+            vehicleIdleRpm,
+            vehicleRedlineRpm,
+            vehicleMaximumEngineTorque,
+            vehicleEngineBrakingTorque,
+            vehicleFinalDriveRatio,
+            vehicleDrivetrainEfficiency,
+            vehicleShiftDuration,
+            vehicleClutchEngagementRate) then
+            vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
+            return false
+        end
 
-    if not Vehicle.SetGearRatios(
-        nativeVehicle,
-        vehicleReverseRatio,
-        table.unpack(vehicleForwardRatios)) then
-        vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
-        return false
+        if not Vehicle.SetGearRatios(
+            nativeVehicle,
+            vehicleReverseRatio,
+            table.unpack(vehicleForwardRatios)) then
+            vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
+            return false
+        end
     end
 
     if not Vehicle.SetDifferential(
@@ -213,18 +233,20 @@ function CreateNativeVehicleDemo()
         return false
     end
 
-    local frontBrakePerWheel = vehicleDriverAids.frontBrakeBias * 0.5
-    local rearBrakePerWheel = (1.0 - vehicleDriverAids.frontBrakeBias) * 0.5
-    for _, wheel in ipairs(PrototypeCarDefinition.wheels) do
-        local serviceBrakeFactor = wheel.axle == "front"
-            and frontBrakePerWheel or rearBrakePerWheel
-        local handbrakeFactor = wheel.axle == "rear" and 0.5 or 0.0
-        if not AddNativeVehicleWheel(
-            wheel,
-            serviceBrakeFactor,
-            handbrakeFactor) then
-            vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
-            return false
+    if not compiledSourceDefinition then
+        local frontBrakePerWheel = vehicleDriverAids.frontBrakeBias * 0.5
+        local rearBrakePerWheel = (1.0 - vehicleDriverAids.frontBrakeBias) * 0.5
+        for _, wheel in ipairs(PrototypeCarDefinition.wheels) do
+            local serviceBrakeFactor = wheel.axle == "front"
+                and frontBrakePerWheel or rearBrakePerWheel
+            local handbrakeFactor = wheel.axle == "rear" and 0.5 or 0.0
+            if not AddNativeVehicleWheel(
+                wheel,
+                serviceBrakeFactor,
+                handbrakeFactor) then
+                vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
+                return false
+            end
         end
     end
 
@@ -233,6 +255,8 @@ function CreateNativeVehicleDemo()
     end
 
     ResetNativeVehicle()
-    vehicleMessage = "Step 29J.1 online: Peugeot-reference wheel centers + articulated wheel presentation"
+    vehicleMessage = compiledSourceDefinition
+        and ("Step 29K native definition loaded: " .. nativeProvider)
+        or "Step 29J.1 online: Peugeot-reference wheel centers + articulated wheel presentation"
     return true
 end

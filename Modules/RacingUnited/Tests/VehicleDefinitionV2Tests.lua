@@ -18,6 +18,11 @@ assert(roadReport.valid, "road-car topology must be structurally valid")
 assert(roadReport.currentSolverReady, "road-car template must preview today")
 assert(#road.bodies == 1 and #road.contactUnits == 4,
     "road-car topology counts changed")
+assert(road.contactUnits[1].radiusM > 0.0
+    and road.contactUnits[1].springRateNPerM > 0.0,
+    "runtime wheel/suspension parameters were not authored")
+assert(road.transmissions[1].finalDriveRatio > 0.0,
+    "runtime transmission parameters were not authored")
 
 local motorcycle = BuildVehicleDefinitionV2(
     CreateVehicleWorkshopDraft("motorcycle"))

@@ -179,6 +179,16 @@
     "returns": "nothing",
     "description": "Draws an auto-scaled native line plot from up to 512 numeric arguments. Intended for bounded diagnostic series rather than gameplay rendering."
   },
+  "Vehicle.CompileDefinitionV2": {
+    "arguments": "(definition: VehicleDefinitionV2 table)",
+    "returns": "valid: boolean, currentSolverReady: boolean, providerId: string, summary: string, diagnostics: string",
+    "description": "Copies a bounded authored table into native data, resolves component references, and reports the matching runtime provider without retaining Lua pointers."
+  },
+  "Vehicle.CreateFromDefinitionV2": {
+    "arguments": "(definition: VehicleDefinitionV2 table, chassisBody: BodyHandle, highRateHertz?: number, maximumDriveForce?: number, maximumBrakeForce?: number, maximumSteerAngleDegrees?: number, tireFriction?: number, lateralStiffness?: number, rollingResistance?: number)",
+    "returns": "vehicle: VehicleHandle, providerId: string, message: string",
+    "description": "Compiles a version-2 component graph and creates it through the selected native provider. Returns zero without flattening unsupported topologies."
+  },
   "Vehicle.StartDynamicsLab": {
     "arguments": "(vehicle: VehicleHandle, maximumDurationSeconds?: number, captureHertz?: number)",
     "returns": "boolean",

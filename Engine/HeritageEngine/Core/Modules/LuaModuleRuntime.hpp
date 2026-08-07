@@ -377,6 +377,8 @@ private:
     static int luaPhysicsGetLastError(lua_State* state);
 
     static int luaVehicleIsAvailable(lua_State* state);
+    static int luaVehicleCompileDefinitionV2(lua_State* state);
+    static int luaVehicleCreateFromDefinitionV2(lua_State* state);
     static int luaVehicleCreate(lua_State* state);
     static int luaVehicleDestroy(lua_State* state);
     static int luaVehicleExists(lua_State* state);

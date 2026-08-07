@@ -206,6 +206,9 @@ bool LuaApi::resolveAllSymbols(std::string& errorMessage)
     HERITAGE_RESOLVE_LUA(lua_tonumberx);
     HERITAGE_RESOLVE_LUA(lua_tointegerx);
     HERITAGE_RESOLVE_LUA(lua_getglobal);
+    HERITAGE_RESOLVE_LUA(lua_getfield);
+    HERITAGE_RESOLVE_LUA(lua_rawgeti);
+    HERITAGE_RESOLVE_LUA(lua_rawlen);
     HERITAGE_RESOLVE_LUA(lua_setglobal);
     HERITAGE_RESOLVE_LUA(lua_createtable);
     HERITAGE_RESOLVE_LUA(lua_setfield);
@@ -240,6 +243,9 @@ void LuaApi::clearSymbols()
     lua_tonumberx = nullptr;
     lua_tointegerx = nullptr;
     lua_getglobal = nullptr;
+    lua_getfield = nullptr;
+    lua_rawgeti = nullptr;
+    lua_rawlen = nullptr;
     lua_setglobal = nullptr;
     lua_createtable = nullptr;
     lua_setfield = nullptr;

@@ -30,6 +30,11 @@ Step 29J.6B uses three topology columns when at least 540 pixels are available,
 then automatically returns to the 29J.6A two-column arrangement in narrower
 panels. Longer asset and output actions remain in two columns.
 
+Step 29K sends every refreshed definition through the native compiler. The
+provider shown in the Workshop is therefore the engine's answer, and supported
+live preview is created by `VehicleDefinitionLoader` rather than by Lua-side
+drive-layout reconstruction.
+
 ## Current workflow
 
 1. Run `Tools/LaunchExactFreshRelease.cmd`.
@@ -54,7 +59,7 @@ module's `Scripts/Vehicles/Definitions/` content tree.
 
 ## Honest capability boundary
 
-Step 29J.6 can live-preview a single-body, single-power-unit,
+The Step 29K `raycast_wheel_v1` provider can live-preview a single-body, single-power-unit,
 single-transmission, four-wheel configuration with 1 to 16 forward ratios.
 The preview uses the current raycast-wheel solver; changing a template does not
 pretend that Formula suspension, kart chassis flex, sprint-car stagger, or ATV

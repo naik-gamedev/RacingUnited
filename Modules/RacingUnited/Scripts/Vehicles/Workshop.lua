@@ -80,7 +80,42 @@ function RefreshVehicleWorkshopDefinition()
     vehicleWorkshop.definition = BuildVehicleDefinitionV2(draft)
     vehicleWorkshop.report = ValidateVehicleDefinitionV2(
         vehicleWorkshop.definition)
-    return vehicleWorkshop.report
+    local report = vehicleWorkshop.report
+    report.nativeValid = report.valid
+    report.nativeSolverReady = report.currentSolverReady
+    report.nativeProvider = "lua_test_fallback"
+    report.nativeSummary = report.summary
+    report.nativeIssues = ""
+    if Vehicle and Vehicle.CompileDefinitionV2 then
+        report.nativeValid,
+            report.nativeSolverReady,
+            report.nativeProvider,
+            report.nativeSummary,
+            report.nativeIssues = Vehicle.CompileDefinitionV2(
+                vehicleWorkshop.definition)
+        if not report.nativeValid then
+            table.insert(report.issues, {
+                severity = "error",
+                code = "native_compiler",
+                message = report.nativeIssues ~= "" and report.nativeIssues
+                    or "Native compiler rejected the definition"
+            })
+            report.errorCount = report.errorCount + 1
+        elseif report.currentSolverReady and not report.nativeSolverReady then
+            table.insert(report.issues, {
+                severity = "warning",
+                code = "native_provider_mismatch",
+                message = report.nativeIssues ~= "" and report.nativeIssues
+                    or "Native runtime provider is not available"
+            })
+            report.warningCount = report.warningCount + 1
+        end
+        report.valid = report.valid and report.nativeValid
+        report.currentSolverReady = report.valid
+            and report.nativeSolverReady
+        report.summary = report.nativeSummary
+    end
+    return report
 end
 
 function SelectVehicleWorkshopTemplate(templateId)
@@ -117,19 +152,6 @@ function SelectVehicleWorkshopBodyAsset()
     vehicleWorkshop.message = "Selected module asset: " .. selected
 end
 
-local function ApplyWorkshopDriveLayout(layout)
-    local frontDriven = layout == "fwd" or layout == "awd"
-    local rearDriven = layout == "rwd" or layout == "awd"
-    local drivenCount = (frontDriven and 2 or 0) + (rearDriven and 2 or 0)
-    if drivenCount == 0 then return false end
-    for _, wheel in ipairs(PrototypeCarDefinition.wheels) do
-        local driven = wheel.axle == "front" and frontDriven
-            or wheel.axle == "rear" and rearDriven
-        wheel.driveFactor = driven and (1.0 / drivenCount) or 0.0
-    end
-    return true
-end
-
 function ApplyVehicleWorkshopPreview()
     local report = RefreshVehicleWorkshopDefinition()
     if not report.valid then
@@ -146,11 +168,6 @@ function ApplyVehicleWorkshopPreview()
             "Cannot preview: choose an OBJ already inside this module's Assets folder"
         return false
     end
-    if not ApplyWorkshopDriveLayout(vehicleWorkshop.draft.driveLayout) then
-        vehicleWorkshop.message = "Cannot preview an unpowered drive layout yet"
-        return false
-    end
-
     local definition = vehicleWorkshop.definition
     local transmission = definition.transmissions[1]
     PrototypeCarDefinition.schemaVersion = 2
@@ -169,7 +186,7 @@ function ApplyVehicleWorkshopPreview()
     vehicleForwardGearCount = #vehicleForwardRatios
     vehicleSelectedGearRatio = vehicleForwardRatios[1]
 
-    if not CreateNativeVehicleDemo() then
+    if not CreateNativeVehicleDemo(definition) then
         vehicleWorkshop.message = "Native preview failed: " .. vehicleMessage
         return false
     end
@@ -178,7 +195,7 @@ function ApplyVehicleWorkshopPreview()
     ApplyVehicleVisualMesh()
     vehicleWorkshop.message = "LIVE PREVIEW: "
         .. vehicleWorkshop.draft.displayName
-        .. " | current raycast-wheel solver only"
+        .. " | native provider " .. report.nativeProvider
     vehicleMessage = vehicleWorkshop.message
     SaveVehicleWorkshopDraft()
     return true
