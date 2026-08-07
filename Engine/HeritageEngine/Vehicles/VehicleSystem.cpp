@@ -18,6 +18,8 @@ constexpr float kVehicleRestLinearSpeed = 0.04f;
 constexpr float kVehicleRestAngularSpeedDegrees = 1.0f;
 constexpr float kVehicleRestWheelSpeed = 0.15f;
 constexpr float kVehicleRestFlatSlopeDegrees = 0.5f;
+constexpr float kLowSpeedTireBlendStart = 0.50f;
+constexpr float kLowSpeedTireBlendEnd = 2.00f;
 
 bool finiteFloat(float value)
 {
@@ -76,6 +78,12 @@ float lengthSquared(const heritage::math::Vec3& value)
 float length(const heritage::math::Vec3& value)
 {
     return std::sqrt(lengthSquared(value));
+}
+
+float smoothStep01(float value)
+{
+    value = std::clamp(value, 0.0f, 1.0f);
+    return value * value * (3.0f - 2.0f * value);
 }
 
 heritage::math::Vec3 normalized(
@@ -1907,6 +1915,7 @@ void VehicleSystem::simulateVehicleSubstep(
         state.handbrakeTorque = 0.0f;
         state.antiLockActive = false;
         state.tractionControlActive = false;
+        state.compressionVelocity = 0.0f;
         state.longitudinalSpeed = 0.0f;
         state.lateralSpeed = 0.0f;
         state.slipRatio = 0.0f;
@@ -2068,9 +2077,6 @@ void VehicleSystem::simulateVehicleSubstep(
         ++groundedCount;
         state.suspensionLength = suspensionLength;
         state.compression = description.restLength - suspensionLength;
-        state.compressionVelocity = (
-            wheel.previousSuspensionLength - suspensionLength)
-            / substepDeltaTime;
         wheel.previousSuspensionLength = suspensionLength;
         state.worldCenter = add(
             mountWorld,
@@ -2080,6 +2086,46 @@ void VehicleSystem::simulateVehicleSubstep(
         state.contactCollider = hit.collider;
         state.surfaceMaterial = hit.surfaceMaterial;
         state.surfaceWetness = hit.surfaceWetness;
+
+        // The vehicle loop may run at 1000 Hz inside a 120 Hz rigid-body
+        // world step. The chassis pose therefore remains fixed across several
+        // vehicle substeps even though tire/suspension impulses immediately
+        // change its velocity. A finite difference of ray length would report
+        // damper motion only during the first substep and zero for the rest,
+        // effectively removing most of the authored damping. Measure the
+        // attachment-point velocity along the suspension axis instead. This is
+        // also the physical relative velocity used by a massless raycast wheel.
+        bodies.linearVelocity(vehicle.description.chassisBody, linearVelocity);
+        bodies.angularVelocityDegrees(
+            vehicle.description.chassisBody,
+            angularVelocityDegrees);
+        const heritage::math::Vec3 mountVelocity = pointVelocity(
+            linearVelocity,
+            angularVelocityDegrees,
+            pose.position,
+            mountWorld);
+        heritage::math::Vec3 supportVelocity{};
+        if (hit.body != heritage::physics::InvalidBody)
+        {
+            heritage::physics::RigidBodyPose supportPose;
+            heritage::math::Vec3 supportLinearVelocity{};
+            heritage::math::Vec3 supportAngularVelocityDegrees{};
+            if (bodies.pose(hit.body, supportPose)
+                && bodies.linearVelocity(hit.body, supportLinearVelocity)
+                && bodies.angularVelocityDegrees(
+                    hit.body,
+                    supportAngularVelocityDegrees))
+            {
+                supportVelocity = pointVelocity(
+                    supportLinearVelocity,
+                    supportAngularVelocityDegrees,
+                    supportPose.position,
+                    hit.point);
+            }
+        }
+        state.compressionVelocity = dot(
+            subtract(mountVelocity, supportVelocity),
+            suspensionDirection);
 
         const float damping = state.compressionVelocity >= 0.0f
             ? description.bumpDamping
@@ -2194,7 +2240,20 @@ void VehicleSystem::simulateVehicleSubstep(
             tireInput);
 
         float longitudinalForce = tireResult.longitudinalForce;
-        float lateralForce = tireResult.lateralForce;
+        // Slip angle becomes ill-conditioned as longitudinal speed approaches
+        // zero. Retaining the normal relaxation-length force in that region
+        // lets a previous cornering load repeatedly overshoot from side to
+        // side while the car is braking to rest. Blend to a direct contact-
+        // velocity damper below walking pace; the final friction-circle clamp
+        // still bounds this force by the tire's current normal load and grip.
+        const float lowSpeedBlend = smoothStep01(
+            (std::abs(longitudinalSpeed) - kLowSpeedTireBlendStart)
+            / (kLowSpeedTireBlendEnd - kLowSpeedTireBlendStart));
+        const float lowSpeedLateralForce =
+            -vehicle.description.lateralStiffness * lateralSpeed;
+        float lateralForce = lowSpeedLateralForce
+            + (tireResult.lateralForce - lowSpeedLateralForce)
+                * lowSpeedBlend;
         longitudinalForce += -vehicle.description.rollingResistance
             * surface.rollingResistanceMultiplier
             * longitudinalSpeed;

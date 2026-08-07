@@ -455,15 +455,21 @@ bool highRateSuspensionAgreesWithNativeRate()
     const float verticalSpeedDifference = std::abs(
         nativeRateSample.maximumVerticalSpeed
             - highRateInsideWorldRateSample.maximumVerticalSpeed);
+    const float suspensionSpeedDifference = std::abs(
+        nativeRateSample.maximumSuspensionVelocity
+            - highRateInsideWorldRateSample.maximumSuspensionVelocity);
     std::cout
         << "rate_comparison final_height_difference_m="
         << finalHeightDifference
         << " peak_vertical_speed_difference_mps="
         << verticalSpeedDifference
+        << " peak_suspension_speed_difference_mps="
+        << suspensionSpeedDifference
         << '\n';
 
     return finalHeightDifference <= 0.020f
-        && verticalSpeedDifference <= 0.20f;
+        && verticalSpeedDifference <= 0.20f
+        && suspensionSpeedDifference <= 0.15f;
 }
 
 bool parkingBrakeHoldsOnSlope()
@@ -536,6 +542,126 @@ bool unbrakedVehicleRollsOnSlope()
         && !sample.sleepingAtEnd;
 }
 
+bool turnThenBrakeRemainsStableAtLowSpeed()
+{
+    PrototypeWorld world;
+    if (!createPrototypeWorld(world, 1000.0f))
+    {
+        std::cerr << "Could not create the turn-and-brake world.\n";
+        return false;
+    }
+
+    const int settleSteps = static_cast<int>(std::round(2.0f / kWorldDeltaTime));
+    for (int index = 0; index < settleSteps; ++index)
+        stepWorld(world);
+
+    world.vehicles.setInputs(world.vehicle, 0.75f, 0.0f, 0.42f, 0.0f);
+    const int cornerSteps = static_cast<int>(std::round(2.0f / kWorldDeltaTime));
+    for (int index = 0; index < cornerSteps; ++index)
+        stepWorld(world);
+
+    world.vehicles.setInputs(world.vehicle, 0.65f, 0.0f, 0.0f, 0.0f);
+    const int straightenSteps = static_cast<int>(std::round(
+        0.75f / kWorldDeltaTime));
+    for (int index = 0; index < straightenSteps; ++index)
+        stepWorld(world);
+
+    world.vehicles.setInputs(world.vehicle, 0.0f, 1.0f, 0.0f, 0.0f);
+    const int brakeSteps = static_cast<int>(std::round(5.0f / kWorldDeltaTime));
+    int lowSpeedYawReversals = 0;
+    int lowSpeedRollReversals = 0;
+    float previousSignificantYawSign = 0.0f;
+    float previousSignificantRollSign = 0.0f;
+    float maximumLowSpeedYawRate = 0.0f;
+    float maximumLowSpeedRollRate = 0.0f;
+    float maximumLowSpeedRearLateralSpeed = 0.0f;
+    float finalSpeed = 0.0f;
+    for (int index = 0; index < brakeSteps; ++index)
+    {
+        stepWorld(world);
+
+        Vec3 linearVelocity{};
+        Vec3 angularVelocityDegrees{};
+        world.bodies.linearVelocity(world.chassis, linearVelocity);
+        world.bodies.angularVelocityDegrees(
+            world.chassis,
+            angularVelocityDegrees);
+        RigidBodyPose brakingPose;
+        world.bodies.pose(world.chassis, brakingPose);
+        const float brakingYawRadians = brakingPose.rotationDegrees.y
+            * 3.14159265358979323846f / 180.0f;
+        const Vec3 chassisForward{
+            std::sin(brakingYawRadians),
+            0.0f,
+            std::cos(brakingYawRadians)
+        };
+        const float localRollRate = angularVelocityDegrees.x * chassisForward.x
+            + angularVelocityDegrees.z * chassisForward.z;
+        finalSpeed = magnitude(linearVelocity);
+        if (finalSpeed > 2.0f)
+            continue;
+
+        maximumLowSpeedYawRate = std::max(
+            maximumLowSpeedYawRate,
+            std::abs(angularVelocityDegrees.y));
+        maximumLowSpeedRollRate = std::max(
+            maximumLowSpeedRollRate,
+            std::abs(localRollRate));
+        for (std::size_t wheelIndex = 2; wheelIndex < 4; ++wheelIndex)
+        {
+            WheelState state;
+            if (world.vehicles.wheelState(world.vehicle, wheelIndex, state))
+            {
+                maximumLowSpeedRearLateralSpeed = std::max(
+                    maximumLowSpeedRearLateralSpeed,
+                    std::abs(state.lateralSpeed));
+            }
+        }
+
+        if (std::abs(angularVelocityDegrees.y) >= 0.35f)
+        {
+            const float yawSign = angularVelocityDegrees.y > 0.0f
+                ? 1.0f
+                : -1.0f;
+            if (previousSignificantYawSign != 0.0f
+                && yawSign != previousSignificantYawSign)
+            {
+                ++lowSpeedYawReversals;
+            }
+            previousSignificantYawSign = yawSign;
+        }
+
+        if (std::abs(localRollRate) >= 0.35f)
+        {
+            const float rollSign = localRollRate > 0.0f
+                ? 1.0f
+                : -1.0f;
+            if (previousSignificantRollSign != 0.0f
+                && rollSign != previousSignificantRollSign)
+            {
+                ++lowSpeedRollReversals;
+            }
+            previousSignificantRollSign = rollSign;
+        }
+    }
+
+    std::cout
+        << "turn_then_brake final_speed_mps=" << finalSpeed
+        << " max_low_speed_yaw_degps=" << maximumLowSpeedYawRate
+        << " max_low_speed_local_roll_degps=" << maximumLowSpeedRollRate
+        << " max_rear_lateral_speed_mps="
+        << maximumLowSpeedRearLateralSpeed
+        << " low_speed_yaw_reversals=" << lowSpeedYawReversals
+        << " low_speed_roll_reversals=" << lowSpeedRollReversals
+        << '\n';
+
+    return finalSpeed <= 0.15f
+        && maximumLowSpeedYawRate <= 0.10f
+        && lowSpeedYawReversals <= 1
+        && maximumLowSpeedRollRate <= 0.25f
+        && lowSpeedRollReversals <= 1;
+}
+
 } // namespace
 
 int main()
@@ -567,6 +693,11 @@ int main()
     std::cout << (unbrakedSlopePassed ? "PASS" : "FAIL")
         << " unbraked slope roll\n";
     failed += unbrakedSlopePassed ? 0 : 1;
+
+    const bool turnBrakePassed = turnThenBrakeRemainsStableAtLowSpeed();
+    std::cout << (turnBrakePassed ? "PASS" : "FAIL")
+        << " turn-then-brake low-speed stability\n";
+    failed += turnBrakePassed ? 0 : 1;
 
     std::cout << (failed == 0 ? "ALL TESTS PASSED" : "TESTS FAILED")
         << " count=" << failed << '\n';
