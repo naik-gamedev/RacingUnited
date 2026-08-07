@@ -1,4 +1,4 @@
--- Live per-wheel bridge for the native nonlinear suspension provider.
+-- Live per-wheel bridge for native suspension and unsprung-mass providers.
 local function VehicleSuspensionAvailable()
     return nativeVehicle ~= 0 and Vehicle.Exists(nativeVehicle)
 end
@@ -42,6 +42,19 @@ function ReadVehicleSuspensionModel(wheelIndex)
     vehicleSuspension.droopStopRateNPerM = droopStopRateNPerM
     vehicleSuspension.motionRatio = motionRatio
     vehicleSuspension.maximumForceN = maximumForceN
+    local effectiveUnsprungMassKg, tireRadialStiffnessNPerM,
+        tireRadialDampingNsPerM, maximumTireDeflectionM,
+        maximumTireNormalForceN =
+        Vehicle.GetWheelUnsprungMassModel(nativeVehicle, wheelIndex)
+    if effectiveUnsprungMassKg == nil then
+        vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
+        return false
+    end
+    vehicleSuspension.effectiveUnsprungMassKg = effectiveUnsprungMassKg
+    vehicleSuspension.tireRadialStiffnessNPerM = tireRadialStiffnessNPerM
+    vehicleSuspension.tireRadialDampingNsPerM = tireRadialDampingNsPerM
+    vehicleSuspension.maximumTireDeflectionM = maximumTireDeflectionM
+    vehicleSuspension.maximumTireNormalForceN = maximumTireNormalForceN
     return true
 end
 
@@ -68,6 +81,16 @@ function ApplyVehicleSuspensionModel(wheelIndex)
         vehicleSuspension.droopStopRateNPerM,
         vehicleSuspension.motionRatio,
         vehicleSuspension.maximumForceN)
+    if success then
+        success = Vehicle.SetWheelUnsprungMassModel(
+            nativeVehicle,
+            wheelIndex,
+            vehicleSuspension.effectiveUnsprungMassKg,
+            vehicleSuspension.tireRadialStiffnessNPerM,
+            vehicleSuspension.tireRadialDampingNsPerM,
+            vehicleSuspension.maximumTireDeflectionM,
+            vehicleSuspension.maximumTireNormalForceN)
+    end
     if not success then
         vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
     end
@@ -111,8 +134,18 @@ function RestoreVehicleSuspensionDefinition()
     vehicleSuspension.droopStopRateNPerM = suspension.droopStopRateNPerM
     vehicleSuspension.motionRatio = suspension.motionRatio
     vehicleSuspension.maximumForceN = suspension.maximumForceN
+    vehicleSuspension.effectiveUnsprungMassKg =
+        suspension.effectiveUnsprungMassKg
+    vehicleSuspension.tireRadialStiffnessNPerM =
+        suspension.tireRadialStiffnessNPerM
+    vehicleSuspension.tireRadialDampingNsPerM =
+        suspension.tireRadialDampingNsPerM
+    vehicleSuspension.maximumTireDeflectionM =
+        suspension.maximumTireDeflectionM
+    vehicleSuspension.maximumTireNormalForceN =
+        suspension.maximumTireNormalForceN
     if ApplyVehicleSuspensionModelToAllWheels() then
-        vehicleMessage = "Restored the prototype nonlinear suspension tune"
+        vehicleMessage = "Restored the prototype suspension and unsprung tune"
         return true
     end
     return false

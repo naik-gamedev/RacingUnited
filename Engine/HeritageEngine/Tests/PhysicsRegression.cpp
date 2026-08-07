@@ -3,6 +3,7 @@
 #include "../Vehicles/VehicleDefinitionCompiler.hpp"
 #include "../Vehicles/VehicleDefinitionLoader.hpp"
 #include "../Vehicles/VehicleSystem.hpp"
+#include "../Vehicles/UnsprungMassModel.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -103,6 +104,11 @@ bool addPrototypeWheel(
     wheel.droopStopRate = 35000.0f;
     wheel.suspensionMotionRatio = 1.0f;
     wheel.maximumSuspensionForce = 250000.0f;
+    wheel.effectiveUnsprungMass = 38.0f;
+    wheel.tireRadialStiffness = 220000.0f;
+    wheel.tireRadialDamping = 1800.0f;
+    wheel.maximumTireDeflection = 0.08f;
+    wheel.maximumTireNormalForce = 250000.0f;
     wheel.driveFactor = driveFactor;
     wheel.steerFactor = steerFactor;
     wheel.brakeFactor = serviceBrakeFactor;
@@ -708,6 +714,8 @@ bool dynamicsLabCapturesHighRateTelemetry()
     std::vector<float> speedSeries;
     std::vector<float> wheelLoadSeries;
     std::vector<float> damperPowerSeries;
+    std::vector<float> unsprungVelocitySeries;
+    std::vector<float> tireDeflectionSeries;
     const bool speedWorked = world.vehicles.dynamicsLabMetricSeries(
         world.vehicle,
         heritage::vehicles::DynamicsLabMetric::SpeedKph,
@@ -726,6 +734,18 @@ bool dynamicsLabCapturesHighRateTelemetry()
         0,
         64,
         damperPowerSeries);
+    const bool unsprungVelocityWorked = world.vehicles.dynamicsLabMetricSeries(
+        world.vehicle,
+        heritage::vehicles::DynamicsLabMetric::WheelUnsprungVelocityMps,
+        0,
+        64,
+        unsprungVelocitySeries);
+    const bool tireDeflectionWorked = world.vehicles.dynamicsLabMetricSeries(
+        world.vehicle,
+        heritage::vehicles::DynamicsLabMetric::WheelTireDeflectionMillimeters,
+        0,
+        64,
+        tireDeflectionSeries);
 
     std::cout
         << "dynamics_lab samples=" << summary.sampleCount
@@ -735,6 +755,10 @@ bool dynamicsLabCapturesHighRateTelemetry()
         << " peak_speed_kph=" << summary.peakSpeedKph
         << " peak_suspension_speed_mps="
         << summary.peakAbsoluteSuspensionVelocityMps
+        << " peak_unsprung_speed_mps="
+        << summary.peakAbsoluteUnsprungVelocityMps
+        << " peak_tire_deflection_mm="
+        << summary.peakTireDeflectionMillimeters
         << " speed_plot_points=" << speedSeries.size()
         << " load_plot_points=" << wheelLoadSeries.size()
         << '\n';
@@ -749,10 +773,16 @@ bool dynamicsLabCapturesHighRateTelemetry()
         && speedWorked
         && wheelLoadWorked
         && damperPowerWorked
+        && unsprungVelocityWorked
+        && tireDeflectionWorked
+        && summary.peakAbsoluteUnsprungVelocityMps > 0.0f
+        && summary.peakTireDeflectionMillimeters > 0.0f
         && !speedSeries.empty()
         && speedSeries.size() <= 64
         && wheelLoadSeries.size() == speedSeries.size()
-        && damperPowerSeries.size() == speedSeries.size();
+        && damperPowerSeries.size() == speedSeries.size()
+        && unsprungVelocitySeries.size() == speedSeries.size()
+        && tireDeflectionSeries.size() == speedSeries.size();
 }
 
 VehicleDefinitionV2Source makeCompiledRoadCarDefinition()
@@ -810,6 +840,11 @@ VehicleDefinitionV2Source makeCompiledRoadCarDefinition()
         contact.suspension = suspension.id;
         contact.tireProvider = "advanced_road";
         contact.radiusM = 0.2979f;
+        contact.effectiveUnsprungMassKg = 38.0f;
+        contact.tireRadialStiffnessNPerM = 220000.0f;
+        contact.tireRadialDampingNsPerM = 1800.0f;
+        contact.maximumTireDeflectionM = 0.08f;
+        contact.maximumTireNormalForceN = 250000.0f;
         contact.serviceBrakeFactor = index < 2 ? 0.31f : 0.19f;
         contact.parkingBrakeFactor = index >= 2 ? 0.50f : 0.0f;
         source.contactUnits.push_back(contact);
@@ -876,6 +911,12 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         -1.0f;
     const auto invalidSuspensionParametersResult =
         VehicleDefinitionCompiler::compile(invalidSuspensionParameters);
+
+    VehicleDefinitionV2Source invalidUnsprungParameters = source;
+    invalidUnsprungParameters.contactUnits[0].effectiveUnsprungMassKg =
+        -1.0f;
+    const auto invalidUnsprungParametersResult =
+        VehicleDefinitionCompiler::compile(invalidUnsprungParameters);
 
     VehicleDefinitionV2Source future = source;
     future.classification = "motorcycle";
@@ -961,6 +1002,33 @@ bool vehicleDefinitionCompilerAndLoaderWork()
             <= 0.0001f
         && invalidLiveSuspensionRejected;
 
+    heritage::vehicles::UnsprungMassDescription unsprungReadback;
+    heritage::vehicles::UnsprungMassDescription liveUnsprung;
+    liveUnsprung.effectiveMassKg = 42.0f;
+    liveUnsprung.tireRadialStiffnessNPerM = 240000.0f;
+    liveUnsprung.tireRadialDampingNsPerM = 2000.0f;
+    liveUnsprung.maximumTireDeflectionM = 0.09f;
+    liveUnsprung.maximumNormalForceN = 275000.0f;
+    const bool liveUnsprungSet = vehicles.setWheelUnsprungMassModel(
+        loaded, 0, liveUnsprung);
+    const bool liveUnsprungRead = vehicles.wheelUnsprungMassModel(
+        loaded, 0, unsprungReadback);
+    heritage::vehicles::UnsprungMassDescription invalidLiveUnsprung =
+        liveUnsprung;
+    invalidLiveUnsprung.tireRadialStiffnessNPerM = 0.0f;
+    const bool invalidLiveUnsprungRejected =
+        !vehicles.setWheelUnsprungMassModel(
+            loaded, 0, invalidLiveUnsprung);
+    const bool liveUnsprungRoundTrip = liveUnsprungSet
+        && liveUnsprungRead
+        && std::abs(unsprungReadback.effectiveMassKg - 42.0f) <= 0.0001f
+        && std::abs(
+            unsprungReadback.tireRadialStiffnessNPerM - 240000.0f)
+            <= 0.0001f
+        && std::abs(unsprungReadback.maximumTireDeflectionM - 0.09f)
+            <= 0.0001f
+        && invalidLiveUnsprungRejected;
+
     std::cout
         << "definition_compiler provider="
         << compiled.definition.runtimeProvider
@@ -970,6 +1038,8 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         << " suspension_reference_rejected=" << (!brokenSuspensionResult.valid)
         << " suspension_parameters_rejected="
         << (!invalidSuspensionParametersResult.valid)
+        << " unsprung_parameters_rejected="
+        << (!invalidUnsprungParametersResult.valid)
         << " future_topology_valid=" << futureResult.valid
         << " future_topology_ready=" << futureResult.currentSolverReady
         << " category_ignored=" << categoryOnlyResult.currentSolverReady
@@ -979,6 +1049,7 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         << " nonlinear_force_n=" << nonlinearBump.normalForceN
         << " damper_power_w=" << nonlinearBump.damperDissipationW
         << " live_suspension_roundtrip=" << liveSuspensionRoundTrip
+        << " live_unsprung_roundtrip=" << liveUnsprungRoundTrip
         << '\n';
 
     return compiled.valid
@@ -989,6 +1060,7 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && !brokenResult.valid
         && !brokenSuspensionResult.valid
         && !invalidSuspensionParametersResult.valid
+        && !invalidUnsprungParametersResult.valid
         && futureResult.valid
         && !futureResult.currentSolverReady
         && futureResult.issueSummary().find("lean_dynamics") != std::string::npos
@@ -999,7 +1071,73 @@ bool vehicleDefinitionCompilerAndLoaderWork()
             != std::string::npos
         && suspensionForcesWorked
         && nonlinearSuspensionWorked
-        && liveSuspensionRoundTrip;
+        && liveSuspensionRoundTrip
+        && liveUnsprungRoundTrip;
+}
+
+bool unsprungMassSettlesAndRespondsToRoadStep()
+{
+    heritage::vehicles::UnsprungMassDescription description;
+    description.effectiveMassKg = 38.0f;
+    description.tireRadialStiffnessNPerM = 220000.0f;
+    description.tireRadialDampingNsPerM = 1800.0f;
+    description.maximumTireDeflectionM = 0.08f;
+    description.maximumNormalForceN = 250000.0f;
+    heritage::vehicles::UnsprungMassState state;
+    heritage::vehicles::UnsprungMassInput input;
+    input.deltaTimeSeconds = 0.001f;
+    input.restLengthM = 0.55f;
+    input.minimumLengthM = 0.35f;
+    input.maximumLengthM = 0.70f;
+    input.suspensionForceN = 2700.0f;
+    input.roadAvailable = true;
+    input.roadHubLengthM = 0.50f;
+    input.roadHubLengthVelocityMps = 0.0f;
+    input.roadNormalAlignment = 1.0f;
+
+    heritage::vehicles::UnsprungMassOutput output;
+    for (int step = 0; step < 3000; ++step)
+    {
+        output = heritage::vehicles::advanceUnsprungMassModel(
+            description, input, state);
+    }
+    const float expectedDeflection = input.suspensionForceN
+        / description.tireRadialStiffnessNPerM;
+    const bool settled = std::abs(
+            output.tireDeflectionM - expectedDeflection) < 0.0002f
+        && std::abs(output.suspensionLengthVelocityMps) < 0.002f
+        && std::abs(output.normalForceN - input.suspensionForceN) < 15.0f;
+
+    input.roadHubLengthM -= 0.02f;
+    float peakNormalForce = 0.0f;
+    float peakUnsprungSpeed = 0.0f;
+    int velocityReversals = 0;
+    float previousVelocity = output.suspensionLengthVelocityMps;
+    for (int step = 0; step < 2000; ++step)
+    {
+        output = heritage::vehicles::advanceUnsprungMassModel(
+            description, input, state);
+        peakNormalForce = std::max(peakNormalForce, output.normalForceN);
+        peakUnsprungSpeed = std::max(
+            peakUnsprungSpeed,
+            std::abs(output.suspensionLengthVelocityMps));
+        if (previousVelocity * output.suspensionLengthVelocityMps < 0.0f)
+            ++velocityReversals;
+        previousVelocity = output.suspensionLengthVelocityMps;
+    }
+    const bool roadStepResponded = peakNormalForce > 5000.0f
+        && peakUnsprungSpeed > 0.10f
+        && velocityReversals >= 2
+        && std::abs(output.tireDeflectionM - expectedDeflection) < 0.0002f
+        && std::abs(output.suspensionLengthVelocityMps) < 0.002f;
+    std::cout
+        << "unsprung_mass settled_deflection_m=" << output.tireDeflectionM
+        << " expected_deflection_m=" << expectedDeflection
+        << " road_step_peak_load_n=" << peakNormalForce
+        << " road_step_peak_speed_mps=" << peakUnsprungSpeed
+        << " velocity_reversals=" << velocityReversals
+        << '\n';
+    return settled && roadStepResponded;
 }
 
 } // namespace
@@ -1043,6 +1181,12 @@ int main()
     std::cout << (dynamicsLabPassed ? "PASS" : "FAIL")
         << " high-rate vehicle dynamics laboratory\n";
     failed += dynamicsLabPassed ? 0 : 1;
+
+    const bool unsprungMassPassed =
+        unsprungMassSettlesAndRespondsToRoadStep();
+    std::cout << (unsprungMassPassed ? "PASS" : "FAIL")
+        << " scalar unsprung-mass wheel-hop response\n";
+    failed += unsprungMassPassed ? 0 : 1;
 
     const bool definitionCompilerPassed =
         vehicleDefinitionCompilerAndLoaderWork();

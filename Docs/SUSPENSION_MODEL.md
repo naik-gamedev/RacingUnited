@@ -61,6 +61,19 @@ The ordinary prototype creation path now supplies the same nonlinear fields as
 the versioned Workshop definition. Older modules that call `Vehicle.AddWheel`
 with the original argument list retain linear-compatible defaults.
 
+## Unsprung mass and tire compliance
+
+Step 29O adds an optional scalar wheel/upright inertia after the suspension
+force provider. When enabled, the suspension link accelerates that mass and a
+radial tire spring/damper generates road-normal load. Consequently the hub is
+no longer forced to follow the road ray exactly: tire deflection and wheel hop
+are simulated at the 1000 Hz vehicle rate.
+
+This scalar state is common infrastructure, not a MacPherson or wishbone
+solver. Future geometry providers will determine authoritative wheel paths,
+motion ratios, camber, toe and upright pose while continuing to use this
+force/inertia layer where appropriate. See `UNSPRUNG_MASS_MODEL.md` and ADR-016.
+
 ## Damage and wear ordering
 
 Damage is intentionally not simulated yet. A defensible later model can build
@@ -76,5 +89,7 @@ on the healthy telemetry in this order:
 6. Represent spring fatigue, sag or fracture through preload/rate/free-length
    changes.
 
-Those effects require linkage geometry, unsprung mass and trustworthy baseline
-captures first. Until then, no random degradation belongs in the solver.
+Those effects require linkage geometry and trustworthy baseline captures first.
+Unsprung inertia and radial tire energy now exist, but no random degradation
+belongs in the solver until healthy geometry, loads and thermal state are
+authoritative.

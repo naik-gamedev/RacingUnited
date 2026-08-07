@@ -88,7 +88,9 @@ function RefreshVehicleTelemetry()
             tractionControlActive, contactCollider, surfaceName, surfaceId,
             surfaceWetness, suspensionSpringForce, suspensionDampingForce,
             suspensionBumpStopForce, suspensionDroopStopForce,
-            suspensionUnclampedForce, damperDissipationWatts =
+            suspensionUnclampedForce, damperDissipationWatts,
+            unsprungVelocity, tireDeflection, tireDeflectionVelocity,
+            tireRadialDissipationWatts =
             Vehicle.GetWheelState(nativeVehicle, index)
         vehicleWheelTelemetry[index] = {
             grounded = grounded,
@@ -138,7 +140,12 @@ function RefreshVehicleTelemetry()
             suspensionBumpStopForce = suspensionBumpStopForce or 0.0,
             suspensionDroopStopForce = suspensionDroopStopForce or 0.0,
             suspensionUnclampedForce = suspensionUnclampedForce or 0.0,
-            damperDissipationWatts = damperDissipationWatts or 0.0
+            damperDissipationWatts = damperDissipationWatts or 0.0,
+            unsprungVelocity = unsprungVelocity or 0.0,
+            tireDeflection = tireDeflection or 0.0,
+            tireDeflectionVelocity = tireDeflectionVelocity or 0.0,
+            tireRadialDissipationWatts =
+                tireRadialDissipationWatts or 0.0
         }
     end
 end

@@ -13,11 +13,13 @@ Read these documents before changing an interconnected system:
 7. `VEHICLE_ARCHITECTURE.md` — generic vehicle composition and Lua/native split.
 8. `VEHICLE_DYNAMICS_LAB.md` — native recording, repeatable experiments, plots and CSV diagnostics.
 9. `VEHICLE_WORKSHOP.md` — versioned topology authoring, validation, live preview and module-owned exports.
-10. `Decisions/` — architecture decision records that must not be silently reversed.
+10. `UNSPRUNG_MASS_MODEL.md` — scalable wheel/upright inertia, radial tire compliance and wheel-hop rules.
+11. `Decisions/` — architecture decision records that must not be silently reversed.
 
 Step 29L contributors must also read `VEHICLE_DEFINITION_RUNTIME.md` for the
 native compiler, suspension-provider and runtime-loader contract.
-Step 29N suspension work must also follow `SUSPENSION_MODEL.md` for force,
-telemetry, and future damage/wear conventions.
+Step 29O suspension work must also follow `SUSPENSION_MODEL.md` and
+`UNSPRUNG_MASS_MODEL.md` for force, wheel-hop, telemetry, scalability, and
+future geometry/damage conventions.
 
 Generated reports are written to `Build/Reports/`. Runtime diagnostics are written to `UserData/Diagnostics/`.

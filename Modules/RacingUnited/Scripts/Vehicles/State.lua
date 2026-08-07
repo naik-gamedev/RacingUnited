@@ -144,7 +144,7 @@ vehicleSelectedGearRatio = vehicleForwardRatios[1]
 vehicleOutputTorque = 0.0
 vehicleDrivenWheelSpeedDifferenceRpm = 0.0
 vehicleForwardGearCount = #vehicleForwardRatios
-vehicleMessage = "Step 29N nonlinear suspension tuning is ready"
+vehicleMessage = "Step 29O scalar unsprung mass and wheel hop are ready"
 vehicleWheelTelemetry = {}
 vehicleWheelTireProfileNames = {}
 for index, wheel in ipairs(definition.wheels) do
@@ -176,5 +176,10 @@ vehicleSuspension = {
     droopStopEngagementM = suspension.droopStopEngagementM,
     droopStopRateNPerM = suspension.droopStopRateNPerM,
     motionRatio = suspension.motionRatio,
-    maximumForceN = suspension.maximumForceN
+    maximumForceN = suspension.maximumForceN,
+    effectiveUnsprungMassKg = suspension.effectiveUnsprungMassKg,
+    tireRadialStiffnessNPerM = suspension.tireRadialStiffnessNPerM,
+    tireRadialDampingNsPerM = suspension.tireRadialDampingNsPerM,
+    maximumTireDeflectionM = suspension.maximumTireDeflectionM,
+    maximumTireNormalForceN = suspension.maximumTireNormalForceN
 }

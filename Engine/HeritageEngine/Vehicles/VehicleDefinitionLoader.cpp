@@ -106,6 +106,16 @@ VehicleHandle VehicleDefinitionLoader::create(
         wheel.suspensionProvider = suspensionProvider;
         wheel.suspensionMotionRatio = suspension.motionRatio;
         wheel.maximumSuspensionForce = suspension.maximumForceN;
+        wheel.effectiveUnsprungMass =
+            contact.authored.effectiveUnsprungMassKg;
+        wheel.tireRadialStiffness =
+            contact.authored.tireRadialStiffnessNPerM;
+        wheel.tireRadialDamping =
+            contact.authored.tireRadialDampingNsPerM;
+        wheel.maximumTireDeflection =
+            contact.authored.maximumTireDeflectionM;
+        wheel.maximumTireNormalForce =
+            contact.authored.maximumTireNormalForceN;
         wheel.driveFactor = contact.driveFactor;
         wheel.steerFactor = contact.authored.steering ? 1.0f : 0.0f;
         wheel.brakeFactor = contact.authored.serviceBrake

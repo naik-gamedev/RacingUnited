@@ -114,6 +114,9 @@
     <ClCompile Include="..\Vehicles\SuspensionModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Vehicles\UnsprungMassModel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Vehicles\VehicleDefinitionCompiler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -267,6 +270,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Vehicles\SuspensionModel.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\UnsprungMassModel.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Vehicles\VehicleDefinition.hpp">

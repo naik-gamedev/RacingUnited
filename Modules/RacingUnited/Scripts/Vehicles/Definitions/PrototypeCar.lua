@@ -117,7 +117,12 @@ PrototypeCarDefinition = {
         droopStopEngagementM = 0.1275,
         droopStopRateNPerM = 35000.0,
         motionRatio = 1.0,
-        maximumForceN = 250000.0
+        maximumForceN = 250000.0,
+        effectiveUnsprungMassKg = 38.0,
+        tireRadialStiffnessNPerM = 220000.0,
+        tireRadialDampingNsPerM = 1800.0,
+        maximumTireDeflectionM = 0.08,
+        maximumTireNormalForceN = 250000.0
     },
 
     -- Vehicle-wide default. Each wheel below can override this with a named

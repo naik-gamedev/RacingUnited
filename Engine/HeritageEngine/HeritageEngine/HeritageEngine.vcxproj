@@ -194,8 +194,9 @@ user32.lib
     <ClCompile Include="..\Physics\ConstraintSystem.cpp" />
     <ClCompile Include="..\Physics\PhysicsWorld.cpp" />
     <ClCompile Include="..\Physics\RigidBodySystem.cpp" />
-    <ClCompile Include="..\Vehicles\TireModel.cpp" />
-    <ClCompile Include="..\Vehicles\SuspensionModel.cpp" />
+      <ClCompile Include="..\Vehicles\TireModel.cpp" />
+      <ClCompile Include="..\Vehicles\SuspensionModel.cpp" />
+      <ClCompile Include="..\Vehicles\UnsprungMassModel.cpp" />
     <ClCompile Include="..\Vehicles\VehicleDefinitionCompiler.cpp" />
     <ClCompile Include="..\Vehicles\VehicleDefinitionLoader.cpp" />
     <ClCompile Include="..\Vehicles\VehicleDynamicsLab.cpp" />
@@ -250,8 +251,9 @@ user32.lib
     <ClInclude Include="..\Physics\ConstraintSystem.hpp" />
     <ClInclude Include="..\Physics\PhysicsWorld.hpp" />
     <ClInclude Include="..\Physics\RigidBodySystem.hpp" />
-    <ClInclude Include="..\Vehicles\TireModel.hpp" />
-    <ClInclude Include="..\Vehicles\SuspensionModel.hpp" />
+      <ClInclude Include="..\Vehicles\TireModel.hpp" />
+      <ClInclude Include="..\Vehicles\SuspensionModel.hpp" />
+      <ClInclude Include="..\Vehicles\UnsprungMassModel.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDefinition.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDefinitionCompiler.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDefinitionLoader.hpp" />

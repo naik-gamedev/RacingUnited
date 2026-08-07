@@ -1,4 +1,4 @@
--- Step 29N: live per-wheel nonlinear suspension tuning and readback.
+-- Step 29O: live nonlinear suspension, unsprung-mass and radial-tire tuning.
 local function DrawSuspensionWheelSelector()
     local changed = false
     local requested = vehicleSuspension.selectedWheel
@@ -103,6 +103,37 @@ local function DrawSuspensionTravelControls()
     UI.TextDisabled("Travel stops engage progressively before the raycast wheel reaches hard travel limits.")
 end
 
+local function DrawSuspensionUnsprungControls()
+    local changed, fieldChanged = false, false
+    vehicleSuspension.effectiveUnsprungMassKg, fieldChanged = UI.SliderFloat(
+        "Effective unsprung mass",
+        vehicleSuspension.effectiveUnsprungMassKg,
+        0.0, 1000.0, "%.2f kg")
+    changed = changed or fieldChanged
+    vehicleSuspension.tireRadialStiffnessNPerM, fieldChanged = UI.SliderFloat(
+        "Tire radial stiffness",
+        vehicleSuspension.tireRadialStiffnessNPerM,
+        10000.0, 2000000.0, "%.0f N/m")
+    changed = changed or fieldChanged
+    vehicleSuspension.tireRadialDampingNsPerM, fieldChanged = UI.SliderFloat(
+        "Tire radial damping",
+        vehicleSuspension.tireRadialDampingNsPerM,
+        0.0, 20000.0, "%.0f N s/m")
+    changed = changed or fieldChanged
+    vehicleSuspension.maximumTireDeflectionM, fieldChanged = UI.SliderFloat(
+        "Maximum tire deflection",
+        vehicleSuspension.maximumTireDeflectionM,
+        0.005, 0.30, "%.4f m")
+    changed = changed or fieldChanged
+    vehicleSuspension.maximumTireNormalForceN, fieldChanged = UI.SliderFloat(
+        "Maximum tire normal force",
+        vehicleSuspension.maximumTireNormalForceN,
+        10000.0, 1000000.0, "%.0f N")
+    changed = changed or fieldChanged
+    ApplySelectedSuspensionWhenChanged(changed)
+    UI.TextDisabled("Zero mass restores the legacy massless raycast wheel for compatibility or low-cost simulation.")
+end
+
 local function DrawSuspensionLiveTelemetry()
     local wheel = vehicleWheelTelemetry[vehicleSuspension.selectedWheel]
     if wheel == nil then
@@ -119,6 +150,12 @@ local function DrawSuspensionLiveTelemetry()
         wheel.suspensionUnclampedForce, wheel.normalForce))
     UI.Text(string.format("Damper heat generation: %.1f W",
         wheel.damperDissipationWatts))
+    UI.Text(string.format("Unsprung velocity: %.4f m/s",
+        wheel.unsprungVelocity))
+    UI.Text(string.format("Tire deflection / velocity: %.4f m / %.4f m/s",
+        wheel.tireDeflection, wheel.tireDeflectionVelocity))
+    UI.Text(string.format("Tire radial heat generation: %.1f W",
+        wheel.tireRadialDissipationWatts))
     UI.TextDisabled("Damper watts will later feed oil/gas temperature, fade, cavitation and wear.")
 end
 
@@ -154,6 +191,10 @@ function DrawVehicleSuspensionPanel()
         end
         if UI.BeginTabItem("TRAVEL") then
             DrawSuspensionTravelControls()
+            UI.EndTabItem()
+        end
+        if UI.BeginTabItem("UNSPRUNG") then
+            DrawSuspensionUnsprungControls()
             UI.EndTabItem()
         end
         if UI.BeginTabItem("LIVE") then

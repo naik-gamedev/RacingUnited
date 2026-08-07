@@ -90,3 +90,9 @@ preload, spring progression, low/high-speed bump and rebound damping, velocity
 knees, bump/droop stops, and travel-limit progression. The compiler validates
 bounded finite parameters before the loader copies them into the selected
 native provider. See `SUSPENSION_MODEL.md`.
+
+Step 29O extends each contact unit with effective unsprung mass, radial tire
+stiffness/damping, maximum tire deflection and maximum tire normal load. The
+compiler validates these values and the loader configures the independent
+native `UnsprungMassModel`. Effective mass zero is valid and selects the legacy
+massless contact path. See `UNSPRUNG_MASS_MODEL.md`.

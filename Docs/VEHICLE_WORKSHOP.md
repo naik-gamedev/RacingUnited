@@ -47,6 +47,11 @@ parameters. The first values are authored defaults rather than measured vehicle
 data; the Dynamics Lab force and damper-power channels exist so they can be
 replaced through repeatable testing instead of visual guesswork.
 
+Step 29O definitions retain unsprung mass and radial tire stiffness, damping,
+deflection and load bounds per contact unit. The live Vehicle `SUSP. > UNSPRUNG`
+page can tune these values on the running prototype, while the Workshop remains
+the topology-first source for exported definitions.
+
 ## Current workflow
 
 1. Run `Tools/LaunchExactFreshRelease.cmd`.

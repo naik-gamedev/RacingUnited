@@ -92,7 +92,17 @@ function AddNativeVehicleWheel(
         wheel.droopStopEngagementM or physics.droopStopEngagementM,
         wheel.droopStopRateNPerM or physics.droopStopRateNPerM,
         wheel.motionRatio or physics.motionRatio,
-        wheel.maximumForceN or physics.maximumForceN)
+        wheel.maximumForceN or physics.maximumForceN,
+        wheel.effectiveUnsprungMassKg
+            or physics.effectiveUnsprungMassKg,
+        wheel.tireRadialStiffnessNPerM
+            or physics.tireRadialStiffnessNPerM,
+        wheel.tireRadialDampingNsPerM
+            or physics.tireRadialDampingNsPerM,
+        wheel.maximumTireDeflectionM
+            or physics.maximumTireDeflectionM,
+        wheel.maximumTireNormalForceN
+            or physics.maximumTireNormalForceN)
 end
 
 function CreateNativeVehicleDemo(compiledSourceDefinition)
@@ -277,7 +287,7 @@ function CreateNativeVehicleDemo(compiledSourceDefinition)
 
     ResetNativeVehicle()
     vehicleMessage = compiledSourceDefinition
-        and ("Step 29N native definition loaded: " .. nativeProvider)
-        or "Step 29N online: nonlinear suspension + live per-wheel tuning"
+        and ("Step 29O native definition loaded: " .. nativeProvider)
+        or "Step 29O online: unsprung mass + radial tire compliance"
     return true
 end

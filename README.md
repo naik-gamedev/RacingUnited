@@ -19,7 +19,9 @@ United launcher, and a headless physics regression executable.
 Run `Tools\RunPhysicsTests.cmd` to build and execute deterministic vehicle
 tests without opening the game. They cover quiet flat-ground rest, parked-body
 sleep/wake behavior, 1000 Hz suspension timing, handbrake holding on a 5-degree
-slope, and legitimate downhill motion when the car is not braked.
+slope, legitimate downhill motion when the car is not braked, nonlinear
+suspension forces, scalar unsprung-mass wheel hop and vehicle-definition
+compilation.
 
 Linux is not a supported build target during the current prototype phase. It
 may return after the Windows engine, module API and racing simulation have

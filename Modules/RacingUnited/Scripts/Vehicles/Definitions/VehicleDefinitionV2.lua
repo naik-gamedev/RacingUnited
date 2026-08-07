@@ -301,6 +301,21 @@ function BuildVehicleDefinitionV2(draft)
             suspensionDirection = { 0.0, -1.0, 0.0 },
             radiusM = source and source.radiusM
                 or prototypeWheelPhysics.radiusM or 0.35,
+            effectiveUnsprungMassKg = source
+                and source.effectiveUnsprungMassKg
+                or prototypeWheelPhysics.effectiveUnsprungMassKg or 0.0,
+            tireRadialStiffnessNPerM = source
+                and source.tireRadialStiffnessNPerM
+                or prototypeWheelPhysics.tireRadialStiffnessNPerM or 220000.0,
+            tireRadialDampingNsPerM = source
+                and source.tireRadialDampingNsPerM
+                or prototypeWheelPhysics.tireRadialDampingNsPerM or 1800.0,
+            maximumTireDeflectionM = source
+                and source.maximumTireDeflectionM
+                or prototypeWheelPhysics.maximumTireDeflectionM or 0.08,
+            maximumTireNormalForceN = source
+                and source.maximumTireNormalForceN
+                or prototypeWheelPhysics.maximumTireNormalForceN or 250000.0,
             serviceBrakeFactor = serviceBrakeFactor,
             parkingBrakeFactor = axle == "rear"
                 and (contactCount == 2 and 1.0 or 0.5) or 0.0
@@ -495,6 +510,33 @@ function ValidateVehicleDefinitionV2(definition)
                 report, "error", "contact_suspension_ref",
                 "Contact unit '" .. tostring(contact.id)
                     .. "' references a missing suspension")
+        end
+        local nonNegativeContactFields = {
+            "effectiveUnsprungMassKg", "tireRadialDampingNsPerM"
+        }
+        for _, field in ipairs(nonNegativeContactFields) do
+            local value = contact[field]
+            if type(value) ~= "number" or value < 0.0 or value ~= value then
+                AddVehicleDefinitionIssue(
+                    report, "error", "contact_vertical_parameter",
+                    "Contact unit '" .. tostring(contact.id)
+                        .. "' has invalid " .. field)
+                break
+            end
+        end
+        local positiveContactFields = {
+            "tireRadialStiffnessNPerM", "maximumTireDeflectionM",
+            "maximumTireNormalForceN"
+        }
+        for _, field in ipairs(positiveContactFields) do
+            local value = contact[field]
+            if type(value) ~= "number" or value <= 0.0 or value ~= value then
+                AddVehicleDefinitionIssue(
+                    report, "error", "contact_vertical_parameter",
+                    "Contact unit '" .. tostring(contact.id)
+                        .. "' has invalid " .. field)
+                break
+            end
         end
     end
     for _, connection in ipairs(connections) do

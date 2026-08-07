@@ -641,6 +641,21 @@ bool parseLuaVehicleDefinitionV2(
                 api, state, -1, "tireProvider");
             contact.radiusM = static_cast<float>(luaFieldNumber(
                 api, state, -1, "radiusM", 0.35));
+            contact.effectiveUnsprungMassKg = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "effectiveUnsprungMassKg", 0.0));
+            contact.tireRadialStiffnessNPerM = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "tireRadialStiffnessNPerM", 220000.0));
+            contact.tireRadialDampingNsPerM = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "tireRadialDampingNsPerM", 1800.0));
+            contact.maximumTireDeflectionM = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "maximumTireDeflectionM", 0.08));
+            contact.maximumTireNormalForceN = static_cast<float>(
+                luaFieldNumber(
+                    api, state, -1, "maximumTireNormalForceN", 250000.0));
             contact.serviceBrakeFactor = static_cast<float>(luaFieldNumber(
                 api, state, -1, "serviceBrakeFactor", 0.25));
             contact.parkingBrakeFactor = static_cast<float>(luaFieldNumber(
@@ -1352,6 +1367,8 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("Vehicle", "GetWheelCount", &LuaModuleRuntime::luaVehicleGetWheelCount);
     registerFunction("Vehicle", "SetWheelSuspensionModel", &LuaModuleRuntime::luaVehicleSetWheelSuspensionModel);
     registerFunction("Vehicle", "GetWheelSuspensionModel", &LuaModuleRuntime::luaVehicleGetWheelSuspensionModel);
+    registerFunction("Vehicle", "SetWheelUnsprungMassModel", &LuaModuleRuntime::luaVehicleSetWheelUnsprungMassModel);
+    registerFunction("Vehicle", "GetWheelUnsprungMassModel", &LuaModuleRuntime::luaVehicleGetWheelUnsprungMassModel);
     registerFunction("Vehicle", "SetInputs", &LuaModuleRuntime::luaVehicleSetInputs);
     registerFunction("Vehicle", "SetWheelBrakeFactors", &LuaModuleRuntime::luaVehicleSetWheelBrakeFactors);
     registerFunction("Vehicle", "SetDriverAids", &LuaModuleRuntime::luaVehicleSetDriverAids);
@@ -6734,6 +6751,16 @@ int LuaModuleRuntime::luaVehicleAddWheel(lua_State* state)
         numberArgument(*runtime, state, 30, 1.0));
     description.maximumSuspensionForce = static_cast<float>(
         numberArgument(*runtime, state, 31, 250000.0));
+    description.effectiveUnsprungMass = static_cast<float>(
+        numberArgument(*runtime, state, 32, 0.0));
+    description.tireRadialStiffness = static_cast<float>(
+        numberArgument(*runtime, state, 33, 220000.0));
+    description.tireRadialDamping = static_cast<float>(
+        numberArgument(*runtime, state, 34, 1800.0));
+    description.maximumTireDeflection = static_cast<float>(
+        numberArgument(*runtime, state, 35, 0.08));
+    description.maximumTireNormalForce = static_cast<float>(
+        numberArgument(*runtime, state, 36, 250000.0));
     const bool result = runtime->m_physics && runtime->m_physics->vehicles().addWheel(
         vehicleHandleArgument(*runtime, state, 1), description);
     runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
@@ -6840,6 +6867,62 @@ int LuaModuleRuntime::luaVehicleGetWheelSuspensionModel(lua_State* state)
     runtime->m_api.lua_pushnumber(state, value.motionRatio);
     runtime->m_api.lua_pushnumber(state, value.maximumForceN);
     return 17;
+}
+
+int LuaModuleRuntime::luaVehicleSetWheelUnsprungMassModel(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime) return 0;
+    int converted = 0;
+    const LuaInteger luaIndex = runtime->m_api.lua_tointegerx(
+        state, 2, &converted);
+    const std::size_t wheelIndex = converted && luaIndex >= 1
+        ? static_cast<std::size_t>(luaIndex - 1)
+        : static_cast<std::size_t>(-1);
+    heritage::vehicles::UnsprungMassDescription value;
+    value.effectiveMassKg = static_cast<float>(
+        numberArgument(*runtime, state, 3, 0.0));
+    value.tireRadialStiffnessNPerM = static_cast<float>(
+        numberArgument(*runtime, state, 4, 220000.0));
+    value.tireRadialDampingNsPerM = static_cast<float>(
+        numberArgument(*runtime, state, 5, 1800.0));
+    value.maximumTireDeflectionM = static_cast<float>(
+        numberArgument(*runtime, state, 6, 0.08));
+    value.maximumNormalForceN = static_cast<float>(
+        numberArgument(*runtime, state, 7, 250000.0));
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().setWheelUnsprungMassModel(
+            vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaModuleRuntime::luaVehicleGetWheelUnsprungMassModel(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime) return 0;
+    int converted = 0;
+    const LuaInteger luaIndex = runtime->m_api.lua_tointegerx(
+        state, 2, &converted);
+    const std::size_t wheelIndex = converted && luaIndex >= 1
+        ? static_cast<std::size_t>(luaIndex - 1)
+        : static_cast<std::size_t>(-1);
+    heritage::vehicles::UnsprungMassDescription value;
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().wheelUnsprungMassModel(
+            vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
+    if (!result)
+    {
+        for (int index = 0; index < 5; ++index)
+            runtime->m_api.lua_pushnil(state);
+        return 5;
+    }
+    runtime->m_api.lua_pushnumber(state, value.effectiveMassKg);
+    runtime->m_api.lua_pushnumber(state, value.tireRadialStiffnessNPerM);
+    runtime->m_api.lua_pushnumber(state, value.tireRadialDampingNsPerM);
+    runtime->m_api.lua_pushnumber(state, value.maximumTireDeflectionM);
+    runtime->m_api.lua_pushnumber(state, value.maximumNormalForceN);
+    return 5;
 }
 
 int LuaModuleRuntime::luaVehicleSetInputs(lua_State* state)
@@ -7378,9 +7461,9 @@ int LuaModuleRuntime::luaVehicleGetDynamicsLabSummary(lua_State* state)
             value);
     if (!result)
     {
-        for (int index = 0; index < 20; ++index)
+        for (int index = 0; index < 23; ++index)
             runtime->m_api.lua_pushnil(state);
-        return 20;
+        return 23;
     }
 
     runtime->m_api.lua_pushboolean(state, value.recording ? 1 : 0);
@@ -7416,7 +7499,13 @@ int LuaModuleRuntime::luaVehicleGetDynamicsLabSummary(lua_State* state)
         state, value.peakSuspensionTravelStopForceNewtons);
     runtime->m_api.lua_pushnumber(
         state, value.peakDamperDissipationWatts);
-    return 20;
+    runtime->m_api.lua_pushnumber(
+        state, value.peakAbsoluteUnsprungVelocityMps);
+    runtime->m_api.lua_pushnumber(
+        state, value.peakTireDeflectionMillimeters);
+    runtime->m_api.lua_pushnumber(
+        state, value.peakTireRadialDissipationWatts);
+    return 23;
 }
 
 int LuaModuleRuntime::luaVehicleGetDynamicsLabSeries(lua_State* state)
@@ -7516,8 +7605,8 @@ int LuaModuleRuntime::luaVehicleGetWheelState(lua_State* state)
         vehicleHandleArgument(*runtime, state, 1), wheelIndex, value);
     if (!result)
     {
-        for (int index = 0; index < 47; ++index) runtime->m_api.lua_pushnil(state);
-        return 47;
+        for (int index = 0; index < 51; ++index) runtime->m_api.lua_pushnil(state);
+        return 51;
     }
     runtime->m_api.lua_pushboolean(state, value.grounded ? 1 : 0);
     runtime->m_api.lua_pushnumber(state, value.suspensionLength);
@@ -7575,7 +7664,11 @@ int LuaModuleRuntime::luaVehicleGetWheelState(lua_State* state)
     runtime->m_api.lua_pushnumber(state, value.suspensionDroopStopForce);
     runtime->m_api.lua_pushnumber(state, value.suspensionUnclampedForce);
     runtime->m_api.lua_pushnumber(state, value.damperDissipationWatts);
-    return 47;
+    runtime->m_api.lua_pushnumber(state, value.unsprungVelocity);
+    runtime->m_api.lua_pushnumber(state, value.tireDeflection);
+    runtime->m_api.lua_pushnumber(state, value.tireDeflectionVelocity);
+    runtime->m_api.lua_pushnumber(state, value.tireRadialDissipationWatts);
+    return 51;
 }
 
 int LuaModuleRuntime::luaVehicleGetLastError(lua_State* state)

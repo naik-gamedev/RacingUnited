@@ -387,6 +387,8 @@ private:
     static int luaVehicleGetWheelCount(lua_State* state);
     static int luaVehicleSetWheelSuspensionModel(lua_State* state);
     static int luaVehicleGetWheelSuspensionModel(lua_State* state);
+    static int luaVehicleSetWheelUnsprungMassModel(lua_State* state);
+    static int luaVehicleGetWheelUnsprungMassModel(lua_State* state);
     static int luaVehicleSetInputs(lua_State* state);
     static int luaVehicleSetWheelBrakeFactors(lua_State* state);
     static int luaVehicleSetDriverAids(lua_State* state);

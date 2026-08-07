@@ -46,7 +46,8 @@ function DrawVehicleDynamicsLabPanel()
         duration, captureHertz, peakSpeed, peakRoll, peakPitch, peakYaw,
         peakSuspensionSpeed, peakSlipRatio, peakSlipAngle, peakGrip,
         minimumLoad, maximumLoad, contactLosses, peakTravelStopForce,
-        peakDamperDissipation =
+        peakDamperDissipation, peakUnsprungSpeed, peakTireDeflection,
+        peakTireRadialDissipation =
         Vehicle.GetDynamicsLabSummary(nativeVehicle)
 
     samples = samples or 0
@@ -68,6 +69,9 @@ function DrawVehicleDynamicsLabPanel()
         minimumLoad or 0.0, maximumLoad or 0.0, contactLosses or 0))
     UI.Text(string.format("Travel-stop peak %.0f N | damper dissipation peak %.0f W",
         peakTravelStopForce or 0.0, peakDamperDissipation or 0.0))
+    UI.Text(string.format("Wheel-hop peak %.3f m/s | tire deflection %.2f mm | radial heat %.0f W",
+        peakUnsprungSpeed or 0.0, peakTireDeflection or 0.0,
+        peakTireRadialDissipation or 0.0))
     UI.TextDisabled(vehicleDynamicsLab.message)
 
     if samples < 2 then
@@ -90,6 +94,10 @@ function DrawVehicleDynamicsLabPanel()
     local bumpStopForce = DynamicsLabSeries(
         "wheel_suspension_bump_stop_force_n")
     local damperPower = DynamicsLabSeries("wheel_damper_dissipation_w")
+    local unsprungSpeed = DynamicsLabSeries("wheel_unsprung_velocity_mps")
+    local tireDeflection = DynamicsLabSeries("wheel_tire_deflection_mm")
+    local tireRadialPower = DynamicsLabSeries(
+        "wheel_tire_radial_dissipation_w")
     local slip = DynamicsLabSeries("wheel_slip_ratio")
     local grip = DynamicsLabSeries("wheel_grip_percent")
 
@@ -102,6 +110,9 @@ function DrawVehicleDynamicsLabPanel()
     UI.PlotLines("Selected-wheel damper force (N)", 72.0, table.unpack(damperForce))
     UI.PlotLines("Selected-wheel bump-stop force (N)", 72.0, table.unpack(bumpStopForce))
     UI.PlotLines("Selected-wheel damper dissipation (W)", 72.0, table.unpack(damperPower))
+    UI.PlotLines("Selected-wheel unsprung velocity (m/s)", 72.0, table.unpack(unsprungSpeed))
+    UI.PlotLines("Selected-wheel tire deflection (mm)", 72.0, table.unpack(tireDeflection))
+    UI.PlotLines("Selected-wheel tire radial dissipation (W)", 72.0, table.unpack(tireRadialPower))
     UI.PlotLines("Selected-wheel slip ratio", 72.0, table.unpack(slip))
     UI.PlotLines("Selected-wheel grip utilization (%)", 72.0, table.unpack(grip))
 end

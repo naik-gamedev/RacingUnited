@@ -47,6 +47,8 @@ $required = @(
     "Docs\Decisions\ADR-013-Suspension-Provider-Contract.md",
     "Docs\Decisions\ADR-014-Nonlinear-Suspension-Forces.md",
     "Docs\Decisions\ADR-015-Live-Per-Wheel-Suspension-Tuning.md",
+    "Docs\Decisions\ADR-016-Scalar-Unsprung-Mass.md",
+    "Docs\UNSPRUNG_MASS_MODEL.md",
     "Docs\LuaApiAnnotations.json",
     "Engine\HeritageEngine\Core\Diagnostics\BuildIdentity.hpp",
     "Engine\HeritageEngine\Core\Diagnostics\GeneratedBuildIdentity.hpp",
@@ -56,6 +58,8 @@ $required = @(
     "Engine\HeritageEngine\Vehicles\TireModel.cpp",
     "Engine\HeritageEngine\Vehicles\SuspensionModel.hpp",
     "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp",
+    "Engine\HeritageEngine\Vehicles\UnsprungMassModel.hpp",
+    "Engine\HeritageEngine\Vehicles\UnsprungMassModel.cpp",
     "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp",
     "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.cpp",
     "Engine\HeritageEngine\Vehicles\VehicleDefinition.hpp",
@@ -118,6 +122,8 @@ if (Test-Path $manifestPath) {
         "Vehicle.GetWheelTireModel",
         "Vehicle.SetWheelSuspensionModel",
         "Vehicle.GetWheelSuspensionModel",
+        "Vehicle.SetWheelUnsprungMassModel",
+        "Vehicle.GetWheelUnsprungMassModel",
         "Vehicle.StartDynamicsLab",
         "Vehicle.GetDynamicsLabSummary",
         "Vehicle.GetDynamicsLabSeries",
@@ -151,8 +157,8 @@ $runtimeCpp = if (Test-Path $runtimeCppPath) { [IO.File]::ReadAllText($runtimeCp
 Check ($runtimeCpp.Contains("m_registeredLuaFunctions")) "runtime records exact registered Lua names"
 Check ($runtimeCpp.Contains("runSafetySmokeTests")) "runtime contains lifetime safety smoke tests"
 Check ($runtimeCpp.Contains("LuaAPI_Runtime.json")) "runtime writes a live API manifest"
-Check ($runtimeCpp.Contains("return 47;")) "wheel-state Lua bridge includes suspension force telemetry"
-Check ($runtimeCpp.Contains("return 20;")) "Dynamics Lab summary includes suspension energy extrema"
+Check ($runtimeCpp.Contains("return 51;")) "wheel-state Lua bridge includes unsprung-mass telemetry"
+Check ($runtimeCpp.Contains("return 23;")) "Dynamics Lab summary includes wheel-hop extrema"
 Check ($runtimeCpp.Contains("OFN_FILEMUSTEXIST")) "Windows module asset picker requires an existing file"
 Check ($runtimeCpp.Contains("resolveSavePath(relative)")) "bounded text export resolves through the active module save root"
 
@@ -192,6 +198,8 @@ Check ($vehicleHeader.Contains("setWheelTireModel")) "per-wheel tire setter cont
 Check ($vehicleHeader.Contains("wheelTireModel")) "per-wheel tire readback contract exists"
 Check ($vehicleHeader.Contains("setWheelSuspensionModel")) "per-wheel suspension setter contract exists"
 Check ($vehicleHeader.Contains("wheelSuspensionModel")) "per-wheel suspension readback contract exists"
+Check ($vehicleHeader.Contains("setWheelUnsprungMassModel")) "per-wheel unsprung-mass setter contract exists"
+Check ($vehicleHeader.Contains("wheelUnsprungMassModel")) "per-wheel unsprung-mass readback contract exists"
 Check ($vehicleHeader.Contains("struct VehicleRestState")) "vehicle parked-rest diagnostic contract exists"
 Check ($vehicleHeader.Contains("startDynamicsLabCapture")) "vehicle exposes opt-in native dynamics capture"
 Check ($vehicleHeader.Contains("damperDissipationWatts")) "wheel state exposes damper energy-rate telemetry"
@@ -206,6 +214,8 @@ Check ($physicsRegression.Contains("vehicleDefinitionCompilerAndLoaderWork")) "h
 Check ($physicsRegression.Contains("motion_ratio_force_n")) "headless regression verifies suspension motion-ratio force evaluation"
 Check ($physicsRegression.Contains("nonlinear_force_n")) "headless regression verifies non-linear suspension force components"
 Check ($physicsRegression.Contains("live_suspension_roundtrip")) "headless regression verifies live suspension tuning roundtrip"
+Check ($physicsRegression.Contains("scalar unsprung-mass wheel-hop response")) "headless regression verifies scalar wheel-hop response"
+Check ($physicsRegression.Contains("live_unsprung_roundtrip")) "headless regression verifies live unsprung-mass tuning roundtrip"
 
 $definitionV2Path = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Definitions\VehicleDefinitionV2.lua"
 $definitionV2 = if (Test-Path $definitionV2Path) { [IO.File]::ReadAllText($definitionV2Path) } else { "" }
@@ -216,6 +226,8 @@ Check ($definitionV2.Contains("suspensions = {}")) "VehicleDefinitionV2 stores r
 Check ($definitionV2.Contains("suspension = suspensionId")) "contact units reference stable suspension IDs"
 Check ($definitionV2.Contains("bumpHighSpeedDampingNsPerM")) "suspension definitions author digressive damping"
 Check ($definitionV2.Contains("bumpStopProgressionNPerM2")) "suspension definitions author progressive travel stops"
+Check ($definitionV2.Contains("effectiveUnsprungMassKg")) "contact definitions author effective unsprung mass"
+Check ($definitionV2.Contains("tireRadialStiffnessNPerM")) "contact definitions author radial tire stiffness"
 Check ($definitionV2.Contains("driveConnections = {}")) "VehicleDefinitionV2 stores explicit drive connections"
 Check ($definitionV2.Contains("ValidateVehicleDefinitionV2")) "VehicleDefinitionV2 has structural validation"
 Check ($definitionV2.Contains("currentSolverReady")) "definition validity remains separate from current solver support"
@@ -258,16 +270,27 @@ Check ($suspensionCpp.Contains("damperDissipationW")) "suspension provider repor
 Check ($vehicleCpp.Contains("evaluateSuspensionModel")) "VehicleSystem evaluates suspension through the provider boundary"
 Check ($runtimeCpp.Contains("luaVehicleGetWheelSuspensionModel")) "Lua exposes exact native suspension readback"
 
+$unsprungHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\UnsprungMassModel.hpp"
+$unsprungHeader = if (Test-Path $unsprungHeaderPath) { [IO.File]::ReadAllText($unsprungHeaderPath) } else { "" }
+$unsprungCppPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\UnsprungMassModel.cpp"
+$unsprungCpp = if (Test-Path $unsprungCppPath) { [IO.File]::ReadAllText($unsprungCppPath) } else { "" }
+Check ($unsprungHeader.Contains("struct UnsprungMassInput")) "unsprung-mass provider has an explicit input contract"
+Check ($unsprungHeader.Contains("struct UnsprungMassOutput")) "unsprung-mass provider has an explicit output contract"
+Check ($unsprungCpp.Contains("advanceUnsprungMassModel")) "scalar unsprung-mass provider implementation exists"
+Check ($runtimeCpp.Contains("luaVehicleGetWheelUnsprungMassModel")) "Lua exposes exact unsprung-mass readback"
+
 $suspensionRuntimePath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Suspension.lua"
 $suspensionRuntime = if (Test-Path $suspensionRuntimePath) { [IO.File]::ReadAllText($suspensionRuntimePath) } else { "" }
 Check ($suspensionRuntime.Contains("ApplyVehicleSuspensionModelToAllWheels")) "module can explicitly copy a selected suspension tune"
 $suspensionPanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\SuspensionPanel.lua"
 $suspensionPanel = if (Test-Path $suspensionPanelPath) { [IO.File]::ReadAllText($suspensionPanelPath) } else { "" }
 Check ($suspensionPanel.Contains("DrawSuspensionLiveTelemetry")) "vehicle suspension panel exposes live force telemetry"
+Check ($suspensionPanel.Contains("DrawSuspensionUnsprungControls")) "vehicle suspension panel exposes unsprung-mass tuning"
 
 $dynamicsLabHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp"
 $dynamicsLabHeader = if (Test-Path $dynamicsLabHeaderPath) { [IO.File]::ReadAllText($dynamicsLabHeaderPath) } else { "" }
 Check ($dynamicsLabHeader.Contains("WheelDamperDissipationWatts")) "Dynamics Lab records damper energy rate"
+Check ($dynamicsLabHeader.Contains("WheelUnsprungVelocityMps")) "Dynamics Lab records wheel-hop velocity"
 
 
 $vehicleProjectPath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj"
@@ -276,6 +299,8 @@ Check ($vehicleProject.Contains("..\Vehicles\TireModel.cpp")) "Visual Studio pro
 Check ($vehicleProject.Contains("..\Vehicles\TireModel.hpp")) "Visual Studio project tracks TireModel.hpp"
 Check ($vehicleProject.Contains("..\Vehicles\SuspensionModel.cpp")) "Visual Studio project compiles SuspensionModel.cpp"
 Check ($vehicleProject.Contains("..\Vehicles\SuspensionModel.hpp")) "Visual Studio project tracks SuspensionModel.hpp"
+Check ($vehicleProject.Contains("..\Vehicles\UnsprungMassModel.cpp")) "Visual Studio project compiles UnsprungMassModel.cpp"
+Check ($vehicleProject.Contains("..\Vehicles\UnsprungMassModel.hpp")) "Visual Studio project tracks UnsprungMassModel.hpp"
 Check ($vehicleProject.Contains("..\Vehicles\VehicleDynamicsLab.cpp")) "Visual Studio project compiles VehicleDynamicsLab.cpp"
 Check ($vehicleProject.Contains("..\Vehicles\VehicleDynamicsLab.hpp")) "Visual Studio project tracks VehicleDynamicsLab.hpp"
 Check ($vehicleProject.Contains("..\Vehicles\VehicleDefinitionCompiler.cpp")) "Visual Studio project compiles VehicleDefinitionCompiler.cpp"

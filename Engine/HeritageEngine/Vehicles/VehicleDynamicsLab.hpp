@@ -29,6 +29,10 @@ enum class DynamicsLabMetric
     WheelSuspensionBumpStopForceNewtons,
     WheelSuspensionDroopStopForceNewtons,
     WheelDamperDissipationWatts,
+    WheelUnsprungVelocityMps,
+    WheelTireDeflectionMillimeters,
+    WheelTireDeflectionVelocityMps,
+    WheelTireRadialDissipationWatts,
     WheelNormalForceNewtons,
     WheelLongitudinalForceNewtons,
     WheelLateralForceNewtons,
@@ -48,6 +52,10 @@ struct DynamicsLabWheelSample
     float suspensionBumpStopForce = 0.0f;
     float suspensionDroopStopForce = 0.0f;
     float damperDissipationWatts = 0.0f;
+    float unsprungVelocity = 0.0f;
+    float tireDeflection = 0.0f;
+    float tireDeflectionVelocity = 0.0f;
+    float tireRadialDissipationWatts = 0.0f;
     float normalForce = 0.0f;
     float longitudinalForce = 0.0f;
     float lateralForce = 0.0f;
@@ -98,6 +106,9 @@ struct DynamicsLabSummary
     float peakAbsoluteSuspensionVelocityMps = 0.0f;
     float peakSuspensionTravelStopForceNewtons = 0.0f;
     float peakDamperDissipationWatts = 0.0f;
+    float peakAbsoluteUnsprungVelocityMps = 0.0f;
+    float peakTireDeflectionMillimeters = 0.0f;
+    float peakTireRadialDissipationWatts = 0.0f;
     float peakAbsoluteSlipRatio = 0.0f;
     float peakAbsoluteSlipAngleDegrees = 0.0f;
     float peakGripUtilizationPercent = 0.0f;

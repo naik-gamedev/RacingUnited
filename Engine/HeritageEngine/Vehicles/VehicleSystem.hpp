@@ -10,6 +10,7 @@
 #include "../Physics/RigidBodySystem.hpp"
 #include "TireModel.hpp"
 #include "SuspensionModel.hpp"
+#include "UnsprungMassModel.hpp"
 #include "VehicleDynamicsLab.hpp"
 
 namespace heritage::vehicles {
@@ -121,6 +122,11 @@ struct WheelDescription
         SuspensionProviderKind::LinearRaycastV1;
     float suspensionMotionRatio = 1.0f;
     float maximumSuspensionForce = 250000.0f;
+    float effectiveUnsprungMass = 0.0f;
+    float tireRadialStiffness = 220000.0f;
+    float tireRadialDamping = 1800.0f;
+    float maximumTireDeflection = 0.08f;
+    float maximumTireNormalForce = 250000.0f;
     float driveFactor = 0.0f;
     float steerFactor = 0.0f;
     float brakeFactor = 1.0f;
@@ -179,6 +185,10 @@ struct WheelState
     float suspensionDroopStopForce = 0.0f;
     float suspensionUnclampedForce = 0.0f;
     float damperDissipationWatts = 0.0f;
+    float unsprungVelocity = 0.0f;
+    float tireDeflection = 0.0f;
+    float tireDeflectionVelocity = 0.0f;
+    float tireRadialDissipationWatts = 0.0f;
     float normalForce = 0.0f;
     float longitudinalForce = 0.0f;
     float lateralForce = 0.0f;
@@ -248,6 +258,14 @@ public:
         VehicleHandle handle,
         std::size_t wheelIndex,
         SuspensionModelDescription& value) const;
+    bool setWheelUnsprungMassModel(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const UnsprungMassDescription& value);
+    bool wheelUnsprungMassModel(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        UnsprungMassDescription& value) const;
 
     bool setInputs(
         VehicleHandle handle,
@@ -401,6 +419,7 @@ private:
         WheelState state;
         TireModelDescription tireModel;
         float previousSuspensionLength = 0.0f;
+        UnsprungMassState unsprungMass;
     };
 
     struct Record

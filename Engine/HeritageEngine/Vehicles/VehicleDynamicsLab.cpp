@@ -246,6 +246,10 @@ bool VehicleDynamicsLab::exportCsv(const std::filesystem::path& path)
             << prefix << "_suspension_bump_stop_force_n"
             << prefix << "_suspension_droop_stop_force_n"
             << prefix << "_damper_dissipation_w"
+            << prefix << "_unsprung_velocity_mps"
+            << prefix << "_tire_deflection_m"
+            << prefix << "_tire_deflection_velocity_mps"
+            << prefix << "_tire_radial_dissipation_w"
             << prefix << "_normal_force_n"
             << prefix << "_longitudinal_force_n"
             << prefix << "_lateral_force_n"
@@ -287,6 +291,10 @@ bool VehicleDynamicsLab::exportCsv(const std::filesystem::path& path)
                 << ',' << wheel.suspensionBumpStopForce
                 << ',' << wheel.suspensionDroopStopForce
                 << ',' << wheel.damperDissipationWatts
+                << ',' << wheel.unsprungVelocity
+                << ',' << wheel.tireDeflection
+                << ',' << wheel.tireDeflectionVelocity
+                << ',' << wheel.tireRadialDissipationWatts
                 << ',' << wheel.normalForce
                 << ',' << wheel.longitudinalForce
                 << ',' << wheel.lateralForce
@@ -364,6 +372,14 @@ float VehicleDynamicsLab::metricValue(
         return wheel.suspensionDroopStopForce;
     case DynamicsLabMetric::WheelDamperDissipationWatts:
         return wheel.damperDissipationWatts;
+    case DynamicsLabMetric::WheelUnsprungVelocityMps:
+        return wheel.unsprungVelocity;
+    case DynamicsLabMetric::WheelTireDeflectionMillimeters:
+        return wheel.tireDeflection * 1000.0f;
+    case DynamicsLabMetric::WheelTireDeflectionVelocityMps:
+        return wheel.tireDeflectionVelocity;
+    case DynamicsLabMetric::WheelTireRadialDissipationWatts:
+        return wheel.tireRadialDissipationWatts;
     case DynamicsLabMetric::WheelNormalForceNewtons:
         return wheel.normalForce;
     case DynamicsLabMetric::WheelLongitudinalForceNewtons:
@@ -412,6 +428,15 @@ void VehicleDynamicsLab::updateSummary(const DynamicsLabSample& sample)
         m_summary.peakDamperDissipationWatts = std::max(
             m_summary.peakDamperDissipationWatts,
             wheel.damperDissipationWatts);
+        m_summary.peakAbsoluteUnsprungVelocityMps = std::max(
+            m_summary.peakAbsoluteUnsprungVelocityMps,
+            absolute(wheel.unsprungVelocity));
+        m_summary.peakTireDeflectionMillimeters = std::max(
+            m_summary.peakTireDeflectionMillimeters,
+            wheel.tireDeflection * 1000.0f);
+        m_summary.peakTireRadialDissipationWatts = std::max(
+            m_summary.peakTireRadialDissipationWatts,
+            wheel.tireRadialDissipationWatts);
         m_summary.peakAbsoluteSlipRatio = std::max(
             m_summary.peakAbsoluteSlipRatio,
             absolute(wheel.slipRatio));
@@ -470,6 +495,10 @@ const char* dynamicsLabMetricName(DynamicsLabMetric metric)
     case DynamicsLabMetric::WheelSuspensionBumpStopForceNewtons: return "wheel_suspension_bump_stop_force_n";
     case DynamicsLabMetric::WheelSuspensionDroopStopForceNewtons: return "wheel_suspension_droop_stop_force_n";
     case DynamicsLabMetric::WheelDamperDissipationWatts: return "wheel_damper_dissipation_w";
+    case DynamicsLabMetric::WheelUnsprungVelocityMps: return "wheel_unsprung_velocity_mps";
+    case DynamicsLabMetric::WheelTireDeflectionMillimeters: return "wheel_tire_deflection_mm";
+    case DynamicsLabMetric::WheelTireDeflectionVelocityMps: return "wheel_tire_deflection_velocity_mps";
+    case DynamicsLabMetric::WheelTireRadialDissipationWatts: return "wheel_tire_radial_dissipation_w";
     case DynamicsLabMetric::WheelNormalForceNewtons: return "wheel_normal_force_n";
     case DynamicsLabMetric::WheelLongitudinalForceNewtons: return "wheel_longitudinal_force_n";
     case DynamicsLabMetric::WheelLateralForceNewtons: return "wheel_lateral_force_n";

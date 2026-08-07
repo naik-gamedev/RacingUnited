@@ -30,6 +30,12 @@ assert(road.suspensions[1].bumpHighSpeedDampingNsPerM >= 0.0
     and road.suspensions[1].bumpStopRateNPerM > 0.0
     and road.suspensions[1].droopStopRateNPerM > 0.0,
     "non-linear damper and travel-limit parameters were not authored")
+assert(road.contactUnits[1].effectiveUnsprungMassKg > 0.0
+    and road.contactUnits[1].tireRadialStiffnessNPerM > 0.0
+    and road.contactUnits[1].tireRadialDampingNsPerM >= 0.0
+    and road.contactUnits[1].maximumTireDeflectionM > 0.0
+    and road.contactUnits[1].maximumTireNormalForceN > 0.0,
+    "unsprung-mass and radial tire parameters were not authored")
 assert(road.transmissions[1].finalDriveRatio > 0.0,
     "runtime transmission parameters were not authored")
 

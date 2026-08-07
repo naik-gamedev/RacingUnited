@@ -85,6 +85,11 @@ struct VehicleContactUnitDefinition
     bool parkingBrake = false;
     std::string tireProvider;
     float radiusM = 0.35f;
+    float effectiveUnsprungMassKg = 0.0f;
+    float tireRadialStiffnessNPerM = 220000.0f;
+    float tireRadialDampingNsPerM = 1800.0f;
+    float maximumTireDeflectionM = 0.08f;
+    float maximumTireNormalForceN = 250000.0f;
     float serviceBrakeFactor = 0.25f;
     float parkingBrakeFactor = 0.0f;
 };

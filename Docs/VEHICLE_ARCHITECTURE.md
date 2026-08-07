@@ -146,6 +146,14 @@ copy, and asymmetric axle/corner setups do not require a new solver. The
 historical `Vehicle.AddWheel` argument order remains source compatible; new
 nonlinear values are optional trailing arguments. See ADR-015.
 
+Step 29O adds optional per-contact unsprung inertia and radial tire compliance.
+A bounded scalar provider computes authoritative suspension-axis hub motion,
+wheel hop, tire deflection and road-normal load at the high-rate vehicle step.
+Effective mass zero preserves the earlier massless path as a compatibility and
+scalability tier. This is deliberately independent of category and linkage
+type; future geometry providers may reuse or replace it. See
+`UNSPRUNG_MASS_MODEL.md` and ADR-016.
+
 ## Dynamics instrumentation
 
 Step 29J.5 adds an opt-in `VehicleDynamicsLab` recorder owned by each native

@@ -273,10 +273,51 @@ bool validWheelDescription(const WheelDescription& value)
         && value.suspensionMotionRatio <= 10.0f
         && finiteFloat(value.maximumSuspensionForce)
         && value.maximumSuspensionForce > 0.0f
+        && finiteFloat(value.effectiveUnsprungMass)
+        && value.effectiveUnsprungMass >= 0.0f
+        && value.effectiveUnsprungMass <= 1000.0f
+        && finiteFloat(value.tireRadialStiffness)
+        && value.tireRadialStiffness > 0.0f
+        && value.tireRadialStiffness <= 10000000.0f
+        && finiteFloat(value.tireRadialDamping)
+        && value.tireRadialDamping >= 0.0f
+        && value.tireRadialDamping <= 1000000.0f
+        && finiteFloat(value.maximumTireDeflection)
+        && value.maximumTireDeflection > 0.0f
+        && value.maximumTireDeflection <= 1.0f
+        && finiteFloat(value.maximumTireNormalForce)
+        && value.maximumTireNormalForce > 0.0f
+        && value.maximumTireNormalForce <= 10000000.0f
         && finiteFloat(value.driveFactor) && value.driveFactor >= 0.0f
         && finiteFloat(value.steerFactor) && value.steerFactor >= -1.0f && value.steerFactor <= 1.0f
         && finiteFloat(value.brakeFactor) && value.brakeFactor >= 0.0f
         && finiteFloat(value.handbrakeFactor) && value.handbrakeFactor >= 0.0f;
+}
+
+SuspensionModelDescription suspensionModelDescription(
+    const WheelDescription& value)
+{
+    SuspensionModelDescription result;
+    result.provider = value.suspensionProvider;
+    result.springPreloadN = value.springPreload;
+    result.springRateNPerM = value.springRate;
+    result.springProgressionNPerM2 = value.springProgression;
+    result.bumpDampingNsPerM = value.bumpDamping;
+    result.bumpHighSpeedDampingNsPerM = value.bumpHighSpeedDamping;
+    result.bumpDampingKneeVelocityMps = value.bumpDampingKneeVelocity;
+    result.reboundDampingNsPerM = value.reboundDamping;
+    result.reboundHighSpeedDampingNsPerM =
+        value.reboundHighSpeedDamping;
+    result.reboundDampingKneeVelocityMps =
+        value.reboundDampingKneeVelocity;
+    result.bumpStopEngagementM = value.bumpStopEngagement;
+    result.bumpStopRateNPerM = value.bumpStopRate;
+    result.bumpStopProgressionNPerM2 = value.bumpStopProgression;
+    result.droopStopEngagementM = value.droopStopEngagement;
+    result.droopStopRateNPerM = value.droopStopRate;
+    result.motionRatio = value.suspensionMotionRatio;
+    result.maximumForceN = value.maximumSuspensionForce;
+    return result;
 }
 
 
@@ -815,6 +856,63 @@ bool VehicleSystem::wheelSuspensionModel(
     value.droopStopRateNPerM = description.droopStopRate;
     value.motionRatio = description.suspensionMotionRatio;
     value.maximumForceN = description.maximumSuspensionForce;
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::setWheelUnsprungMassModel(
+    VehicleHandle handle,
+    std::size_t wheelIndex,
+    const UnsprungMassDescription& value)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle.SetWheelUnsprungMassModel received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+
+    WheelRecord& wheel = slot->record.wheels[wheelIndex];
+    WheelDescription updated = wheel.description;
+    updated.effectiveUnsprungMass = value.effectiveMassKg;
+    updated.tireRadialStiffness = value.tireRadialStiffnessNPerM;
+    updated.tireRadialDamping = value.tireRadialDampingNsPerM;
+    updated.maximumTireDeflection = value.maximumTireDeflectionM;
+    updated.maximumTireNormalForce = value.maximumNormalForceN;
+    if (!validWheelDescription(updated))
+    {
+        setError("Vehicle.SetWheelUnsprungMassModel received data outside the supported range.");
+        return false;
+    }
+
+    const bool modeChanged = (wheel.description.effectiveUnsprungMass <= 0.0f)
+        != (updated.effectiveUnsprungMass <= 0.0f);
+    wheel.description = updated;
+    if (modeChanged)
+        wheel.unsprungMass = {};
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::wheelUnsprungMassModel(
+    VehicleHandle handle,
+    std::size_t wheelIndex,
+    UnsprungMassDescription& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle.GetWheelUnsprungMassModel received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+
+    const WheelDescription& description =
+        slot->record.wheels[wheelIndex].description;
+    value.effectiveMassKg = description.effectiveUnsprungMass;
+    value.tireRadialStiffnessNPerM = description.tireRadialStiffness;
+    value.tireRadialDampingNsPerM = description.tireRadialDamping;
+    value.maximumTireDeflectionM = description.maximumTireDeflection;
+    value.maximumNormalForceN = description.maximumTireNormalForce;
     clearError();
     return true;
 }
@@ -2154,6 +2252,10 @@ void VehicleSystem::simulateVehicleSubstep(
         state.suspensionDroopStopForce = 0.0f;
         state.suspensionUnclampedForce = 0.0f;
         state.damperDissipationWatts = 0.0f;
+        state.unsprungVelocity = 0.0f;
+        state.tireDeflection = 0.0f;
+        state.tireDeflectionVelocity = 0.0f;
+        state.tireRadialDissipationWatts = 0.0f;
         state.longitudinalSpeed = 0.0f;
         state.lateralSpeed = 0.0f;
         state.slipRatio = 0.0f;
@@ -2258,21 +2360,7 @@ void VehicleSystem::simulateVehicleSubstep(
         state.serviceBrakeTorque = serviceBrakeTorque;
         state.handbrakeTorque = handbrakeTorque;
 
-        if (!hitGround)
-        {
-            state.suspensionLength = maximumLength;
-            state.compression = description.restLength - maximumLength;
-            state.compressionVelocity = (
-                wheel.previousSuspensionLength - maximumLength)
-                / substepDeltaTime;
-            state.worldCenter = add(
-                mountWorld,
-                scale(suspensionDirection, maximumLength));
-            state.contactPoint = add(
-                state.worldCenter,
-                scale(suspensionDirection, description.radius));
-            wheel.previousSuspensionLength = maximumLength;
-
+        const auto advanceFreeWheelRotation = [&]() {
             const float projectedAngularVelocity = state.wheelAngularVelocity
                 + (driveTorque / wheel.tireModel.wheelInertia)
                     * substepDeltaTime;
@@ -2291,129 +2379,286 @@ void VehicleSystem::simulateVehicleSubstep(
             state.relaxedSlipAngleDegrees *= std::exp(-4.0f * substepDeltaTime);
             state.wheelRotationDegrees += degrees(
                 state.wheelAngularVelocity * substepDeltaTime);
-            continue;
-        }
+        };
 
-        float suspensionLength = hit.distance - description.radius;
-        if (suspensionLength > maximumLength)
+        float suspensionForce = 0.0f;
+        if (description.effectiveUnsprungMass <= 0.0f)
         {
-            state.suspensionLength = maximumLength;
-            state.compression = description.restLength - maximumLength;
+            if (!hitGround)
+            {
+                state.suspensionLength = maximumLength;
+                state.compression = description.restLength - maximumLength;
+                state.compressionVelocity = (
+                    wheel.previousSuspensionLength - maximumLength)
+                    / substepDeltaTime;
+                state.worldCenter = add(
+                    mountWorld,
+                    scale(suspensionDirection, maximumLength));
+                state.contactPoint = add(
+                    state.worldCenter,
+                    scale(suspensionDirection, description.radius));
+                wheel.previousSuspensionLength = maximumLength;
+                advanceFreeWheelRotation();
+                continue;
+            }
+
+            float suspensionLength = hit.distance - description.radius;
+            if (suspensionLength > maximumLength)
+            {
+                state.suspensionLength = maximumLength;
+                state.compression = description.restLength - maximumLength;
+                state.worldCenter = add(
+                    mountWorld,
+                    scale(suspensionDirection, maximumLength));
+                state.contactPoint = hit.point;
+                wheel.previousSuspensionLength = maximumLength;
+                continue;
+            }
+
+            suspensionLength = std::clamp(
+                suspensionLength,
+                minimumLength,
+                maximumLength);
+            state.grounded = true;
+            ++groundedCount;
+            state.suspensionLength = suspensionLength;
+            state.compression = description.restLength - suspensionLength;
+            wheel.previousSuspensionLength = suspensionLength;
             state.worldCenter = add(
                 mountWorld,
-                scale(suspensionDirection, maximumLength));
+                scale(suspensionDirection, suspensionLength));
             state.contactPoint = hit.point;
-            wheel.previousSuspensionLength = maximumLength;
-            continue;
-        }
+            state.contactNormal = normalized(
+                hit.normal,
+                { 0.0f, 1.0f, 0.0f });
+            state.contactCollider = hit.collider;
+            state.surfaceMaterial = hit.surfaceMaterial;
+            state.surfaceWetness = hit.surfaceWetness;
 
-        suspensionLength = std::clamp(
-            suspensionLength,
-            minimumLength,
-            maximumLength);
-        state.grounded = true;
-        ++groundedCount;
-        state.suspensionLength = suspensionLength;
-        state.compression = description.restLength - suspensionLength;
-        wheel.previousSuspensionLength = suspensionLength;
-        state.worldCenter = add(
-            mountWorld,
-            scale(suspensionDirection, suspensionLength));
-        state.contactPoint = hit.point;
-        state.contactNormal = normalized(hit.normal, { 0.0f, 1.0f, 0.0f });
-        state.contactCollider = hit.collider;
-        state.surfaceMaterial = hit.surfaceMaterial;
-        state.surfaceWetness = hit.surfaceWetness;
-
-        // The vehicle loop may run at 1000 Hz inside a 120 Hz rigid-body
-        // world step. The chassis pose therefore remains fixed across several
-        // vehicle substeps even though tire/suspension impulses immediately
-        // change its velocity. A finite difference of ray length would report
-        // damper motion only during the first substep and zero for the rest,
-        // effectively removing most of the authored damping. Measure the
-        // attachment-point velocity along the suspension axis instead. This is
-        // also the physical relative velocity used by a massless raycast wheel.
-        bodies.linearVelocity(vehicle.description.chassisBody, linearVelocity);
-        bodies.angularVelocityDegrees(
-            vehicle.description.chassisBody,
-            angularVelocityDegrees);
-        const heritage::math::Vec3 mountVelocity = pointVelocity(
-            linearVelocity,
-            angularVelocityDegrees,
-            pose.position,
-            mountWorld);
-        heritage::math::Vec3 supportVelocity{};
-        if (hit.body != heritage::physics::InvalidBody)
-        {
-            heritage::physics::RigidBodyPose supportPose;
-            heritage::math::Vec3 supportLinearVelocity{};
-            heritage::math::Vec3 supportAngularVelocityDegrees{};
-            if (bodies.pose(hit.body, supportPose)
-                && bodies.linearVelocity(hit.body, supportLinearVelocity)
-                && bodies.angularVelocityDegrees(
-                    hit.body,
-                    supportAngularVelocityDegrees))
+            // The vehicle loop may run at 1000 Hz inside a 120 Hz rigid-body
+            // world step. Attachment velocity remains authoritative across
+            // those substeps for the legacy massless contact.
+            bodies.linearVelocity(
+                vehicle.description.chassisBody,
+                linearVelocity);
+            bodies.angularVelocityDegrees(
+                vehicle.description.chassisBody,
+                angularVelocityDegrees);
+            const heritage::math::Vec3 mountVelocity = pointVelocity(
+                linearVelocity,
+                angularVelocityDegrees,
+                pose.position,
+                mountWorld);
+            heritage::math::Vec3 supportVelocity{};
+            if (hit.body != heritage::physics::InvalidBody)
             {
-                supportVelocity = pointVelocity(
-                    supportLinearVelocity,
-                    supportAngularVelocityDegrees,
-                    supportPose.position,
-                    hit.point);
+                heritage::physics::RigidBodyPose supportPose;
+                heritage::math::Vec3 supportLinearVelocity{};
+                heritage::math::Vec3 supportAngularVelocityDegrees{};
+                if (bodies.pose(hit.body, supportPose)
+                    && bodies.linearVelocity(
+                        hit.body,
+                        supportLinearVelocity)
+                    && bodies.angularVelocityDegrees(
+                        hit.body,
+                        supportAngularVelocityDegrees))
+                {
+                    supportVelocity = pointVelocity(
+                        supportLinearVelocity,
+                        supportAngularVelocityDegrees,
+                        supportPose.position,
+                        hit.point);
+                }
+            }
+            state.compressionVelocity = dot(
+                subtract(mountVelocity, supportVelocity),
+                suspensionDirection);
+
+            const SuspensionModelOutput suspensionOutput =
+                evaluateSuspensionModel(
+                    suspensionModelDescription(description),
+                    { state.compression, state.compressionVelocity });
+            suspensionForce = suspensionOutput.normalForceN;
+            state.suspensionSpringForce = suspensionOutput.springForceN;
+            state.suspensionDampingForce = suspensionOutput.dampingForceN;
+            state.suspensionBumpStopForce = suspensionOutput.bumpStopForceN;
+            state.suspensionDroopStopForce = suspensionOutput.droopStopForceN;
+            state.suspensionUnclampedForce = suspensionOutput.unclampedForceN;
+            state.damperDissipationWatts =
+                suspensionOutput.damperDissipationW;
+            state.normalForce = suspensionForce;
+            if (suspensionForce > 0.0f)
+            {
+                const heritage::math::Vec3 suspensionImpulse = scale(
+                    suspensionDirection,
+                    -suspensionForce * substepDeltaTime);
+                bodies.applyImpulseAtPoint(
+                    vehicle.description.chassisBody,
+                    suspensionImpulse,
+                    mountWorld);
             }
         }
-        state.compressionVelocity = dot(
-            subtract(mountVelocity, supportVelocity),
-            suspensionDirection);
-
-        SuspensionModelDescription suspensionDescription;
-        suspensionDescription.provider = description.suspensionProvider;
-        suspensionDescription.springPreloadN = description.springPreload;
-        suspensionDescription.springRateNPerM = description.springRate;
-        suspensionDescription.springProgressionNPerM2 =
-            description.springProgression;
-        suspensionDescription.bumpDampingNsPerM = description.bumpDamping;
-        suspensionDescription.bumpHighSpeedDampingNsPerM =
-            description.bumpHighSpeedDamping;
-        suspensionDescription.bumpDampingKneeVelocityMps =
-            description.bumpDampingKneeVelocity;
-        suspensionDescription.reboundDampingNsPerM = description.reboundDamping;
-        suspensionDescription.reboundHighSpeedDampingNsPerM =
-            description.reboundHighSpeedDamping;
-        suspensionDescription.reboundDampingKneeVelocityMps =
-            description.reboundDampingKneeVelocity;
-        suspensionDescription.bumpStopEngagementM =
-            description.bumpStopEngagement;
-        suspensionDescription.bumpStopRateNPerM = description.bumpStopRate;
-        suspensionDescription.bumpStopProgressionNPerM2 =
-            description.bumpStopProgression;
-        suspensionDescription.droopStopEngagementM =
-            description.droopStopEngagement;
-        suspensionDescription.droopStopRateNPerM = description.droopStopRate;
-        suspensionDescription.motionRatio = description.suspensionMotionRatio;
-        suspensionDescription.maximumForceN =
-            description.maximumSuspensionForce;
-        const SuspensionModelOutput suspensionOutput =
-            evaluateSuspensionModel(
-                suspensionDescription,
-                { state.compression, state.compressionVelocity });
-        const float suspensionForce = suspensionOutput.normalForceN;
-        state.suspensionSpringForce = suspensionOutput.springForceN;
-        state.suspensionDampingForce = suspensionOutput.dampingForceN;
-        state.suspensionBumpStopForce = suspensionOutput.bumpStopForceN;
-        state.suspensionDroopStopForce = suspensionOutput.droopStopForceN;
-        state.suspensionUnclampedForce = suspensionOutput.unclampedForceN;
-        state.damperDissipationWatts =
-            suspensionOutput.damperDissipationW;
-        state.normalForce = suspensionForce;
-        if (suspensionForce > 0.0f)
+        else
         {
-            const heritage::math::Vec3 suspensionImpulse = scale(
-                suspensionDirection,
-                -suspensionForce * substepDeltaTime);
-            bodies.applyImpulseAtPoint(
+            bodies.linearVelocity(
                 vehicle.description.chassisBody,
-                suspensionImpulse,
+                linearVelocity);
+            bodies.angularVelocityDegrees(
+                vehicle.description.chassisBody,
+                angularVelocityDegrees);
+            const heritage::math::Vec3 mountVelocity = pointVelocity(
+                linearVelocity,
+                angularVelocityDegrees,
+                pose.position,
                 mountWorld);
+            heritage::math::Vec3 supportVelocity{};
+            if (hitGround
+                && hit.body != heritage::physics::InvalidBody)
+            {
+                heritage::physics::RigidBodyPose supportPose;
+                heritage::math::Vec3 supportLinearVelocity{};
+                heritage::math::Vec3 supportAngularVelocityDegrees{};
+                if (bodies.pose(hit.body, supportPose)
+                    && bodies.linearVelocity(
+                        hit.body,
+                        supportLinearVelocity)
+                    && bodies.angularVelocityDegrees(
+                        hit.body,
+                        supportAngularVelocityDegrees))
+                {
+                    supportVelocity = pointVelocity(
+                        supportLinearVelocity,
+                        supportAngularVelocityDegrees,
+                        supportPose.position,
+                        hit.point);
+                }
+            }
+            const float roadHubLength = hitGround
+                ? hit.distance - description.radius
+                : maximumLength;
+            const float geometricCompressionVelocity = hitGround
+                ? dot(
+                    subtract(mountVelocity, supportVelocity),
+                    suspensionDirection)
+                : 0.0f;
+            if (!wheel.unsprungMass.initialized)
+            {
+                wheel.unsprungMass.initialized = true;
+                wheel.unsprungMass.suspensionLengthM = std::clamp(
+                    hitGround ? roadHubLength : description.restLength,
+                    minimumLength,
+                    maximumLength);
+                wheel.unsprungMass.suspensionLengthVelocityMps =
+                    hitGround ? -geometricCompressionVelocity : 0.0f;
+            }
+
+            state.compression = description.restLength
+                - wheel.unsprungMass.suspensionLengthM;
+            state.compressionVelocity =
+                -wheel.unsprungMass.suspensionLengthVelocityMps;
+            const SuspensionModelOutput suspensionOutput =
+                evaluateSuspensionModel(
+                    suspensionModelDescription(description),
+                    { state.compression, state.compressionVelocity });
+            const float suspensionLinkForce = std::clamp(
+                suspensionOutput.unclampedForceN,
+                -description.maximumSuspensionForce,
+                description.maximumSuspensionForce);
+
+            UnsprungMassDescription unsprungDescription;
+            unsprungDescription.effectiveMassKg =
+                description.effectiveUnsprungMass;
+            unsprungDescription.tireRadialStiffnessNPerM =
+                description.tireRadialStiffness;
+            unsprungDescription.tireRadialDampingNsPerM =
+                description.tireRadialDamping;
+            unsprungDescription.maximumTireDeflectionM =
+                description.maximumTireDeflection;
+            unsprungDescription.maximumNormalForceN =
+                description.maximumTireNormalForce;
+            UnsprungMassInput unsprungInput;
+            unsprungInput.deltaTimeSeconds = substepDeltaTime;
+            unsprungInput.restLengthM = description.restLength;
+            unsprungInput.minimumLengthM = minimumLength;
+            unsprungInput.maximumLengthM = maximumLength;
+            unsprungInput.suspensionForceN = suspensionLinkForce;
+            unsprungInput.roadAvailable = hitGround;
+            unsprungInput.roadHubLengthM = roadHubLength;
+            unsprungInput.roadHubLengthVelocityMps =
+                -geometricCompressionVelocity;
+            unsprungInput.roadNormalAlignment = hitGround
+                ? dot(
+                    normalized(hit.normal, { 0.0f, 1.0f, 0.0f }),
+                    scale(suspensionDirection, -1.0f))
+                : 1.0f;
+            const UnsprungMassOutput unsprungOutput =
+                advanceUnsprungMassModel(
+                    unsprungDescription,
+                    unsprungInput,
+                    wheel.unsprungMass);
+
+            state.suspensionLength = unsprungOutput.suspensionLengthM;
+            state.compression = description.restLength
+                - state.suspensionLength;
+            state.compressionVelocity =
+                -unsprungOutput.suspensionLengthVelocityMps;
+            state.unsprungVelocity =
+                unsprungOutput.suspensionLengthVelocityMps;
+            state.tireDeflection = unsprungOutput.tireDeflectionM;
+            state.tireDeflectionVelocity =
+                unsprungOutput.tireDeflectionVelocityMps;
+            state.tireRadialDissipationWatts =
+                unsprungOutput.tireRadialDissipationW;
+            state.suspensionSpringForce = suspensionOutput.springForceN;
+            state.suspensionDampingForce = suspensionOutput.dampingForceN;
+            state.suspensionBumpStopForce = suspensionOutput.bumpStopForceN;
+            state.suspensionDroopStopForce = suspensionOutput.droopStopForceN;
+            state.suspensionUnclampedForce =
+                suspensionOutput.unclampedForceN;
+            state.damperDissipationWatts =
+                suspensionOutput.damperDissipationW;
+            state.normalForce = unsprungOutput.normalForceN;
+            suspensionForce = state.normalForce;
+            state.grounded = hitGround && unsprungOutput.grounded;
+            state.worldCenter = add(
+                mountWorld,
+                scale(suspensionDirection, state.suspensionLength));
+            state.contactPoint = hitGround
+                ? hit.point
+                : add(
+                    state.worldCenter,
+                    scale(suspensionDirection, description.radius));
+            wheel.previousSuspensionLength = state.suspensionLength;
+
+            if (hitGround)
+            {
+                state.contactNormal = normalized(
+                    hit.normal,
+                    { 0.0f, 1.0f, 0.0f });
+            }
+            if (state.grounded)
+            {
+                ++groundedCount;
+                state.contactCollider = hit.collider;
+                state.surfaceMaterial = hit.surfaceMaterial;
+                state.surfaceWetness = hit.surfaceWetness;
+            }
+
+            if (std::abs(suspensionLinkForce) > 0.0f)
+            {
+                const heritage::math::Vec3 suspensionImpulse = scale(
+                    suspensionDirection,
+                    -suspensionLinkForce * substepDeltaTime);
+                bodies.applyImpulseAtPoint(
+                    vehicle.description.chassisBody,
+                    suspensionImpulse,
+                    mountWorld);
+            }
+            if (!state.grounded)
+            {
+                advanceFreeWheelRotation();
+                continue;
+            }
         }
 
         // Refresh velocities because earlier wheels in this same 1 ms substep
@@ -2661,6 +2906,11 @@ void VehicleSystem::captureDynamicsLabFrame(
         wheel.suspensionBumpStopForce = state.suspensionBumpStopForce;
         wheel.suspensionDroopStopForce = state.suspensionDroopStopForce;
         wheel.damperDissipationWatts = state.damperDissipationWatts;
+        wheel.unsprungVelocity = state.unsprungVelocity;
+        wheel.tireDeflection = state.tireDeflection;
+        wheel.tireDeflectionVelocity = state.tireDeflectionVelocity;
+        wheel.tireRadialDissipationWatts =
+            state.tireRadialDissipationWatts;
         wheel.normalForce = state.normalForce;
         wheel.longitudinalForce = state.longitudinalForce;
         wheel.lateralForce = state.lateralForce;

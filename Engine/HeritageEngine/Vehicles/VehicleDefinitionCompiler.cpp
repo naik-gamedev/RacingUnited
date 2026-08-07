@@ -386,6 +386,21 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
 
         if (!finite(contact.localMount) || !finite(contact.suspensionDirection)
             || !finite(contact.radiusM) || contact.radiusM <= 0.0f
+            || !finite(contact.effectiveUnsprungMassKg)
+            || contact.effectiveUnsprungMassKg < 0.0f
+            || contact.effectiveUnsprungMassKg > 1000.0f
+            || !finite(contact.tireRadialStiffnessNPerM)
+            || contact.tireRadialStiffnessNPerM <= 0.0f
+            || contact.tireRadialStiffnessNPerM > 10000000.0f
+            || !finite(contact.tireRadialDampingNsPerM)
+            || contact.tireRadialDampingNsPerM < 0.0f
+            || contact.tireRadialDampingNsPerM > 1000000.0f
+            || !finite(contact.maximumTireDeflectionM)
+            || contact.maximumTireDeflectionM <= 0.0f
+            || contact.maximumTireDeflectionM > 1.0f
+            || !finite(contact.maximumTireNormalForceN)
+            || contact.maximumTireNormalForceN <= 0.0f
+            || contact.maximumTireNormalForceN > 10000000.0f
             || !finite(contact.serviceBrakeFactor) || contact.serviceBrakeFactor < 0.0f
             || !finite(contact.parkingBrakeFactor) || contact.parkingBrakeFactor < 0.0f)
         {
