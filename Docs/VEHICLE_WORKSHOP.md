@@ -22,6 +22,10 @@ This admits ordinary four-wheel cars, single-seaters, karts, multi-axle
 trucks, trailers, motorcycles, and independent front/rear powertrains without
 putting vehicle-category conditionals in the generic loader.
 
+Step 29J.6A makes the Workshop controls responsive. Topology templates and
+related choices wrap into two-column rows instead of disappearing beyond the
+right side of narrower panels.
+
 ## Current workflow
 
 1. Run `Tools/LaunchExactFreshRelease.cmd`.

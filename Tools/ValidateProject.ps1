@@ -106,6 +106,7 @@ if (Test-Path $manifestPath) {
         "Vehicle.GetDynamicsLabSeries",
         "Vehicle.ExportDynamicsLabCsv",
         "UI.InputText",
+        "UI.GetAvailableWidth",
         "UI.PlotLines",
         "Module.AssetExists",
         "Module.SelectAssetFile",
@@ -191,6 +192,11 @@ $workshop = if (Test-Path $workshopPath) { [IO.File]::ReadAllText($workshopPath)
 Check ($workshop.Contains("Module.SelectAssetFile")) "Workshop uses the module-isolated native asset picker"
 Check ($workshop.Contains("Module.WriteSaveText")) "Workshop exports through the bounded module save API"
 Check ($workshop.Contains("ApplyVehicleWorkshopPreview")) "Workshop has an explicit current-solver preview bridge"
+
+$workshopPanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\WorkshopPanel.lua"
+$workshopPanel = if (Test-Path $workshopPanelPath) { [IO.File]::ReadAllText($workshopPanelPath) } else { "" }
+Check ($workshopPanel.Contains("UI.GetAvailableWidth()")) "Workshop sizes controls from the available panel width"
+Check ($workshopPanel.Contains("WorkshopTemplateRow")) "Workshop wraps topology templates into bounded rows"
 
 
 $tireHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\TireModel.hpp"

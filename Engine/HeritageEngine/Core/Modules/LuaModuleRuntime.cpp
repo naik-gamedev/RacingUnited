@@ -598,6 +598,7 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("UI", "Separator", &LuaModuleRuntime::luaUiSeparator);
     registerFunction("UI", "Spacing", &LuaModuleRuntime::luaUiSpacing);
     registerFunction("UI", "SameLine", &LuaModuleRuntime::luaUiSameLine);
+    registerFunction("UI", "GetAvailableWidth", &LuaModuleRuntime::luaUiGetAvailableWidth);
     registerFunction("UI", "Button", &LuaModuleRuntime::luaUiButton);
     registerFunction("UI", "SliderFloat", &LuaModuleRuntime::luaUiSliderFloat);
     registerFunction("UI", "Checkbox", &LuaModuleRuntime::luaUiCheckbox);
@@ -1916,6 +1917,18 @@ int LuaModuleRuntime::luaUiSameLine(lua_State*)
     return 0;
 }
 
+int LuaModuleRuntime::luaUiGetAvailableWidth(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    runtime->m_api.lua_pushnumber(
+        state,
+        static_cast<LuaNumber>((std::max)(0.0f, ImGui::GetContentRegionAvail().x)));
+    return 1;
+}
+
 int LuaModuleRuntime::luaUiButton(lua_State* state)
 {
     LuaModuleRuntime* runtime = runtimeFrom(state);
@@ -1932,10 +1945,14 @@ int LuaModuleRuntime::luaUiButton(lua_State* state)
     const float width = (std::min)((std::max)(80.0f, requestedWidth), availableWidth);
     const float height = (std::max)(22.0f, static_cast<float>(
         numberArgument(*runtime, state, 3, 38.0)));
+    const bool centered = booleanArgument(*runtime, state, 4, true);
 
-    const float cursorX = ImGui::GetCursorPosX()
-        + (ImGui::GetContentRegionAvail().x - width) * 0.5f;
-    ImGui::SetCursorPosX((std::max)(ImGui::GetCursorPosX(), cursorX));
+    if (centered)
+    {
+        const float cursorX = ImGui::GetCursorPosX()
+            + (ImGui::GetContentRegionAvail().x - width) * 0.5f;
+        ImGui::SetCursorPosX((std::max)(ImGui::GetCursorPosX(), cursorX));
+    }
 
     ImGui::BeginDisabled(!runtime->m_allowInteraction);
     const bool clicked = ImGui::Button(label.c_str(), ImVec2(width, height));

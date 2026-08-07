@@ -157,6 +157,7 @@ private:
     static int luaUiSeparator(lua_State* state);
     static int luaUiSpacing(lua_State* state);
     static int luaUiSameLine(lua_State* state);
+    static int luaUiGetAvailableWidth(lua_State* state);
     static int luaUiButton(lua_State* state);
     static int luaUiSliderFloat(lua_State* state);
     static int luaUiCheckbox(lua_State* state);

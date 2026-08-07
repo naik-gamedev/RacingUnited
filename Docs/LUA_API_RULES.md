@@ -59,6 +59,14 @@ double-click-to-type exact numeric entry. Press Enter to commit or click elsewhe
 leave text-input mode. Serious setup and engineering values must never depend on mouse
 precision alone.
 
+## Responsive tool layouts
+
+`UI.GetAvailableWidth()` returns the remaining horizontal content width in pixels.
+`UI.Button` accepts `(label, width, height, centered)`; `centered` defaults to
+`true` for ordinary single-button panels. Tool grids pass `false` and calculate
+two-column widths from the available region so controls remain visible without a
+horizontal scrollbar.
+
 ## Blender authoring boundary
 
 Racing United creator content is authored as X left/right, Y forward/backward, Z height

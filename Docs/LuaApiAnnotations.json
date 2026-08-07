@@ -164,6 +164,16 @@
     "returns": "integer",
     "description": "Returns the number of static drive-surface triangles currently participating in physics raycasts."
   },
+  "UI.Button": {
+    "arguments": "(label: string, widthPixels?: number, heightPixels?: number, centered?: boolean)",
+    "returns": "clicked: boolean",
+    "description": "Draws a button. It remains centered by default; pass centered=false when composing responsive rows from UI.GetAvailableWidth()."
+  },
+  "UI.GetAvailableWidth": {
+    "arguments": "()",
+    "returns": "widthPixels: number",
+    "description": "Returns the horizontal content width remaining at the current cursor position."
+  },
   "UI.PlotLines": {
     "arguments": "(label: string, heightPixels: number, value1: number, ...)",
     "returns": "nothing",

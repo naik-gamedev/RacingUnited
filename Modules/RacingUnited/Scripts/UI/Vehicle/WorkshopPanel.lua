@@ -1,9 +1,20 @@
 -- First usable front-end for the versioned topology-first vehicle contract.
-local function WorkshopTemplateButton(templateId)
+local function WorkshopColumnWidth()
+    return math.max(100.0, (UI.GetAvailableWidth() - 10.0) * 0.5)
+end
+
+local function WorkshopTemplateButton(templateId, width)
     local template = VehicleDefinitionV2.templates[templateId]
-    if UI.Button(template.label) then
+    if UI.Button(template.label, width, 38.0, false) then
         SelectVehicleWorkshopTemplate(templateId)
     end
+end
+
+local function WorkshopTemplateRow(firstId, secondId)
+    local width = WorkshopColumnWidth()
+    WorkshopTemplateButton(firstId, width)
+    UI.SameLine()
+    WorkshopTemplateButton(secondId, width)
 end
 
 local function WorkshopFieldChanged(changed)
@@ -19,24 +30,11 @@ function DrawVehicleWorkshopPanel()
     UI.Spacing()
 
     UI.TextDisabled("STARTING TOPOLOGY")
-    WorkshopTemplateButton("road_car")
-    UI.SameLine()
-    WorkshopTemplateButton("formula")
-    UI.SameLine()
-    WorkshopTemplateButton("indycar")
-    UI.SameLine()
-    WorkshopTemplateButton("kart")
-    UI.SameLine()
-    WorkshopTemplateButton("sprint_car")
-    WorkshopTemplateButton("atv")
-    UI.SameLine()
-    WorkshopTemplateButton("motorcycle")
-    UI.SameLine()
-    WorkshopTemplateButton("truck")
-    UI.SameLine()
-    WorkshopTemplateButton("twin_engine")
-    UI.SameLine()
-    WorkshopTemplateButton("custom")
+    WorkshopTemplateRow("road_car", "formula")
+    WorkshopTemplateRow("indycar", "kart")
+    WorkshopTemplateRow("sprint_car", "atv")
+    WorkshopTemplateRow("motorcycle", "truck")
+    WorkshopTemplateRow("twin_engine", "custom")
 
     local draft = vehicleWorkshop.draft
     local changed = false
@@ -54,11 +52,12 @@ function DrawVehicleWorkshopPanel()
     draft.bodyAsset, changed = UI.InputText(
         "Assets-relative OBJ", draft.bodyAsset, 512)
     WorkshopFieldChanged(changed)
-    if UI.Button("SELECT OBJ FROM MODULE ASSETS") then
+    local columnWidth = WorkshopColumnWidth()
+    if UI.Button("SELECT OBJ FROM MODULE ASSETS", columnWidth, 38.0, false) then
         SelectVehicleWorkshopBodyAsset()
     end
     UI.SameLine()
-    if UI.Button("USE PLAYER CAR SLOT") then
+    if UI.Button("USE PLAYER CAR SLOT", columnWidth, 38.0, false) then
         draft.bodyAsset = "Vehicles/Player/PlayerCar.obj"
         RefreshVehicleWorkshopDefinition()
         SaveVehicleWorkshopDraft()
@@ -92,24 +91,36 @@ function DrawVehicleWorkshopPanel()
     WorkshopFieldChanged(changed)
 
     UI.Text("Driven topology: " .. string.upper(draft.driveLayout))
-    if UI.Button("FWD") then SetVehicleWorkshopDriveLayout("fwd") end
+    columnWidth = WorkshopColumnWidth()
+    if UI.Button("FWD", columnWidth, 38.0, false) then
+        SetVehicleWorkshopDriveLayout("fwd")
+    end
     UI.SameLine()
-    if UI.Button("RWD") then SetVehicleWorkshopDriveLayout("rwd") end
+    if UI.Button("RWD", columnWidth, 38.0, false) then
+        SetVehicleWorkshopDriveLayout("rwd")
+    end
+    if UI.Button("AWD", columnWidth, 38.0, false) then
+        SetVehicleWorkshopDriveLayout("awd")
+    end
     UI.SameLine()
-    if UI.Button("AWD") then SetVehicleWorkshopDriveLayout("awd") end
-    UI.SameLine()
-    if UI.Button("SPLIT POWERTRAINS") then
+    if UI.Button("SPLIT POWERTRAINS", columnWidth, 38.0, false) then
         SetVehicleWorkshopDriveLayout("split")
     end
 
     UI.Text("Power-unit placement: " .. string.upper(draft.engineLocation))
-    if UI.Button("FRONT") then SetVehicleWorkshopEngineLocation("front") end
+    columnWidth = WorkshopColumnWidth()
+    if UI.Button("FRONT", columnWidth, 38.0, false) then
+        SetVehicleWorkshopEngineLocation("front")
+    end
     UI.SameLine()
-    if UI.Button("MID") then SetVehicleWorkshopEngineLocation("mid") end
+    if UI.Button("MID", columnWidth, 38.0, false) then
+        SetVehicleWorkshopEngineLocation("mid")
+    end
+    if UI.Button("REAR", columnWidth, 38.0, false) then
+        SetVehicleWorkshopEngineLocation("rear")
+    end
     UI.SameLine()
-    if UI.Button("REAR") then SetVehicleWorkshopEngineLocation("rear") end
-    UI.SameLine()
-    if UI.Button("DISTRIBUTED") then
+    if UI.Button("DISTRIBUTED", columnWidth, 38.0, false) then
         SetVehicleWorkshopEngineLocation("distributed")
     end
 
@@ -152,16 +163,16 @@ function DrawVehicleWorkshopPanel()
         end
     end
 
-    if UI.Button("VALIDATE") then
+    if UI.Button("VALIDATE", UI.GetAvailableWidth(), 38.0, false) then
         RefreshVehicleWorkshopDefinition()
         vehicleWorkshop.message = "Validation refreshed"
     end
-    UI.SameLine()
-    if UI.Button("APPLY LIVE PROTOTYPE PREVIEW") then
+    columnWidth = WorkshopColumnWidth()
+    if UI.Button("APPLY LIVE PROTOTYPE PREVIEW", columnWidth, 38.0, false) then
         ApplyVehicleWorkshopPreview()
     end
     UI.SameLine()
-    if UI.Button("EXPORT VERSIONED DEFINITION") then
+    if UI.Button("EXPORT VERSIONED DEFINITION", columnWidth, 38.0, false) then
         ExportVehicleWorkshopDefinition()
     end
     UI.TextWrapped(vehicleWorkshop.message)
