@@ -26,6 +26,10 @@ Step 29J.6A makes the Workshop controls responsive. Topology templates and
 related choices wrap into two-column rows instead of disappearing beyond the
 right side of narrower panels.
 
+Step 29J.6B uses three topology columns when at least 540 pixels are available,
+then automatically returns to the 29J.6A two-column arrangement in narrower
+panels. Longer asset and output actions remain in two columns.
+
 ## Current workflow
 
 1. Run `Tools/LaunchExactFreshRelease.cmd`.

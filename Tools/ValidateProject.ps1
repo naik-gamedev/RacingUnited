@@ -197,6 +197,8 @@ $workshopPanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\Wo
 $workshopPanel = if (Test-Path $workshopPanelPath) { [IO.File]::ReadAllText($workshopPanelPath) } else { "" }
 Check ($workshopPanel.Contains("UI.GetAvailableWidth()")) "Workshop sizes controls from the available panel width"
 Check ($workshopPanel.Contains("WorkshopTemplateRow")) "Workshop wraps topology templates into bounded rows"
+Check ($workshopPanel.Contains("WorkshopTemplateThreeColumnRow")) "Workshop supports the wider three-column topology grid"
+Check ($workshopPanel.Contains("availableWidth >= 540.0")) "Workshop retains an explicit narrow-panel fallback"
 
 
 $tireHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\TireModel.hpp"

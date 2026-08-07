@@ -3,6 +3,10 @@ local function WorkshopColumnWidth()
     return math.max(100.0, (UI.GetAvailableWidth() - 10.0) * 0.5)
 end
 
+local function WorkshopThreeColumnWidth()
+    return math.max(80.0, (UI.GetAvailableWidth() - 20.0) / 3.0)
+end
+
 local function WorkshopTemplateButton(templateId, width)
     local template = VehicleDefinitionV2.templates[templateId]
     if UI.Button(template.label, width, 38.0, false) then
@@ -15,6 +19,33 @@ local function WorkshopTemplateRow(firstId, secondId)
     WorkshopTemplateButton(firstId, width)
     UI.SameLine()
     WorkshopTemplateButton(secondId, width)
+end
+
+local function WorkshopTemplateThreeColumnRow(firstId, secondId, thirdId)
+    local width = WorkshopThreeColumnWidth()
+    WorkshopTemplateButton(firstId, width)
+    UI.SameLine()
+    WorkshopTemplateButton(secondId, width)
+    UI.SameLine()
+    WorkshopTemplateButton(thirdId, width)
+end
+
+local function DrawWorkshopTemplateGrid()
+    local availableWidth = UI.GetAvailableWidth()
+    if availableWidth >= 540.0 then
+        WorkshopTemplateThreeColumnRow("road_car", "formula", "indycar")
+        WorkshopTemplateThreeColumnRow("kart", "sprint_car", "atv")
+        WorkshopTemplateThreeColumnRow(
+            "motorcycle", "truck", "twin_engine")
+        WorkshopTemplateButton("custom", UI.GetAvailableWidth())
+        return
+    end
+
+    WorkshopTemplateRow("road_car", "formula")
+    WorkshopTemplateRow("indycar", "kart")
+    WorkshopTemplateRow("sprint_car", "atv")
+    WorkshopTemplateRow("motorcycle", "truck")
+    WorkshopTemplateRow("twin_engine", "custom")
 end
 
 local function WorkshopFieldChanged(changed)
@@ -30,11 +61,7 @@ function DrawVehicleWorkshopPanel()
     UI.Spacing()
 
     UI.TextDisabled("STARTING TOPOLOGY")
-    WorkshopTemplateRow("road_car", "formula")
-    WorkshopTemplateRow("indycar", "kart")
-    WorkshopTemplateRow("sprint_car", "atv")
-    WorkshopTemplateRow("motorcycle", "truck")
-    WorkshopTemplateRow("twin_engine", "custom")
+    DrawWorkshopTemplateGrid()
 
     local draft = vehicleWorkshop.draft
     local changed = false
