@@ -1,6 +1,6 @@
 -- Vehicle debug UI coordinator. Each subsystem owns a short, focused sub-tab.
 function DrawVehicleDebugPanel()
-    UI.TextDisabled("NATIVE VEHICLE LAB - STEP 29J.1")
+    UI.TextDisabled("NATIVE VEHICLE LAB - STEP 29J.5")
     UI.Separator()
     UI.Spacing()
 
@@ -31,6 +31,10 @@ function DrawVehicleDebugPanel()
         end
         if UI.BeginTabItem("TELEMETRY") then
             DrawVehicleTelemetryPanel()
+            UI.EndTabItem()
+        end
+        if UI.BeginTabItem("LAB") then
+            DrawVehicleDynamicsLabPanel()
             UI.EndTabItem()
         end
         UI.EndTabBar()

@@ -21,12 +21,16 @@ function VehicleFixedUpdate(fixedDeltaTime)
         return
     end
 
+    local controlled, throttle, brake, steering, handbrake =
+        VehicleDynamicsLabFixedInputs(fixedDeltaTime)
+    if not controlled then
+        throttle = Input.Value("Throttle")
+        brake = Input.Value("Brake")
+        steering = ReadVehicleSteeringInput()
+        handbrake = Input.Value("Handbrake")
+    end
     Vehicle.SetInputs(
-        nativeVehicle,
-        Input.Value("Throttle"),
-        Input.Value("Brake"),
-        ReadVehicleSteeringInput(),
-        Input.Value("Handbrake"))
+        nativeVehicle, throttle, brake, steering, handbrake)
     RefreshVehicleTelemetry()
 
     if nativeVehicleBody ~= 0 and Physics.BodyExists(nativeVehicleBody) then

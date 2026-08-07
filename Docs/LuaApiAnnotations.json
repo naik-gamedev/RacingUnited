@@ -143,5 +143,40 @@
     "arguments": "()",
     "returns": "integer",
     "description": "Returns the number of static drive-surface triangles currently participating in physics raycasts."
+  },
+  "UI.PlotLines": {
+    "arguments": "(label: string, heightPixels: number, value1: number, ...)",
+    "returns": "nothing",
+    "description": "Draws an auto-scaled native line plot from up to 512 numeric arguments. Intended for bounded diagnostic series rather than gameplay rendering."
+  },
+  "Vehicle.StartDynamicsLab": {
+    "arguments": "(vehicle: VehicleHandle, maximumDurationSeconds?: number, captureHertz?: number)",
+    "returns": "boolean",
+    "description": "Clears any earlier run and starts an opt-in bounded native dynamics capture at or below the vehicle high-rate solver frequency."
+  },
+  "Vehicle.StopDynamicsLab": {
+    "arguments": "(vehicle: VehicleHandle)",
+    "returns": "boolean",
+    "description": "Stops recording while retaining every captured sample and summary."
+  },
+  "Vehicle.ClearDynamicsLab": {
+    "arguments": "(vehicle: VehicleHandle)",
+    "returns": "boolean",
+    "description": "Stops and removes the retained native dynamics capture for one vehicle."
+  },
+  "Vehicle.GetDynamicsLabSummary": {
+    "arguments": "(vehicle: VehicleHandle)",
+    "returns": "recording, complete, samples, capacity, wheels, durationSeconds, captureHertz, peakSpeedKph, peakRollDegps, peakPitchDegps, peakYawDegps, peakSuspensionSpeedMps, peakSlipRatio, peakSlipAngleDeg, peakGripPercent, minimumGroundedLoadN, maximumGroundedLoadN, contactLossEvents",
+    "description": "Returns bounded-capture status and extrema calculated from authoritative native high-rate samples."
+  },
+  "Vehicle.GetDynamicsLabSeries": {
+    "arguments": "(vehicle: VehicleHandle, metricName: string, oneBasedWheelIndex?: integer, maximumPoints?: integer)",
+    "returns": "zero or more numeric values",
+    "description": "Returns at most 240 chronological peak-preserving plot values for one supported global or per-wheel dynamics metric."
+  },
+  "Vehicle.ExportDynamicsLabCsv": {
+    "arguments": "(vehicle: VehicleHandle, plainCsvFilename?: string)",
+    "returns": "worked: boolean, pathOrError: string",
+    "description": "Exports all retained native samples below the active module's private Saves/DynamicsLab directory."
   }
 }

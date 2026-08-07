@@ -4,6 +4,7 @@
 #include "../../Physics/StaticTriangleSceneImporter.hpp"
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cctype>
 #include <iostream>
@@ -595,6 +596,7 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("UI", "Dummy", &LuaModuleRuntime::luaUiDummy);
     registerFunction("UI", "TextColored", &LuaModuleRuntime::luaUiTextColored);
     registerFunction("UI", "ProgressBar", &LuaModuleRuntime::luaUiProgressBar);
+    registerFunction("UI", "PlotLines", &LuaModuleRuntime::luaUiPlotLines);
 
     registerFunction("Engine", "OpenSettings", &LuaModuleRuntime::luaEngineOpenSettings);
     registerFunction("Engine", "Exit", &LuaModuleRuntime::luaEngineExit);
@@ -830,6 +832,12 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("Vehicle", "GetGroundedWheelCount", &LuaModuleRuntime::luaVehicleGetGroundedWheelCount);
     registerFunction("Vehicle", "GetLastHighRateStepCount", &LuaModuleRuntime::luaVehicleGetLastHighRateStepCount);
     registerFunction("Vehicle", "GetTotalHighRateStepCount", &LuaModuleRuntime::luaVehicleGetTotalHighRateStepCount);
+    registerFunction("Vehicle", "StartDynamicsLab", &LuaModuleRuntime::luaVehicleStartDynamicsLab);
+    registerFunction("Vehicle", "StopDynamicsLab", &LuaModuleRuntime::luaVehicleStopDynamicsLab);
+    registerFunction("Vehicle", "ClearDynamicsLab", &LuaModuleRuntime::luaVehicleClearDynamicsLab);
+    registerFunction("Vehicle", "GetDynamicsLabSummary", &LuaModuleRuntime::luaVehicleGetDynamicsLabSummary);
+    registerFunction("Vehicle", "GetDynamicsLabSeries", &LuaModuleRuntime::luaVehicleGetDynamicsLabSeries);
+    registerFunction("Vehicle", "ExportDynamicsLabCsv", &LuaModuleRuntime::luaVehicleExportDynamicsLabCsv);
     registerFunction("Vehicle", "GetWheelState", &LuaModuleRuntime::luaVehicleGetWheelState);
     registerFunction("Vehicle", "GetLastError", &LuaModuleRuntime::luaVehicleGetLastError);
 
@@ -2273,6 +2281,43 @@ int LuaModuleRuntime::luaUiProgressBar(lua_State* state)
         fraction,
         ImVec2(width, height),
         overlay.empty() ? nullptr : overlay.c_str());
+    return 0;
+}
+
+int LuaModuleRuntime::luaUiPlotLines(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    const std::string label = stringArgument(*runtime, state, 1, "Plot");
+    const float height = (std::max)(40.0f, static_cast<float>(
+        numberArgument(*runtime, state, 2, 90.0)));
+    const int argumentCount = runtime->m_api.lua_gettop(state);
+    const int valueCount = (std::min)(512, (std::max)(0, argumentCount - 2));
+    if (valueCount == 0)
+    {
+        ImGui::TextDisabled("%s: no captured samples", label.c_str());
+        return 0;
+    }
+
+    std::vector<float> values;
+    values.reserve(static_cast<std::size_t>(valueCount));
+    for (int argument = 3; argument < 3 + valueCount; ++argument)
+    {
+        values.push_back(static_cast<float>(
+            numberArgument(*runtime, state, argument, 0.0)));
+    }
+
+    ImGui::PlotLines(
+        label.c_str(),
+        values.data(),
+        valueCount,
+        0,
+        nullptr,
+        FLT_MAX,
+        FLT_MAX,
+        ImVec2(-1.0f, height));
     return 0;
 }
 
@@ -6458,6 +6503,177 @@ int LuaModuleRuntime::luaVehicleGetTotalHighRateStepCount(lua_State* state)
         ? static_cast<LuaInteger>(runtime->m_physics->vehicles().totalHighRateStepCount(
             vehicleHandleArgument(*runtime, state, 1))) : 0);
     return 1;
+}
+
+int LuaModuleRuntime::luaVehicleStartDynamicsLab(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().startDynamicsLabCapture(
+            vehicleHandleArgument(*runtime, state, 1),
+            static_cast<float>(numberArgument(*runtime, state, 2, 20.0)),
+            static_cast<float>(numberArgument(*runtime, state, 3, 1000.0)));
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaModuleRuntime::luaVehicleStopDynamicsLab(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().stopDynamicsLabCapture(
+            vehicleHandleArgument(*runtime, state, 1));
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaModuleRuntime::luaVehicleClearDynamicsLab(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().clearDynamicsLabCapture(
+            vehicleHandleArgument(*runtime, state, 1));
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaModuleRuntime::luaVehicleGetDynamicsLabSummary(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    heritage::vehicles::DynamicsLabSummary value;
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().dynamicsLabSummary(
+            vehicleHandleArgument(*runtime, state, 1),
+            value);
+    if (!result)
+    {
+        for (int index = 0; index < 18; ++index)
+            runtime->m_api.lua_pushnil(state);
+        return 18;
+    }
+
+    runtime->m_api.lua_pushboolean(state, value.recording ? 1 : 0);
+    runtime->m_api.lua_pushboolean(state, value.captureComplete ? 1 : 0);
+    runtime->m_api.lua_pushinteger(
+        state, static_cast<LuaInteger>(value.sampleCount));
+    runtime->m_api.lua_pushinteger(
+        state, static_cast<LuaInteger>(value.sampleCapacity));
+    runtime->m_api.lua_pushinteger(
+        state, static_cast<LuaInteger>(value.wheelCount));
+    runtime->m_api.lua_pushnumber(state, value.durationSeconds);
+    runtime->m_api.lua_pushnumber(state, value.requestedCaptureHertz);
+    runtime->m_api.lua_pushnumber(state, value.peakSpeedKph);
+    runtime->m_api.lua_pushnumber(
+        state, value.peakAbsoluteRollRateDegreesPerSecond);
+    runtime->m_api.lua_pushnumber(
+        state, value.peakAbsolutePitchRateDegreesPerSecond);
+    runtime->m_api.lua_pushnumber(
+        state, value.peakAbsoluteYawRateDegreesPerSecond);
+    runtime->m_api.lua_pushnumber(
+        state, value.peakAbsoluteSuspensionVelocityMps);
+    runtime->m_api.lua_pushnumber(state, value.peakAbsoluteSlipRatio);
+    runtime->m_api.lua_pushnumber(
+        state, value.peakAbsoluteSlipAngleDegrees);
+    runtime->m_api.lua_pushnumber(state, value.peakGripUtilizationPercent);
+    runtime->m_api.lua_pushnumber(
+        state, value.minimumGroundedNormalForceNewtons);
+    runtime->m_api.lua_pushnumber(
+        state, value.maximumGroundedNormalForceNewtons);
+    runtime->m_api.lua_pushinteger(
+        state, static_cast<LuaInteger>(value.groundContactLossEvents));
+    return 18;
+}
+
+int LuaModuleRuntime::luaVehicleGetDynamicsLabSeries(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime || !runtime->m_physics)
+        return 0;
+
+    heritage::vehicles::DynamicsLabMetric metric;
+    if (!heritage::vehicles::parseDynamicsLabMetric(
+            stringArgument(*runtime, state, 2),
+            metric))
+    {
+        return 0;
+    }
+
+    int converted = 0;
+    const LuaInteger luaIndex = runtime->m_api.lua_tointegerx(
+        state, 3, &converted);
+    const std::size_t wheelIndex = converted && luaIndex >= 1
+        ? static_cast<std::size_t>(luaIndex - 1)
+        : 0u;
+    const std::size_t maximumPoints = static_cast<std::size_t>(
+        (std::max)(16.0, (std::min)(240.0,
+            numberArgument(*runtime, state, 4, 180.0))));
+
+    std::vector<float> values;
+    if (!runtime->m_physics->vehicles().dynamicsLabMetricSeries(
+            vehicleHandleArgument(*runtime, state, 1),
+            metric,
+            wheelIndex,
+            maximumPoints,
+            values))
+    {
+        return 0;
+    }
+    if (!runtime->m_api.lua_checkstack(
+            state,
+            static_cast<int>(values.size())))
+    {
+        return 0;
+    }
+    for (const float value : values)
+        runtime->m_api.lua_pushnumber(state, value);
+    return static_cast<int>(values.size());
+}
+
+int LuaModuleRuntime::luaVehicleExportDynamicsLabCsv(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    const std::string requestedName = stringArgument(
+        *runtime, state, 2, "latest_vehicle_dynamics.csv");
+    const std::filesystem::path name(requestedName);
+    const bool safeName = !requestedName.empty()
+        && !name.has_parent_path()
+        && name.filename() == name
+        && name.extension() == ".csv";
+    if (!runtime->m_physics || !runtime->m_context || !safeName)
+    {
+        const std::string message = !safeName
+            ? "Dynamics lab export name must be a plain .csv filename."
+            : "Dynamics lab export requires Vehicle and Module services.";
+        runtime->m_api.lua_pushboolean(state, 0);
+        runtime->m_api.lua_pushlstring(
+            state, message.c_str(), message.size());
+        return 2;
+    }
+
+    const std::filesystem::path path = runtime->m_context->resolveSavePath(
+        std::filesystem::path("DynamicsLab") / name);
+    const bool result = !path.empty()
+        && runtime->m_physics->vehicles().exportDynamicsLabCsv(
+            vehicleHandleArgument(*runtime, state, 1),
+            path);
+    const std::string message = result
+        ? path.string()
+        : runtime->m_physics->vehicles().lastError();
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    runtime->m_api.lua_pushlstring(state, message.c_str(), message.size());
+    return 2;
 }
 
 int LuaModuleRuntime::luaVehicleGetWheelState(lua_State* state)

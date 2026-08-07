@@ -662,6 +662,71 @@ bool turnThenBrakeRemainsStableAtLowSpeed()
         && lowSpeedRollReversals <= 1;
 }
 
+bool dynamicsLabCapturesHighRateTelemetry()
+{
+    PrototypeWorld world;
+    if (!createPrototypeWorld(world, 1000.0f))
+    {
+        std::cerr << "Could not create the dynamics-lab world.\n";
+        return false;
+    }
+    if (!world.vehicles.startDynamicsLabCapture(
+            world.vehicle, 1.0f, 1000.0f))
+    {
+        std::cerr << "Could not start the dynamics lab: "
+            << world.vehicles.lastError() << '\n';
+        return false;
+    }
+
+    world.vehicles.setInputs(world.vehicle, 0.55f, 0.0f, 0.15f, 0.0f);
+    for (int index = 0; index < 120; ++index)
+        stepWorld(world);
+
+    heritage::vehicles::DynamicsLabSummary summary;
+    if (!world.vehicles.dynamicsLabSummary(world.vehicle, summary))
+        return false;
+
+    std::vector<float> speedSeries;
+    std::vector<float> wheelLoadSeries;
+    const bool speedWorked = world.vehicles.dynamicsLabMetricSeries(
+        world.vehicle,
+        heritage::vehicles::DynamicsLabMetric::SpeedKph,
+        0,
+        64,
+        speedSeries);
+    const bool wheelLoadWorked = world.vehicles.dynamicsLabMetricSeries(
+        world.vehicle,
+        heritage::vehicles::DynamicsLabMetric::WheelNormalForceNewtons,
+        0,
+        64,
+        wheelLoadSeries);
+
+    std::cout
+        << "dynamics_lab samples=" << summary.sampleCount
+        << " capacity=" << summary.sampleCapacity
+        << " duration_s=" << summary.durationSeconds
+        << " capture_hz=" << summary.requestedCaptureHertz
+        << " peak_speed_kph=" << summary.peakSpeedKph
+        << " peak_suspension_speed_mps="
+        << summary.peakAbsoluteSuspensionVelocityMps
+        << " speed_plot_points=" << speedSeries.size()
+        << " load_plot_points=" << wheelLoadSeries.size()
+        << '\n';
+
+    return summary.captureComplete
+        && !summary.recording
+        && summary.sampleCount == 1000
+        && summary.sampleCapacity == 1000
+        && summary.wheelCount == 4
+        && std::abs(summary.durationSeconds - 1.0) <= 0.001
+        && summary.peakSpeedKph > 0.1f
+        && speedWorked
+        && wheelLoadWorked
+        && !speedSeries.empty()
+        && speedSeries.size() <= 64
+        && wheelLoadSeries.size() == speedSeries.size();
+}
+
 } // namespace
 
 int main()
@@ -698,6 +763,11 @@ int main()
     std::cout << (turnBrakePassed ? "PASS" : "FAIL")
         << " turn-then-brake low-speed stability\n";
     failed += turnBrakePassed ? 0 : 1;
+
+    const bool dynamicsLabPassed = dynamicsLabCapturesHighRateTelemetry();
+    std::cout << (dynamicsLabPassed ? "PASS" : "FAIL")
+        << " high-rate vehicle dynamics laboratory\n";
+    failed += dynamicsLabPassed ? 0 : 1;
 
     std::cout << (failed == 0 ? "ALL TESTS PASSED" : "TESTS FAILED")
         << " count=" << failed << '\n';

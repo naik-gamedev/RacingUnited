@@ -198,6 +198,7 @@ bool LuaApi::resolveAllSymbols(std::string& errorMessage)
     HERITAGE_RESOLVE_LUA(lua_pcallk);
     HERITAGE_RESOLVE_LUA(lua_version);
     HERITAGE_RESOLVE_LUA(lua_gettop);
+    HERITAGE_RESOLVE_LUA(lua_checkstack);
     HERITAGE_RESOLVE_LUA(lua_settop);
     HERITAGE_RESOLVE_LUA(lua_type);
     HERITAGE_RESOLVE_LUA(lua_toboolean);
@@ -231,6 +232,7 @@ void LuaApi::clearSymbols()
     lua_pcallk = nullptr;
     lua_version = nullptr;
     lua_gettop = nullptr;
+    lua_checkstack = nullptr;
     lua_settop = nullptr;
     lua_type = nullptr;
     lua_toboolean = nullptr;

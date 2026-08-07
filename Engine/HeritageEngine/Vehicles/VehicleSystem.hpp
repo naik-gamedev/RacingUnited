@@ -9,6 +9,7 @@
 #include "../Physics/CollisionSystem.hpp"
 #include "../Physics/RigidBodySystem.hpp"
 #include "TireModel.hpp"
+#include "VehicleDynamicsLab.hpp"
 
 namespace heritage::vehicles {
 
@@ -334,6 +335,27 @@ public:
     heritage::physics::BodyHandle chassisBody(VehicleHandle handle) const;
     bool restState(VehicleHandle handle, VehicleRestState& value) const;
 
+    // Opt-in native high-rate telemetry. Only explicitly recorded vehicles
+    // allocate sample storage, keeping full race fields free of lab overhead.
+    bool startDynamicsLabCapture(
+        VehicleHandle handle,
+        float maximumDurationSeconds,
+        float captureHertz);
+    bool stopDynamicsLabCapture(VehicleHandle handle);
+    bool clearDynamicsLabCapture(VehicleHandle handle);
+    bool dynamicsLabSummary(
+        VehicleHandle handle,
+        DynamicsLabSummary& value) const;
+    bool dynamicsLabMetricSeries(
+        VehicleHandle handle,
+        DynamicsLabMetric metric,
+        std::size_t wheelIndex,
+        std::size_t maximumPoints,
+        std::vector<float>& values) const;
+    bool exportDynamicsLabCsv(
+        VehicleHandle handle,
+        const std::filesystem::path& path);
+
     void simulate(
         heritage::physics::RigidBodySystem& bodies,
         const heritage::physics::CollisionSystem& collisions,
@@ -397,6 +419,7 @@ private:
         bool restCandidate = false;
         float requiredHoldForce = 0.0f;
         float availableBrakeHoldForce = 0.0f;
+        VehicleDynamicsLab dynamicsLab;
     };
 
     struct Slot
@@ -420,6 +443,10 @@ private:
         heritage::physics::RigidBodySystem& bodies,
         const heritage::physics::CollisionSystem& collisions,
         float substepDeltaTime);
+    void captureDynamicsLabFrame(
+        Record& vehicle,
+        const heritage::physics::RigidBodySystem& bodies,
+        float sourceDeltaTime);
     void setError(const std::string& message) const;
     void clearError() const;
 

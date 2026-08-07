@@ -153,6 +153,19 @@ heritage::math::Vec3 rotateVector(
     return add(value, add(scale(first, rotation.w), cross(qv, first)));
 }
 
+heritage::math::Vec3 inverseRotateVector(
+    const Quaternion& rotation,
+    const heritage::math::Vec3& value)
+{
+    const Quaternion inverse{
+        rotation.w,
+        -rotation.x,
+        -rotation.y,
+        -rotation.z
+    };
+    return rotateVector(inverse, value);
+}
+
 heritage::math::Vec3 pointVelocity(
     const heritage::math::Vec3& linearVelocity,
     const heritage::math::Vec3& angularVelocityDegrees,
@@ -501,6 +514,7 @@ void VehicleSystem::resetClock()
         slot.record.restCandidate = false;
         slot.record.requiredHoldForce = 0.0f;
         slot.record.availableBrakeHoldForce = 0.0f;
+        slot.record.dynamicsLab.clear();
         for (WheelRecord& wheel : slot.record.wheels)
         {
             wheel.state.wheelRotationDegrees = 0.0f;
@@ -1388,6 +1402,120 @@ bool VehicleSystem::restState(
     return true;
 }
 
+bool VehicleSystem::startDynamicsLabCapture(
+    VehicleHandle handle,
+    float maximumDurationSeconds,
+    float captureHertz)
+{
+    Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Dynamics lab start received an invalid or stale vehicle handle.");
+        return false;
+    }
+    if (captureHertz > slot->record.description.highRateHertz + 0.001f)
+    {
+        setError("Dynamics lab capture rate cannot exceed the vehicle high-rate solver.");
+        return false;
+    }
+    if (!slot->record.dynamicsLab.start(
+            maximumDurationSeconds,
+            captureHertz,
+            slot->record.wheels.size()))
+    {
+        setError(slot->record.dynamicsLab.lastError());
+        return false;
+    }
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::stopDynamicsLabCapture(VehicleHandle handle)
+{
+    Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Dynamics lab stop received an invalid or stale vehicle handle.");
+        return false;
+    }
+    slot->record.dynamicsLab.stop();
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::clearDynamicsLabCapture(VehicleHandle handle)
+{
+    Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Dynamics lab clear received an invalid or stale vehicle handle.");
+        return false;
+    }
+    slot->record.dynamicsLab.clear();
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::dynamicsLabSummary(
+    VehicleHandle handle,
+    DynamicsLabSummary& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Dynamics lab summary received an invalid or stale vehicle handle.");
+        return false;
+    }
+    value = slot->record.dynamicsLab.summary();
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::dynamicsLabMetricSeries(
+    VehicleHandle handle,
+    DynamicsLabMetric metric,
+    std::size_t wheelIndex,
+    std::size_t maximumPoints,
+    std::vector<float>& values) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Dynamics lab series received an invalid or stale vehicle handle.");
+        return false;
+    }
+    if (!slot->record.dynamicsLab.metricSeries(
+            metric,
+            wheelIndex,
+            maximumPoints,
+            values))
+    {
+        setError("Dynamics lab series received an invalid wheel or point count.");
+        return false;
+    }
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::exportDynamicsLabCsv(
+    VehicleHandle handle,
+    const std::filesystem::path& path)
+{
+    Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Dynamics lab export received an invalid or stale vehicle handle.");
+        return false;
+    }
+    if (!slot->record.dynamicsLab.exportCsv(path))
+    {
+        setError(slot->record.dynamicsLab.lastError());
+        return false;
+    }
+    clearError();
+    return true;
+}
+
 void VehicleSystem::simulate(
     heritage::physics::RigidBodySystem& bodies,
     const heritage::physics::CollisionSystem& collisions,
@@ -1433,6 +1561,7 @@ void VehicleSystem::simulate(
             {
                 vehicle.highRateAccumulator = 0.0;
                 vehicle.speed = 0.0f;
+                captureDynamicsLabFrame(vehicle, bodies, worldDeltaTime);
                 continue;
             }
 
@@ -2331,6 +2460,74 @@ void VehicleSystem::simulateVehicleSubstep(
     }
 
     vehicle.groundedWheelCount = groundedCount;
+    captureDynamicsLabFrame(vehicle, bodies, substepDeltaTime);
+}
+
+void VehicleSystem::captureDynamicsLabFrame(
+    Record& vehicle,
+    const heritage::physics::RigidBodySystem& bodies,
+    float sourceDeltaTime)
+{
+    if (!vehicle.dynamicsLab.recording())
+        return;
+
+    heritage::physics::RigidBodyPose pose;
+    heritage::math::Vec3 linearVelocity{};
+    heritage::math::Vec3 angularVelocityDegrees{};
+    if (!bodies.pose(vehicle.description.chassisBody, pose)
+        || !bodies.linearVelocity(
+            vehicle.description.chassisBody,
+            linearVelocity)
+        || !bodies.angularVelocityDegrees(
+            vehicle.description.chassisBody,
+            angularVelocityDegrees))
+    {
+        return;
+    }
+
+    const Quaternion rotation = quaternionFromEulerDegrees(
+        pose.rotationDegrees);
+    const heritage::math::Vec3 localVelocity = inverseRotateVector(
+        rotation,
+        linearVelocity);
+    const heritage::math::Vec3 localAngularVelocity = inverseRotateVector(
+        rotation,
+        angularVelocityDegrees);
+
+    DynamicsLabFrame frame;
+    frame.position = pose.position;
+    frame.localVelocity = localVelocity;
+    // Local X is right (pitch), Y is up (yaw), and Z is forward (roll).
+    frame.rollRateDegreesPerSecond = localAngularVelocity.z;
+    frame.pitchRateDegreesPerSecond = localAngularVelocity.x;
+    frame.yawRateDegreesPerSecond = localAngularVelocity.y;
+    frame.speedMps = length(linearVelocity);
+    frame.steeringInput = vehicle.steering;
+    frame.steeringAngleDegrees = vehicle.currentSteerCenterDegrees;
+    frame.throttleInput = vehicle.throttle;
+    frame.brakeInput = vehicle.brake;
+    frame.handbrakeInput = vehicle.handbrake;
+    frame.engineRpm = vehicle.engineRpm;
+    frame.wheels.reserve(vehicle.wheels.size());
+    for (const WheelRecord& source : vehicle.wheels)
+    {
+        const WheelState& state = source.state;
+        DynamicsLabWheelSample wheel;
+        wheel.grounded = state.grounded;
+        wheel.compression = state.compression;
+        wheel.suspensionVelocity = state.compressionVelocity;
+        wheel.normalForce = state.normalForce;
+        wheel.longitudinalForce = state.longitudinalForce;
+        wheel.lateralForce = state.lateralForce;
+        wheel.steerAngleDegrees = state.steerAngleDegrees;
+        wheel.wheelAngularVelocity = state.wheelAngularVelocity;
+        wheel.slipRatio = state.relaxedSlipRatio;
+        wheel.slipAngleDegrees = state.relaxedSlipAngleDegrees;
+        wheel.gripUtilization = state.gripUtilization;
+        wheel.aligningTorque = state.aligningTorque;
+        frame.wheels.push_back(wheel);
+    }
+    vehicle.dynamicsLab.capture(sourceDeltaTime, frame);
 }
 
 VehicleHandle VehicleSystem::makeHandle(

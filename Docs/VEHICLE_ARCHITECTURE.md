@@ -108,3 +108,13 @@ single-colour OBJ workflow. See ADR-007 through ADR-009.
 ## Data definitions
 
 Vehicle definitions should be mostly data and reference reusable presets. Planned examples include `Peugeot_206_RC.lua` and `Ducati_Monster_S4R.lua`.
+
+## Dynamics instrumentation
+
+Step 29J.5 adds an opt-in `VehicleDynamicsLab` recorder owned by each native
+vehicle record. It samples authoritative vehicle and wheel state inside the
+high-rate solver, retains bounded captures, calculates summary peaks, supplies
+downsampled plot series and exports complete CSV data. Inactive vehicles do not
+allocate a capture buffer. Repeatable experiment inputs remain module-side so
+diagnostic scenarios cannot leak special behavior into production physics. See
+`VEHICLE_DYNAMICS_LAB.md` for the public workflow and extension rules.

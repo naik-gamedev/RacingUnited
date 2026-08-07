@@ -33,6 +33,7 @@ $required = @(
     "Docs\LUA_API_RULES.md",
     "Docs\PHYSICS_ARCHITECTURE.md",
     "Docs\VEHICLE_ARCHITECTURE.md",
+    "Docs\VEHICLE_DYNAMICS_LAB.md",
     "Docs\Decisions\ADR-005-Advanced-Road-Tire-Provider.md",
     "Docs\Decisions\ADR-006-Per-Wheel-Tire-Profiles.md",
     "Docs\Decisions\ADR-007-Player-Vehicle-Visual-Slot.md",
@@ -46,6 +47,8 @@ $required = @(
     "Engine\HeritageEngine\Core\Modules\LuaModuleRuntime.hpp",
     "Engine\HeritageEngine\Vehicles\TireModel.hpp",
     "Engine\HeritageEngine\Vehicles\TireModel.cpp",
+    "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.hpp",
+    "Engine\HeritageEngine\Vehicles\VehicleDynamicsLab.cpp",
     "Engine\HeritageEngine\Physics\StaticBoxSceneImporter.hpp",
     "Engine\HeritageEngine\Physics\StaticBoxSceneImporter.cpp",
     "Engine\HeritageEngine\Physics\StaticTriangleSceneImporter.hpp",
@@ -58,6 +61,7 @@ $required = @(
     "Modules\RacingUnited\Scripts\Runtime\PlayerWorld.lua",
     "Modules\RacingUnited\Scripts\Vehicles\Definitions\PrototypeCar.lua",
     "Modules\RacingUnited\Scripts\Vehicles\Visuals.lua",
+    "Modules\RacingUnited\Scripts\Vehicles\DynamicsLab.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\VisualPanel.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\Visual\BodyPanel.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\Visual\WheelsPanel.lua",
@@ -68,6 +72,7 @@ $required = @(
     "Modules\RacingUnited\Assets\Scenes\Player\PlayerScene_Collision.obj",
     "Modules\RacingUnited\Assets\Scenes\Player\README_IMPORT.txt",
     "Modules\RacingUnited\Scripts\UI\VehicleDebugPanel.lua",
+    "Modules\RacingUnited\Scripts\UI\Vehicle\DynamicsLabPanel.lua",
     "Tools\RunPhysicsTests.cmd"
 )
 foreach ($relative in $required) {
@@ -91,6 +96,11 @@ if (Test-Path $manifestPath) {
         "Vehicle.SetTireModel",
         "Vehicle.SetWheelTireModel",
         "Vehicle.GetWheelTireModel",
+        "Vehicle.StartDynamicsLab",
+        "Vehicle.GetDynamicsLabSummary",
+        "Vehicle.GetDynamicsLabSeries",
+        "Vehicle.ExportDynamicsLabCsv",
+        "UI.PlotLines",
         "Physics.DestroyBody",
         "Physics.SetColliderSurface",
         "Physics.GetColliderSurface",
@@ -146,12 +156,14 @@ Check ($vehicleHeader.Contains("TireModelDescription tireModel")) "each wheel re
 Check ($vehicleHeader.Contains("setWheelTireModel")) "per-wheel tire setter contract exists"
 Check ($vehicleHeader.Contains("wheelTireModel")) "per-wheel tire readback contract exists"
 Check ($vehicleHeader.Contains("struct VehicleRestState")) "vehicle parked-rest diagnostic contract exists"
+Check ($vehicleHeader.Contains("startDynamicsLabCapture")) "vehicle exposes opt-in native dynamics capture"
 
 $physicsRegressionPath = Join-Path $Root "Engine\HeritageEngine\Tests\PhysicsRegression.cpp"
 $physicsRegression = if (Test-Path $physicsRegressionPath) { [IO.File]::ReadAllText($physicsRegressionPath) } else { "" }
 Check ($physicsRegression.Contains("parkingBrakeHoldsOnSlope")) "headless regression covers parking-brake slope hold"
 Check ($physicsRegression.Contains("unbrakedVehicleRollsOnSlope")) "headless regression preserves unbraked slope roll"
 Check ($physicsRegression.Contains("flatRestSleepsAndThrottleWakes")) "headless regression covers parked sleep and throttle wake"
+Check ($physicsRegression.Contains("dynamicsLabCapturesHighRateTelemetry")) "headless regression verifies exact high-rate dynamics capture"
 
 
 $tireHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\TireModel.hpp"
@@ -168,6 +180,8 @@ $vehicleProjectPath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\Heri
 $vehicleProject = if (Test-Path $vehicleProjectPath) { [IO.File]::ReadAllText($vehicleProjectPath) } else { "" }
 Check ($vehicleProject.Contains("..\Vehicles\TireModel.cpp")) "Visual Studio project compiles TireModel.cpp"
 Check ($vehicleProject.Contains("..\Vehicles\TireModel.hpp")) "Visual Studio project tracks TireModel.hpp"
+Check ($vehicleProject.Contains("..\Vehicles\VehicleDynamicsLab.cpp")) "Visual Studio project compiles VehicleDynamicsLab.cpp"
+Check ($vehicleProject.Contains("..\Vehicles\VehicleDynamicsLab.hpp")) "Visual Studio project tracks VehicleDynamicsLab.hpp"
 Check ($vehicleProject.Contains("..\Physics\StaticBoxSceneImporter.cpp")) "Visual Studio project compiles StaticBoxSceneImporter.cpp"
 Check ($vehicleProject.Contains("..\Physics\StaticBoxSceneImporter.hpp")) "Visual Studio project tracks StaticBoxSceneImporter.hpp"
 Check ($vehicleProject.Contains("..\Physics\StaticTriangleSceneImporter.cpp")) "Visual Studio project compiles StaticTriangleSceneImporter.cpp"

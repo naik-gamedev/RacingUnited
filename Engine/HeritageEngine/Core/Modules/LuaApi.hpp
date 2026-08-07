@@ -54,6 +54,7 @@ public:
 
     LuaNumber (HERITAGE_LUA_CALL* lua_version)(lua_State*) = nullptr;
     int (HERITAGE_LUA_CALL* lua_gettop)(lua_State*) = nullptr;
+    int (HERITAGE_LUA_CALL* lua_checkstack)(lua_State*, int) = nullptr;
     void (HERITAGE_LUA_CALL* lua_settop)(lua_State*, int) = nullptr;
     int (HERITAGE_LUA_CALL* lua_type)(lua_State*, int) = nullptr;
     int (HERITAGE_LUA_CALL* lua_toboolean)(lua_State*, int) = nullptr;

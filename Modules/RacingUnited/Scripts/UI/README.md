@@ -7,7 +7,7 @@ contributors do not append unrelated controls to one giant file.
 - `Prototype/`: entity, physics, module, scene and safety top-level panels.
 - `Physics/`: fixed-world, suspension, query/CCD and body diagnostic panels.
 - `VehicleDebugPanel.lua`: vehicle sub-tab coordinator only.
-- `Vehicle/`: driving, surfaces, tires, drivetrain, driver aids and telemetry.
+- `Vehicle/`: driving, surfaces, tires, drivetrain, driver aids, telemetry and the dynamics laboratory.
 - `SafetyNetPanel.lua`: shared safety controls used by prototype and About screens.
 
 Rules:

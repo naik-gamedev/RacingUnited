@@ -13,6 +13,7 @@ This folder configures and orchestrates vehicles. High-frequency simulation rema
 - `Tuning.lua` — sends mutable tuning values to native systems.
 - `Factory.lua` — creates, resets, and destroys native vehicle instances.
 - `Telemetry.lua` — reads native state for UI and diagnostics.
+- `DynamicsLab.lua` — repeatable experiment control for the opt-in native high-rate recorder.
 - `Lifecycle.lua` — scene entry/exit, fixed-step control, presentation, and shift commands.
 - `../UI/VehicleDebugPanel.lua` — vehicle debug UI only; it contains no simulation logic.
 
@@ -25,6 +26,7 @@ This folder configures and orchestrates vehicles. High-frequency simulation rema
 5. Avoid hidden global state; current globals are transitional and should gradually move behind stable APIs.
 6. Vehicle definition files should contain data, not per-frame simulation code.
 7. Networking-critical state must be exposed explicitly and deterministically.
+8. Dynamics-lab scenarios may provide fixed-step inputs, but measurement and simulation remain native; scenario code must never become production physics.
 
 Examples of future data definitions include `Peugeot_206_RC.lua` and `Ducati_Monster_S4R.lua`. They should reference reusable engines, gearboxes, differentials, tires, suspension, brakes, and aerodynamic components rather than copying their solvers.
 

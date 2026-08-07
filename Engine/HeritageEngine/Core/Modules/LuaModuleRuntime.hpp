@@ -171,6 +171,7 @@ private:
     static int luaUiDummy(lua_State* state);
     static int luaUiTextColored(lua_State* state);
     static int luaUiProgressBar(lua_State* state);
+    static int luaUiPlotLines(lua_State* state);
 
     static int luaEngineOpenSettings(lua_State* state);
     static int luaEngineExit(lua_State* state);
@@ -406,6 +407,12 @@ private:
     static int luaVehicleGetGroundedWheelCount(lua_State* state);
     static int luaVehicleGetLastHighRateStepCount(lua_State* state);
     static int luaVehicleGetTotalHighRateStepCount(lua_State* state);
+    static int luaVehicleStartDynamicsLab(lua_State* state);
+    static int luaVehicleStopDynamicsLab(lua_State* state);
+    static int luaVehicleClearDynamicsLab(lua_State* state);
+    static int luaVehicleGetDynamicsLabSummary(lua_State* state);
+    static int luaVehicleGetDynamicsLabSeries(lua_State* state);
+    static int luaVehicleExportDynamicsLabCsv(lua_State* state);
     static int luaVehicleGetWheelState(lua_State* state);
     static int luaVehicleGetLastError(lua_State* state);
 

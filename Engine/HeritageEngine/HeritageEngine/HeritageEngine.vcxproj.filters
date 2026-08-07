@@ -111,6 +111,9 @@
     <ClCompile Include="..\Vehicles\TireModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Vehicles\VehicleDynamicsLab.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Vehicles\VehicleSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -252,6 +255,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Vehicles\TireModel.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\VehicleDynamicsLab.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Vehicles\VehicleSystem.hpp">

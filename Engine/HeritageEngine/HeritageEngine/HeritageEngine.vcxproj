@@ -195,6 +195,7 @@ user32.lib
     <ClCompile Include="..\Physics\PhysicsWorld.cpp" />
     <ClCompile Include="..\Physics\RigidBodySystem.cpp" />
     <ClCompile Include="..\Vehicles\TireModel.cpp" />
+    <ClCompile Include="..\Vehicles\VehicleDynamicsLab.cpp" />
     <ClCompile Include="..\Vehicles\VehicleSystem.cpp" />
     <ClCompile Include="..\Core\Entities\EntityRegistry.cpp" />
     <ClCompile Include="..\Core\Entities\EntitySceneDocument.cpp" />
@@ -247,6 +248,7 @@ user32.lib
     <ClInclude Include="..\Physics\PhysicsWorld.hpp" />
     <ClInclude Include="..\Physics\RigidBodySystem.hpp" />
     <ClInclude Include="..\Vehicles\TireModel.hpp" />
+    <ClInclude Include="..\Vehicles\VehicleDynamicsLab.hpp" />
     <ClInclude Include="..\Vehicles\VehicleSystem.hpp" />
     <ClInclude Include="..\Core\Entities\EntityRegistry.hpp" />
     <ClInclude Include="..\Core\Entities\EntitySceneDocument.hpp" />

@@ -11,6 +11,7 @@ Read these documents before changing an interconnected system:
 5. `LUA_API_RULES.md` — binding contract and generated API manifests.
 6. `PHYSICS_ARCHITECTURE.md` — fixed-step and multi-rate physics rules.
 7. `VEHICLE_ARCHITECTURE.md` — generic vehicle composition and Lua/native split.
-8. `Decisions/` — architecture decision records that must not be silently reversed.
+8. `VEHICLE_DYNAMICS_LAB.md` — native recording, repeatable experiments, plots and CSV diagnostics.
+9. `Decisions/` — architecture decision records that must not be silently reversed.
 
 Generated reports are written to `Build/Reports/`. Runtime diagnostics are written to `UserData/Diagnostics/`.
