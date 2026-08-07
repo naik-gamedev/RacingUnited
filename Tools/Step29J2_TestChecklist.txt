@@ -1,0 +1,25 @@
+HERITAGE ENGINE STEP 29J.2 - QUICK CHECK
+
+1. Run Tools\BuildAndRunStep29J2.cmd.
+2. If Release x64 builds, open the PROTOTYPE scene.
+3. Go to SCENE > WORLD.
+4. Click LOAD / RELOAD PLAYER SCENE.
+5. Expected:
+   - old physics-lab clutter disappears;
+   - a simple parking-lot-style Player Scene appears;
+   - collision proxy count is greater than zero;
+   - the car resets near the Player Scene origin and can drive on the floor;
+   - outer wall/kerb proxy boxes stop the car.
+6. Replace Assets\Scenes\Player\PlayerScene.obj with your own 1:1 Blender scene when ready.
+7. For collision, replace PlayerScene_Collision.obj with simple axis-aligned proxy boxes.
+8. Double-click any numeric slider to enter an exact keyboard value, then press Enter.
+
+AUTHORING CONTRACT
+X = left/right
+Y = forward/backward
+Z = height
+1 Blender unit = 1 metre
+
+NOTE
+The collision proxy importer is temporary and box-only. Step 29K will move the
+content pipeline toward glTF hierarchy/named nodes/materials.

@@ -1,0 +1,5 @@
+# Heritage Engine module-owned scene document
+id = main_menu
+type = empty
+clear_color = 0.004, 0.007, 0.012
+overlay = false

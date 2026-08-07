@@ -1,0 +1,18 @@
+Heritage Engine - Step 29J.3 Player Spawn / Collision Bridge
+
+1. Extract the Step 29J.3 ZIP over the RacingUnited project.
+2. Your PlayerScene.obj, PlayerScene_Collision.obj, PlayerCar.obj and PlayerWheel.obj are not supplied by this update and must remain yours.
+3. Run Tools\BuildAndRunStep29J3.cmd.
+4. Open the prototype -> SCENE -> WORLD -> LOAD / RELOAD PLAYER SCENE.
+5. Existing scene without marker:
+   - Spawn source should show "auto-ground" when a suitable road/ground proxy is found.
+   - The car should reset onto that proxy instead of blindly at world origin.
+6. Exact authored spawn (recommended):
+   - In the COLLISION Blender scene add a small cube named SPAWN_PLAYER.
+   - Put the cube physically on the road at the desired starting point.
+   - Export PlayerScene_Collision.obj again and reload the Player Scene.
+   - Spawn source should show "marker".
+   - The marker does not become a collider.
+7. The temporary OBJ bridge faces the vehicle along Blender +Y.
+8. Remember: changing a Blender object's origin/pivot alone does not move OBJ vertex coordinates and therefore cannot define the spawn point.
+9. Collision is still one axis-aligned box per OBJ object/group. Use simple collision proxy objects rather than a duplicate of a detailed final scene where possible.

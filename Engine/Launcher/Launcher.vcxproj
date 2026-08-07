@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version='1.0' encoding='utf-8'?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -70,6 +70,16 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(ProjectDir)..\HeritageEngine\x64\Debug\</OutDir>
+    <IntDir>$(ProjectDir)x64\Debug\</IntDir>
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(ProjectDir)..\HeritageEngine\x64\Release\</OutDir>
+    <IntDir>$(ProjectDir)x64\Release\</IntDir>
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -86,7 +96,7 @@
       <AdditionalLibraryDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib
 ;opengl32.lib;Ole32.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
-    </Link>
+    <IgnoreSpecificDefaultLibraries>MSVCRT;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries></Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
@@ -101,7 +111,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -130,7 +140,7 @@
       <AdditionalLibraryDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib
 ;opengl32.lib;Ole32.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
-    </Link>
+    <IgnoreSpecificDefaultLibraries>MSVCRT;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries></Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
@@ -145,7 +155,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -153,6 +163,7 @@
       <AdditionalLibraryDirectories>$(ProjectDir)..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib
 ;opengl32.lib;Ole32.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
@@ -166,12 +177,23 @@
     <ClCompile Include="..\..\ThirdParty\IMGUI\imgui_draw.cpp" />
     <ClCompile Include="..\..\ThirdParty\IMGUI\imgui_tables.cpp" />
     <ClCompile Include="..\..\ThirdParty\IMGUI\imgui_widgets.cpp" />
+    <ClCompile Include="..\HeritageEngine\Core\Modules\ModuleLoader.cpp" />
+    <ClCompile Include="..\HeritageEngine\Core\Settings\VideoSettingsStorage.cpp" />
+    <ClCompile Include="..\HeritageEngine\Graphics\DisplaySystem.cpp" />
+    <ClCompile Include="LauncherSettingsPage.cpp" />
+    <ClCompile Include="LauncherState.cpp" />
     <ClCompile Include="launcher_main.cpp">
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\HeritageEngine\Core\Modules\ModuleInfo.hpp" />
+    <ClInclude Include="..\HeritageEngine\Core\Modules\ModuleLoader.hpp" />
+    <ClInclude Include="LauncherSettingsPage.hpp" />
+    <ClInclude Include="LauncherState.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

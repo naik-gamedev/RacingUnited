@@ -29,14 +29,48 @@
 #include <vector>
 #include <map>
 #include <filesystem>
+#include <cstdint>
+#include <algorithm>
+#include <utility>
+
+#include "../HeritageEngine/Core/Modules/ModuleLoader.hpp"
+#include "../HeritageEngine/Core/Settings/VideoSettingsStorage.hpp"
+#include "../HeritageEngine/Graphics/DisplaySystem.hpp"
+#include "LauncherSettingsPage.hpp"
+#include "LauncherState.hpp"
 
 namespace fs = std::filesystem;
+using heritage::modules::ModuleInfo;
+using heritage::modules::ModuleLoader;
+using heritage::settings::VideoSettings;
+using heritage::settings::VideoSettingsStorage;
+using heritage::graphics::DisplaySystem;
+using racing::launcher::drawSettingsTabs;
+using racing::launcher::LauncherState;
+using racing::launcher::LauncherStateStorage;
 
 #ifdef _WIN32
 #define RACING_GLSL_VERSION "#version 460"
 #else
 #define RACING_GLSL_VERSION "#version 330"
 #endif
+
+static fs::path executableDirectory()
+{
+#ifdef _WIN32
+    char modulePath[MAX_PATH] = {};
+    const DWORD length = GetModuleFileNameA(nullptr, modulePath, MAX_PATH);
+    return length
+        ? fs::path(modulePath).parent_path().lexically_normal()
+        : fs::current_path().lexically_normal();
+#else
+    char modulePath[4096] = {};
+    const ssize_t length = readlink("/proc/self/exe", modulePath, sizeof(modulePath) - 1);
+    return length > 0
+        ? fs::path(std::string(modulePath, length)).parent_path().lexically_normal()
+        : fs::current_path().lexically_normal();
+#endif
+}
 
 static fs::path findProjectRoot()
 {
@@ -74,101 +108,183 @@ static double g_dragStartX = 0, g_dragStartY = 0;
 static int    g_winStartX = 0, g_winStartY = 0;
 
 // -----------------------------------------------------------------------
-//  Module descriptor
+//  Engine executable and per-module settings
 // -----------------------------------------------------------------------
-struct Module
+static fs::path resolveEngineExecutable(const fs::path& projectRoot)
 {
-    std::string folderName;
-    std::string name;
-    std::string version;
-    std::string author;
-    std::string description;
-    std::string executable;
-};
-
-static std::string resolveModuleExecutable(const fs::path& projectRoot, const Module& mod)
-{
-    fs::path configured = mod.executable;
-    if (configured.is_absolute()) return configured.string();
-
-    std::vector<fs::path> candidates = {
-        projectRoot / configured,
-        projectRoot / "build/bin" / configured,
-        projectRoot / "Engine/HeritageEngine/x64/Debug" / configured,
-        projectRoot / "Engine/HeritageEngine/x64/Release" / configured,
-        fs::current_path() / configured,
+    // Prefer the engine next to the running launcher. This guarantees that a
+    // Release launcher starts the Release engine beside it, while a Debug
+    // launcher starts the matching Debug engine.
+    const std::vector<fs::path> candidates = {
+        executableDirectory() / "HeritageEngine.exe",
+        projectRoot / "HeritageEngine.exe",
+        projectRoot / "build/bin/HeritageEngine.exe",
+        projectRoot / "Engine/HeritageEngine/x64/Release/HeritageEngine.exe",
+        projectRoot / "Engine/x64/Release/HeritageEngine.exe",
+        projectRoot / "x64/Release/HeritageEngine.exe",
+        projectRoot / "Engine/HeritageEngine/x64/Debug/HeritageEngine.exe",
+        projectRoot / "Engine/x64/Debug/HeritageEngine.exe",
+        projectRoot / "x64/Debug/HeritageEngine.exe"
     };
 
-#ifdef _WIN32
-    if (!configured.has_extension())
-    {
-        const size_t candidateCount = candidates.size();
-        for (size_t i = 0; i < candidateCount; ++i)
-            candidates.push_back(candidates[i].string() + ".exe");
-    }
-#endif
-
     for (const fs::path& candidate : candidates)
-        if (fs::exists(candidate)) return candidate.lexically_normal().string();
+    {
+        if (fs::is_regular_file(candidate))
+            return candidate.lexically_normal();
+    }
 
-    return (projectRoot / "build/bin" / configured).lexically_normal().string();
+    return {};
 }
 
-// -----------------------------------------------------------------------
-//  INI parser
-// -----------------------------------------------------------------------
-static std::map<std::string, std::string> parseINI(const std::string& path)
+static std::string quotedArgument(const fs::path& value)
 {
-    std::map<std::string, std::string> out;
-    std::ifstream f(path);
-    std::string line;
-    while (std::getline(f, line))
-    {
-        if (line.empty() || line[0] == '#' || line[0] == ';') continue;
-        auto eq = line.find('=');
-        if (eq == std::string::npos) continue;
-        std::string key = line.substr(0, eq);
-        std::string val = line.substr(eq + 1);
-        auto trim = [](std::string& s) {
-            size_t a = s.find_first_not_of(" \t\r\n");
-            size_t b = s.find_last_not_of(" \t\r\n");
-            s = (a == std::string::npos) ? "" : s.substr(a, b - a + 1);
-            };
-        trim(key); trim(val);
-        out[key] = val;
-    }
-    return out;
+    return "\"" + value.string() + "\"";
 }
 
-// -----------------------------------------------------------------------
-//  Scan Modules/ folder
-// -----------------------------------------------------------------------
-static std::vector<Module> scanModules(const std::string& modulesRoot)
+static std::string quotedArgument(const std::string& value)
 {
-    std::vector<Module> results;
-    if (!fs::exists(modulesRoot)) return results;
-    for (auto& entry : fs::directory_iterator(modulesRoot))
+    return "\"" + value + "\"";
+}
+
+static std::string moduleLaunchArguments(
+    const fs::path& projectRoot,
+    const ModuleInfo& module)
+{
+    return "--project-root " + quotedArgument(projectRoot)
+        + " --module-path " + quotedArgument(module.rootPath)
+        + " --module " + quotedArgument(module.id);
+}
+
+static fs::path getModuleSettingsRoot(
+    const fs::path& projectRoot,
+    const ModuleInfo& module)
+{
+    return ModuleLoader::userDataRoot(projectRoot, module);
+}
+
+static VideoSettings loadModuleSettings(
+    const fs::path& projectRoot,
+    const ModuleInfo& module)
+{
+    VideoSettings settings;
+    const fs::path path = getModuleSettingsRoot(projectRoot, module) / "settings_video.ini";
+
+    try
     {
-        if (!entry.is_directory()) continue;
-        std::string iniPath = entry.path().string() + "/module.ini";
-        if (!fs::exists(iniPath)) continue;
-        auto ini = parseINI(iniPath);
-        Module m;
-        m.folderName = entry.path().filename().string();
-        m.name = ini.count("name") ? ini["name"] : m.folderName;
-        m.version = ini.count("version") ? ini["version"] : "?";
-        m.author = ini.count("author") ? ini["author"] : "Unknown";
-        m.description = ini.count("description") ? ini["description"] : "";
-        m.executable = ini.count("executable") ? ini["executable"] : "RacingUnited.exe";
-        results.push_back(m);
+        if (fs::exists(path))
+        {
+            VideoSettingsStorage::load(path.string(), settings);
+        }
+        else
+        {
+            const fs::path legacyPath = projectRoot / "settings_video.ini";
+            if (fs::exists(legacyPath))
+                VideoSettingsStorage::load(legacyPath.string(), settings);
+        }
     }
-    return results;
+    catch (...)
+    {
+        settings = VideoSettings{};
+    }
+
+    return settings;
+}
+
+static void loadModuleDisplaySettings(
+    const fs::path& projectRoot,
+    const ModuleInfo& module,
+    DisplaySystem& display)
+{
+    try
+    {
+        const fs::path path = getModuleSettingsRoot(projectRoot, module)
+            / "settings_engine.ini";
+        if (fs::exists(path))
+        {
+            display.load(path.string());
+        }
+        else
+        {
+            const fs::path legacyPath = projectRoot / "settings_engine.ini";
+            if (fs::exists(legacyPath))
+                display.load(legacyPath.string());
+        }
+    }
+    catch (...)
+    {
+    }
+}
+
+static void saveModuleSettings(
+    const fs::path& projectRoot,
+    const ModuleInfo& module,
+    const VideoSettings& settings,
+    const DisplaySystem& display)
+{
+    try
+    {
+        const fs::path settingsRoot = getModuleSettingsRoot(projectRoot, module);
+        fs::create_directories(settingsRoot);
+        VideoSettingsStorage::save(
+            (settingsRoot / "settings_video.ini").string(),
+            settings);
+        display.save((settingsRoot / "settings_engine.ini").string());
+    }
+    catch (const std::exception& exception)
+    {
+        std::cerr << "Could not save module settings: "
+                  << exception.what() << "\n";
+    }
+}
+
+static int findModuleIndexById(
+    const std::vector<ModuleInfo>& modules,
+    const std::string& moduleId)
+{
+    for (int index = 0; index < static_cast<int>(modules.size()); ++index)
+    {
+        if (modules[index].id == moduleId)
+            return index;
+    }
+    return -1;
+}
+
+static void resizeLauncherWindow(
+    GLFWwindow* window,
+    int desiredWidth,
+    int desiredHeight)
+{
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    if (!monitor)
+    {
+        glfwSetWindowSize(window, desiredWidth, desiredHeight);
+        return;
+    }
+
+    int workX = 0, workY = 0, workW = desiredWidth, workH = desiredHeight;
+    glfwGetMonitorWorkarea(monitor, &workX, &workY, &workW, &workH);
+
+    const int width = (std::min)(desiredWidth, (std::max)(320, workW - 24));
+    const int height = (std::min)(desiredHeight, (std::max)(240, workH - 24));
+
+    int windowX = 0, windowY = 0;
+    glfwGetWindowPos(window, &windowX, &windowY);
+
+    if (windowX + width > workX + workW)
+        windowX = workX + workW - width;
+    if (windowY + height > workY + workH)
+        windowY = workY + workH - height;
+    windowX = (std::max)(windowX, workX);
+    windowY = (std::max)(windowY, workY);
+
+    glfwSetWindowSize(window, width, height);
+    glfwSetWindowPos(window, windowX, windowY);
 }
 
 // -----------------------------------------------------------------------
 //  Desktop shortcut
 // -----------------------------------------------------------------------
-static void createDesktopShortcut(const Module& mod, const std::string& exePath)
+static bool createDesktopShortcut(const ModuleInfo& mod, const fs::path& exePath)
 {
 #ifdef _WIN32
     HRESULT hr = CoInitialize(nullptr);
@@ -177,10 +293,12 @@ static void createDesktopShortcut(const Module& mod, const std::string& exePath)
         IID_IShellLinkA, (void**)&pLink);
     if (SUCCEEDED(hr))
     {
-        pLink->SetPath(exePath.c_str());
-        pLink->SetArguments(mod.folderName.c_str());
+        pLink->SetPath(exePath.string().c_str());
+        const fs::path projectRoot = findProjectRoot();
+        const std::string arguments = moduleLaunchArguments(projectRoot, mod);
+        pLink->SetArguments(arguments.c_str());
         pLink->SetDescription(mod.description.c_str());
-        pLink->SetWorkingDirectory(fs::path(exePath).parent_path().string().c_str());
+        pLink->SetWorkingDirectory(exePath.parent_path().string().c_str());
         IPersistFile* pFile = nullptr;
         hr = pLink->QueryInterface(IID_IPersistFile, (void**)&pFile);
         if (SUCCEEDED(hr))
@@ -189,66 +307,22 @@ static void createDesktopShortcut(const Module& mod, const std::string& exePath)
             SHGetFolderPathA(nullptr, CSIDL_DESKTOP, nullptr, 0, desktopPath);
             std::string lnkPath = std::string(desktopPath) + "\\" + mod.name + ".lnk";
             std::wstring wLnk(lnkPath.begin(), lnkPath.end());
-            pFile->Save(wLnk.c_str(), TRUE);
+            const HRESULT saveResult = pFile->Save(wLnk.c_str(), TRUE);
             pFile->Release();
+            pLink->Release();
+            CoUninitialize();
+            return SUCCEEDED(saveResult);
         }
         pLink->Release();
     }
     CoUninitialize();
+    return false;
 #else
     (void)mod;
     (void)exePath;
     std::cerr << "Desktop shortcut creation is not implemented on Linux\n";
+    return false;
 #endif
-}
-
-// -----------------------------------------------------------------------
-//  Settings
-// -----------------------------------------------------------------------
-struct Settings
-{
-    int   resolutionIdx = 2;
-    bool  fullscreen = false;
-    int   fpsCapIdx = 0;
-    float masterVolume = 1.0f;
-    float musicVolume = 0.8f;
-    float sfxVolume = 1.0f;
-    std::string apiName = "OpenGL";
-};
-
-static const char* resolutions[] = { "1280x720","1600x900","1920x1080","2560x1440","3840x2160" };
-static const char* fpsCaps[] = { "Unlimited","30","60","90","120","144","165","240" };
-static const char* apis[] = { "OpenGL" };
-
-static void saveSettings(const Settings& s, const std::string& path)
-{
-    if (path.empty()) return;
-    std::ofstream f(path);
-    f << "resolution = " << resolutions[s.resolutionIdx] << "\n";
-    f << "fullscreen = " << (s.fullscreen ? "1" : "0") << "\n";
-    f << "fps_cap    = " << fpsCaps[s.fpsCapIdx] << "\n";
-    f << "master_vol = " << s.masterVolume << "\n";
-    f << "music_vol  = " << s.musicVolume << "\n";
-    f << "sfx_vol    = " << s.sfxVolume << "\n";
-    f << "api        = " << s.apiName << "\n";
-}
-
-static Settings loadSettings(const std::string& path)
-{
-    Settings s;
-    if (path.empty() || !fs::exists(path)) return s;
-    auto ini = parseINI(path);
-    if (ini.count("fullscreen")) s.fullscreen = ini["fullscreen"] == "1";
-    if (ini.count("master_vol")) s.masterVolume = std::stof(ini["master_vol"]);
-    if (ini.count("music_vol"))  s.musicVolume = std::stof(ini["music_vol"]);
-    if (ini.count("sfx_vol"))    s.sfxVolume = std::stof(ini["sfx_vol"]);
-    if (ini.count("resolution"))
-        for (int i = 0;i < IM_ARRAYSIZE(resolutions);i++)
-            if (ini["resolution"] == resolutions[i]) { s.resolutionIdx = i;break; }
-    if (ini.count("fps_cap"))
-        for (int i = 0;i < IM_ARRAYSIZE(fpsCaps);i++)
-            if (ini["fps_cap"] == fpsCaps[i]) { s.fpsCapIdx = i;break; }
-    return s;
 }
 
 // -----------------------------------------------------------------------
@@ -301,22 +375,32 @@ int main()
     });
 
     const int WIN_W = 820;
-    const int WIN_H = 560;
+    const int COLLAPSED_H = 560;
+    const int EXPANDED_H = 760;
     const int TITLEBAR_H = 36;
+    const double MODULE_RESCAN_INTERVAL = 5.0;
 
     const fs::path projectRoot = findProjectRoot();
-    const std::string modulesRoot = (projectRoot / "Modules").string();
     const std::string fontPath = (projectRoot / "Assets/Fonts/Orbitron-SemiBold.ttf").string();
 
-    std::vector<Module> modules = scanModules(modulesRoot);
-    int selectedModule = 0;
+    const fs::path launcherStatePath = projectRoot / "UserData/launcher.ini";
+    LauncherState launcherState;
+    LauncherStateStorage::load(launcherStatePath, launcherState);
 
-    Settings settings;
-    auto getSettingsPath = [&]()->std::string {
-        if (modules.empty()) return "";
-        return modulesRoot + "/" + modules[selectedModule].folderName + "/settings.ini";
-        };
-    if (!modules.empty()) settings = loadSettings(getSettingsPath());
+    heritage::modules::ModuleScanResult scanResult = ModuleLoader::scanDetailed(projectRoot);
+    std::vector<ModuleInfo> modules = std::move(scanResult.modules);
+    std::vector<std::string> moduleWarnings = std::move(scanResult.warnings);
+    int selectedModule = findModuleIndexById(modules, launcherState.lastModuleId);
+    if (selectedModule < 0 && !modules.empty())
+        selectedModule = 0;
+
+    VideoSettings settings;
+    if (selectedModule >= 0)
+    {
+        settings = loadModuleSettings(projectRoot, modules[selectedModule]);
+        launcherState.lastModuleId = modules[selectedModule].id;
+        LauncherStateStorage::save(launcherStatePath, launcherState);
+    }
 
     if (!glfwInit()) return -1;
 
@@ -333,17 +417,23 @@ int main()
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    GLFWwindow* window = glfwCreateWindow(WIN_W, WIN_H, "Racing United", nullptr, nullptr);
+    const int initialHeight = launcherState.settingsVisible ? EXPANDED_H : COLLAPSED_H;
+    GLFWwindow* window = glfwCreateWindow(WIN_W, initialHeight, "Racing United", nullptr, nullptr);
     if (!window) { glfwTerminate(); return -1; }
 
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-    glfwSetWindowPos(window, (mode->width - WIN_W) / 2, (mode->height - WIN_H) / 2);
+    glfwSetWindowPos(window, (mode->width - WIN_W) / 2, (mode->height - initialHeight) / 2);
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) return -1;
+
+    DisplaySystem display;
+    display.initialize();
+    if (selectedModule >= 0)
+        loadModuleDisplaySettings(projectRoot, modules[selectedModule], display);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -366,14 +456,59 @@ int main()
 
     std::string notification = "";
     double      notifyTime = 0.0;
-    bool        showSettings = false;
+    bool        showSettings = launcherState.settingsVisible;
     bool        shouldClose = false;
     bool        shouldMin = false;
+    bool        notificationIsError = false;
+    double      nextModuleScanTime = glfwGetTime() + MODULE_RESCAN_INTERVAL;
 
     while (!glfwWindowShouldClose(window) && !shouldClose)
     {
         glfwPollEvents();
         if (shouldMin) { glfwIconifyWindow(window); shouldMin = false; }
+
+        const double currentTime = glfwGetTime();
+        if (currentTime >= nextModuleScanTime)
+        {
+            nextModuleScanTime = currentTime + MODULE_RESCAN_INTERVAL;
+
+            const std::string previousId =
+                (selectedModule >= 0 && selectedModule < static_cast<int>(modules.size()))
+                ? modules[selectedModule].id
+                : launcherState.lastModuleId;
+
+            heritage::modules::ModuleScanResult refreshed = ModuleLoader::scanDetailed(projectRoot);
+            std::vector<ModuleInfo> refreshedModules = std::move(refreshed.modules);
+            moduleWarnings = std::move(refreshed.warnings);
+
+            int refreshedIndex = findModuleIndexById(refreshedModules, previousId);
+            if (refreshedIndex < 0 && !refreshedModules.empty())
+                refreshedIndex = 0;
+
+            const std::string refreshedId = refreshedIndex >= 0
+                ? refreshedModules[refreshedIndex].id
+                : std::string{};
+            const bool selectionChanged = refreshedId != previousId;
+
+            modules = std::move(refreshedModules);
+            selectedModule = refreshedIndex;
+
+            if (selectionChanged && selectedModule >= 0)
+            {
+                settings = loadModuleSettings(projectRoot, modules[selectedModule]);
+                display.shutdown();
+                display.initialize();
+                loadModuleDisplaySettings(projectRoot, modules[selectedModule], display);
+                launcherState.lastModuleId = modules[selectedModule].id;
+                LauncherStateStorage::save(launcherStatePath, launcherState);
+            }
+        }
+
+        int windowW = 0, windowH = 0;
+        int framebufferW = 0, framebufferH = 0;
+        glfwGetWindowSize(window, &windowW, &windowH);
+        glfwGetFramebufferSize(window, &framebufferW, &framebufferH);
+        glViewport(0, 0, framebufferW, framebufferH);
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -381,7 +516,7 @@ int main()
 
         // Custom title bar
         ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2((float)WIN_W, (float)TITLEBAR_H));
+        ImGui::SetNextWindowSize(ImVec2((float)windowW, (float)TITLEBAR_H));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, 1.f));
         ImGui::Begin("##titlebar", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
@@ -389,7 +524,7 @@ int main()
             ImGuiWindowFlags_NoSavedSettings);
 
         ImGui::SetCursorPos(ImVec2(0, 0));
-        ImGui::InvisibleButton("##drag", ImVec2((float)WIN_W - 80, (float)TITLEBAR_H));
+        ImGui::InvisibleButton("##drag", ImVec2((float)windowW - 80, (float)TITLEBAR_H));
         if (ImGui::IsItemActive())
         {
             if (!g_dragging) {
@@ -420,12 +555,12 @@ int main()
         ImGui::PopFont();
 
         ImGui::PushFont(g_fontSmall);
-        ImGui::SetCursorPos(ImVec2((float)WIN_W - 76, 4));
+        ImGui::SetCursorPos(ImVec2((float)windowW - 76, 4));
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.25f, 1));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.35f, 0.35f, 0.35f, 1));
         if (ImGui::Button(" _ ##min", ImVec2(36, 28))) shouldMin = true;
-        ImGui::SetCursorPos(ImVec2((float)WIN_W - 40, 4));
+        ImGui::SetCursorPos(ImVec2((float)windowW - 40, 4));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.1f, 0.1f, 1));
         if (ImGui::Button(" X ##cls", ImVec2(36, 28)))
         {
@@ -440,7 +575,7 @@ int main()
 
         // Main content
         ImGui::SetNextWindowPos(ImVec2(0, (float)TITLEBAR_H));
-        ImGui::SetNextWindowSize(ImVec2((float)WIN_W, (float)(WIN_H - TITLEBAR_H)));
+        ImGui::SetNextWindowSize(ImVec2((float)windowW, (float)(windowH - TITLEBAR_H)));
         ImGui::Begin("##root", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
@@ -484,47 +619,169 @@ int main()
                 {
                     if (selectedModule != i)
                     {
-                        saveSettings(settings, getSettingsPath());
+                        if (selectedModule >= 0)
+                            saveModuleSettings(projectRoot, modules[selectedModule], settings, display);
                         selectedModule = i;
-                        settings = loadSettings(getSettingsPath());
+                        settings = loadModuleSettings(projectRoot, modules[selectedModule]);
+                        display.shutdown();
+                        display.initialize();
+                        loadModuleDisplaySettings(
+                            projectRoot,
+                            modules[selectedModule],
+                            display);
+                        launcherState.lastModuleId = modules[selectedModule].id;
+                        LauncherStateStorage::save(launcherStatePath, launcherState);
                     }
                 }
             }
             ImGui::PopFont();
         }
 
+        if (!moduleWarnings.empty())
+        {
+            ImGui::PushFont(g_fontSmall);
+            ImGui::PushStyleColor(
+                ImGuiCol_Text,
+                ImVec4(0.95f, 0.55f, 0.25f, 1.0f));
+
+            const std::string warningLabel = "MODULE WARNINGS: "
+                + std::to_string(moduleWarnings.size());
+            if (ImGui::Selectable(
+                    warningLabel.c_str(),
+                    false,
+                    ImGuiSelectableFlags_None,
+                    ImVec2(0.0f, 20.0f)))
+            {
+                ImGui::OpenPopup("Module Warnings");
+            }
+
+            ImGui::PopStyleColor();
+            ImGui::PopFont();
+
+            ImGui::SetNextWindowSize(
+                ImVec2(560.0f, 260.0f),
+                ImGuiCond_Appearing);
+            if (ImGui::BeginPopupModal(
+                    "Module Warnings",
+                    nullptr,
+                    ImGuiWindowFlags_NoResize
+                    | ImGuiWindowFlags_NoSavedSettings))
+            {
+                ImGui::PushFont(g_fontSmall);
+                ImGui::TextWrapped(
+                    "The launcher found one or more module manifest problems. "
+                    "Click Close after reading them, then correct the relevant module.ini file.");
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                ImGui::BeginChild(
+                    "##module_warning_list",
+                    ImVec2(0.0f, -42.0f),
+                    false,
+                    ImGuiWindowFlags_AlwaysVerticalScrollbar);
+                for (const std::string& warning : moduleWarnings)
+                {
+                    ImGui::Bullet();
+                    ImGui::SameLine();
+                    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 480.0f);
+                    ImGui::TextWrapped("%s", warning.c_str());
+                    ImGui::PopTextWrapPos();
+                    ImGui::Spacing();
+                }
+                ImGui::EndChild();
+
+                if (ImGui::Button("CLOSE", ImVec2(120.0f, 30.0f)))
+                    ImGui::CloseCurrentPopup();
+
+                ImGui::PopFont();
+                ImGui::EndPopup();
+            }
+        }
+
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
 
-        bool hasModule = !modules.empty();
+        bool hasModule = selectedModule >= 0;
         if (!hasModule) ImGui::BeginDisabled();
 
         ImGui::PushFont(g_fontNormal);
         if (ImGui::Button("LAUNCH", ImVec2(120, 36)))
         {
-            saveSettings(settings, getSettingsPath());
-            const std::string executablePath = resolveModuleExecutable(projectRoot, modules[selectedModule]);
-#ifdef _WIN32
-            ShellExecuteA(nullptr, "open", executablePath.c_str(),
-                modules[selectedModule].folderName.c_str(), nullptr, SW_SHOWNORMAL);
-#else
-            pid_t child = fork();
-            if (child == 0)
+            saveModuleSettings(projectRoot, modules[selectedModule], settings, display);
+            const fs::path executablePath = resolveEngineExecutable(projectRoot);
+            const std::string arguments = moduleLaunchArguments(
+                projectRoot,
+                modules[selectedModule]);
+
+            if (executablePath.empty())
             {
-                execl(executablePath.c_str(), executablePath.c_str(),
-                    modules[selectedModule].folderName.c_str(), nullptr);
-                _exit(127);
+                notification = "HeritageEngine.exe was not found in the Racing United package.";
+                notificationIsError = true;
+                notifyTime = glfwGetTime();
             }
+            else
+            {
+#ifdef _WIN32
+                const HINSTANCE launchResult = ShellExecuteA(
+                    nullptr,
+                    "open",
+                    executablePath.string().c_str(),
+                    arguments.c_str(),
+                    executablePath.parent_path().string().c_str(),
+                    SW_SHOWNORMAL);
+                if (reinterpret_cast<std::intptr_t>(launchResult) <= 32)
+                {
+                    notification = "Windows could not start HeritageEngine.exe.";
+                    notificationIsError = true;
+                    notifyTime = glfwGetTime();
+                }
+                else
+                {
+                    shouldClose = true;
+                }
+#else
+                pid_t child = fork();
+                if (child == 0)
+                {
+                    const std::string projectRootArgument = projectRoot.string();
+                    const std::string moduleRootArgument = modules[selectedModule].rootPath.string();
+                    execl(
+                        executablePath.string().c_str(),
+                        executablePath.string().c_str(),
+                        "--project-root",
+                        projectRootArgument.c_str(),
+                        "--module-path",
+                        moduleRootArgument.c_str(),
+                        "--module",
+                        modules[selectedModule].id.c_str(),
+                        nullptr);
+                    _exit(127);
+                }
+                shouldClose = true;
 #endif
-            shouldClose = true;
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("SHORTCUT", ImVec2(120, 36)))
         {
-            const std::string executablePath = resolveModuleExecutable(projectRoot, modules[selectedModule]);
-            createDesktopShortcut(modules[selectedModule], executablePath);
-            notification = "Shortcut created for " + modules[selectedModule].name;
+            const fs::path executablePath = resolveEngineExecutable(projectRoot);
+            if (executablePath.empty())
+            {
+                notification = "HeritageEngine.exe was not found; shortcut was not created.";
+                notificationIsError = true;
+            }
+            else if (createDesktopShortcut(modules[selectedModule], executablePath))
+            {
+                notification = "Shortcut created for " + modules[selectedModule].name;
+                notificationIsError = false;
+            }
+            else
+            {
+                notification = "Windows could not create the desktop shortcut.";
+                notificationIsError = true;
+            }
             notifyTime = glfwGetTime();
         }
         ImGui::PopFont();
@@ -534,13 +791,21 @@ int main()
 
         ImGui::PushFont(g_fontNormal);
         if (ImGui::Button(showSettings ? "HIDE SETTINGS" : "SETTINGS", ImVec2(248, 28)))
+        {
             showSettings = !showSettings;
+            launcherState.settingsVisible = showSettings;
+            LauncherStateStorage::save(launcherStatePath, launcherState);
+            resizeLauncherWindow(
+                window,
+                WIN_W,
+                showSettings ? EXPANDED_H : COLLAPSED_H);
+        }
         ImGui::PopFont();
 
         ImGui::NextColumn();
 
         // Module info
-        if (!modules.empty())
+        if (selectedModule >= 0)
         {
             auto& m = modules[selectedModule];
             ImGui::PushFont(g_fontLarge);
@@ -548,6 +813,25 @@ int main()
             ImGui::PopFont();
             ImGui::PushFont(g_fontSmall);
             ImGui::TextDisabled("v%s  by %s", m.version.c_str(), m.author.c_str());
+            ImGui::TextDisabled("Runtime: %s", m.runtime.c_str());
+            if (m.runtime == "scripted_ui")
+            {
+                ImGui::TextDisabled(
+                    "Entry UI: %s",
+                    m.entryUi.empty() ? "<missing>" : m.entryUi.c_str());
+            }
+            else if (m.runtime == "lua")
+            {
+                ImGui::TextDisabled(
+                    "Entry script: %s",
+                    m.entryScript.empty() ? "<missing>" : m.entryScript.c_str());
+            }
+            else
+            {
+                ImGui::TextDisabled(
+                    "Entry scene: %s",
+                    m.scene.empty() ? "<empty black scene>" : m.scene.c_str());
+            }
             ImGui::Spacing();
             ImGui::TextWrapped("%s", m.description.c_str());
             ImGui::PopFont();
@@ -558,52 +842,22 @@ int main()
         ImGui::Separator();
         ImGui::Spacing();
 
-        // Settings panel
-        if (showSettings && !modules.empty())
+        // Settings panel. Both the launcher and the engine read/write the
+        // same per-module VideoSettings file, so there is no second settings
+        // format to drift out of sync.
+        if (showSettings && selectedModule >= 0)
         {
             ImGui::PushFont(g_fontNormal);
-            if (ImGui::BeginTabBar("SettingsTabs"))
-            {
-                if (ImGui::BeginTabItem("Video"))
-                {
-                    ImGui::Spacing();
-                    ImGui::SetNextItemWidth(200);
-                    if (ImGui::Combo("Resolution", &settings.resolutionIdx, resolutions, IM_ARRAYSIZE(resolutions)))
-                        saveSettings(settings, getSettingsPath());
-                    if (ImGui::Checkbox("Fullscreen", &settings.fullscreen))
-                        saveSettings(settings, getSettingsPath());
-                    ImGui::SetNextItemWidth(200);
-                    if (ImGui::Combo("FPS Cap", &settings.fpsCapIdx, fpsCaps, IM_ARRAYSIZE(fpsCaps)))
-                        saveSettings(settings, getSettingsPath());
-                    ImGui::SetNextItemWidth(200);
-                    int apiIdx = 0;
-                    if (ImGui::Combo("Render API", &apiIdx, apis, IM_ARRAYSIZE(apis)))
-                        saveSettings(settings, getSettingsPath());
-                    ImGui::EndTabItem();
-                }
-                if (ImGui::BeginTabItem("Audio"))
-                {
-                    ImGui::Spacing();
-                    ImGui::SetNextItemWidth(200);
-                    if (ImGui::SliderFloat("Master", &settings.masterVolume, 0.f, 1.f))
-                        saveSettings(settings, getSettingsPath());
-                    ImGui::SetNextItemWidth(200);
-                    if (ImGui::SliderFloat("Music", &settings.musicVolume, 0.f, 1.f))
-                        saveSettings(settings, getSettingsPath());
-                    ImGui::SetNextItemWidth(200);
-                    if (ImGui::SliderFloat("SFX", &settings.sfxVolume, 0.f, 1.f))
-                        saveSettings(settings, getSettingsPath());
-                    ImGui::EndTabItem();
-                }
-                if (ImGui::BeginTabItem("Input"))
-                {
-                    ImGui::Spacing();
-                    ImGui::TextDisabled("Input binding will be configured here.");
-                    ImGui::TextDisabled("Steering wheel, gamepad, keyboard supported.");
-                    ImGui::EndTabItem();
-                }
-                ImGui::EndTabBar();
-            }
+            ImGui::BeginChild(
+                "##module_settings",
+                ImVec2(0.0f, (std::max)(220.0f, ImGui::GetContentRegionAvail().y)),
+                true,
+                ImGuiWindowFlags_AlwaysVerticalScrollbar);
+
+            if (drawSettingsTabs(settings, display))
+                saveModuleSettings(projectRoot, modules[selectedModule], settings, display);
+
+            ImGui::EndChild();
             ImGui::PopFont();
         }
 
@@ -613,9 +867,12 @@ int main()
             double elapsed = glfwGetTime() - notifyTime;
             if (elapsed < 3.0)
             {
-                ImGui::SetCursorPosY(490);
+                ImGui::SetCursorPosY((std::max)(0.0f, ImGui::GetWindowHeight() - 36.0f));
                 ImGui::PushFont(g_fontSmall);
-                ImGui::TextColored(ImVec4(0.6f, 0.9f, 0.6f, 1.f), "%s", notification.c_str());
+                const ImVec4 notificationColor = notificationIsError
+                    ? ImVec4(0.95f, 0.35f, 0.30f, 1.0f)
+                    : ImVec4(0.60f, 0.90f, 0.60f, 1.0f);
+                ImGui::TextColored(notificationColor, "%s", notification.c_str());
                 ImGui::PopFont();
             }
             else notification = "";
@@ -630,10 +887,17 @@ int main()
         glfwSwapBuffers(window);
     }
 
-    saveSettings(settings, getSettingsPath());
+    if (selectedModule >= 0)
+    {
+        saveModuleSettings(projectRoot, modules[selectedModule], settings, display);
+        launcherState.lastModuleId = modules[selectedModule].id;
+    }
+    launcherState.settingsVisible = showSettings;
+    LauncherStateStorage::save(launcherStatePath, launcherState);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+    display.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;

@@ -1,0 +1,22 @@
+HERITAGE ENGINE - STEP 29F TEST CHECKLIST
+==========================================
+
+1. Run Tools\BuildAndRunStep29F.cmd.
+2. Confirm the Racing United prototype scene loads without a Lua error.
+3. Confirm the vehicle panel title says:
+   Per-Wheel Surface Detection - Step 29F
+4. Click:
+   RESET ON SPLIT GRIP - LEFT ASPHALT / RIGHT ICE
+5. After the car settles, confirm the per-wheel surface telemetry reads:
+   FL asphalt, FR ice, RL asphalt, RR ice.
+6. Apply throttle/steering. The right-side ice tires should have drastically
+   less effective friction than the left-side asphalt tires.
+7. Click RESET BEFORE SURFACE RUNWAY and drive forward. The four tires should
+   independently report the collider actually under them as the car crosses:
+   wet asphalt -> gravel -> dirt -> grass -> snow -> ice.
+8. ABS, TCS, handbrake, reverse, neutral, gears, steering and Ackermann should
+   still work as in Step 29E.
+9. Optional safety regression: ABOUT SCENE API -> RUN ENGINE SAFETY SMOKE TESTS.
+
+If anything fails, send the first compiler/Lua error or a screenshot of the
+vehicle telemetry and UserData\Diagnostics\step29f_build_and_run.txt.

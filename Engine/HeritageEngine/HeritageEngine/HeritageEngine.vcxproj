@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version='1.0' encoding='utf-8'?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -87,8 +87,8 @@
 ;opengl32.lib;
 gdi32.lib;
 user32.lib
-;shell32.lib;dwmapi.lib</AdditionalDependencies>
-      <IgnoreSpecificDefaultLibraries>MSVCRT</IgnoreSpecificDefaultLibraries>
+;shell32.lib;dwmapi.lib;xaudio2.lib;dinput8.lib;dxguid.lib;ole32.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>MSVCRT;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <AdditionalLibraryDirectories>$(ProjectDir)..\..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <Manifest>
@@ -104,7 +104,7 @@ user32.lib
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -114,7 +114,7 @@ user32.lib
 ;opengl32.lib;
 gdi32.lib;
 user32.lib
-;shell32.lib;dwmapi.lib</AdditionalDependencies>
+;shell32.lib;dwmapi.lib;xaudio2.lib;dinput8.lib;dxguid.lib;ole32.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>MSVCRT</IgnoreSpecificDefaultLibraries>
       <AdditionalLibraryDirectories>$(ProjectDir)..\..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
@@ -140,8 +140,8 @@ user32.lib
 ;opengl32.lib;
 gdi32.lib;
 user32.lib
-;shell32.lib;dwmapi.lib</AdditionalDependencies>
-      <IgnoreSpecificDefaultLibraries>MSVCRT</IgnoreSpecificDefaultLibraries>
+;shell32.lib;dwmapi.lib;xaudio2.lib;dinput8.lib;dxguid.lib;ole32.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>MSVCRT;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
@@ -157,7 +157,7 @@ user32.lib
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -167,8 +167,10 @@ user32.lib
 ;opengl32.lib;
 gdi32.lib;
 user32.lib
-;shell32.lib;dwmapi.lib</AdditionalDependencies>
-      <IgnoreSpecificDefaultLibraries>MSVCRT</IgnoreSpecificDefaultLibraries>
+;shell32.lib;dwmapi.lib;xaudio2.lib;dinput8.lib;dxguid.lib;ole32.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
@@ -182,12 +184,120 @@ user32.lib
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_draw.cpp" />
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_tables.cpp" />
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_widgets.cpp" />
+    <ClCompile Include="..\Camera\OrbitCamera.cpp" />
+    <ClCompile Include="..\Audio\AudioSystem.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\InputSystem.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\WindowsDirectInputBackend.cpp" />
+    <ClCompile Include="..\Physics\CollisionSystem.cpp" />
+    <ClCompile Include="..\Physics\StaticBoxSceneImporter.cpp" />
+    <ClCompile Include="..\Physics\StaticTriangleSceneImporter.cpp" />
+    <ClCompile Include="..\Physics\ConstraintSystem.cpp" />
+    <ClCompile Include="..\Physics\PhysicsWorld.cpp" />
+    <ClCompile Include="..\Physics\RigidBodySystem.cpp" />
+    <ClCompile Include="..\Vehicles\TireModel.cpp" />
+    <ClCompile Include="..\Vehicles\VehicleSystem.cpp" />
+    <ClCompile Include="..\Core\Entities\EntityRegistry.cpp" />
+    <ClCompile Include="..\Core\Entities\EntitySceneDocument.cpp" />
+    <ClCompile Include="..\Core\Entities\EntityPrefabDocument.cpp" />
+    <ClCompile Include="..\Core\Modules\ModuleLoader.cpp" />
+    <ClCompile Include="..\Core\Modules\ModuleContext.cpp" />
+    <ClCompile Include="..\Core\Modules\ModuleSaveStore.cpp" />
+    <ClCompile Include="..\Core\Modules\BuiltInSceneRuntime.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaApi.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaModuleRuntime.cpp" />
+    <ClCompile Include="..\Core\Modules\ModuleRuntimeManager.cpp" />
+    <ClCompile Include="..\Core\Modules\ScriptedUiRuntime.cpp" />
+    <ClCompile Include="..\Scenes\LogoShowcaseScene.cpp" />
+    <ClCompile Include="..\Scenes\RacingUnitedBootScene.cpp" />
+    <ClCompile Include="..\Scenes\SceneManager.cpp" />
+    <ClCompile Include="..\Scenes\ModuleDocumentScene.cpp" />
+    <ClCompile Include="..\Core\Settings\VideoSettingsStorage.cpp" />
+    <ClCompile Include="..\Core\Settings\AudioSettingsStorage.cpp" />
+    <ClCompile Include="..\Core\Timing\FrameLimiter.cpp" />
+    <ClCompile Include="..\Graphics\DisplaySystem.cpp" />
+    <ClCompile Include="..\Graphics\Framebuffer\PostFramebuffer.cpp" />
+    <ClCompile Include="..\Graphics\Mesh.cpp" />
+    <ClCompile Include="..\Graphics\AntiAliasing.cpp" />
+    <ClCompile Include="..\Graphics\PostProcessing\PostProcessor.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\SceneRenderer.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\EntityDebugRenderer.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshRenderer.cpp" />
+    <ClCompile Include="..\Graphics\RenderScaler.cpp" />
+    <ClCompile Include="..\Graphics\ShaderProgram.cpp" />
+    <ClCompile Include="..\Graphics\WindowSystem.cpp" />
+    <ClCompile Include="..\UI\UiImageCache.cpp" />
+    <ClCompile Include="..\UI\PauseMenu.cpp" />
+    <ClCompile Include="..\UI\Settings\AudioSettingsPage.cpp" />
+    <ClCompile Include="..\UI\Settings\GameplaySettingsPage.cpp" />
+    <ClCompile Include="..\UI\Settings\InputSettingsPage.cpp" />
+    <ClCompile Include="..\UI\Settings\SettingsMenu.cpp" />
+    <ClCompile Include="..\UI\Settings\VideoSettingsPage.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\ThirdParty\IMGUI\imgui.h" />
+    <ClInclude Include="..\Camera\OrbitCamera.hpp" />
+    <ClInclude Include="..\Audio\AudioSystem.hpp" />
+    <ClInclude Include="$(ProjectDir)..\Input\InputSystem.hpp" />
+    <ClInclude Include="$(ProjectDir)..\Input\WindowsDirectInputBackend.hpp" />
+    <ClInclude Include="..\Physics\CollisionSystem.hpp" />
+    <ClInclude Include="..\Physics\StaticBoxSceneImporter.hpp" />
+    <ClInclude Include="..\Physics\StaticTriangleSceneImporter.hpp" />
+    <ClInclude Include="..\Physics\ConstraintSystem.hpp" />
+    <ClInclude Include="..\Physics\PhysicsWorld.hpp" />
+    <ClInclude Include="..\Physics\RigidBodySystem.hpp" />
+    <ClInclude Include="..\Vehicles\TireModel.hpp" />
+    <ClInclude Include="..\Vehicles\VehicleSystem.hpp" />
+    <ClInclude Include="..\Core\Entities\EntityRegistry.hpp" />
+    <ClInclude Include="..\Core\Entities\EntitySceneDocument.hpp" />
+    <ClInclude Include="..\Core\Entities\EntityPrefabDocument.hpp" />
+    <ClInclude Include="..\Core\Diagnostics\BuildIdentity.hpp" />
+    <ClInclude Include="..\Core\Diagnostics\GeneratedBuildIdentity.hpp" />
+    <ClInclude Include="..\Core\Modules\ModuleInfo.hpp" />
+    <ClInclude Include="..\Core\Modules\ModuleLoader.hpp" />
+    <ClInclude Include="..\Core\Modules\ModuleContext.hpp" />
+    <ClInclude Include="..\Core\Modules\ModuleSaveStore.hpp" />
+    <ClInclude Include="..\Core\Modules\ModuleRuntime.hpp" />
+    <ClInclude Include="..\Core\Modules\BuiltInSceneRuntime.hpp" />
+    <ClInclude Include="..\Core\Modules\LuaApi.hpp" />
+    <ClInclude Include="..\Core\Modules\LuaModuleRuntime.hpp" />
+    <ClInclude Include="..\Core\Modules\ModuleRuntimeManager.hpp" />
+    <ClInclude Include="..\Core\Modules\ModuleRuntimeAction.hpp" />
+    <ClInclude Include="..\Core\Modules\ModuleRuntimeServices.hpp" />
+    <ClInclude Include="..\Core\Modules\ScriptedUiRuntime.hpp" />
+    <ClInclude Include="..\Scenes\Scene.hpp" />
+    <ClInclude Include="..\Scenes\LogoShowcaseScene.hpp" />
+    <ClInclude Include="..\Scenes\RacingUnitedBootScene.hpp" />
+    <ClInclude Include="..\Scenes\SceneManager.hpp" />
+    <ClInclude Include="..\Scenes\ModuleDocumentScene.hpp" />
+    <ClInclude Include="..\Core\Settings\VideoSettings.hpp" />
+    <ClInclude Include="..\Core\Settings\AudioSettings.hpp" />
+    <ClInclude Include="..\Core\Settings\VideoSettingsStorage.hpp" />
+    <ClInclude Include="..\Core\Settings\AudioSettingsStorage.hpp" />
+    <ClInclude Include="..\Core\Timing\FrameLimiter.hpp" />
+    <ClInclude Include="..\Graphics\DisplaySystem.hpp" />
+    <ClInclude Include="..\Graphics\Framebuffer\PostFramebuffer.hpp" />
+    <ClInclude Include="..\Graphics\Mesh.hpp" />
+    <ClInclude Include="..\Graphics\AntiAliasing.hpp" />
+    <ClInclude Include="..\Graphics\PostProcessing\PostProcessor.hpp" />
+    <ClInclude Include="..\Graphics\Renderer\SceneRenderer.hpp" />
+    <ClInclude Include="..\Graphics\Renderer\EntityDebugRenderer.hpp" />
+    <ClInclude Include="..\Graphics\Renderer\EntityMeshRenderer.hpp" />
+    <ClInclude Include="..\Graphics\RenderScaler.hpp" />
+    <ClInclude Include="..\Graphics\ShaderProgram.hpp" />
+    <ClInclude Include="..\Graphics\WindowSystem.hpp" />
+    <ClInclude Include="..\UI\UiImageCache.hpp" />
+    <ClInclude Include="..\UI\PauseMenu.hpp" />
+    <ClInclude Include="..\UI\Settings\AudioSettingsPage.hpp" />
+    <ClInclude Include="..\UI\Settings\GameplaySettingsPage.hpp" />
+    <ClInclude Include="..\UI\Settings\InputSettingsPage.hpp" />
+    <ClInclude Include="..\UI\Settings\SettingsMenu.hpp" />
+    <ClInclude Include="..\UI\Settings\VideoSettingsPage.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="CopyLuaRuntime" AfterTargets="Build" Condition="Exists('$(ProjectDir)..\..\..\ThirdParty\Lua\bin\lua54.dll')">
+    <Copy SourceFiles="$(ProjectDir)..\..\..\ThirdParty\Lua\bin\lua54.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

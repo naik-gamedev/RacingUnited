@@ -10,11 +10,19 @@ Release/
 
 # Compiled output
 build/
+Build/
 *.exe
 *.pdb
 *.ilk
 *.exp
 *.lib
+
+# Local runtime state and per-user settings
+/UserData/
+/settings_*.ini
+
+# Local project archives
+/*.zip
 
 # OS junk
 Thumbs.db

@@ -1,0 +1,39 @@
+HERITAGE ENGINE - STEP 29J TEST CHECKLIST
+==========================================
+
+Goal: give independently rendered wheel meshes the already-existing native
+suspension, Ackermann steering and simulated wheel-spin state.
+
+FAST CONFIRMATION
+-----------------
+1. Run Tools\BuildAndRunStep29J.cmd.
+2. If the Release x64 rebuild succeeds and the prototype drives, the previous
+   physics/drivetrain/tire baseline is intact.
+3. Your existing PlayerCar.obj should still be present; this incremental ZIP
+   intentionally does NOT contain or overwrite it.
+
+OPTIONAL VISUAL TEST
+--------------------
+1. Open VEHICLE > VISUAL > WHEELS.
+2. If PlayerCar.obj currently contains its own rigid wheels, expect duplicate
+   wheels when the articulated system is enabled. That is normal for this test.
+3. Tick Enable articulated wheel meshes.
+4. Drive and steer slowly. The generic dark wheel meshes should:
+      - rise/fall with suspension length,
+      - steer independently at the front using native Ackermann angles,
+      - rotate using native wheelRotationDegrees.
+5. Untick it to return to the whole-car OBJ presentation.
+
+CLEAN AUTHORED TEST
+-------------------
+1. Export a body-only PlayerCar.obj.
+2. Export one wheel around its exact center as PlayerWheel.obj, with X as axle,
+   Y up, Z forward, and metres.
+3. Replace the two creator-owned assets while the engine is running.
+4. Enable articulated wheel meshes and use the visual-only fitment sliders.
+
+IMPORTANT
+---------
+The fitment sliders do not move physics contacts. They exist only so temporary
+art can be made presentable. A real Peugeot definition should eventually make
+wheelbase, track, tire radius and authored wheel centers physically agree.

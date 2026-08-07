@@ -1,0 +1,147 @@
+{
+  "Engine.GetBuildIdentity": {
+    "arguments": "()",
+    "returns": "string",
+    "description": "Returns the executable milestone, compiled configuration, Git identity, dirty state, and generated UTC timestamp."
+  },
+  "Engine.GetBuildStep": {
+    "arguments": "()",
+    "returns": "string",
+    "description": "Returns the repository milestone identifier embedded before compilation."
+  },
+  "Engine.GetGitCommit": {
+    "arguments": "()",
+    "returns": "string",
+    "description": "Returns the Git commit recorded before compilation, or unavailable when Git metadata was absent."
+  },
+  "Engine.GetBuildConfiguration": {
+    "arguments": "()",
+    "returns": "string",
+    "description": "Returns Debug or Release according to the compiled executable."
+  },
+  "Engine.GetLuaApiCount": {
+    "arguments": "()",
+    "returns": "integer",
+    "description": "Returns the number of unique Lua functions registered by the current runtime."
+  },
+  "Engine.GetLuaApiName": {
+    "arguments": "(oneBasedIndex: integer)",
+    "returns": "string|nil",
+    "description": "Returns one exact qualified Lua API name from the live registry."
+  },
+  "Engine.DumpLuaAPI": {
+    "arguments": "()",
+    "returns": "integer",
+    "description": "Prints the live qualified Lua API names to the console and returns the count."
+  },
+  "Engine.RunSafetySmokeTests": {
+    "arguments": "()",
+    "returns": "passed: boolean, summary: string, reportPath: string",
+    "description": "Runs non-destructive handle-generation and body-dependent cleanup smoke tests."
+  },
+  "Engine.GetLastSafetyReport": {
+    "arguments": "()",
+    "returns": "summary: string, reportPath: string",
+    "description": "Returns the last in-process safety smoke-test summary and report location."
+  },
+  "Vehicle.SetInputs": {
+    "arguments": "(vehicle: VehicleHandle, throttle: number, brake: number, steering: number, handbrake?: number)",
+    "returns": "boolean",
+    "description": "Sets normalized driver inputs for one native vehicle."
+  },
+  "Vehicle.Create": {
+    "arguments": "(chassisBody: BodyHandle, highRateHertz?: number)",
+    "returns": "VehicleHandle",
+    "description": "Creates a generation-checked vehicle attached to a dynamic chassis body. Inspect the handler for all optional tuning arguments."
+  },
+  "Physics.DestroyBody": {
+    "arguments": "(body: BodyHandle)",
+    "returns": "boolean",
+    "description": "Destroys dependent vehicles, constraints, and colliders before invalidating the body handle."
+  },
+  "Entity.Destroy": {
+    "arguments": "(entity: EntityHandle)",
+    "returns": "boolean",
+    "description": "Destroys an entity subtree and invalidates the generation-checked handle."
+  },
+  "Physics.SetColliderSurface": {
+    "arguments": "(collider: ColliderHandle, material: string, wetness?: number)",
+    "returns": "boolean",
+    "description": "Assigns a generic physical surface identity and 0..1 wetness to one collider. Valid materials: default, asphalt, gravel, dirt, grass, snow, ice, kerb/curb, painted_line."
+  },
+  "Physics.GetColliderSurface": {
+    "arguments": "(collider: ColliderHandle)",
+    "returns": "materialName: string|nil, materialId: integer|nil, wetness: number|nil",
+    "description": "Reads the physical surface identity carried by one collider."
+  },
+  "Physics.Raycast": {
+    "arguments": "(originX: number, originY: number, originZ: number, directionX: number, directionY: number, directionZ: number, maxDistance: number, layerMask?: integer, includeTriggers?: boolean, ignoredBody?: BodyHandle)",
+    "returns": "hit: boolean, collider: ColliderHandle, body: BodyHandle, distance: number, pointX: number, pointY: number, pointZ: number, normalX: number, normalY: number, normalZ: number, trigger: boolean, surfaceName: string, surfaceId: integer, surfaceWetness: number",
+    "description": "Closest-hit raycast. Step 29F appends the contacted collider's surface identity and wetness without changing the first eleven return values."
+  },
+  "Vehicle.GetWheelState": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "41 values; inspect Vehicles/Telemetry.lua for the canonical unpack order",
+    "description": "Returns wheel suspension, advanced tire pure/combined-force telemetry, brake/driver-aid state, contact collider, and per-wheel detected surface data."
+  },
+  "Vehicle.SetTireModel": {
+    "arguments": "(vehicle: VehicleHandle, nominalLoad: number, peakFriction: number, longitudinalStiffness: number, corneringStiffness: number, loadSensitivity: number, longitudinalRelaxationLength: number, lateralRelaxationLength: number, wheelInertia: number, pneumaticTrail: number, stiffnessLoadExponent?: number, longitudinalShapeFactor?: number, lateralShapeFactor?: number, longitudinalCurvatureFactor?: number, lateralCurvatureFactor?: number, combinedSlipExponent?: number, pneumaticTrailFalloff?: number)",
+    "returns": "boolean",
+    "description": "Configures the Step 29H vehicle-wide default road-tire profile and intentionally reapplies it to every existing wheel for backward-compatible all-wheel tuning."
+  },
+  "Vehicle.SetWheelTireModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, nominalLoad: number, peakFriction: number, longitudinalStiffness: number, corneringStiffness: number, loadSensitivity: number, longitudinalRelaxationLength: number, lateralRelaxationLength: number, wheelInertia: number, pneumaticTrail: number, stiffnessLoadExponent?: number, longitudinalShapeFactor?: number, lateralShapeFactor?: number, longitudinalCurvatureFactor?: number, lateralCurvatureFactor?: number, combinedSlipExponent?: number, pneumaticTrailFalloff?: number)",
+    "returns": "boolean",
+    "description": "Assigns an independent advanced road-tire description to one wheel/contact unit without modifying any other wheel."
+  },
+  "Vehicle.GetWheelTireModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "nominalLoad, peakFriction, longitudinalStiffness, corneringStiffness, loadSensitivity, longitudinalRelaxationLength, lateralRelaxationLength, wheelInertia, pneumaticTrail, stiffnessLoadExponent, longitudinalShapeFactor, lateralShapeFactor, longitudinalCurvatureFactor, lateralCurvatureFactor, combinedSlipExponent, pneumaticTrailFalloff",
+    "description": "Reads the exact native tire description currently assigned to one wheel so scripts and diagnostics do not need to guess which profile is active."
+  },
+  "UI.SliderFloat": {
+    "arguments": "(label: string, value: number, minimum: number, maximum: number, format?: string)",
+    "returns": "value: number, changed: boolean",
+    "description": "Draws a draggable numeric slider. Step 29J.2 also supports double-clicking the slider to switch it into exact keyboard-entry mode; Enter commits and clicking away exits text mode."
+  },
+  "Entity.SetMesh": {
+    "arguments": "(entity: EntityHandle, assetPath: string, red?: number, green?: number, blue?: number, normalize?: boolean, doubleSided?: boolean, blenderCoordinates?: boolean)",
+    "returns": "boolean",
+    "description": "Assigns an OBJ mesh to an entity. With blenderCoordinates=true, positions/normals authored as Blender X left/right, Y forward/backward, Z height are deterministically converted at the import boundary while preserving authored 1:1 scale."
+  },
+  "Entity.GetMesh": {
+    "arguments": "(entity: EntityHandle)",
+    "returns": "assetPath: string|nil, red: number, green: number, blue: number, visible: boolean, normalize: boolean, doubleSided: boolean, blenderCoordinates: boolean",
+    "description": "Reads the current mesh component, including whether Blender-coordinate import mode is active."
+  },
+  "Physics.LoadStaticBoxScene": {
+    "arguments": "(assetRelativePath: string, blenderCoordinates?: boolean)",
+    "returns": "collisionBoxCount: integer",
+    "description": "Loads the temporary Step 29J.2 OBJ collision-proxy scene. Each object/group with referenced faces becomes one native axis-aligned static box. Returns -1 on error; inspect Physics.GetLastError()."
+  },
+  "Physics.UnloadStaticBoxScene": {
+    "arguments": "()",
+    "returns": "boolean",
+    "description": "Destroys all native static bodies/entities created by Physics.LoadStaticBoxScene for the active Lua runtime."
+  },
+  "Physics.GetStaticBoxSceneCount": {
+    "arguments": "()",
+    "returns": "integer",
+    "description": "Returns the number of static collision proxy boxes currently owned by the Lua runtime."
+  },
+  "Physics.LoadStaticTriangleScene": {
+    "arguments": "(collisionAssetRelativePath: string, spawnVisualAssetRelativePath?: string, blenderDefaultObjCoordinates?: boolean)",
+    "returns": "triangleCount: integer, spawnX?: number, spawnGroundY?: number, spawnZ?: number, spawnMode: string",
+    "description": "Loads exact static OBJ triangles into the read-only world-query path used by suspension/tire raycasts. Optional visual OBJ may provide SPAWN_PLAYER metadata. Returns -1 on error; inspect Physics.GetLastError()."
+  },
+  "Physics.UnloadStaticTriangleScene": {
+    "arguments": "()",
+    "returns": "boolean",
+    "description": "Clears the read-only static triangle drive-surface scene for the active physics world."
+  },
+  "Physics.GetStaticTriangleSceneCount": {
+    "arguments": "()",
+    "returns": "integer",
+    "description": "Returns the number of static drive-surface triangles currently participating in physics raycasts."
+  }
+}

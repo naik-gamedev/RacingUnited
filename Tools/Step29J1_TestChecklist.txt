@@ -1,0 +1,45 @@
+HERITAGE ENGINE - STEP 29J.1 TEST CHECKLIST
+============================================
+
+Goal: stop visually reconstructing wheel positions in Lua and use the exact
+native wheel centers, while giving the current Peugeot-shaped body realistic
+206 RC reference wheelbase/track dimensions.
+
+FAST CONFIRMATION
+-----------------
+1. Run Tools\BuildAndRunStep29J1.cmd.
+2. If Release x64 rebuild succeeds and the car still drives, the existing
+   physics/tire/drivetrain baseline remains operational.
+3. Your PlayerCar.obj and PlayerWheel.obj are NOT supplied by this update and
+   are not overwritten.
+
+VISUAL CONFIRMATION
+-------------------
+1. Open VEHICLE > VISUAL > WHEELS.
+2. Enable articulated wheel meshes.
+3. The UI should show:
+      Wheelbase     2442 mm
+      Front track   1437 mm
+      Rear track    1428 mm
+      Tire          205/40 ZR17
+4. The wheels should be much closer to the Peugeot wheel arches than the old
+   temporary 2.10 m track / 2.60 m wheelbase layout.
+5. Each wheel position is now the native WheelState.worldCenter. Rotation must
+   not modify its center position.
+6. Left-side and right-side meshes should face opposite outward directions.
+7. Front wheels should still steer independently with Ackermann and all wheels
+   should still spin from native wheelRotationDegrees.
+
+ASSET CONVENTION
+----------------
+Wheel OBJ origin = exact wheel center.
+Vehicle +X = right, +Y = up, +Z = forward.
+Wheel local X = axle.
+Visible/outer wheel face = local +X.
+
+NOTE
+----
+The 206 RC dimensions are a geometry/reference improvement only. The current
+prototype drivetrain, suspension constants and tire curves are still development
+templates. The later production Peugeot definition will replace them with
+properly researched/measured data.

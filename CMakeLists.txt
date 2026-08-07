@@ -56,6 +56,9 @@ endfunction()
 
 add_executable(HeritageEngine
     Engine/HeritageEngine/HeritageEngine/main.cpp
+    Engine/HeritageEngine/Graphics/Mesh.cpp
+    Engine/HeritageEngine/Graphics/AntiAliasing.cpp
+    Engine/HeritageEngine/Graphics/ShaderProgram.cpp
     ThirdParty/GLAD/src/glad.c
     $<TARGET_OBJECTS:racingunited_imgui>
 )

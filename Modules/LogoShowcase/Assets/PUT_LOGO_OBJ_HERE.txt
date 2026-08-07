@@ -1,0 +1,8 @@
+Copy your existing Assets/RacingUnited_3D_Logo.obj into this folder.
+
+Final path:
+Modules/LogoShowcase/Assets/RacingUnited_3D_Logo.obj
+
+The engine contains a temporary legacy fallback to the old root Assets path,
+so the scene will still launch before you move the OBJ. Copying it here proves
+that the module owns its own asset.

@@ -1,0 +1,13 @@
+# Racing United scene that places a reusable vehicle prefab.
+id = prototype
+type = entities
+clear_color = 0.010, 0.018, 0.040
+overlay = false
+
+[entity:player_vehicle_instance]
+prefab = Vehicles/Step27F_PrototypeVehicle.hprefab
+name = Player Vehicle Root
+tags = Player
+position = 0.0, 0.5, 0.0
+rotation = 0.0, 0.0, 0.0
+scale = 1.0, 1.0, 1.0

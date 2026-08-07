@@ -1,0 +1,5 @@
+# A third scene owned entirely by the module.
+id = about
+type = empty
+clear_color = 0.010, 0.060, 0.015
+overlay = false

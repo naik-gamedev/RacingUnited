@@ -1,0 +1,80 @@
+# Heritage Engine reusable entity prefab.
+# One unique root is required; every instance receives fresh persistent IDs.
+id = step27f_prototype_vehicle
+type = entities
+overlay = false
+
+[entity:vehicle_root]
+name = Prototype Vehicle Root
+tags = Vehicle, PrefabRoot
+position = 0.0, 0.0, 0.0
+rotation = 0.0, 0.0, 0.0
+scale = 1.0, 1.0, 1.0
+
+[entity:vehicle_chassis]
+name = Player Chassis
+parent = vehicle_root
+tags = Chassis, VisualMesh
+position = 0.0, 0.82, 0.0
+rotation = 0.0, 0.0, 0.0
+scale = 1.0, 1.0, 1.0
+mesh = Vehicles/Step27E_LowPolyHatchback.obj
+mesh_color = 0.10, 0.42, 0.92
+mesh_visible = true
+mesh_normalize = false
+mesh_double_sided = false
+
+[entity:wheel_front_left]
+name = Wheel Front Left
+parent = vehicle_root
+tags = Wheel, SteeringWheel
+position = -1.05, 0.42, 1.30
+rotation = 0.0, 0.0, 0.0
+scale = 0.42, 0.80, 0.80
+debug_primitive = cylinder
+debug_color = 0.045, 0.050, 0.060
+debug_visible = true
+
+[entity:wheel_front_right]
+name = Wheel Front Right
+parent = vehicle_root
+tags = Wheel, SteeringWheel
+position = 1.05, 0.42, 1.30
+rotation = 0.0, 0.0, 0.0
+scale = 0.42, 0.80, 0.80
+debug_primitive = cylinder
+debug_color = 0.045, 0.050, 0.060
+debug_visible = true
+
+[entity:wheel_rear_left]
+name = Wheel Rear Left
+parent = vehicle_root
+tags = Wheel
+position = -1.05, 0.42, -1.30
+rotation = 0.0, 0.0, 0.0
+scale = 0.42, 0.80, 0.80
+debug_primitive = cylinder
+debug_color = 0.045, 0.050, 0.060
+debug_visible = true
+
+[entity:wheel_rear_right]
+name = Wheel Rear Right
+parent = vehicle_root
+tags = Wheel
+position = 1.05, 0.42, -1.30
+rotation = 0.0, 0.0, 0.0
+scale = 0.42, 0.80, 0.80
+debug_primitive = cylinder
+debug_color = 0.045, 0.050, 0.060
+debug_visible = true
+
+[entity:driver_camera_mount]
+name = Driver Camera Mount
+parent = vehicle_root
+tags = CameraMount, Cockpit
+position = 0.0, 1.55, -0.10
+rotation = 0.0, 0.0, 0.0
+scale = 0.20, 0.20, 0.20
+debug_primitive = sphere
+debug_color = 1.00, 0.82, 0.18
+debug_visible = true

@@ -1,0 +1,29 @@
+# Heritage Module UI document, revision 1
+# Change this file and relaunch the module; no Heritage Engine rebuild is needed.
+
+start_screen = Main
+clear_color = 0.004, 0.006, 0.010
+
+[screen Main]
+title = RACING UNITED
+subtitle = MODULE-OWNED SCRIPTED UI
+text = This entire menu is loaded from Modules/RacingUnited/UI/MainMenu.hui.
+text = The module owns the labels, screens, navigation and button actions. Heritage Engine only supplies the safe UI primitives and engine services.
+button = START|screen:Prototype
+button = ENGINE SETTINGS|engine_settings
+button = ABOUT THIS RUNTIME|screen:About
+button = EXIT|exit
+
+[screen Prototype]
+title = DRIVING PROTOTYPE
+subtitle = FUTURE MODULE CONTENT
+text = This is a second screen defined by the module document. Later, START can load a module-owned 3D scene or call Lua gameplay logic.
+button = NOT IMPLEMENTED YET|message:The driving prototype will arrive after the module logic and UI foundations are stable.
+button = BACK|screen:Main
+
+[screen About]
+title = HERITAGE MODULE UI
+subtitle = FIRST SCRIPTED LOGIC LAYER
+text = The module does not call raw ImGui. It describes screens and actions through a Heritage Engine-owned interface.
+text = A later Lua runtime will use the same action and UI contracts, allowing modules to implement career modes, dealerships, garages, HUDs and completely custom menus.
+button = BACK|screen:Main
