@@ -109,6 +109,14 @@ single-colour OBJ workflow. See ADR-007 through ADR-009.
 
 Vehicle definitions should be mostly data and reference reusable presets. Planned examples include `Peugeot_206_RC.lua` and `Ducati_Monster_S4R.lua`.
 
+Step 29J.6 establishes `VehicleDefinitionV2` as the first versioned authoring
+envelope. Bodies, power units, transmissions, contact units and drive
+connections are explicit arrays with stable IDs. Classification is metadata
+and an editor-template selector; it may not select a category-specific generic
+solver. Definition validation is separate from current-solver readiness so an
+honest twin-engine, articulated, tracked, or leaning definition can be retained
+before its native providers exist. See `VEHICLE_WORKSHOP.md`.
+
 ## Dynamics instrumentation
 
 Step 29J.5 adds an opt-in `VehicleDynamicsLab` recorder owned by each native

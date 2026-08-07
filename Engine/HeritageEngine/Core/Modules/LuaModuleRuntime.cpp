@@ -7,6 +7,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cctype>
+#include <cstring>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -15,6 +16,21 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifdef APIENTRY
+#undef APIENTRY
+#endif
+#include <Windows.h>
+#include <commdlg.h>
+#pragma comment(lib, "Comdlg32.lib")
+#endif
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
@@ -586,6 +602,7 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("UI", "SliderFloat", &LuaModuleRuntime::luaUiSliderFloat);
     registerFunction("UI", "Checkbox", &LuaModuleRuntime::luaUiCheckbox);
     registerFunction("UI", "InputInt", &LuaModuleRuntime::luaUiInputInt);
+    registerFunction("UI", "InputText", &LuaModuleRuntime::luaUiInputText);
     registerFunction("UI", "Image", &LuaModuleRuntime::luaUiImage);
     registerFunction("UI", "ImageButton", &LuaModuleRuntime::luaUiImageButton);
     registerFunction("UI", "GetImageSize", &LuaModuleRuntime::luaUiGetImageSize);
@@ -903,8 +920,11 @@ void LuaModuleRuntime::registerBindings()
     registerFunction("Module", "Name", &LuaModuleRuntime::luaModuleName);
     registerFunction("Module", "Version", &LuaModuleRuntime::luaModuleVersion);
     registerFunction("Module", "AssetPath", &LuaModuleRuntime::luaModuleAssetPath);
+    registerFunction("Module", "AssetExists", &LuaModuleRuntime::luaModuleAssetExists);
+    registerFunction("Module", "SelectAssetFile", &LuaModuleRuntime::luaModuleSelectAssetFile);
     registerFunction("Module", "DataPath", &LuaModuleRuntime::luaModuleDataPath);
     registerFunction("Module", "SavePath", &LuaModuleRuntime::luaModuleSavePath);
+    registerFunction("Module", "WriteSaveText", &LuaModuleRuntime::luaModuleWriteSaveText);
 }
 
 void LuaModuleRuntime::sandboxStandardLibraries()
@@ -2025,6 +2045,32 @@ int LuaModuleRuntime::luaUiInputInt(lua_State* state)
     ImGui::EndDisabled();
 
     runtime->m_api.lua_pushinteger(state, static_cast<LuaInteger>(value));
+    runtime->m_api.lua_pushboolean(state, changed ? 1 : 0);
+    return 2;
+}
+
+int LuaModuleRuntime::luaUiInputText(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    const std::string label = stringArgument(*runtime, state, 1, "Text");
+    const std::string current = stringArgument(*runtime, state, 2);
+    const std::size_t requestedCapacity = static_cast<std::size_t>((std::max)(
+        32.0,
+        (std::min)(4096.0, numberArgument(*runtime, state, 3, 512.0))));
+    std::vector<char> buffer(requestedCapacity + 1, '\0');
+    const std::size_t copied = (std::min)(current.size(), requestedCapacity);
+    std::memcpy(buffer.data(), current.data(), copied);
+
+    ImGui::BeginDisabled(!runtime->m_allowInteraction);
+    const bool changed = ImGui::InputText(
+        label.c_str(), buffer.data(), buffer.size());
+    ImGui::EndDisabled();
+
+    const std::size_t length = std::strlen(buffer.data());
+    runtime->m_api.lua_pushlstring(state, buffer.data(), length);
     runtime->m_api.lua_pushboolean(state, changed ? 1 : 0);
     return 2;
 }
@@ -7680,6 +7726,110 @@ int LuaModuleRuntime::luaModuleAssetPath(lua_State* state)
     return 1;
 }
 
+int LuaModuleRuntime::luaModuleAssetExists(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime || !runtime->m_context)
+        return 0;
+
+    const std::filesystem::path path = runtime->m_context->resolveAssetPath(
+        stringArgument(*runtime, state, 1));
+    std::error_code error;
+    const bool exists = !path.empty()
+        && std::filesystem::is_regular_file(path, error)
+        && !error;
+    runtime->m_api.lua_pushboolean(state, exists ? 1 : 0);
+    return 1;
+}
+
+int LuaModuleRuntime::luaModuleSelectAssetFile(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime || !runtime->m_context)
+        return 0;
+
+#if defined(_WIN32)
+    std::vector<wchar_t> selected(32768, L'\0');
+    const std::wstring initialDirectory =
+        runtime->m_context->assetRoot().wstring();
+    const wchar_t filter[] =
+        L"Wavefront OBJ (*.obj)\0*.obj\0All files (*.*)\0*.*\0\0";
+
+    OPENFILENAMEW dialog{};
+    dialog.lStructSize = sizeof(dialog);
+    dialog.lpstrFile = selected.data();
+    dialog.nMaxFile = static_cast<DWORD>(selected.size());
+    dialog.lpstrFilter = filter;
+    dialog.nFilterIndex = 1;
+    dialog.lpstrInitialDir = initialDirectory.c_str();
+    dialog.lpstrTitle = L"Select a module-owned vehicle OBJ";
+    dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST
+        | OFN_NOCHANGEDIR | OFN_DONTADDTORECENT;
+
+    if (!GetOpenFileNameW(&dialog))
+    {
+        runtime->m_api.lua_pushnil(state);
+        const std::string message = CommDlgExtendedError() == 0
+            ? "Asset selection cancelled."
+            : "The Windows asset picker could not complete.";
+        runtime->m_api.lua_pushlstring(
+            state, message.c_str(), message.size());
+        return 2;
+    }
+
+    std::error_code error;
+    const std::filesystem::path root = std::filesystem::weakly_canonical(
+        runtime->m_context->assetRoot(), error);
+    if (error)
+    {
+        const std::string message = "The module Assets directory is unavailable.";
+        runtime->m_api.lua_pushnil(state);
+        runtime->m_api.lua_pushlstring(
+            state, message.c_str(), message.size());
+        return 2;
+    }
+    const std::filesystem::path absolute = std::filesystem::weakly_canonical(
+        std::filesystem::path(selected.data()), error);
+    const std::filesystem::path relative = error
+        ? std::filesystem::path{}
+        : absolute.lexically_relative(root);
+    bool safe = !relative.empty() && !relative.is_absolute();
+    for (const std::filesystem::path& component : relative)
+    {
+        if (component == "..")
+            safe = false;
+    }
+    std::string extension = absolute.extension().string();
+    std::transform(
+        extension.begin(), extension.end(), extension.begin(),
+        [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
+    safe = safe && extension == ".obj"
+        && std::filesystem::is_regular_file(absolute, error) && !error;
+    if (!safe)
+    {
+        const std::string message =
+            "Vehicle assets must be .obj files already inside this module's Assets folder.";
+        runtime->m_api.lua_pushnil(state);
+        runtime->m_api.lua_pushlstring(
+            state, message.c_str(), message.size());
+        return 2;
+    }
+
+    const std::string value = relative.generic_string();
+    runtime->m_api.lua_pushlstring(state, value.c_str(), value.size());
+    runtime->m_api.lua_pushnil(state);
+    return 2;
+#else
+    const std::string message =
+        "The native asset picker is currently implemented for Windows only.";
+    runtime->m_api.lua_pushnil(state);
+    runtime->m_api.lua_pushlstring(state, message.c_str(), message.size());
+    return 2;
+#endif
+}
+
 int LuaModuleRuntime::luaModuleDataPath(lua_State* state)
 {
     LuaModuleRuntime* runtime = runtimeFrom(state);
@@ -7714,6 +7864,63 @@ int LuaModuleRuntime::luaModuleSavePath(lua_State* state)
         runtime->m_api.lua_pushlstring(state, value.c_str(), value.size());
     }
     return 1;
+}
+
+int LuaModuleRuntime::luaModuleWriteSaveText(lua_State* state)
+{
+    LuaModuleRuntime* runtime = runtimeFrom(state);
+    if (!runtime || !runtime->m_context)
+        return 0;
+
+    const std::string relativeText = stringArgument(*runtime, state, 1);
+    const std::string contents = stringArgument(*runtime, state, 2);
+    const std::filesystem::path relative(relativeText);
+    std::string extension = relative.extension().string();
+    std::transform(
+        extension.begin(), extension.end(), extension.begin(),
+        [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
+    const bool supportedExtension = extension == ".lua"
+        || extension == ".json" || extension == ".txt";
+    const std::filesystem::path path = runtime->m_context->resolveSavePath(relative);
+    if (path.empty() || !supportedExtension || contents.size() > 2u * 1024u * 1024u)
+    {
+        const std::string message =
+            "Module.WriteSaveText requires a safe .lua, .json or .txt save-relative path and at most 2 MiB of text.";
+        runtime->m_api.lua_pushboolean(state, 0);
+        runtime->m_api.lua_pushlstring(
+            state, message.c_str(), message.size());
+        return 2;
+    }
+
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    if (error)
+    {
+        const std::string message =
+            "Could not create the module save directory: " + error.message();
+        runtime->m_api.lua_pushboolean(state, 0);
+        runtime->m_api.lua_pushlstring(
+            state, message.c_str(), message.size());
+        return 2;
+    }
+
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output.write(contents.data(), static_cast<std::streamsize>(contents.size()));
+    if (!output)
+    {
+        const std::string message = "Could not write the module save text file.";
+        runtime->m_api.lua_pushboolean(state, 0);
+        runtime->m_api.lua_pushlstring(
+            state, message.c_str(), message.size());
+        return 2;
+    }
+
+    const std::string result = path.string();
+    runtime->m_api.lua_pushboolean(state, 1);
+    runtime->m_api.lua_pushlstring(state, result.c_str(), result.size());
+    return 2;
 }
 
 } // namespace heritage::modules

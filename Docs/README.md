@@ -12,6 +12,7 @@ Read these documents before changing an interconnected system:
 6. `PHYSICS_ARCHITECTURE.md` — fixed-step and multi-rate physics rules.
 7. `VEHICLE_ARCHITECTURE.md` — generic vehicle composition and Lua/native split.
 8. `VEHICLE_DYNAMICS_LAB.md` — native recording, repeatable experiments, plots and CSV diagnostics.
-9. `Decisions/` — architecture decision records that must not be silently reversed.
+9. `VEHICLE_WORKSHOP.md` — versioned topology authoring, validation, live preview and module-owned exports.
+10. `Decisions/` — architecture decision records that must not be silently reversed.
 
 Generated reports are written to `Build/Reports/`. Runtime diagnostics are written to `UserData/Diagnostics/`.

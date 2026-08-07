@@ -14,6 +14,8 @@ This folder configures and orchestrates vehicles. High-frequency simulation rema
 - `Factory.lua` — creates, resets, and destroys native vehicle instances.
 - `Telemetry.lua` — reads native state for UI and diagnostics.
 - `DynamicsLab.lua` — repeatable experiment control for the opt-in native high-rate recorder.
+- `Definitions/VehicleDefinitionV2.lua` — versioned component topology, templates, validation and deterministic export serialization.
+- `Workshop.lua` — persistent authoring draft, current-solver preview bridge and module-private export.
 - `Lifecycle.lua` — scene entry/exit, fixed-step control, presentation, and shift commands.
 - `../UI/VehicleDebugPanel.lua` — vehicle debug UI only; it contains no simulation logic.
 
@@ -27,6 +29,7 @@ This folder configures and orchestrates vehicles. High-frequency simulation rema
 6. Vehicle definition files should contain data, not per-frame simulation code.
 7. Networking-critical state must be exposed explicitly and deterministically.
 8. Dynamics-lab scenarios may provide fixed-step inputs, but measurement and simulation remain native; scenario code must never become production physics.
+9. Vehicle categories are Workshop templates and metadata, never switches that select duplicated generic solvers.
 
 Examples of future data definitions include `Peugeot_206_RC.lua` and `Ducati_Monster_S4R.lua`. They should reference reusable engines, gearboxes, differentials, tires, suspension, brakes, and aerodynamic components rather than copying their solvers.
 

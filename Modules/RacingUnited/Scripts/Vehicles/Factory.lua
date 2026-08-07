@@ -187,12 +187,7 @@ function CreateNativeVehicleDemo()
     if not Vehicle.SetGearRatios(
         nativeVehicle,
         vehicleReverseRatio,
-        vehicleForwardRatios[1],
-        vehicleForwardRatios[2],
-        vehicleForwardRatios[3],
-        vehicleForwardRatios[4],
-        vehicleForwardRatios[5],
-        vehicleForwardRatios[6]) then
+        table.unpack(vehicleForwardRatios)) then
         vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
         return false
     end

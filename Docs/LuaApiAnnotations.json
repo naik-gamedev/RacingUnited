@@ -104,6 +104,26 @@
     "returns": "value: number, changed: boolean",
     "description": "Draws a draggable numeric slider. Step 29J.2 also supports double-clicking the slider to switch it into exact keyboard-entry mode; Enter commits and clicking away exits text mode."
   },
+  "UI.InputText": {
+    "arguments": "(label: string, value: string, maximumCharacters?: integer)",
+    "returns": "value: string, changed: boolean",
+    "description": "Draws a bounded single-line text editor. The native buffer is rebuilt from Lua-owned state each frame and is capped at 4096 characters."
+  },
+  "Module.AssetExists": {
+    "arguments": "(assetsRelativePath: string)",
+    "returns": "boolean",
+    "description": "Checks whether a safe path beneath the active module's Assets directory identifies a regular file."
+  },
+  "Module.SelectAssetFile": {
+    "arguments": "()",
+    "returns": "assetsRelativePath: string|nil, errorText: string|nil",
+    "description": "Opens the Windows OBJ picker and accepts only an existing .obj already contained by the active module's Assets directory."
+  },
+  "Module.WriteSaveText": {
+    "arguments": "(saveRelativePath: string, contents: string)",
+    "returns": "worked: boolean, pathOrError: string",
+    "description": "Writes at most 2 MiB of text to a safe .lua, .json or .txt path beneath the active module's private Saves directory."
+  },
   "Entity.SetMesh": {
     "arguments": "(entity: EntityHandle, assetPath: string, red?: number, green?: number, blue?: number, normalize?: boolean, doubleSided?: boolean, blenderCoordinates?: boolean)",
     "returns": "boolean",

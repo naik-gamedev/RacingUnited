@@ -34,6 +34,7 @@ $required = @(
     "Docs\PHYSICS_ARCHITECTURE.md",
     "Docs\VEHICLE_ARCHITECTURE.md",
     "Docs\VEHICLE_DYNAMICS_LAB.md",
+    "Docs\VEHICLE_WORKSHOP.md",
     "Docs\Decisions\ADR-005-Advanced-Road-Tire-Provider.md",
     "Docs\Decisions\ADR-006-Per-Wheel-Tire-Profiles.md",
     "Docs\Decisions\ADR-007-Player-Vehicle-Visual-Slot.md",
@@ -60,6 +61,9 @@ $required = @(
     "Modules\RacingUnited\Scripts\Runtime\SurfaceDemo.lua",
     "Modules\RacingUnited\Scripts\Runtime\PlayerWorld.lua",
     "Modules\RacingUnited\Scripts\Vehicles\Definitions\PrototypeCar.lua",
+    "Modules\RacingUnited\Scripts\Vehicles\Definitions\VehicleDefinitionV2.lua",
+    "Modules\RacingUnited\Scripts\Vehicles\Workshop.lua",
+    "Modules\RacingUnited\Tests\VehicleDefinitionV2Tests.lua",
     "Modules\RacingUnited\Scripts\Vehicles\Visuals.lua",
     "Modules\RacingUnited\Scripts\Vehicles\DynamicsLab.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\VisualPanel.lua",
@@ -73,6 +77,7 @@ $required = @(
     "Modules\RacingUnited\Assets\Scenes\Player\README_IMPORT.txt",
     "Modules\RacingUnited\Scripts\UI\VehicleDebugPanel.lua",
     "Modules\RacingUnited\Scripts\UI\Vehicle\DynamicsLabPanel.lua",
+    "Modules\RacingUnited\Scripts\UI\Vehicle\WorkshopPanel.lua",
     "Tools\RunPhysicsTests.cmd"
 )
 foreach ($relative in $required) {
@@ -100,7 +105,11 @@ if (Test-Path $manifestPath) {
         "Vehicle.GetDynamicsLabSummary",
         "Vehicle.GetDynamicsLabSeries",
         "Vehicle.ExportDynamicsLabCsv",
+        "UI.InputText",
         "UI.PlotLines",
+        "Module.AssetExists",
+        "Module.SelectAssetFile",
+        "Module.WriteSaveText",
         "Physics.DestroyBody",
         "Physics.SetColliderSurface",
         "Physics.GetColliderSurface",
@@ -122,6 +131,8 @@ $runtimeCpp = if (Test-Path $runtimeCppPath) { [IO.File]::ReadAllText($runtimeCp
 Check ($runtimeCpp.Contains("m_registeredLuaFunctions")) "runtime records exact registered Lua names"
 Check ($runtimeCpp.Contains("runSafetySmokeTests")) "runtime contains lifetime safety smoke tests"
 Check ($runtimeCpp.Contains("LuaAPI_Runtime.json")) "runtime writes a live API manifest"
+Check ($runtimeCpp.Contains("OFN_FILEMUSTEXIST")) "Windows module asset picker requires an existing file"
+Check ($runtimeCpp.Contains("resolveSavePath(relative)")) "bounded text export resolves through the active module save root"
 
 $physicsWorldPath = Join-Path $Root "Engine\HeritageEngine\Physics\PhysicsWorld.cpp"
 $physicsWorld = if (Test-Path $physicsWorldPath) { [IO.File]::ReadAllText($physicsWorldPath) } else { "" }
@@ -164,6 +175,22 @@ Check ($physicsRegression.Contains("parkingBrakeHoldsOnSlope")) "headless regres
 Check ($physicsRegression.Contains("unbrakedVehicleRollsOnSlope")) "headless regression preserves unbraked slope roll"
 Check ($physicsRegression.Contains("flatRestSleepsAndThrottleWakes")) "headless regression covers parked sleep and throttle wake"
 Check ($physicsRegression.Contains("dynamicsLabCapturesHighRateTelemetry")) "headless regression verifies exact high-rate dynamics capture"
+
+$definitionV2Path = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Definitions\VehicleDefinitionV2.lua"
+$definitionV2 = if (Test-Path $definitionV2Path) { [IO.File]::ReadAllText($definitionV2Path) } else { "" }
+Check ($definitionV2.Contains("schemaVersion = 2")) "VehicleDefinitionV2 has an explicit schema version"
+Check ($definitionV2.Contains("powerUnits = {}")) "VehicleDefinitionV2 stores arbitrary power units"
+Check ($definitionV2.Contains("transmissions = {}")) "VehicleDefinitionV2 stores arbitrary transmissions"
+Check ($definitionV2.Contains("driveConnections = {}")) "VehicleDefinitionV2 stores explicit drive connections"
+Check ($definitionV2.Contains("ValidateVehicleDefinitionV2")) "VehicleDefinitionV2 has structural validation"
+Check ($definitionV2.Contains("currentSolverReady")) "definition validity remains separate from current solver support"
+Check ($definitionV2.Contains('twin_engine = {')) "Workshop includes an independent-powertrain template"
+
+$workshopPath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Workshop.lua"
+$workshop = if (Test-Path $workshopPath) { [IO.File]::ReadAllText($workshopPath) } else { "" }
+Check ($workshop.Contains("Module.SelectAssetFile")) "Workshop uses the module-isolated native asset picker"
+Check ($workshop.Contains("Module.WriteSaveText")) "Workshop exports through the bounded module save API"
+Check ($workshop.Contains("ApplyVehicleWorkshopPreview")) "Workshop has an explicit current-solver preview bridge"
 
 
 $tireHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\TireModel.hpp"

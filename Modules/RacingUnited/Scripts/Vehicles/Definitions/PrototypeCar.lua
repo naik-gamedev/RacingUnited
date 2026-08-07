@@ -4,8 +4,20 @@
 -- dimensions so the imported player body has sensible wheel placement now.
 -- This is still NOT the final measured Peugeot physics definition.
 PrototypeCarDefinition = {
+    schemaVersion = 2,
     id = "step29j4a_prototype_car",
     displayName = "Step 29J.4A Peugeot-Oriented Prototype",
+    classification = "car",
+
+    -- This compatibility summary lets the current handwritten prototype live
+    -- beside the complete topology-first VehicleDefinitionV2 contract. The
+    -- Workshop exports the full bodies/power/transmission/contact graph.
+    architecture = {
+        bodyCount = 1,
+        powerUnitCount = 1,
+        transmissionCount = 1,
+        contactUnitCount = 4
+    },
 
     referenceGeometry = {
         name = "2003 Peugeot 206 RC",

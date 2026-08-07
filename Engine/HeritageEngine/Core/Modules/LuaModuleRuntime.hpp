@@ -161,6 +161,7 @@ private:
     static int luaUiSliderFloat(lua_State* state);
     static int luaUiCheckbox(lua_State* state);
     static int luaUiInputInt(lua_State* state);
+    static int luaUiInputText(lua_State* state);
     static int luaUiImage(lua_State* state);
     static int luaUiImageButton(lua_State* state);
     static int luaUiGetImageSize(lua_State* state);
@@ -473,8 +474,11 @@ private:
     static int luaModuleName(lua_State* state);
     static int luaModuleVersion(lua_State* state);
     static int luaModuleAssetPath(lua_State* state);
+    static int luaModuleAssetExists(lua_State* state);
+    static int luaModuleSelectAssetFile(lua_State* state);
     static int luaModuleDataPath(lua_State* state);
     static int luaModuleSavePath(lua_State* state);
+    static int luaModuleWriteSaveText(lua_State* state);
 
     LuaApi m_api;
     lua_State* m_state = nullptr;
