@@ -653,3 +653,80 @@ TIRE33 renamed the shader's bead interpolation variable from `beadToBelt` to `be
 
 ### Priority
 First verify that normal world graphics are restored. Only after that evaluate TIRE33's intended smooth whole-bottom tire behavior and stationary jitter reduction.
+
+## Attempt 36 — TIRE34 / VIS27 Whole-Bottom Carcass Shear
+
+### Live evidence leading to this attempt
+- TIRE33A restored rendering, but the user reported **no meaningful visible change** in lateral carcass deformation.
+- The physical lateral displacement magnitude from TIRE32 is acceptable as the authority, but visually it still looks as though only a small handful of vertices at the very bottom are being dragged sideways.
+- The explicit requirement is now unambiguous: **every rubber vertex in the connected lower carcass beneath the user's green-line boundary must participate smoothly**, not merely the tread/contact vertices. The bead/rim attachment is the only region that should remain strongly anchored.
+
+### Diagnosis
+TIRE33 broadened the circumference mask, but its `beadToCarcass = smoothstep(0.035, 0.70, radialFraction)` kept a large fraction of the lower sidewall only weakly coupled to the structural ring displacement. Therefore the visible silhouette could still read as a localized contact-patch pull even though the physical ring offset itself was correct. The TIRE33 shear domain also reused the contact-derived `down` basis, whereas the proven 21x13 lower-shell lattice is world-gravity anchored.
+
+### Changes
+1. Preserve TIRE32's physical rigid-ring displacement magnitude and TIRE27/TIRE31 obstacle deformation.
+2. Define a **separate gravity-anchored carcass-down basis** from world down, matching the 21x13 lower-shell interpretation and independent of transient contact-normal tilt.
+3. Broaden circumferential participation with `smoothstep(-0.08, 0.34, lowerHemisphere)`, coupling the entire lower half smoothly and feathering slightly above the geometric equator.
+4. Move the bead-to-carcass transition dramatically inward: `smoothstep(0.015, 0.42, radialFraction)`. The immediate bead remains fixed, but lower sidewall, shoulder and tread now follow the physical ring much more coherently.
+5. Add a lower-sidewall participation floor so mid-sidewall vertices cannot lag far behind the tread and create the visible pinch. This is still zero at the bead and fades before the outer tread.
+6. Apply radial structural displacement through the same gravity-defined lower-carcass envelope so radial and lateral structural modes do not form separate hinges.
+7. Mirror the exact deformation logic in the shadow vertex shader.
+
+### Intended result
+Under lateral force, the full lower tire cross-section should form a broad continuous shear from anchored bead -> bending sidewall -> displaced shoulder/tread. The visible deformation should resemble the user's tire/ring compliance reference: several millimetres of belt/contact-patch shift spread smoothly over many vertices, not a few vertices pinched at the bottom.
+
+### Do not regress
+- Do not increase the physical lateral offset merely to make the effect visible; magnitude remains physics-driven.
+- Do not touch FL/FR/RL/RR routing or width-basis routing.
+- Do not weaken TIRE31 non-inversion constraints.
+- Do not replace the 21x13 obstacle contact lattice.
+
+## Attempt 37 — TIRE35 / VIS28 Two-Scale Lower-Carcass Equilibrium
+
+### Live evidence leading to this attempt
+- The user's current screenshot still showed a small, deep patch of displaced tire
+  vertices while the neighboring lower tread and sidewall stayed almost circular.
+- TIRE34 broadened physical rigid-ring shear, but the reported failure was also
+  present under ordinary vertical load. Shear-mask changes could not repair that
+  separate radial/contact deformation path.
+
+### Deterministic cause
+The live shader set `deflection` to zero whenever
+`uTireVisualProbeGridValid` was true. The 21x13 grid is normally valid on a loaded
+tire, so the analytic flat footprint, lower-carcass rise and sidewall bulge were
+all disabled in normal driving. Only probe-local compression remained visible.
+The CPU also blurred ordinary equilibrium footprint load together with irregular
+obstacle penetration, making that local path try to represent two different
+structural scales at once.
+
+### Changes
+1. Keep the authoritative native radial-deflection/contact-patch mode active while
+   the detailed probe grid is live.
+2. Build an explicit equilibrium compression field from native deflection, tire
+   radius and finite patch length/width.
+3. Subtract that equilibrium from direct CollisionSystem samples before the TIRE33
+   carcass relaxation, so only kerb/rock/broken-road residual is spread locally.
+4. Recombine equilibrium plus relaxed residual with per-region geometric capacity.
+   This preserves the deeper of baseline or direct collision and retains TIRE31
+   non-inversion limits.
+5. In both visible and shadow shaders, subtract the matching equilibrium field from
+   the probe value. Ordinary vehicle weight therefore cannot be applied twice.
+6. Replace the narrow 26-degree lower-carcass influence with a continuous analytic
+   envelope that starts just above the equator, rises through the complete lower
+   half, keeps the bead anchored, raises the lower belt/sidewall and bulges the
+   sidewall outward.
+7. Add repository validation requiring the CPU equilibrium/residual split and both
+   embedded GLSL copies. Record the architecture in ADR-073.
+
+### Validation completed before live user test
+- Release C++ build succeeds with zero warnings and zero errors.
+- Hidden runtime smoke test reaches the Racing United Lua prototype scene on
+  OpenGL 4.6 with both mesh and shadow shaders compiling/linking successfully.
+
+### Required live judgement
+- Flat road: the bottom half should now read as one smooth loaded carcass, with a
+  finite flat tread patch and broad sidewall transition rather than a vertex pinch.
+- Sidewalk/kerb: the local residual should remain deepest at the obstacle while
+  neighboring rubber bends smoothly into it.
+- Rim and bead must remain rigid; no tongue, fin, inversion or opposite-wheel dent.

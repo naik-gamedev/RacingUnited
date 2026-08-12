@@ -358,6 +358,36 @@ float tireProbeGridCompressionM(float phi, float widthCoordinate)
     return mix(mix(c00, c01, tb), mix(c10, c11, tb), ts);
 }
 
+float tireEquilibriumCompressionM(float phi, float widthCoordinate)
+{
+    if (!uTireVisualGrounded || uTireRadialDeflectionM <= 0.0001)
+        return 0.0;
+
+    // Must mirror the equilibrium footprint authored by
+    // LuaEntitySetMeshNodeTireColliderTrianglesFromWheel. This is the smooth,
+    // low-frequency pneumatic load mode; the probe-grid remainder represents
+    // only irregular road/kerb detail.
+    float referenceRadiusM = max(uTireReferenceRadiusM, 0.05);
+    float patchLengthM = uTireContactPatchLengthM > 0.01
+        ? uTireContactPatchLengthM : referenceRadiusM * 0.34;
+    patchLengthM = clamp(patchLengthM, 0.025, referenceRadiusM * 0.95);
+    float patchHalfAngle = clamp(
+        0.62 * patchLengthM / referenceRadiusM, 0.075, 0.34);
+    float angleFromBottom = abs(phi - 0.5 * HERITAGE_PI);
+    if (angleFromBottom >= patchHalfAngle)
+        return 0.0;
+
+    float longitudinalT = angleFromBottom / patchHalfAngle;
+    float longitudinalWeight = 1.0
+        - longitudinalT * longitudinalT * (3.0 - 2.0 * longitudinalT);
+    float absWidth = abs(clamp(widthCoordinate, -1.0, 1.0));
+    float widthWeight = clamp((1.0 - absWidth) / 0.42, 0.0, 1.0);
+    float shoulderWeight = clamp((0.90 - absWidth) / 0.48, 0.0, 1.0);
+    float treadWeight = max(widthWeight, 0.42 * shoulderWeight);
+    return max(uTireRadialDeflectionM, 0.0)
+        * longitudinalWeight * treadWeight;
+}
+
 vec4 tireProbeDebugOverlay(vec3 position)
 {
     if (!uTireProbeDebugVisible || !uTireVisualEnabled)
@@ -503,7 +533,14 @@ void applyTireProbeGridConstraint(inout vec3 position)
     float widthCoordinate = clamp(
         dot(relative, lateral) / max(uTireVisualHalfWidth, 0.0001),
         -1.0, 1.0);
-    float compressionM = tireProbeGridCompressionM(phi, widthCoordinate);
+    // TIRE35/VIS28: the native radial-deflection/contact-patch state already
+    // drives the broad lower-carcass equilibrium in applyTireVisualDeformation.
+    // Consume only compression above that equilibrium here, otherwise ordinary
+    // vehicle weight is applied twice and pinches a few probe-adjacent vertices.
+    float compressionM = max(
+        tireProbeGridCompressionM(phi, widthCoordinate)
+            - tireEquilibriumCompressionM(phi, widthCoordinate),
+        0.0);
     if (compressionM <= 0.00005)
         return;
 
@@ -659,24 +696,46 @@ void applyTireVisualDeformation(inout vec3 position, inout vec3 normal)
     float visualRingRadM = clamp(
         uTireRingRadialOffsetM * 0.55, -0.018, 0.018);
 
-    // TIRE33/VIS26 broad lower-carcass eigenmode.  Live TIRE32 showed the
-    // force direction and magnitude were finally plausible, but too few bottom
-    // vertices visually followed the displaced belt. Treat everything beneath
-    // the user's green-line chord as one smooth lower carcass: the bead remains
-    // anchored, while sidewall -> shoulder -> tread progressively follows the
-    // physical rigid-ring displacement. The circumferential feather is defined in
-    // the actual wheel/down basis, so camber and steering cannot rotate the mask
-    // onto the wrong side of the tire.
+    // TIRE34/VIS27 whole-bottom carcass shear. TIRE33's intent was correct,
+    // but live testing showed that the radial bead fade left too much of the
+    // lower sidewall visually anchored, so the physical rigid-ring displacement
+    // still read as a handful of pulled vertices at the contact patch. Define
+    // the shear domain from world gravity (the same frame as the 21x13 lower
+    // probe lattice), then let essentially the complete lower carcass participate.
+    // Only the immediate bead/rim attachment remains strongly constrained.
     vec3 initialRadialDirection = radial / max(radius, 0.000001);
-    float lowerHemisphere = dot(initialRadialDirection, down);
-    float lowerCarcassRegion = smoothstep(0.10, 0.48, lowerHemisphere);
-    float beadToCarcass = smoothstep(0.035, 0.70, radialFraction);
+    vec3 carcassDown = worldToLocal * vec3(0.0, -1.0, 0.0);
+    carcassDown -= axle * dot(carcassDown, axle);
+    if (dot(carcassDown, carcassDown) < 0.000001)
+        carcassDown = tireRestDown(uTireVisualAxleAxis);
+    carcassDown = normalize(carcassDown);
+
+    float lowerHemisphere = dot(initialRadialDirection, carcassDown);
+    // Start coupling slightly above the geometric equator and reach full
+    // participation well before the dense-bottom rows. This creates one smooth
+    // elastic lower-half mode rather than a narrow bottom patch.
+    float lowerCarcassRegion = smoothstep(-0.08, 0.34, lowerHemisphere);
+    // The bead itself must stay on the rim, but the sidewall should bend with
+    // the displaced belt. Reach near-full participation much earlier through
+    // the rubber depth than TIRE33's 0.70 radial threshold.
+    float beadToCarcass = smoothstep(0.015, 0.42, radialFraction);
     float carcassShearMask = lowerCarcassRegion * beadToCarcass;
+
+    // Add a broad shape-preserving floor through the lower sidewall. It keeps
+    // the bead anchored (radialFraction == 0) while preventing mid-sidewall
+    // vertices from lagging far behind the tread and producing a visible pinch.
+    float lowerSidewallFlex = lowerCarcassRegion
+        * smoothstep(0.04, 0.30, radialFraction)
+        * (1.0 - smoothstep(0.86, 1.0, radialFraction));
+    carcassShearMask = max(carcassShearMask, lowerSidewallFlex * 0.78);
 
     vec3 ringTranslation = metersToLocal * (
         forward * visualRingLongM + lateral * visualRingLatM);
     position += ringTranslation * carcassShearMask;
-    position += down * (metersToLocal * visualRingRadM * beadToCarcass);
+    // Radial ring displacement follows the same gravity-defined lower carcass
+    // envelope so it cannot create a separate narrow bottom hinge.
+    position += carcassDown * (
+        metersToLocal * visualRingRadM * beadToCarcass * lowerCarcassRegion);
 
     // Circumferential wind-up is visually represented as belt/tread twist
     // relative to the bead. Yaw is deliberately much weaker here: the real
@@ -728,7 +787,10 @@ void applyTireVisualDeformation(inout vec3 position, inout vec3 normal)
             min(uTireVisualHalfWidth, contactHalfWidth * 1.12 + 0.0001),
             abs(axial))
         : treadWidthMask;
-    float deflection = (uTireVisualGrounded && !uTireVisualProbeGridValid)
+    // The broad pneumatic equilibrium must remain active when the detailed
+    // probe lattice is valid. The old !uTireVisualProbeGridValid branch disabled
+    // this entire shape on the live path and left only local vertex dents.
+    float deflection = uTireVisualGrounded
         ? max(uTireRadialDeflectionM, 0.0) * metersToLocal
         : 0.0;
     float contactLengthLocal =
@@ -801,8 +863,17 @@ void applyTireVisualDeformation(inout vec3 position, inout vec3 normal)
         contactLengthLocal / max(2.0 * uTireVisualOuterRadius, 0.0001),
         0.0, 0.95));
     float influenceAngle = max(halfPatchAngle * 2.8, 0.45);
-    float bottomMask = smoothstep(
+    float localFootprintEnvelope = smoothstep(
         cos(influenceAngle), 1.0, dot(radialDirection, down));
+    // A pressurised carcass transmits the contact load through the complete
+    // lower sidewall/belt structure. This gravity-anchored, low-order mode begins
+    // just above the equator and rises smoothly toward the footprint, independent
+    // of visual mesh tessellation. It is deliberately broad, not a soft-body mesh.
+    float loadedLowerHemisphere = dot(radialDirection, down);
+    float wholeLowerCarcassEnvelope = smoothstep(
+        -0.10, 0.92, loadedLowerHemisphere);
+    float bottomMask = max(
+        localFootprintEnvelope, wholeLowerCarcassEnvelope * 0.78);
     float sidewallRadialMask = smoothstep(0.08, 0.28, radialFractionAfter)
         * (1.0 - smoothstep(0.76, 0.96, radialFractionAfter));
     float sidewallAxialMask = smoothstep(0.48, 0.90,
@@ -812,11 +883,11 @@ void applyTireVisualDeformation(inout vec3 position, inout vec3 normal)
     // bulge outward. This makes normal road-tire deflection readable in motion
     // without moving the bead/rim interface.
     float lowerCarcassMask = bottomMask
-        * smoothstep(0.10, 0.72, radialFractionAfter)
-        * (1.0 - treadRadialMask * 0.45);
-    position -= down * (deflection * 0.32 * lowerCarcassMask);
+        * smoothstep(0.035, 0.52, radialFractionAfter)
+        * (1.0 - treadRadialMask * 0.35);
+    position -= down * (deflection * 0.48 * lowerCarcassMask);
 
-    float bulge = deflection * 0.38
+    float bulge = deflection * 0.46
         * bottomMask * sidewallRadialMask * sidewallAxialMask;
     if (abs(axial) > 0.000001)
         position += axle * sign(axial) * bulge;
@@ -1661,6 +1732,32 @@ float tireProbeGridCompressionM(float phi, float widthCoordinate)
     return mix(mix(c00, c01, tb), mix(c10, c11, tb), ts);
 }
 
+float tireEquilibriumCompressionM(float phi, float widthCoordinate)
+{
+    if (!uTireVisualGrounded || uTireRadialDeflectionM <= 0.0001)
+        return 0.0;
+
+    float referenceRadiusM = max(uTireReferenceRadiusM, 0.05);
+    float patchLengthM = uTireContactPatchLengthM > 0.01
+        ? uTireContactPatchLengthM : referenceRadiusM * 0.34;
+    patchLengthM = clamp(patchLengthM, 0.025, referenceRadiusM * 0.95);
+    float patchHalfAngle = clamp(
+        0.62 * patchLengthM / referenceRadiusM, 0.075, 0.34);
+    float angleFromBottom = abs(phi - 0.5 * HERITAGE_PI);
+    if (angleFromBottom >= patchHalfAngle)
+        return 0.0;
+
+    float longitudinalT = angleFromBottom / patchHalfAngle;
+    float longitudinalWeight = 1.0
+        - longitudinalT * longitudinalT * (3.0 - 2.0 * longitudinalT);
+    float absWidth = abs(clamp(widthCoordinate, -1.0, 1.0));
+    float widthWeight = clamp((1.0 - absWidth) / 0.42, 0.0, 1.0);
+    float shoulderWeight = clamp((0.90 - absWidth) / 0.48, 0.0, 1.0);
+    float treadWeight = max(widthWeight, 0.42 * shoulderWeight);
+    return max(uTireRadialDeflectionM, 0.0)
+        * longitudinalWeight * treadWeight;
+}
+
 void applyTireProbeGridConstraint(inout vec3 position)
 {
     if (!uTireVisualProbeGridValid)
@@ -1715,7 +1812,10 @@ void applyTireProbeGridConstraint(inout vec3 position)
     float widthCoordinate = clamp(
         dot(relative, lateral) / max(uTireVisualHalfWidth, 0.0001),
         -1.0, 1.0);
-    float compressionM = tireProbeGridCompressionM(phi, widthCoordinate);
+    float compressionM = max(
+        tireProbeGridCompressionM(phi, widthCoordinate)
+            - tireEquilibriumCompressionM(phi, widthCoordinate),
+        0.0);
     if (compressionM <= 0.00005)
         return;
 
@@ -1865,15 +1965,26 @@ vec3 deformTireShadowPosition(vec3 position)
     float visualRingRadM = clamp(
         uTireRingRadialOffsetM * 0.55, -0.018, 0.018);
 
+    // TIRE34/VIS27 shadow path mirrors the main whole-bottom carcass mode.
     vec3 initialRadialDirection = radial / max(radius, 0.000001);
-    float lowerHemisphere = dot(initialRadialDirection, down);
-    float lowerCarcassRegion = smoothstep(0.10, 0.48, lowerHemisphere);
-    float beadToCarcass = smoothstep(0.035, 0.70, radialFraction);
+    vec3 carcassDown = worldToLocal * vec3(0.0, -1.0, 0.0);
+    carcassDown -= axle * dot(carcassDown, axle);
+    if (dot(carcassDown, carcassDown) < 0.000001)
+        carcassDown = tireRestDown(uTireVisualAxleAxis);
+    carcassDown = normalize(carcassDown);
+    float lowerHemisphere = dot(initialRadialDirection, carcassDown);
+    float lowerCarcassRegion = smoothstep(-0.08, 0.34, lowerHemisphere);
+    float beadToCarcass = smoothstep(0.015, 0.42, radialFraction);
     float carcassShearMask = lowerCarcassRegion * beadToCarcass;
+    float lowerSidewallFlex = lowerCarcassRegion
+        * smoothstep(0.04, 0.30, radialFraction)
+        * (1.0 - smoothstep(0.86, 1.0, radialFraction));
+    carcassShearMask = max(carcassShearMask, lowerSidewallFlex * 0.78);
     position += metersToLocal * (
         forward * visualRingLongM + lateral * visualRingLatM)
         * carcassShearMask;
-    position += down * (metersToLocal * visualRingRadM * beadToCarcass);
+    position += carcassDown * (
+        metersToLocal * visualRingRadM * beadToCarcass * lowerCarcassRegion);
 
     relative = position - uTireVisualCenter;
     relative = rotateAroundAxis(
@@ -1917,7 +2028,7 @@ vec3 deformTireShadowPosition(vec3 position)
             min(uTireVisualHalfWidth, contactHalfWidth * 1.12 + 0.0001),
             abs(axial))
         : treadWidthMask;
-    float deflection = (uTireVisualGrounded && !uTireVisualProbeGridValid)
+    float deflection = uTireVisualGrounded
         ? max(uTireRadialDeflectionM, 0.0) * metersToLocal
         : 0.0;
     float contactLengthLocal =
@@ -1982,17 +2093,22 @@ vec3 deformTireShadowPosition(vec3 position)
         contactLengthLocal / max(2.0 * uTireVisualOuterRadius, 0.0001),
         0.0, 0.95));
     float influenceAngle = max(halfPatchAngle * 2.8, 0.45);
-    float bottomMask = smoothstep(
+    float localFootprintEnvelope = smoothstep(
         cos(influenceAngle), 1.0, dot(radialDirection, down));
+    float loadedLowerHemisphere = dot(radialDirection, down);
+    float wholeLowerCarcassEnvelope = smoothstep(
+        -0.10, 0.92, loadedLowerHemisphere);
+    float bottomMask = max(
+        localFootprintEnvelope, wholeLowerCarcassEnvelope * 0.78);
     float sidewallRadialMask = smoothstep(0.08, 0.28, radialFractionAfter)
         * (1.0 - smoothstep(0.76, 0.96, radialFractionAfter));
     float sidewallAxialMask = smoothstep(0.48, 0.90,
         abs(axial) / max(uTireVisualHalfWidth, 0.0001));
     float lowerCarcassMask = bottomMask
-        * smoothstep(0.10, 0.72, radialFractionAfter)
-        * (1.0 - treadRadialMask * 0.45);
-    position -= down * (deflection * 0.32 * lowerCarcassMask);
-    float bulge = deflection * 0.38
+        * smoothstep(0.035, 0.52, radialFractionAfter)
+        * (1.0 - treadRadialMask * 0.35);
+    position -= down * (deflection * 0.48 * lowerCarcassMask);
+    float bulge = deflection * 0.46
         * bottomMask * sidewallRadialMask * sidewallAxialMask;
     if (abs(axial) > 0.000001)
         position += axle * sign(axial) * bulge;

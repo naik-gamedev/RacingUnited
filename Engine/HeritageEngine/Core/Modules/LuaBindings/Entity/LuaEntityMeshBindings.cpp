@@ -499,6 +499,8 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
             // coordinate disagreements cannot make the visual contact disappear.
             std::array<float, heritage::entities::TireVisualProbeCount>
                 compressionM{};
+            std::array<float, heritage::entities::TireVisualProbeCount>
+                compressionCapacityM{};
 
             heritage::math::Vec3 chassisWorldPosition{};
             heritage::math::Vec3 chassisWorldRotationDegrees{};
@@ -704,12 +706,12 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
                         runtime->m_physics->rigidBodies(),
                         hit);
 
+                    const float regionalCompressionCapacityM =
+                        radialCompressionCapacityM * (1.0f - sideNormalBlend)
+                        + lateralCompressionCapacityM * sideNormalBlend;
                     float compression = 0.0f;
                     if (hitSomething)
                     {
-                        const float regionalCompressionCapacityM =
-                            radialCompressionCapacityM * (1.0f - sideNormalBlend)
-                            + lateralCompressionCapacityM * sideNormalBlend;
                         compression = std::clamp(
                             expectedTouchDistanceM - hit.distance,
                             0.0f,
@@ -719,6 +721,7 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
                     const std::size_t index = station
                         * heritage::entities::TireVisualProbeWidthBands + band;
                     compressionM[index] = compression;
+                    compressionCapacityM[index] = regionalCompressionCapacityM;
                     if (compression > 0.0005f)
                     {
                         ++activeProbeCount;
@@ -728,13 +731,21 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
                 }
             }
 
-            // Flat-road fallback is deliberately only a *minimum* loaded
-            // footprint, never a replacement for real obstacle probes.  TIRE26
-            // injected the fallback into one single bottom row, which made a
-            // coarse scalloped dent. TIRE27 distributes the same authoritative
-            // native deflection over the dense bottom stations and tapers it
-            // across the tread. Real road/kerb/rock probe compression still wins
-            // through max(), so the fallback cannot erase local 3D shape.
+            // TIRE35/VIS28 separates the low-frequency pneumatic equilibrium
+            // shape from high-frequency road detail. Previously the baseline
+            // footprint and collider penetration were blurred together, then the
+            // vertex shader applied the resulting scalar only to nearby vertices.
+            // That is why a loaded tire could look like three or four vertices had
+            // been pinched upward while the rest of the lower carcass stayed round.
+            //
+            // The equilibrium field below is derived from the authoritative native
+            // deflection and finite contact-patch length. It is sent in the same
+            // total-compression grid for compatibility, but relaxation operates
+            // only on the collider residual above this field. The shader consumes
+            // the equilibrium as one broad carcass mode and applies only the
+            // residual locally for kerbs, rocks and broken road.
+            std::array<float, heritage::entities::TireVisualProbeCount>
+                equilibriumCompressionM{};
             if (wheelState.grounded && wheelState.tireDeflection > 0.0001)
             {
                 const float baseline = std::clamp(
@@ -786,28 +797,30 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
                             * longitudinalWeight * treadWeight;
                         const std::size_t index = station
                             * heritage::entities::TireVisualProbeWidthBands + band;
-                        compressionM[index] = (std::max)(
-                            compressionM[index], shapedBaseline);
+                        equilibriumCompressionM[index] = shapedBaseline;
                     }
                 }
-                maximumProbeCompression = (std::max)(
-                    maximumProbeCompression, baseline);
             }
 
-            // TIRE33/VIS26: make the complete dense bottom carcass beneath the
-            // user-defined green-line chord participate in one smooth deformation
-            // envelope.  TIRE31 only inherited from two immediate neighbours, so a
-            // real load could still grab a handful of lattice nodes and make a
-            // local pinch.  Stations 4..16 are the deliberately dense 65..115 degree
-            // loaded arc introduced in TIRE27.  First retain the old local coupling
-            // for front/rear lower-half obstacle fidelity, then run several cheap
-            // separable carcass-relaxation passes across the ENTIRE dense bottom arc
-            // and all 13 width bands.  Raw collision depth is a hard lower bound, so
-            // smoothing can spread a contact but can never average away real
-            // penetration.  This is a reduced-order belt/sidewall tension solve, not
-            // a visual blur over the final mesh.
-            const auto rawCompressionM = compressionM;
-            auto locallyCoupledCompressionM = rawCompressionM;
+            // Remove the analytically represented equilibrium from the direct
+            // collision samples before carcass coupling. Adding the fields back at
+            // the end preserves max(equilibrium, direct collision) exactly at every
+            // probe while preventing normal flat-road load from becoming a second,
+            // narrow deformation layered over the broad carcass mode.
+            std::array<float, heritage::entities::TireVisualProbeCount>
+                rawIrregularCompressionM{};
+            for (std::size_t index = 0; index < rawIrregularCompressionM.size(); ++index)
+            {
+                rawIrregularCompressionM[index] = (std::max)(
+                    compressionM[index] - equilibriumCompressionM[index], 0.0f);
+            }
+
+            // Retain the dense TIRE33 reduced-order belt/sidewall relaxation, but
+            // solve only the irregular residual. Local road detail spreads smoothly
+            // through its neighboring carcass; the ordinary loaded shape is handled
+            // once, by the physics-driven equilibrium mode.
+            const auto rawCompressionM = rawIrregularCompressionM;
+            auto locallyCoupledCompressionM = rawIrregularCompressionM;
             for (std::size_t station = 0;
                  station < heritage::entities::TireVisualProbeCircumferenceStations;
                  ++station)
@@ -949,7 +962,7 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
             // neighbouring rows are blended at 50% so there is no visible hinge at
             // the dense-region boundary.  Outside that feather the original local
             // contact coupling remains authoritative for curb-face/rock contacts.
-            compressionM = locallyCoupledCompressionM;
+            auto coupledIrregularCompressionM = locallyCoupledCompressionM;
             for (int station = kDenseBottomFeatherFirst;
                  station <= kDenseBottomFeatherLast;
                  ++station)
@@ -968,8 +981,21 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
                     const float blended = locallyCoupledCompressionM[index]
                         + (relaxedCompressionM[index]
                             - locallyCoupledCompressionM[index]) * regionWeight;
-                    compressionM[index] = (std::max)(rawCompressionM[index], blended);
+                    coupledIrregularCompressionM[index] = (std::max)(
+                        rawCompressionM[index], blended);
                 }
+            }
+
+            for (std::size_t index = 0; index < compressionM.size(); ++index)
+            {
+                // equilibrium + max(collision - equilibrium, 0) is exactly
+                // max(equilibrium, collision). Relaxation may raise neighboring
+                // residuals, but never beyond this tire section's geometric room.
+                compressionM[index] = std::clamp(
+                    equilibriumCompressionM[index]
+                        + coupledIrregularCompressionM[index],
+                    0.0f,
+                    compressionCapacityM[index]);
             }
 
             // Recompute diagnostics from the actual coupled field sent to the GPU.

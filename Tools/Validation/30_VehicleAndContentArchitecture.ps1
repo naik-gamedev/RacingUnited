@@ -402,6 +402,19 @@ Check ($tire17C3LegacyForceShear -or $tire32PhysicalForceShear) "TIRE17C3/TIRE32
 # embedded mesh/shadow shader again.
 Check (-not $clean05Shaders.Contains("visualRingRadM * beadToBelt") -and $clean05Shaders.Contains("visualRingRadM * beadToCarcass")) "TIRE33A embedded tire shaders use the live bead-to-carcass radial mask with no dangling beadToBelt reference"
 
+# TIRE35: normal pneumatic load is one broad, physics-driven equilibrium
+# deformation. The dense probe lattice adds only its irregular residual; it must
+# never disable or re-apply the native deflection mode. Require both visible and
+# shadow copies of the embedded GLSL implementation.
+$tire35EquilibriumFunctions = ([regex]::Matches(
+    $clean05Shaders, "float tireEquilibriumCompressionM")).Count
+$tire35WholeLowerModes = ([regex]::Matches(
+    $clean05Shaders, "float wholeLowerCarcassEnvelope")).Count
+$tire35UngatedDeflectionModes = ([regex]::Matches(
+    $clean05Shaders, "float deflection = uTireVisualGrounded")).Count
+Check ($luaBindingCpp.Contains("equilibriumCompressionM") -and $luaBindingCpp.Contains("rawIrregularCompressionM") -and $luaBindingCpp.Contains("coupledIrregularCompressionM")) "TIRE35 CPU probe solve separates pneumatic equilibrium from irregular road-contact residual"
+Check ($tire35EquilibriumFunctions -eq 2 -and $tire35WholeLowerModes -eq 2 -and $tire35UngatedDeflectionModes -eq 2 -and -not $clean05Shaders.Contains("float deflection = (uTireVisualGrounded && !uTireVisualProbeGridValid)")) "TIRE35 visible and shadow shaders preserve broad whole-lower-carcass deformation while the detailed probe grid is live"
+
 $wheelContractPath = Join-Path $Root "Docs\Decisions\ADR-009-Wheel-Coordinate-Contract.md"
 Check (Test-Path $wheelContractPath) "wheel coordinate/presentation ADR exists"
 $tireSurfaceRoadmapPath = Join-Path $Root "Docs\TIRE_SURFACE_ROADMAP.md"

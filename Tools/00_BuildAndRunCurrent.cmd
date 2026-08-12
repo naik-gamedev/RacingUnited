@@ -11,7 +11,7 @@ set "REPORTS=%ROOT%\Build\Reports"
 set "DIAGNOSTICS=%ROOT%\UserData\Diagnostics"
 set "BUILD_LOG=%REPORTS%\CurrentBuild.log"
 set "TEST_LOG=%DIAGNOSTICS%\physics_regression_current.txt"
-set "MILESTONE=TIRE33A-GLSL-CARCASS-HOTFIX"
+set "MILESTONE=TIRE35-TWO-SCALE-LOWER-CARCASS-EQUILIBRIUM"
 set "MSBUILD_TARGET=Build"
 set "BUILD_MODE=incremental"
 if /I "%~1"=="full" (
@@ -25,7 +25,7 @@ if not exist "%DIAGNOSTICS%" mkdir "%DIAGNOSTICS%"
 cls
 echo ============================================================
 echo Heritage Engine - CURRENT build + run [%MILESTONE%]
-echo TIRE33A TIRE33 carcass relaxation + corrected live GLSL radial mask
+echo TIRE35 broad physics equilibrium + dense 21x13 irregular road detail
 echo ============================================================
 echo Root: %ROOT%
 echo Build mode: %BUILD_MODE%  ^(pass FULL for an explicit full rebuild^)
