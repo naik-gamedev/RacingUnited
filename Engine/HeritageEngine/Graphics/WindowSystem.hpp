@@ -7,6 +7,12 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+// GLFW/GLAD may have supplied APIENTRY before this header reaches Windows.h.
+// Undefine it so the Windows SDK can provide its canonical definition without
+// producing C4005 in translation units that include GLFW first.
+#ifdef APIENTRY
+#undef APIENTRY
+#endif
 #include <windows.h>
 #endif
 

@@ -14,6 +14,15 @@ The running engine also writes:
 
 The runtime files are authoritative for the exact functions registered by that executable. A future contributor must not invent a function name from memory.
 
+
+## Binding source organization
+
+The public registration table remains centralized in `LuaModuleRuntime.cpp`, while
+handler bodies live below `Core/Modules/LuaBindings`. Physics, Vehicle and Entity
+are subdivided by responsibility so a generic namespace file cannot become the next
+10,000-line runtime. `GenerateLuaApiManifest.ps1` resolves each public API entry to
+its exact implementation source. See `LUA_BINDING_ARCHITECTURE.md`.
+
 ## Signature annotations
 
 `Docs/LuaApiAnnotations.json` supplies human-readable signatures and descriptions for annotated APIs. Entries marked unannotated in the generated manifest require inspection of the named C++ handler. Do not infer argument order or return values from the function name alone.

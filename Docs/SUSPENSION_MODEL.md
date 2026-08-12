@@ -33,6 +33,24 @@ additional shaft-displacement factor. This makes the authoring value useful for
 pushrod, pullrod and unequal-lever layouts even before their geometry providers
 derive the ratio dynamically.
 
+## Torsion-bar springing (SUS03B)
+
+`trailing_arm_torsion_bar_v1` keeps spring and damper leverage separate. The
+trailing-arm geometry provider supplies torsion-bar twist, instantaneous angular
+motion ratio (radians per metre of wheel travel), and separate-damper motion
+ratio.
+
+The current `TorsionBar` helper accepts the same creator-friendly reference wheel
+preload/rate/progression fields used elsewhere, converts them to equivalent
+rotational preload torque and torsional stiffness at the reference arm leverage,
+then evaluates spring torque from actual arm twist. Wheel spring force is obtained
+through the current angular leverage. This is a rotational spring model; it does
+not pretend the rear torsion bar is a coil spring acting directly at the wheel.
+
+When better physical data becomes available, direct torsion-bar dimensions or
+measured torsional stiffness can extend this mechanism without changing the
+trailing-arm kinematics contract.
+
 ## Telemetry
 
 `Vehicle.GetWheelState` appends the following values after its existing surface

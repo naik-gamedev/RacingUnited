@@ -117,9 +117,10 @@ void RigidBodySystem::clear()
 BodyHandle RigidBodySystem::create(const RigidBodyDescription& description)
 {
     if (!finiteVec3(description.position)
-        || !finiteVec3(description.rotationDegrees))
+        || !finiteVec3(description.rotationDegrees)
+        || !finiteVec3(description.centerOfMassLocal))
     {
-        setError("Physics.CreateBody requires finite position and rotation values.");
+        setError("Physics.CreateBody requires finite position, rotation, and centre-of-mass values.");
         return InvalidBody;
     }
 
@@ -183,6 +184,7 @@ BodyHandle RigidBodySystem::create(const RigidBodyDescription& description)
     slot.record.position = description.position;
     slot.record.previousRotation = quaternionFromEulerDegrees(description.rotationDegrees);
     slot.record.rotation = slot.record.previousRotation;
+    slot.record.centerOfMassLocal = description.centerOfMassLocal;
     slot.record.mass = description.mass;
     slot.record.inverseMass = description.motionType == BodyMotionType::Dynamic
         ? 1.0f / description.mass
@@ -298,18 +300,26 @@ bool RigidBodySystem::setMotionType(
     body.inverseMass = value == BodyMotionType::Dynamic
         ? 1.0f / body.mass
         : 0.0f;
-    if (value == BodyMotionType::Dynamic
-        && body.inverseInertiaLocal.x <= 0.0f
-        && body.inverseInertiaLocal.y <= 0.0f
-        && body.inverseInertiaLocal.z <= 0.0f)
+    if (value == BodyMotionType::Dynamic)
     {
-        body.inverseInertiaLocal = {
-            body.inverseMass,
-            body.inverseMass,
-            body.inverseMass
-        };
+        if (body.hasInertiaLocalOverride)
+        {
+            const heritage::math::Vec3 inertia = body.inertiaLocalOverrideKgM2;
+            body.inverseInertiaLocal = {
+                1.0f / inertia.x, 1.0f / inertia.y, 1.0f / inertia.z };
+        }
+        else if (body.inverseInertiaLocal.x <= 0.0f
+            && body.inverseInertiaLocal.y <= 0.0f
+            && body.inverseInertiaLocal.z <= 0.0f)
+        {
+            body.inverseInertiaLocal = {
+                body.inverseMass,
+                body.inverseMass,
+                body.inverseMass
+            };
+        }
     }
-    else if (value != BodyMotionType::Dynamic)
+    else
     {
         body.inverseInertiaLocal = {};
     }
@@ -365,14 +375,23 @@ bool RigidBodySystem::setMass(BodyHandle handle, float value)
     slot->record.inverseMass = slot->record.motionType == BodyMotionType::Dynamic
         ? 1.0f / value
         : 0.0f;
-    if (slot->record.motionType == BodyMotionType::Dynamic
-        && previousMass > 0.0f)
+    if (slot->record.motionType == BodyMotionType::Dynamic)
     {
-        // Preserve a physically sensible tensor until CollisionSystem rebuilds
-        // exact collider-derived mass properties on the next fixed step.
-        slot->record.inverseInertiaLocal = scaleVector(
-            slot->record.inverseInertiaLocal,
-            previousMass / value);
+        if (slot->record.hasInertiaLocalOverride)
+        {
+            const heritage::math::Vec3 inertia =
+                slot->record.inertiaLocalOverrideKgM2;
+            slot->record.inverseInertiaLocal = {
+                1.0f / inertia.x, 1.0f / inertia.y, 1.0f / inertia.z };
+        }
+        else if (previousMass > 0.0f)
+        {
+            // Preserve a physically sensible tensor until CollisionSystem
+            // rebuilds collider-derived mass properties on the next fixed step.
+            slot->record.inverseInertiaLocal = scaleVector(
+                slot->record.inverseInertiaLocal,
+                previousMass / value);
+        }
     }
     else
     {
@@ -382,6 +401,157 @@ bool RigidBodySystem::setMass(BodyHandle handle, float value)
     ++m_massPropertiesRevision;
     if (m_massPropertiesRevision == 0)
         m_massPropertiesRevision = 1;
+    clearError();
+    return true;
+}
+
+
+bool RigidBodySystem::inertiaLocal(
+    BodyHandle handle,
+    heritage::math::Vec3& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Physics.GetBodyInertiaLocal received an invalid or stale body handle.");
+        return false;
+    }
+
+    const heritage::math::Vec3 inverse = slot->record.inverseInertiaLocal;
+    value = {
+        inverse.x > 0.0f ? 1.0f / inverse.x : 0.0f,
+        inverse.y > 0.0f ? 1.0f / inverse.y : 0.0f,
+        inverse.z > 0.0f ? 1.0f / inverse.z : 0.0f
+    };
+    clearError();
+    return true;
+}
+
+bool RigidBodySystem::setInertiaLocal(
+    BodyHandle handle,
+    const heritage::math::Vec3& value)
+{
+    Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Physics.SetBodyInertiaLocal received an invalid or stale body handle.");
+        return false;
+    }
+    if (!finiteVec3(value)
+        || value.x <= 0.0f || value.y <= 0.0f || value.z <= 0.0f
+        || value.x > 1.0e12f || value.y > 1.0e12f || value.z > 1.0e12f)
+    {
+        setError("Physics.SetBodyInertiaLocal requires finite positive diagonal inertia values up to 1e12 kg*m^2.");
+        return false;
+    }
+
+    slot->record.inertiaLocalOverrideKgM2 = value;
+    slot->record.hasInertiaLocalOverride = true;
+    slot->record.inverseInertiaLocal = slot->record.motionType == BodyMotionType::Dynamic
+        ? heritage::math::Vec3{ 1.0f / value.x, 1.0f / value.y, 1.0f / value.z }
+        : heritage::math::Vec3{};
+    wakeRecord(slot->record);
+    ++m_massPropertiesRevision;
+    if (m_massPropertiesRevision == 0)
+        m_massPropertiesRevision = 1;
+    clearError();
+    return true;
+}
+
+bool RigidBodySystem::clearInertiaLocalOverride(BodyHandle handle)
+{
+    Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Physics.ClearBodyInertiaLocalOverride received an invalid or stale body handle.");
+        return false;
+    }
+
+    slot->record.inertiaLocalOverrideKgM2 = {};
+    slot->record.hasInertiaLocalOverride = false;
+    slot->record.inverseInertiaLocal = slot->record.motionType == BodyMotionType::Dynamic
+        ? heritage::math::Vec3{
+            slot->record.inverseMass,
+            slot->record.inverseMass,
+            slot->record.inverseMass }
+        : heritage::math::Vec3{};
+    wakeRecord(slot->record);
+    ++m_massPropertiesRevision;
+    if (m_massPropertiesRevision == 0)
+        m_massPropertiesRevision = 1;
+    clearError();
+    return true;
+}
+
+bool RigidBodySystem::inertiaLocalOverridden(
+    BodyHandle handle,
+    bool& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Physics.IsBodyInertiaLocalOverridden received an invalid or stale body handle.");
+        return false;
+    }
+    value = slot->record.hasInertiaLocalOverride;
+    clearError();
+    return true;
+}
+
+bool RigidBodySystem::centerOfMassLocal(
+    BodyHandle handle,
+    heritage::math::Vec3& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Physics.GetBodyCenterOfMassLocal received an invalid or stale body handle.");
+        return false;
+    }
+
+    value = slot->record.centerOfMassLocal;
+    clearError();
+    return true;
+}
+
+bool RigidBodySystem::setCenterOfMassLocal(
+    BodyHandle handle,
+    const heritage::math::Vec3& value)
+{
+    if (!finiteVec3(value))
+    {
+        setError("Physics.SetBodyCenterOfMassLocal requires finite values.");
+        return false;
+    }
+
+    Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Physics.SetBodyCenterOfMassLocal received an invalid or stale body handle.");
+        return false;
+    }
+
+    slot->record.centerOfMassLocal = value;
+    wakeRecord(slot->record);
+    ++m_massPropertiesRevision;
+    if (m_massPropertiesRevision == 0)
+        m_massPropertiesRevision = 1;
+    clearError();
+    return true;
+}
+
+bool RigidBodySystem::centerOfMassWorld(
+    BodyHandle handle,
+    heritage::math::Vec3& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Physics.GetBodyCenterOfMassWorld received an invalid or stale body handle.");
+        return false;
+    }
+
+    value = worldCenterOfMass(slot->record);
     clearError();
     return true;
 }
@@ -559,6 +729,33 @@ bool RigidBodySystem::interpolatedPose(
         slot->record.previousRotation,
         slot->record.rotation,
         safeAlpha));
+    clearError();
+    return true;
+}
+
+bool RigidBodySystem::interpolatedBasis(
+    BodyHandle handle,
+    float alpha,
+    heritage::math::Vec3& right,
+    heritage::math::Vec3& up,
+    heritage::math::Vec3& forward) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Physics.GetBodyInterpolatedBasis received an invalid or stale body handle.");
+        return false;
+    }
+
+    const float safeAlpha = std::clamp(alpha, 0.0f, 1.0f);
+    const Quaternion rotation = interpolate(
+        slot->record.previousRotation,
+        slot->record.rotation,
+        safeAlpha);
+
+    right = rotateVector(rotation, { 1.0f, 0.0f, 0.0f });
+    up = rotateVector(rotation, { 0.0f, 1.0f, 0.0f });
+    forward = rotateVector(rotation, { 0.0f, 0.0f, 1.0f });
     clearError();
     return true;
 }
@@ -1004,15 +1201,20 @@ void RigidBodySystem::integrate(
 
         if (body.motionType == BodyMotionType::Kinematic)
         {
-            // Kinematic motion is authored directly by game code. It is not
-            // affected by gravity, forces, mass or damping.
-            body.position = add(
-                body.position,
+            // Velocity-driven kinematic motion uses centre-of-mass velocity too.
+            // The authored body/entity origin therefore moves around the COM
+            // when angular velocity is present and a local COM offset is set.
+            const heritage::math::Vec3 centerBefore = worldCenterOfMass(body);
+            const heritage::math::Vec3 centerAfter = add(
+                centerBefore,
                 scaleVector(body.linearVelocity, fixedDeltaTime));
             body.rotation = integrateAngularVelocity(
                 body.rotation,
                 body.angularVelocityDegrees,
                 fixedDeltaTime);
+            body.position = subtract(
+                centerAfter,
+                rotateVector(body.rotation, body.centerOfMassLocal));
             body.sleeping = false;
             body.sleepTimer = 0.0f;
             body.accumulatedForce = {};
@@ -1041,15 +1243,38 @@ void RigidBodySystem::integrate(
             body.angularVelocityDegrees,
             angularDecay);
 
-        body.position = add(
-            body.position,
+        const heritage::math::Vec3 centerBefore = worldCenterOfMass(body);
+        const heritage::math::Vec3 centerAfter = add(
+            centerBefore,
             scaleVector(body.linearVelocity, fixedDeltaTime));
         body.rotation = integrateAngularVelocity(
             body.rotation,
             body.angularVelocityDegrees,
             fixedDeltaTime);
+        body.position = subtract(
+            centerAfter,
+            rotateVector(body.rotation, body.centerOfMassLocal));
         body.accumulatedForce = {};
     }
+}
+
+void RigidBodySystem::rebaseLocalOrigin(
+    const heritage::math::Vec3& shift)
+{
+    if (!finiteVec3(shift))
+        return;
+
+    for (Slot& slot : m_slots)
+    {
+        if (!slot.alive)
+            continue;
+
+        slot.record.position = subtract(slot.record.position, shift);
+        slot.record.previousPosition = subtract(
+            slot.record.previousPosition, shift);
+    }
+
+    clearError();
 }
 
 void RigidBodySystem::snapInterpolation()
@@ -1181,75 +1406,29 @@ bool RigidBodySystem::destroyResolved(std::uint32_t index, Slot& slot)
 RigidBodySystem::Quaternion RigidBodySystem::quaternionFromEulerDegrees(
     const heritage::math::Vec3& value)
 {
-    const float halfX = radians(value.x) * 0.5f;
-    const float halfY = radians(value.y) * 0.5f;
-    const float halfZ = radians(value.z) * 0.5f;
-
-    const float cx = std::cos(halfX);
-    const float sx = std::sin(halfX);
-    const float cy = std::cos(halfY);
-    const float sy = std::sin(halfY);
-    const float cz = std::cos(halfZ);
-    const float sz = std::sin(halfZ);
-
-    return normalized({
-        cz * cy * cx + sz * sy * sx,
-        cz * cy * sx - sz * sy * cx,
-        cz * sy * cx + sz * cy * sx,
-        sz * cy * cx - cz * sy * sx
-    });
+    return heritage::math::normalized(
+        heritage::math::makeQuaternionFromEulerDegrees(value),
+        kQuaternionEpsilon);
 }
 
 heritage::math::Vec3 RigidBodySystem::eulerDegreesFromQuaternion(
     const Quaternion& value)
 {
-    const Quaternion q = normalized(value);
-    const float sinXCosY = 2.0f * (q.w * q.x + q.y * q.z);
-    const float cosXCosY = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
-    const float angleX = std::atan2(sinXCosY, cosXCosY);
-
-    const float sinY = std::clamp(
-        2.0f * (q.w * q.y - q.z * q.x),
-        -1.0f,
-        1.0f);
-    const float angleY = std::asin(sinY);
-
-    const float sinZCosY = 2.0f * (q.w * q.z + q.x * q.y);
-    const float cosZCosY = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
-    const float angleZ = std::atan2(sinZCosY, cosZCosY);
-
-    return { degrees(angleX), degrees(angleY), degrees(angleZ) };
+    return heritage::math::eulerDegreesFromUnitQuaternion(
+        heritage::math::normalized(value, kQuaternionEpsilon));
 }
 
 RigidBodySystem::Quaternion RigidBodySystem::multiply(
     const Quaternion& left,
     const Quaternion& right)
 {
-    return {
-        left.w * right.w - left.x * right.x - left.y * right.y - left.z * right.z,
-        left.w * right.x + left.x * right.w + left.y * right.z - left.z * right.y,
-        left.w * right.y - left.x * right.z + left.y * right.w + left.z * right.x,
-        left.w * right.z + left.x * right.y - left.y * right.x + left.z * right.w
-    };
+    return heritage::math::multiply(left, right);
 }
 
 RigidBodySystem::Quaternion RigidBodySystem::normalized(
     const Quaternion& value)
 {
-    const float lengthSquared = value.w * value.w
-        + value.x * value.x
-        + value.y * value.y
-        + value.z * value.z;
-    if (lengthSquared <= kQuaternionEpsilon)
-        return {};
-
-    const float inverseLength = 1.0f / std::sqrt(lengthSquared);
-    return {
-        value.w * inverseLength,
-        value.x * inverseLength,
-        value.y * inverseLength,
-        value.z * inverseLength
-    };
+    return heritage::math::normalized(value, kQuaternionEpsilon);
 }
 
 RigidBodySystem::Quaternion RigidBodySystem::interpolate(
@@ -1312,20 +1491,22 @@ RigidBodySystem::Quaternion RigidBodySystem::integrateAngularVelocity(
 RigidBodySystem::Quaternion RigidBodySystem::conjugate(
     const Quaternion& value)
 {
-    return { value.w, -value.x, -value.y, -value.z };
+    return heritage::math::conjugate(value);
 }
 
 heritage::math::Vec3 RigidBodySystem::rotateVector(
     const Quaternion& rotation,
     const heritage::math::Vec3& value)
 {
-    const heritage::math::Vec3 q{ rotation.x, rotation.y, rotation.z };
-    const heritage::math::Vec3 twiceCross = scaleVector(cross(q, value), 2.0f);
+    return heritage::math::rotateVectorUnit(rotation, value);
+}
+
+heritage::math::Vec3 RigidBodySystem::worldCenterOfMass(
+    const Record& body)
+{
     return add(
-        value,
-        add(
-            scaleVector(twiceCross, rotation.w),
-            cross(q, twiceCross)));
+        body.position,
+        rotateVector(body.rotation, body.centerOfMassLocal));
 }
 
 heritage::math::Vec3 RigidBodySystem::applyWorldInverseInertia(
@@ -1356,7 +1537,9 @@ void RigidBodySystem::applyImpulseToRecord(
         body.linearVelocity,
         scaleVector(impulse, body.inverseMass));
 
-    const heritage::math::Vec3 leverArm = subtract(worldPoint, body.position);
+    const heritage::math::Vec3 leverArm = subtract(
+        worldPoint,
+        worldCenterOfMass(body));
     const heritage::math::Vec3 angularImpulse = cross(leverArm, impulse);
     const heritage::math::Vec3 deltaRadiansPerSecond =
         applyWorldInverseInertia(body, angularImpulse);

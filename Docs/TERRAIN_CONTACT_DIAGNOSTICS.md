@@ -1,9 +1,10 @@
 # Terrain Contact Diagnostics
 
-Step 29Q establishes an observable baseline before Heritage Engine replaces its
-temporary query-only static triangle bridge. It does not silently correct a
-lost contact. Every wheel records why its latest suspension support query did
-or did not produce authoritative load.
+Step 29Q established the observable wheel-support baseline while the static
+triangle world was still query-oriented. The engine has since gained a BVH-backed
+rigid-body path for dynamic primitive colliders against those same static
+triangles. Wheel support remains independently observable: every wheel records
+why its latest suspension query did or did not produce authoritative load.
 
 ## Native status contract
 
@@ -41,10 +42,11 @@ closest-hit raycast:
 - whether any static triangle hit; and
 - whether the chosen closest hit was a static triangle.
 
-Static scene bounds are calculated once when triangles are installed, not for
-every wheel query. Individual triangle AABBs are still constructed during each
-query in Step 29Q; Milestone 2 replaces that linear scan with a deterministic
-spatial acceleration structure.
+Static scene bounds are calculated when triangles are installed. Individual
+triangle queries are accelerated by the immutable `StaticTriangleBvh`; wheel
+rays and rigid-body contact broadphase no longer linearly scan the complete
+triangle set. Query diagnostics still report candidate and exact-test counts so
+acceleration regressions remain visible.
 
 ## Tunnelling classification cost
 
@@ -53,15 +55,18 @@ If it finds geometry above the ray origin, the status becomes
 `surface_behind_ray_origin` and remains visible while that miss persists. Normal
 grounded and already-airborne substeps do not pay for a second raycast.
 
-This probe is diagnostic evidence, not collision recovery. The chassis and
-wheel are still permitted to pass through query-only triangles until the
-authoritative static triangle contact path lands in Milestone 2.
+This reverse probe is diagnostic evidence, not suspension-contact recovery. A
+dynamic chassis primitive may now be stopped by the static-triangle rigid-body
+solver, but that must not hide a suspension ray losing support or silently change
+its `WheelContactStatus`. The wheel/contact-provider diagnostic contract therefore
+remains useful after rigid-body triangle contact exists.
 
 ## Lua and live inspection
 
 `Vehicle.GetWheelContactDiagnostic(vehicle, wheel)` returns 13 values without
-changing the established 51-value `Vehicle.GetWheelState` ABI. Racing United
-stores those fields in `vehicleWheelTelemetry` and displays them in
+changing the `Vehicle.GetWheelState` field order. `GetWheelState` itself is now a
+60-value TIRE03 ABI after the appended tire turn-slip/contact-patch telemetry.
+Racing United stores those fields in `vehicleWheelTelemetry` and displays them in
 Vehicle > Suspension > Live.
 
 ## Deterministic regression coverage
@@ -76,7 +81,9 @@ Vehicle > Suspension > Live.
 - support geometry just beyond maximum suspension reach;
 - a 120 m/s downward state whose support plane is already behind the ray;
 - departure beyond imported scene bounds; and
-- an airborne chassis landing on the static triangle query surface.
+- an airborne chassis landing on the static triangle support surface; and
+- dynamic sphere and box rigid bodies falling onto and settling on the same
+  static-triangle world.
 
-The test prints the final native status names so a future contact implementation
-cannot turn a failure into an unexplained boolean.
+The tests print the final native status/contact evidence so a future contact
+implementation cannot turn a failure into an unexplained boolean.

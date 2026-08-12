@@ -17,6 +17,8 @@ constexpr float kMinimumTimeScale = 0.0f;
 constexpr float kMaximumTimeScale = 4.0f;
 constexpr int kAbsoluteMaximumWorldStepsPerFrame = 256;
 constexpr double kStepComparisonEpsilon = 1.0e-12;
+constexpr float kMinimumFloatingOriginThreshold = 32.0f;
+constexpr float kMaximumFloatingOriginThreshold = 1000000.0f;
 
 bool finiteFloat(float value)
 {
@@ -33,10 +35,17 @@ PhysicsWorld::PhysicsWorld()
 void PhysicsWorld::reset()
 {
     m_vehicles.clear();
+    m_surfaces.clear();
+    m_surfaces.setGlobalOrigin({ 0.0, 0.0, 0.0 });
     m_constraints.clear();
     m_collisions.clear();
     m_rigidBodies.clear();
     m_gravity = { 0.0f, -9.80665f, 0.0f };
+    m_globalOrigin = { 0.0, 0.0, 0.0 };
+    m_pendingEntityRebase = { 0.0f, 0.0f, 0.0f };
+    m_floatingOriginAnchor = InvalidBody;
+    m_floatingOriginThreshold = 4096.0f;
+    m_originRebaseCount = 0;
     m_fixedDeltaTime = 1.0 / 120.0;
     m_timeScale = 1.0f;
     m_paused = false;
@@ -137,6 +146,14 @@ void PhysicsWorld::advance(
 void PhysicsWorld::synchronizeEntityTransforms(
     heritage::entities::EntityRegistry& entities)
 {
+    if (m_pendingEntityRebase.x != 0.0f
+        || m_pendingEntityRebase.y != 0.0f
+        || m_pendingEntityRebase.z != 0.0f)
+    {
+        entities.rebaseRootPositions(m_pendingEntityRebase);
+        m_pendingEntityRebase = { 0.0f, 0.0f, 0.0f };
+    }
+
     m_rigidBodies.synchronizeEntities(entities, m_interpolationAlpha);
     m_vehicles.removeInvalidBodies(m_rigidBodies);
     m_constraints.removeInvalidBodies(m_rigidBodies);
@@ -179,6 +196,181 @@ void PhysicsWorld::setGravity(const heritage::math::Vec3& gravity)
     m_gravity = gravity;
     m_rigidBodies.wakeAll();
     m_lastError.clear();
+}
+
+bool PhysicsWorld::setFloatingOriginAnchor(
+    BodyHandle body,
+    float rebaseThresholdMeters)
+{
+    if (!m_rigidBodies.exists(body))
+    {
+        m_lastError = "Floating-origin anchor requires a valid rigid body.";
+        return false;
+    }
+    if (!finiteFloat(rebaseThresholdMeters)
+        || rebaseThresholdMeters < kMinimumFloatingOriginThreshold
+        || rebaseThresholdMeters > kMaximumFloatingOriginThreshold)
+    {
+        m_lastError = "Floating-origin threshold must be between 32 and 1,000,000 metres.";
+        return false;
+    }
+
+    m_floatingOriginAnchor = body;
+    m_floatingOriginThreshold = rebaseThresholdMeters;
+    m_lastError.clear();
+    return true;
+}
+
+void PhysicsWorld::clearFloatingOriginAnchor()
+{
+    m_floatingOriginAnchor = InvalidBody;
+    m_lastError.clear();
+}
+
+heritage::math::DVec3 PhysicsWorld::localToGlobal(
+    const heritage::math::Vec3& localPosition) const
+{
+    return {
+        m_globalOrigin.x + static_cast<double>(localPosition.x),
+        m_globalOrigin.y + static_cast<double>(localPosition.y),
+        m_globalOrigin.z + static_cast<double>(localPosition.z)
+    };
+}
+
+bool PhysicsWorld::globalToLocal(
+    const heritage::math::DVec3& globalPosition,
+    heritage::math::Vec3& localPosition) const
+{
+    const double x = globalPosition.x - m_globalOrigin.x;
+    const double y = globalPosition.y - m_globalOrigin.y;
+    const double z = globalPosition.z - m_globalOrigin.z;
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)
+        || std::abs(x) > static_cast<double>((std::numeric_limits<float>::max)())
+        || std::abs(y) > static_cast<double>((std::numeric_limits<float>::max)())
+        || std::abs(z) > static_cast<double>((std::numeric_limits<float>::max)()))
+    {
+        return false;
+    }
+
+    localPosition = {
+        static_cast<float>(x),
+        static_cast<float>(y),
+        static_cast<float>(z)
+    };
+    return true;
+}
+
+bool PhysicsWorld::bodyGlobalPosition(
+    BodyHandle body,
+    heritage::math::DVec3& globalPosition) const
+{
+    RigidBodyPose pose;
+    if (!m_rigidBodies.pose(body, pose))
+        return false;
+    globalPosition = localToGlobal(pose.position);
+    return true;
+}
+
+bool PhysicsWorld::setBodyGlobalPosition(
+    BodyHandle body,
+    const heritage::math::DVec3& globalPosition)
+{
+    heritage::math::Vec3 local{};
+    if (!globalToLocal(globalPosition, local))
+    {
+        m_lastError = "Global body position is outside the current local FP32 frame.";
+        return false;
+    }
+    if (!m_rigidBodies.setPosition(body, local))
+        return false;
+    m_lastError.clear();
+    return true;
+}
+
+void PhysicsWorld::applyLocalOriginShift(
+    const heritage::math::Vec3& shift)
+{
+    if (shift.x == 0.0f && shift.y == 0.0f && shift.z == 0.0f)
+        return;
+
+    m_rigidBodies.rebaseLocalOrigin(shift);
+    m_constraints.rebaseLocalOrigin(shift);
+    m_collisions.rebaseLocalOrigin(shift);
+
+    // EntityRegistry is owned by the module runtime, not PhysicsWorld. Queue
+    // the same shift and apply it once before the next render synchronization.
+    m_pendingEntityRebase.x += shift.x;
+    m_pendingEntityRebase.y += shift.y;
+    m_pendingEntityRebase.z += shift.z;
+
+    m_globalOrigin.x += static_cast<double>(shift.x);
+    m_globalOrigin.y += static_cast<double>(shift.y);
+    m_globalOrigin.z += static_cast<double>(shift.z);
+    m_surfaces.setGlobalOrigin(m_globalOrigin);
+    ++m_originRebaseCount;
+}
+
+void PhysicsWorld::updateFloatingOrigin()
+{
+    if (m_floatingOriginAnchor == InvalidBody)
+        return;
+    if (!m_rigidBodies.exists(m_floatingOriginAnchor))
+    {
+        m_floatingOriginAnchor = InvalidBody;
+        return;
+    }
+
+    RigidBodyPose pose;
+    if (!m_rigidBodies.pose(m_floatingOriginAnchor, pose))
+        return;
+
+    heritage::math::Vec3 shift{};
+    if (std::abs(pose.position.x) >= m_floatingOriginThreshold)
+        shift.x = pose.position.x;
+    if (std::abs(pose.position.y) >= m_floatingOriginThreshold)
+        shift.y = pose.position.y;
+    if (std::abs(pose.position.z) >= m_floatingOriginThreshold)
+        shift.z = pose.position.z;
+
+    applyLocalOriginShift(shift);
+}
+
+bool PhysicsWorld::resetWorldOrigin()
+{
+    if (m_globalOrigin.x == 0.0
+        && m_globalOrigin.y == 0.0
+        && m_globalOrigin.z == 0.0)
+    {
+        return true;
+    }
+
+    const heritage::math::DVec3 desiredShift{
+        -m_globalOrigin.x,
+        -m_globalOrigin.y,
+        -m_globalOrigin.z
+    };
+    if (std::abs(desiredShift.x)
+            > static_cast<double>((std::numeric_limits<float>::max)())
+        || std::abs(desiredShift.y)
+            > static_cast<double>((std::numeric_limits<float>::max)())
+        || std::abs(desiredShift.z)
+            > static_cast<double>((std::numeric_limits<float>::max)()))
+    {
+        m_lastError = "Current FP64 world origin cannot be represented as one local rebase shift.";
+        return false;
+    }
+
+    applyLocalOriginShift({
+        static_cast<float>(desiredShift.x),
+        static_cast<float>(desiredShift.y),
+        static_cast<float>(desiredShift.z)
+    });
+    // The accumulated origin is authoritative; scene reset wants exact authored
+    // zero even if the final float shift rounded by a few ULPs.
+    m_globalOrigin = { 0.0, 0.0, 0.0 };
+    m_surfaces.setGlobalOrigin(m_globalOrigin);
+    m_lastError.clear();
+    return true;
 }
 
 float PhysicsWorld::tickRate() const
@@ -266,11 +458,16 @@ void PhysicsWorld::performStep(const StepCallback& callback)
     m_vehicles.simulate(
         m_rigidBodies,
         m_collisions,
+        m_surfaces,
         fixedDeltaTime,
         m_gravity);
     m_constraints.simulate(m_rigidBodies, fixedDeltaTime);
     m_rigidBodies.integrate(fixedDeltaTime, m_gravity);
     m_collisions.simulate(m_rigidBodies, fixedDeltaTime);
+
+    // Rebase only after the complete fixed-step solve so every body, contact,
+    // constraint and tire sees one coherent coordinate frame during the step.
+    updateFloatingOrigin();
 
     ++m_stepCount;
     ++m_lastSubstepCount;

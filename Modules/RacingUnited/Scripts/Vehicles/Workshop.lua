@@ -173,6 +173,7 @@ function ApplyVehicleWorkshopPreview()
     PrototypeCarDefinition.schemaVersion = 2
     PrototypeCarDefinition.classification = definition.classification
     PrototypeCarDefinition.chassis.massKg = vehicleWorkshop.draft.massKg
+    RefreshPrototypeMassPropertiesEstimate()
     PrototypeCarDefinition.visual.bodyAsset = vehicleWorkshop.draft.bodyAsset
     PrototypeCarDefinition.powertrain.maximumEngineTorque =
         vehicleWorkshop.draft.maximumTorqueNm

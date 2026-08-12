@@ -1,5 +1,9 @@
 -- Creates, resets and destroys the Step 29H prototype vehicle.
 function DestroyVehicleDemo()
+    DestroySuspensionAuthoringGizmos()
+    if nativeVehicleBody ~= 0 and Physics.BodyExists(nativeVehicleBody) then
+        Physics.ClearFloatingOriginAnchor()
+    end
     if nativeVehicle ~= 0 and Vehicle.Exists(nativeVehicle) then
         Vehicle.Destroy(nativeVehicle)
     end
@@ -139,11 +143,24 @@ function CreateNativeVehicleDemo(compiledSourceDefinition)
         return false
     end
     Physics.SetBodyGravityFactor(nativeVehicleBody, 1.0)
+    if not ApplyPrototypeRigidBodyMassProperties(nativeVehicleBody) then
+        vehicleMessage = "VEHICLE ERROR: " .. vehicleMassProperties.message
+        Physics.DestroyBody(nativeVehicleBody)
+        nativeVehicleBody = 0
+        return false
+    end
     Physics.SetBodyLinearDamping(
         nativeVehicleBody, PrototypeCarDefinition.chassis.linearDamping)
     Physics.SetBodyAngularDamping(
         nativeVehicleBody, PrototypeCarDefinition.chassis.angularDamping)
     Physics.SetBodyAllowSleep(nativeVehicleBody, true)
+    -- Large-world policy: keep the active player's local physics frame compact.
+    -- All other bodies, static collision and scene roots shift by the identical
+    -- amount, so relative race geometry is unchanged even with 150 cars.
+    if not Physics.SetFloatingOriginAnchor(nativeVehicleBody, 4096.0) then
+        vehicleMessage = "VEHICLE ERROR: " .. Physics.GetLastError()
+        return false
+    end
 
     nativeVehicleCollider = Physics.CreateBoxCollider(
         nativeVehicleBody,
@@ -293,6 +310,16 @@ function CreateNativeVehicleDemo(compiledSourceDefinition)
         end
     end
 
+    if not ApplyDefinitionAntiRollBars() then
+        return false
+    end
+
+    -- V2 loader applies its own chassisFlex block. The handwritten prototype
+    -- path must explicitly install the same reusable native mechanism.
+    if not compiledSourceDefinition and not ApplyDefinitionChassisFlex() then
+        return false
+    end
+
     if not ApplyDefinitionTireProfiles() then
         return false
     end
@@ -300,9 +327,21 @@ function CreateNativeVehicleDemo(compiledSourceDefinition)
         return false
     end
 
+    if not ApplyVehicleFitmentSetup() then
+        vehicleMessage = "VEHICLE ERROR: " .. tostring(vehicleFitment.message)
+        return false
+    end
+
     ResetNativeVehicle()
+    SuspensionAuthoringOnVehicleCreated()
+    -- Hardpoint-provider activation preserves the alignment fields, but apply
+    -- the setup once more so the native state and resolved fitment telemetry
+    -- are guaranteed to be current after authoring promotion.
+    if not ApplyVehicleFitmentSetup() then
+        return false
+    end
     vehicleMessage = compiledSourceDefinition
-        and ("Step 29Q native definition loaded: " .. nativeProvider)
-        or "Step 29Q online: observable terrain contact loss"
+        and ("FITMENT01 reference geometry + setup loaded: " .. nativeProvider)
+        or "FITMENT01 online: per-corner wheel fitment + alignment layered over authored reference geometry"
     return true
 end

@@ -1,0 +1,157 @@
+#pragma once
+
+struct lua_State;
+
+namespace heritage::modules {
+
+// CLEAN12: private Lua C-handler catalogue for the core binding domain.
+// Kept out of LuaModuleRuntime.hpp so ordinary runtime consumers do not
+// parse hundreds of unrelated binding declarations.
+
+struct LuaCoreBindingHandlers
+{
+
+    static int luaAudioIsAvailable(lua_State* state);
+    static int luaAudioGetBackend(lua_State* state);
+    static int luaAudioPlaySound(lua_State* state);
+    static int luaAudioPlayLoop(lua_State* state);
+    static int luaAudioStop(lua_State* state);
+    static int luaAudioStopAll(lua_State* state);
+    static int luaAudioIsPlaying(lua_State* state);
+    static int luaAudioSetVolume(lua_State* state);
+    static int luaAudioSetPitch(lua_State* state);
+    static int luaAudioSetMasterVolume(lua_State* state);
+    static int luaAudioGetMasterVolume(lua_State* state);
+    static int luaAudioSetBusVolume(lua_State* state);
+    static int luaAudioGetBusVolume(lua_State* state);
+    static int luaAudioGetLastError(lua_State* state);
+    static int luaEngineOpenSettings(lua_State* state);
+    static int luaEngineExit(lua_State* state);
+    static int luaEngineSetClearColor(lua_State* state);
+    static int luaEngineLog(lua_State* state);
+    static int luaEngineGetBuildIdentity(lua_State* state);
+    static int luaEngineGetBuildStep(lua_State* state);
+    static int luaEngineGetGitCommit(lua_State* state);
+    static int luaEngineGetBuildConfiguration(lua_State* state);
+    static int luaEngineGetLuaApiCount(lua_State* state);
+    static int luaEngineGetLuaApiName(lua_State* state);
+    static int luaEngineDumpLuaAPI(lua_State* state);
+    static int luaEngineRunSafetySmokeTests(lua_State* state);
+    static int luaEngineGetLastSafetyReport(lua_State* state);
+    static int luaEnvironmentGetTimeOfDay(lua_State* state);
+    static int luaEnvironmentSetTimeOfDay(lua_State* state);
+    static int luaEnvironmentIsCycleEnabled(lua_State* state);
+    static int luaEnvironmentSetCycleEnabled(lua_State* state);
+    static int luaEnvironmentGetTimeScale(lua_State* state);
+    static int luaEnvironmentSetTimeScale(lua_State* state);
+    static int luaEnvironmentGetSunDirection(lua_State* state);
+    static int luaInputIsAvailable(lua_State* state);
+    static int luaInputRegisterAction(lua_State* state);
+    static int luaInputDown(lua_State* state);
+    static int luaInputPressed(lua_State* state);
+    static int luaInputReleased(lua_State* state);
+    static int luaInputValue(lua_State* state);
+    static int luaInputGetBinding(lua_State* state);
+    static int luaInputGetBindingCount(lua_State* state);
+    static int luaInputGetBindingAt(lua_State* state);
+    static int luaInputBind(lua_State* state);
+    static int luaInputAddBinding(lua_State* state);
+    static int luaInputRemoveBinding(lua_State* state);
+    static int luaInputResetBinding(lua_State* state);
+    static int luaInputResetBindings(lua_State* state);
+    static int luaInputKeyDown(lua_State* state);
+    static int luaInputKeyPressed(lua_State* state);
+    static int luaInputKeyReleased(lua_State* state);
+    static int luaInputMouseDown(lua_State* state);
+    static int luaInputMousePressed(lua_State* state);
+    static int luaInputMouseReleased(lua_State* state);
+    static int luaInputMouseDelta(lua_State* state);
+    static int luaInputGamepadConnected(lua_State* state);
+    static int luaInputGetGamepadName(lua_State* state);
+    static int luaInputGetLastError(lua_State* state);
+    static int luaModuleId(lua_State* state);
+    static int luaModuleName(lua_State* state);
+    static int luaModuleVersion(lua_State* state);
+    static int luaModuleAssetPath(lua_State* state);
+    static int luaModuleAssetExists(lua_State* state);
+    static int luaModuleGetAssetIndexRevision(lua_State* state);
+    static int luaModuleGetAssetCount(lua_State* state);
+    static int luaModuleGetAssetPath(lua_State* state);
+    static int luaModuleGetLatestAsset(lua_State* state);
+    static int luaModuleRefreshAssetIndex(lua_State* state);
+    static int luaModuleSelectAssetFile(lua_State* state);
+    static int luaModuleDataPath(lua_State* state);
+    static int luaModuleSavePath(lua_State* state);
+    static int luaModuleWriteSaveText(lua_State* state);
+    static int luaPrefabIsAvailable(lua_State* state);
+    static int luaPrefabExists(lua_State* state);
+    static int luaPrefabInstantiate(lua_State* state);
+    static int luaPrefabGetLastError(lua_State* state);
+    static int luaSaveGetString(lua_State* state);
+    static int luaSaveSetString(lua_State* state);
+    static int luaSaveGetInt(lua_State* state);
+    static int luaSaveSetInt(lua_State* state);
+    static int luaSaveGetNumber(lua_State* state);
+    static int luaSaveSetNumber(lua_State* state);
+    static int luaSaveGetBool(lua_State* state);
+    static int luaSaveSetBool(lua_State* state);
+    static int luaSaveHas(lua_State* state);
+    static int luaSaveRemove(lua_State* state);
+    static int luaSaveClear(lua_State* state);
+    static int luaSaveFlush(lua_State* state);
+    static int luaSaveGetPath(lua_State* state);
+    static int luaSaveGetLastError(lua_State* state);
+    static int luaSaveIsDirty(lua_State* state);
+    static int luaSceneLoad(lua_State* state);
+    static int luaSceneReload(lua_State* state);
+    static int luaSceneGetCurrent(lua_State* state);
+    static int luaSceneExists(lua_State* state);
+    static int luaSceneGetLastError(lua_State* state);
+    static int luaScriptInclude(lua_State* state);
+    static int luaUiBeginPanel(lua_State* state);
+    static int luaUiEndPanel(lua_State* state);
+    static int luaUiBeginTabBar(lua_State* state);
+    static int luaUiEndTabBar(lua_State* state);
+    static int luaUiBeginTabItem(lua_State* state);
+    static int luaUiEndTabItem(lua_State* state);
+    static int luaUiModuleLabel(lua_State* state);
+    static int luaUiTitle(lua_State* state);
+    static int luaUiSubtitle(lua_State* state);
+    static int luaUiText(lua_State* state);
+    static int luaUiTextWrapped(lua_State* state);
+    static int luaUiTextDisabled(lua_State* state);
+    static int luaUiGetAvailableWidth(lua_State* state);
+    static int luaUiButton(lua_State* state);
+    static int luaUiSliderFloat(lua_State* state);
+    static int luaUiInputFloat(lua_State* state);
+    static int luaUiCheckbox(lua_State* state);
+    static int luaUiInputInt(lua_State* state);
+    static int luaUiInputText(lua_State* state);
+    static int luaUiImage(lua_State* state);
+    static int luaUiImageButton(lua_State* state);
+    static int luaUiGetImageSize(lua_State* state);
+    static int luaUiUnloadImage(lua_State* state);
+    static int luaUiGetLastError(lua_State* state);
+    static int luaUiSetCursorPos(lua_State* state);
+    static int luaUiGetCursorPos(lua_State* state);
+    static int luaUiDummy(lua_State* state);
+    static int luaUiTextColored(lua_State* state);
+    static int luaUiProgressBar(lua_State* state);
+    static int luaUiPlotLines(lua_State* state);
+    static int luaVegetationIsAvailable(lua_State* state);
+    static int luaVegetationReset(lua_State* state);
+    static int luaVegetationRegisterSpecies(lua_State* state);
+    static int luaVegetationSetSpeciesLod(lua_State* state);
+    static int luaVegetationSetSpeciesWindResponse(lua_State* state);
+    static int luaVegetationAddInstance(lua_State* state);
+    static int luaVegetationClearInstances(lua_State* state);
+    static int luaVegetationGetRepresentation(lua_State* state);
+    static int luaVegetationGetStats(lua_State* state);
+    static int luaVegetationSetWind(lua_State* state);
+    static int luaVegetationGetLastError(lua_State* state);
+    static int luaUiSeparator(lua_State* state);
+    static int luaUiSpacing(lua_State* state);
+    static int luaUiSameLine(lua_State* state);
+};
+
+} // namespace heritage::modules

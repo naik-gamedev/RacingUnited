@@ -8,6 +8,8 @@
 
 #include "../Core/Math/Math.hpp"
 #include "RigidBodySystem.hpp"
+#include "StaticTriangleBvh.hpp"
+#include "Surfaces/SurfaceMaterialProperties.hpp"
 
 namespace heritage::physics {
 
@@ -33,7 +35,11 @@ enum class SurfaceMaterial
     Snow = 5,
     Ice = 6,
     Kerb = 7,
-    PaintedLine = 8
+    PaintedLine = 8,
+    Mud = 9,
+    Sand = 10,
+    SoftSoil = 11,
+    DeepSnow = 12
 };
 
 struct StaticSceneTriangle
@@ -44,6 +50,7 @@ struct StaticSceneTriangle
     heritage::math::Vec3 normal{ 0.0f, 1.0f, 0.0f };
     SurfaceMaterial surfaceMaterial = SurfaceMaterial::Default;
     float surfaceWetness = 0.0f;
+    SurfaceMaterialProperties surfaceProperties{};
 };
 
 struct ColliderDescription
@@ -104,6 +111,7 @@ struct RaycastHit
     float fraction = 0.0f;
     SurfaceMaterial surfaceMaterial = SurfaceMaterial::Default;
     float surfaceWetness = 0.0f;
+    SurfaceMaterialProperties surfaceProperties{};
     bool trigger = false;
 };
 
@@ -114,6 +122,7 @@ struct RaycastQueryDiagnostics
 {
     std::size_t colliderCandidateCount = 0;
     std::size_t staticTriangleCandidateCount = 0;
+    std::size_t staticBvhNodeTestCount = 0;
     std::size_t exactTestCount = 0;
     bool staticSceneLoaded = false;
     bool originInsideStaticSceneHorizontalBounds = false;
@@ -135,6 +144,7 @@ struct SphereCastHit
     float fraction = 0.0f;
     SurfaceMaterial surfaceMaterial = SurfaceMaterial::Default;
     float surfaceWetness = 0.0f;
+    SurfaceMaterialProperties surfaceProperties{};
     bool trigger = false;
 };
 
@@ -209,9 +219,10 @@ public:
         const CollisionQueryFilter& filter,
         const RigidBodySystem& bodies) const;
 
-    // Sweeps a sphere against sphere and oriented-box colliders. Sphere targets
-    // are exact. Box targets use the exact expanded-box slab solution for faces
-    // and a conservative result near rounded Minkowski corners.
+    // Sweeps a sphere against sphere/oriented-box colliders and the creator
+    // static-triangle scene. Primitive targets use the existing exact/conservative
+    // narrowphase; static triangles use conservative advancement against exact
+    // point-to-triangle distance so camera/AI probes also see authored terrain.
     bool sphereCast(
         const heritage::math::Vec3& origin,
         float radius,
@@ -242,11 +253,37 @@ public:
         return m_lastRaycastDiagnostics;
     }
 
-    // Read-only creator/world triangle scene used by suspension/tire raycasts.
-    // This is deliberately not yet a full rigid-body triangle-mesh collider.
+    // Immutable creator/world static-triangle scene. The same BVH-backed data
+    // participates in ray/sphere queries and dynamic primitive-vs-static-triangle
+    // rigid-body contacts. It is not a general mesh ColliderHandle: dynamic
+    // triangle meshes, mesh-vs-mesh contact and deformable meshes remain outside
+    // this contract.
     void setStaticSceneTriangles(std::vector<StaticSceneTriangle> triangles);
     void clearStaticSceneTriangles();
+
+    // Floating-origin support for creator-authored immutable triangle worlds.
+    // Primitive colliders follow their rigid bodies; only detached static-scene
+    // triangles need explicit translation and BVH rebuild.
+    void rebaseLocalOrigin(const heritage::math::Vec3& shift);
     std::size_t staticSceneTriangleCount() const { return m_staticSceneTriangles.size(); }
+    bool staticSceneTriangle(std::uint32_t triangleIndex, StaticSceneTriangle& triangle) const;
+    void nearbyStaticSceneTriangles(
+        const heritage::math::Vec3& center,
+        float halfExtent,
+        std::size_t maximumTriangles,
+        std::vector<StaticSceneTriangle>& triangles) const;
+    std::size_t staticSceneBvhNodeCount() const
+    {
+        return m_staticTriangleBvh.nodeCount();
+    }
+    std::size_t staticSceneBvhLeafCount() const
+    {
+        return m_staticTriangleBvh.leafCount();
+    }
+    std::size_t staticSceneBvhMaximumDepth() const
+    {
+        return m_staticTriangleBvh.maximumDepth();
+    }
 
     void simulate(RigidBodySystem& bodies, float fixedDeltaTime);
 
@@ -264,6 +301,22 @@ public:
     std::size_t sleepingIslandCount() const { return m_sleepingIslandCount; }
     std::size_t warmStartedContactCount() const { return m_warmStartedContactCount; }
     std::size_t persistentContactCount() const { return m_contactCache.size(); }
+    std::size_t staticBroadphaseNodeTestCount() const
+    {
+        return m_staticBroadphaseNodeTestCount;
+    }
+    std::size_t staticTriangleCandidateCount() const
+    {
+        return m_staticTriangleCandidateCount;
+    }
+    std::size_t staticTriangleNarrowphaseTestCount() const
+    {
+        return m_staticTriangleNarrowphaseTestCount;
+    }
+    std::size_t staticTriangleContactCount() const
+    {
+        return m_staticTriangleContactCount;
+    }
 
     // Statistics from the most recently completed fixed world step.
     std::size_t continuousCollisionBodyCount() const { return m_continuousCollisionBodyCount; }
@@ -413,6 +466,13 @@ private:
         const Record& collider,
         const RigidBodySystem::Record& body,
         SphereCastHit& hit) const;
+    bool sphereCastStaticSceneTriangle(
+        const heritage::math::Vec3& origin,
+        float castRadius,
+        const heritage::math::Vec3& normalizedDirection,
+        float maximumDistance,
+        std::uint32_t triangleIndex,
+        SphereCastHit& hit) const;
     bool sphereOverlapsCollider(
         const heritage::math::Vec3& center,
         float radius,
@@ -424,6 +484,42 @@ private:
         float maximumDistance,
         const StaticSceneTriangle& triangle,
         RaycastHit& hit) const;
+    void queryStaticSceneTriangles(
+        const Aabb& bounds,
+        std::vector<std::uint32_t>& triangleIndices,
+        std::size_t& nodeTestCount) const;
+    bool raycastStaticSceneOnly(
+        const heritage::math::Vec3& origin,
+        const heritage::math::Vec3& normalizedDirection,
+        float maximumDistance,
+        RaycastHit& hit,
+        std::uint32_t& triangleIndex,
+        std::size_t& nodeTestCount) const;
+    bool sphereStaticTriangleContact(
+        ColliderHandle sphereHandle,
+        const Record& sphere,
+        const RigidBodySystem::Record& sphereBody,
+        std::uint32_t triangleIndex,
+        CollisionContact& contact) const;
+    bool boxStaticTriangleContact(
+        ColliderHandle boxHandle,
+        const Record& box,
+        const RigidBodySystem::Record& boxBody,
+        std::uint32_t triangleIndex,
+        CollisionContact& contact) const;
+    bool generateStaticTriangleContact(
+        ColliderHandle colliderHandle,
+        const Record& collider,
+        const RigidBodySystem::Record& body,
+        std::uint32_t triangleIndex,
+        CollisionContact& contact) const;
+    static ColliderHandle staticTriangleColliderHandle(
+        std::uint32_t triangleIndex);
+    static bool staticTriangleIndexFromColliderHandle(
+        ColliderHandle handle,
+        std::uint32_t& triangleIndex);
+
+    void collectBroadphaseContacts(RigidBodySystem& bodies);
 
     bool generateContact(
         ColliderHandle handleA,
@@ -484,6 +580,21 @@ private:
         RigidBodySystem::Record& bodyA,
         RigidBodySystem::Record& bodyB,
         CollisionContact& contact);
+    void resolveStaticPosition(
+        RigidBodySystem::Record& body,
+        const CollisionContact& contact);
+    void warmStartStaticContact(
+        RigidBodySystem::Record& body,
+        CollisionContact& contact);
+    void resolveStaticVelocity(
+        const Record& collider,
+        const StaticSceneTriangle& triangle,
+        RigidBodySystem::Record& body,
+        CollisionContact& contact);
+    float staticEffectiveMassDenominator(
+        const RigidBodySystem::Record& body,
+        const heritage::math::Vec3& point,
+        const heritage::math::Vec3& direction) const;
     void persistContactCache();
     void updateSimulationIslandsAndSleeping(
         RigidBodySystem& bodies,
@@ -500,6 +611,7 @@ private:
 
     std::vector<Slot> m_slots;
     std::vector<StaticSceneTriangle> m_staticSceneTriangles;
+    StaticTriangleBvh m_staticTriangleBvh;
     Aabb m_staticSceneBounds;
     bool m_staticSceneBoundsValid = false;
     std::vector<std::uint32_t> m_freeIndices;
@@ -512,6 +624,10 @@ private:
     std::size_t m_activeIslandCount = 0;
     std::size_t m_sleepingIslandCount = 0;
     std::size_t m_warmStartedContactCount = 0;
+    std::size_t m_staticBroadphaseNodeTestCount = 0;
+    std::size_t m_staticTriangleCandidateCount = 0;
+    std::size_t m_staticTriangleNarrowphaseTestCount = 0;
+    std::size_t m_staticTriangleContactCount = 0;
     std::size_t m_continuousCollisionBodyCount = 0;
     std::size_t m_continuousCollisionSweepCount = 0;
     std::size_t m_continuousCollisionHitCount = 0;

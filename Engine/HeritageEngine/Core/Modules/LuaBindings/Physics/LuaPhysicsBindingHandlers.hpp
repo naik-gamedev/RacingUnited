@@ -1,0 +1,155 @@
+#pragma once
+
+struct lua_State;
+
+namespace heritage::modules {
+
+// CLEAN12: private Lua C-handler catalogue for the physics binding domain.
+// Kept out of LuaModuleRuntime.hpp so ordinary runtime consumers do not
+// parse hundreds of unrelated binding declarations.
+
+struct LuaPhysicsBindingHandlers
+{
+
+    static int luaPhysicsCreateBody(lua_State* state);
+    static int luaPhysicsDestroyBody(lua_State* state);
+    static int luaPhysicsBodyExists(lua_State* state);
+    static int luaPhysicsGetBodyCount(lua_State* state);
+    static int luaPhysicsGetSleepingBodyCount(lua_State* state);
+    static int luaPhysicsGetActiveDynamicBodyCount(lua_State* state);
+    static int luaPhysicsFindBodyByEntity(lua_State* state);
+    static int luaPhysicsGetBodyEntity(lua_State* state);
+    static int luaPhysicsGetBodyMotionType(lua_State* state);
+    static int luaPhysicsSetBodyMotionType(lua_State* state);
+    static int luaPhysicsGetBodyMass(lua_State* state);
+    static int luaPhysicsSetBodyMass(lua_State* state);
+    static int luaPhysicsGetBodyInertiaLocal(lua_State* state);
+    static int luaPhysicsSetBodyInertiaLocal(lua_State* state);
+    static int luaPhysicsClearBodyInertiaLocalOverride(lua_State* state);
+    static int luaPhysicsIsBodyInertiaLocalOverridden(lua_State* state);
+    static int luaPhysicsGetBodyCenterOfMassLocal(lua_State* state);
+    static int luaPhysicsSetBodyCenterOfMassLocal(lua_State* state);
+    static int luaPhysicsGetBodyCenterOfMassWorld(lua_State* state);
+    static int luaPhysicsGetBodyGravityFactor(lua_State* state);
+    static int luaPhysicsSetBodyGravityFactor(lua_State* state);
+    static int luaPhysicsGetBodyLinearDamping(lua_State* state);
+    static int luaPhysicsSetBodyLinearDamping(lua_State* state);
+    static int luaPhysicsGetBodyAngularDamping(lua_State* state);
+    static int luaPhysicsSetBodyAngularDamping(lua_State* state);
+    static int luaPhysicsGetBodyContinuousCollision(lua_State* state);
+    static int luaPhysicsSetBodyContinuousCollision(lua_State* state);
+    static int luaPhysicsGetBodyPosition(lua_State* state);
+    static int luaPhysicsSetBodyPosition(lua_State* state);
+    static int luaPhysicsGetBodyRotation(lua_State* state);
+    static int luaPhysicsSetBodyRotation(lua_State* state);
+    static int luaPhysicsGetBodyLinearVelocity(lua_State* state);
+    static int luaPhysicsSetBodyLinearVelocity(lua_State* state);
+    static int luaPhysicsGetBodyAngularVelocity(lua_State* state);
+    static int luaPhysicsSetBodyAngularVelocity(lua_State* state);
+    static int luaPhysicsApplyBodyForce(lua_State* state);
+    static int luaPhysicsApplyBodyImpulse(lua_State* state);
+    static int luaPhysicsApplyBodyImpulseAtPoint(lua_State* state);
+    static int luaPhysicsApplyBodyAngularImpulse(lua_State* state);
+    static int luaPhysicsClearBodyForces(lua_State* state);
+    static int luaPhysicsIsBodySleeping(lua_State* state);
+    static int luaPhysicsSetBodySleeping(lua_State* state);
+    static int luaPhysicsGetBodyAllowSleep(lua_State* state);
+    static int luaPhysicsSetBodyAllowSleep(lua_State* state);
+    static int luaPhysicsWakeBody(lua_State* state);
+    static int luaPhysicsCreateSphereCollider(lua_State* state);
+    static int luaPhysicsCreateBoxCollider(lua_State* state);
+    static int luaPhysicsLoadStaticBoxScene(lua_State* state);
+    static int luaPhysicsLoadStaticTriangleScene(lua_State* state);
+    static int luaPhysicsUnloadStaticTriangleScene(lua_State* state);
+    static int luaPhysicsGetStaticTriangleSceneCount(lua_State* state);
+    static int luaPhysicsUnloadStaticBoxScene(lua_State* state);
+    static int luaPhysicsGetStaticBoxSceneCount(lua_State* state);
+    static int luaPhysicsDestroyCollider(lua_State* state);
+    static int luaPhysicsColliderExists(lua_State* state);
+    static int luaPhysicsGetColliderCount(lua_State* state);
+    static int luaPhysicsGetBodyColliderCount(lua_State* state);
+    static int luaPhysicsGetColliderBody(lua_State* state);
+    static int luaPhysicsGetColliderShape(lua_State* state);
+    static int luaPhysicsSetColliderMaterial(lua_State* state);
+    static int luaPhysicsSetColliderSurface(lua_State* state);
+    static int luaPhysicsGetColliderSurface(lua_State* state);
+    static int luaPhysicsSetColliderTrigger(lua_State* state);
+    static int luaPhysicsSetColliderFilter(lua_State* state);
+    static int luaPhysicsCreateSpringConstraint(lua_State* state);
+    static int luaPhysicsDestroyConstraint(lua_State* state);
+    static int luaPhysicsConstraintExists(lua_State* state);
+    static int luaPhysicsGetConstraintCount(lua_State* state);
+    static int luaPhysicsGetEnabledConstraintCount(lua_State* state);
+    static int luaPhysicsGetActiveConstraintCount(lua_State* state);
+    static int luaPhysicsSetConstraintEnabled(lua_State* state);
+    static int luaPhysicsGetConstraintEnabled(lua_State* state);
+    static int luaPhysicsSetSpringConstraintProperties(lua_State* state);
+    static int luaPhysicsGetSpringConstraintState(lua_State* state);
+    static int luaPhysicsGetConstraintBodyA(lua_State* state);
+    static int luaPhysicsGetConstraintBodyB(lua_State* state);
+    static int luaPhysicsGetLastError(lua_State* state);
+    static int luaPhysicsRaycast(lua_State* state);
+    static int luaPhysicsRaycastAny(lua_State* state);
+    static int luaPhysicsSphereCast(lua_State* state);
+    static int luaPhysicsSphereCastAny(lua_State* state);
+    static int luaPhysicsOverlapSphereCount(lua_State* state);
+    static int luaPhysicsGetLastQueryCandidateCount(lua_State* state);
+    static int luaPhysicsGetLastQueryExactTestCount(lua_State* state);
+    static int luaPhysicsGetContactCount(lua_State* state);
+    static int luaPhysicsGetBodyContactCount(lua_State* state);
+    static int luaPhysicsIsBodyTouching(lua_State* state);
+    static int luaPhysicsGetBroadphaseCandidateCount(lua_State* state);
+    static int luaPhysicsGetNarrowphaseTestCount(lua_State* state);
+    static int luaPhysicsGetResolvedContactCount(lua_State* state);
+    static int luaPhysicsGetSimulationIslandCount(lua_State* state);
+    static int luaPhysicsGetActiveIslandCount(lua_State* state);
+    static int luaPhysicsGetSleepingIslandCount(lua_State* state);
+    static int luaPhysicsGetWarmStartedContactCount(lua_State* state);
+    static int luaPhysicsGetPersistentContactCount(lua_State* state);
+    static int luaPhysicsGetContinuousCollisionBodyCount(lua_State* state);
+    static int luaPhysicsGetContinuousCollisionSweepCount(lua_State* state);
+    static int luaPhysicsGetContinuousCollisionHitCount(lua_State* state);
+    static int luaPhysicsGetContinuousCollisionClampedBodyCount(lua_State* state);
+    static int luaPhysicsGetContinuousCollisionUnsupportedBodyCount(lua_State* state);
+    static int luaPhysicsIsAvailable(lua_State* state);
+    static int luaPhysicsGetFixedDelta(lua_State* state);
+    static int luaPhysicsGetTickRate(lua_State* state);
+    static int luaPhysicsSetTickRate(lua_State* state);
+    static int luaPhysicsGetGravity(lua_State* state);
+    static int luaPhysicsSetGravity(lua_State* state);
+    static int luaPhysicsGetSurfaceEnvironment(lua_State* state);
+    static int luaPhysicsGetSurfacePresentation(lua_State* state);
+    static int luaPhysicsGetTireDevelopmentControls(lua_State* state);
+    static int luaPhysicsSetTireDevelopmentControls(lua_State* state);
+    static int luaPhysicsResetTrackRubber(lua_State* state);
+    static int luaPhysicsSetSurfaceEnvironment(lua_State* state);
+    static int luaPhysicsIsPaused(lua_State* state);
+    static int luaPhysicsSetPaused(lua_State* state);
+    static int luaPhysicsRequestSingleStep(lua_State* state);
+    static int luaPhysicsGetTimeScale(lua_State* state);
+    static int luaPhysicsSetTimeScale(lua_State* state);
+    static int luaPhysicsGetStepCount(lua_State* state);
+    static int luaPhysicsGetSimulationTime(lua_State* state);
+    static int luaPhysicsGetInterpolationAlpha(lua_State* state);
+    static int luaPhysicsGetLastSubstepCount(lua_State* state);
+    static int luaPhysicsGetMaximumWorldStepsPerFrame(lua_State* state);
+    static int luaPhysicsGetPendingWorldStepCount(lua_State* state);
+    static int luaPhysicsGetBacklogTime(lua_State* state);
+    static int luaPhysicsGetPeakBacklogTime(lua_State* state);
+    static int luaPhysicsWasOverloadedLastFrame(lua_State* state);
+    static int luaPhysicsGetOverloadFrameCount(lua_State* state);
+    static int luaPhysicsGetDroppedTime(lua_State* state);
+    static int luaPhysicsGetClampedTime(lua_State* state);
+    static int luaPhysicsResetClock(lua_State* state);
+    static int luaPhysicsSetFloatingOriginAnchor(lua_State* state);
+    static int luaPhysicsClearFloatingOriginAnchor(lua_State* state);
+    static int luaPhysicsGetWorldOrigin(lua_State* state);
+    static int luaPhysicsGetOriginRebaseCount(lua_State* state);
+    static int luaPhysicsResetWorldOrigin(lua_State* state);
+    static int luaPhysicsLocalToGlobal(lua_State* state);
+    static int luaPhysicsGlobalToLocal(lua_State* state);
+    static int luaPhysicsGetBodyGlobalPosition(lua_State* state);
+    static int luaPhysicsSetBodyGlobalPosition(lua_State* state);
+};
+
+} // namespace heritage::modules

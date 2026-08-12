@@ -8,6 +8,7 @@
 #include "CollisionSystem.hpp"
 #include "ConstraintSystem.hpp"
 #include "RigidBodySystem.hpp"
+#include "Surfaces/SurfaceWorld.hpp"
 #include "../Vehicles/VehicleSystem.hpp"
 
 namespace heritage::physics {
@@ -49,6 +50,8 @@ public:
     const ConstraintSystem& constraints() const { return m_constraints; }
     heritage::vehicles::VehicleSystem& vehicles() { return m_vehicles; }
     const heritage::vehicles::VehicleSystem& vehicles() const { return m_vehicles; }
+    SurfaceWorld& surfaces() { return m_surfaces; }
+    const SurfaceWorld& surfaces() const { return m_surfaces; }
 
     // Destroys attached colliders before invalidating the body handle.
     bool destroyBody(BodyHandle handle);
@@ -60,6 +63,32 @@ public:
 
     heritage::math::Vec3 gravity() const { return m_gravity; }
     void setGravity(const heritage::math::Vec3& gravity);
+
+    // P64-02 large-world coordinate policy:
+    // - m_globalOrigin is FP64 absolute truth.
+    // - rigid bodies/collision/entities remain in a compact FP32 local frame.
+    // - an anchor body may periodically move that local frame so important
+    //   simulation stays numerically close to zero without changing the world.
+    bool setFloatingOriginAnchor(
+        BodyHandle body,
+        float rebaseThresholdMeters = 4096.0f);
+    void clearFloatingOriginAnchor();
+    BodyHandle floatingOriginAnchor() const { return m_floatingOriginAnchor; }
+    float floatingOriginThreshold() const { return m_floatingOriginThreshold; }
+    heritage::math::DVec3 globalOrigin() const { return m_globalOrigin; }
+    std::uint64_t originRebaseCount() const { return m_originRebaseCount; }
+    heritage::math::DVec3 localToGlobal(
+        const heritage::math::Vec3& localPosition) const;
+    bool globalToLocal(
+        const heritage::math::DVec3& globalPosition,
+        heritage::math::Vec3& localPosition) const;
+    bool bodyGlobalPosition(
+        BodyHandle body,
+        heritage::math::DVec3& globalPosition) const;
+    bool setBodyGlobalPosition(
+        BodyHandle body,
+        const heritage::math::DVec3& globalPosition);
+    bool resetWorldOrigin();
 
     float fixedDeltaTime() const { return static_cast<float>(m_fixedDeltaTime); }
     float tickRate() const;
@@ -109,6 +138,8 @@ public:
 
 private:
     void performStep(const StepCallback& callback);
+    void updateFloatingOrigin();
+    void applyLocalOriginShift(const heritage::math::Vec3& shift);
     void updateInterpolationAlpha();
     void discardWholeStepBacklog();
     void trimBacklogToLimit();
@@ -116,8 +147,14 @@ private:
     RigidBodySystem m_rigidBodies;
     CollisionSystem m_collisions;
     ConstraintSystem m_constraints;
+    SurfaceWorld m_surfaces;
     heritage::vehicles::VehicleSystem m_vehicles;
     heritage::math::Vec3 m_gravity{ 0.0f, -9.80665f, 0.0f };
+    heritage::math::DVec3 m_globalOrigin{ 0.0, 0.0, 0.0 };
+    heritage::math::Vec3 m_pendingEntityRebase{ 0.0f, 0.0f, 0.0f };
+    BodyHandle m_floatingOriginAnchor = InvalidBody;
+    float m_floatingOriginThreshold = 4096.0f;
+    std::uint64_t m_originRebaseCount = 0;
     double m_fixedDeltaTime = 1.0 / 120.0;
     double m_accumulator = 0.0;
     double m_simulationTime = 0.0;

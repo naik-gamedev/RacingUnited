@@ -194,6 +194,7 @@ public:
     std::vector<InputDeviceInfo> gamepads() const;
     bool directInputAvailable() const { return m_directInput.available(); }
     std::vector<WindowsDirectInputBackend::DeviceInfo> directInputDevices() const;
+    void refreshInputDevices();
 
     std::vector<InputActionInfo> actions() const;
     std::vector<std::string> actionGroups() const { return m_actionGroups; }

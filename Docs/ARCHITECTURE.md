@@ -22,6 +22,8 @@ A module owns:
 
 Racing United must not be baked into general engine services. Another module may replace vehicle handling or omit vehicles entirely.
 
+Source-tree hygiene follows the same boundary: reusable `Engine/HeritageEngine` code must not contain Racing United-specific scene classes, entry IDs, or gameplay fallbacks. Module-specific bootstrapping belongs in `Modules/<ModuleId>` manifests/scripts/content. A generic engine service may know that modules and scenes exist; it must not know that a particular game module exists.
+
 ## Simulation boundary
 
 Native C++ owns computationally heavy, deterministic, networking-critical simulation. Lua configures and orchestrates it. Lua may prototype behavior, but production tire, suspension, drivetrain, differential, aero, and force-feedback solvers belong in native components.
@@ -48,3 +50,17 @@ Public contracts are represented by:
 - Automated tests and diagnostic reports.
 
 Changing a contract requires updating all relevant records in the same milestone.
+
+## Source organization
+
+File length is a diagnostic, not a design rule. Split code when one translation unit or function owns multiple independently changing responsibilities, not simply because it crosses an arbitrary line count.
+
+Current organization rules:
+
+- `Core/Modules/LuaModuleRuntime.cpp` owns Lua state/lifecycle, sandboxing, registration order, hot reload, API introspection and smoke-test orchestration. API handler bodies live below `Core/Modules/LuaBindings` and large namespaces such as Physics, Vehicle and Entity are subdivided again by responsibility. See `LUA_BINDING_ARCHITECTURE.md`.
+- The directory path supplies broad subsystem context; filenames name the concrete mechanism/responsibility. Avoid both vague dumping-ground names and filenames that redundantly encode the entire directory path.
+- Large numerical solvers should retain a small orchestration layer and extract well-defined stages only when regression coverage can prove behavior is preserved. In particular, vehicle-substep decomposition is treated as an isolated refactor rather than being mixed into unrelated feature work.
+- `Vehicles/VehicleSystem.cpp` is the vehicle lifetime/handle/plumbing unit. Vehicle configuration, Dynamics Lab telemetry, vehicle-level stepping and the authoritative high-rate wheel solver live in `VehicleConfiguration.cpp`, `VehicleTelemetry.cpp`, `VehicleSimulation.cpp` and `VehicleWheelSimulation.cpp` respectively. This boundary is responsibility-based; tire milestone numbers do not become source-file architecture.
+- Independent regression domains live in independent test translation units so safety coverage can grow without recreating a monolithic test file.
+- Planned native vehicle mechanisms may be scaffolded ahead of implementation as project-visible, non-compiled files. This makes ownership visible before new code has an opportunity to accumulate in generic files.
+

@@ -1,4 +1,14 @@
 {
+  "Engine.DumpLuaAPI": {
+    "arguments": "()",
+    "returns": "integer",
+    "description": "Prints the live qualified Lua API names to the console and returns the count."
+  },
+  "Engine.GetBuildConfiguration": {
+    "arguments": "()",
+    "returns": "string",
+    "description": "Returns Debug or Release according to the compiled executable."
+  },
   "Engine.GetBuildIdentity": {
     "arguments": "()",
     "returns": "string",
@@ -14,10 +24,10 @@
     "returns": "string",
     "description": "Returns the Git commit recorded before compilation, or unavailable when Git metadata was absent."
   },
-  "Engine.GetBuildConfiguration": {
+  "Engine.GetLastSafetyReport": {
     "arguments": "()",
-    "returns": "string",
-    "description": "Returns Debug or Release according to the compiled executable."
+    "returns": "summary: string, reportPath: string",
+    "description": "Returns the last in-process safety smoke-test summary and report location."
   },
   "Engine.GetLuaApiCount": {
     "arguments": "()",
@@ -29,180 +39,210 @@
     "returns": "string|nil",
     "description": "Returns one exact qualified Lua API name from the live registry."
   },
-  "Engine.DumpLuaAPI": {
-    "arguments": "()",
-    "returns": "integer",
-    "description": "Prints the live qualified Lua API names to the console and returns the count."
-  },
   "Engine.RunSafetySmokeTests": {
     "arguments": "()",
     "returns": "passed: boolean, summary: string, reportPath: string",
     "description": "Runs non-destructive handle-generation and body-dependent cleanup smoke tests."
-  },
-  "Engine.GetLastSafetyReport": {
-    "arguments": "()",
-    "returns": "summary: string, reportPath: string",
-    "description": "Returns the last in-process safety smoke-test summary and report location."
-  },
-  "Vehicle.SetInputs": {
-    "arguments": "(vehicle: VehicleHandle, throttle: number, brake: number, steering: number, handbrake?: number)",
-    "returns": "boolean",
-    "description": "Sets normalized driver inputs for one native vehicle."
-  },
-  "Vehicle.Create": {
-    "arguments": "(chassisBody: BodyHandle, highRateHertz?: number)",
-    "returns": "VehicleHandle",
-    "description": "Creates a generation-checked vehicle attached to a dynamic chassis body. Inspect the handler for all optional tuning arguments."
-  },
-  "Physics.DestroyBody": {
-    "arguments": "(body: BodyHandle)",
-    "returns": "boolean",
-    "description": "Destroys dependent vehicles, constraints, and colliders before invalidating the body handle."
   },
   "Entity.Destroy": {
     "arguments": "(entity: EntityHandle)",
     "returns": "boolean",
     "description": "Destroys an entity subtree and invalidates the generation-checked handle."
   },
-  "Physics.SetColliderSurface": {
-    "arguments": "(collider: ColliderHandle, material: string, wetness?: number)",
+  "Entity.GetMesh": {
+    "arguments": "(entity: EntityHandle)",
+    "returns": "assetPath: string|nil, red: number, green: number, blue: number, visible: boolean, normalize: boolean, doubleSided: boolean, blenderCoordinates: boolean",
+    "description": "Reads the current mesh component, including whether Blender-coordinate import mode is active."
+  },
+  "Entity.SetMesh": {
+    "arguments": "(entity: EntityHandle, assetPath: string, red?: number, green?: number, blue?: number, normalize?: boolean, doubleSided?: boolean, blenderCoordinates?: boolean)",
     "returns": "boolean",
-    "description": "Assigns a generic physical surface identity and 0..1 wetness to one collider. Valid materials: default, asphalt, gravel, dirt, grass, snow, ice, kerb/curb, painted_line."
+    "description": "Assigns an OBJ or GLB mesh to an entity. With blenderCoordinates=true, OBJ positions/normals authored as Blender X left/right, Y forward/backward, Z height are deterministically converted at the import boundary while preserving authored 1:1 scale. GLB imports preserve authored node transforms, skinning and looped animation playback."
   },
-  "Physics.GetColliderSurface": {
-    "arguments": "(collider: ColliderHandle)",
-    "returns": "materialName: string|nil, materialId: integer|nil, wetness: number|nil",
-    "description": "Reads the physical surface identity carried by one collider."
-  },
-  "Physics.Raycast": {
-    "arguments": "(originX: number, originY: number, originZ: number, directionX: number, directionY: number, directionZ: number, maxDistance: number, layerMask?: integer, includeTriggers?: boolean, ignoredBody?: BodyHandle)",
-    "returns": "hit: boolean, collider: ColliderHandle, body: BodyHandle, distance: number, pointX: number, pointY: number, pointZ: number, normalX: number, normalY: number, normalZ: number, trigger: boolean, surfaceName: string, surfaceId: integer, surfaceWetness: number",
-    "description": "Closest-hit raycast. Step 29F appends the contacted collider's surface identity and wetness without changing the first eleven return values."
-  },
-  "Vehicle.GetWheelState": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
-    "returns": "51 values; inspect Vehicles/Telemetry.lua for the canonical unpack order",
-    "description": "Returns wheel suspension force components, damper dissipation, unsprung velocity, radial tire deflection/power, advanced tire force telemetry, brake/driver-aid state, contact collider, and detected surface data."
-  },
-  "Vehicle.GetWheelContactDiagnostic": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
-    "returns": "statusName, statusId, lossTransitionCount, rayCandidateCount, exactTestCount, staticTriangleCandidateCount, staticSceneLoaded, originInsideStaticSceneBounds, rayBoundsOverlapStaticScene, selectedHitWasStaticTriangle, rawSupportDistanceM, suspensionBottomed, bottomOutPenetrationM",
-    "description": "Returns the native reason and query evidence for the wheel's latest support result. Diagnostics distinguish valid support, bottom-out, detected road with zero load, a surface behind the ray origin, scene-boundary exits, missing geometry, broadphase misses, narrowphase misses and support beyond suspension travel."
-  },
-  "Vehicle.GetWheelUprightPose": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
-    "returns": "camberDegrees, toeDegrees, localRotationXDegrees, localRotationYDegrees, localRotationZDegrees, worldSteeringAxisX, worldSteeringAxisY, worldSteeringAxisZ, worldForwardX, worldForwardY, worldForwardZ, worldRightX, worldRightY, worldRightZ, worldUpX, worldUpY, worldUpZ",
-    "description": "Returns the authoritative native upright orientation evaluated at the current suspension travel and Ackermann steering angle."
-  },
-  "Vehicle.SetWheelSuspensionModel": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, springPreloadN: number, springRateNPerM: number, springProgressionNPerM2: number, bumpDampingNsPerM: number, bumpHighSpeedDampingNsPerM: number, bumpDampingKneeVelocityMps: number, reboundDampingNsPerM: number, reboundHighSpeedDampingNsPerM: number, reboundDampingKneeVelocityMps: number, bumpStopEngagementM: number, bumpStopRateNPerM: number, bumpStopProgressionNPerM2: number, droopStopEngagementM: number, droopStopRateNPerM: number, motionRatio: number, maximumForceN: number)",
+  "Entity.SetMeshNodeAnchoredWorldPose": {
+    "arguments": "(entity: EntityHandle, rootNodeName: string, anchorNodeName: string, worldX: number, worldY: number, worldZ: number, localRotationXDegrees?: number, localRotationYDegrees?: number, localRotationZDegrees?: number)",
     "returns": "boolean",
-    "description": "Atomically validates and applies an independent healthy nonlinear suspension tune to one wheel/contact unit. Geometry and tire data are unchanged."
+    "description": "Moves a GLB node subtree as one authored rigid assembly so a named descendant anchor lands at an authoritative world position while a local rotation delta is composed around that anchor. Intended for modular assemblies such as a wheel root anchored by its wheel-spin pivot without destroying authored caliper/wheel/tire placement or left/right facing."
   },
-  "Vehicle.GetWheelSuspensionModel": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
-    "returns": "provider, springPreloadN, springRateNPerM, springProgressionNPerM2, bumpDampingNsPerM, bumpHighSpeedDampingNsPerM, bumpDampingKneeVelocityMps, reboundDampingNsPerM, reboundHighSpeedDampingNsPerM, reboundDampingKneeVelocityMps, bumpStopEngagementM, bumpStopRateNPerM, bumpStopProgressionNPerM2, droopStopEngagementM, droopStopRateNPerM, motionRatio, maximumForceN",
-    "description": "Reads the exact native nonlinear suspension description assigned to one wheel so live tools never infer state from Lua defaults."
-  },
-  "Vehicle.SetWheelSuspensionGeometry": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, steeringAxisX: number, steeringAxisY: number, steeringAxisZ: number, staticCamberDegrees: number, camberGainDegreesPerM: number, camberProgressionDegreesPerM2: number, staticToeDegrees: number, toeGainDegreesPerM: number, toeProgressionDegreesPerM2: number)",
+  "Entity.SetMeshNodeTireDeformation": {
+    "arguments": "(entity: EntityHandle, nodeName: string, grounded: boolean, referenceRadiusM: number, radialDeflectionM: number, contactPatchLengthM: number, contactPatchWidthM: number, ringRadialOffsetM: number, ringLongitudinalOffsetM: number, ringLateralOffsetM: number, ringYawDegrees: number, ringWindupDegrees: number, flatSpotDepthM: number, flatSpotSector: number, contactNormalWorldX: number, contactNormalWorldY: number, contactNormalWorldZ: number, contactPlaneDistanceM: number)",
     "returns": "boolean",
-    "description": "Atomically validates and applies the selected contact unit's local steering axis plus signed quadratic camber and toe curves."
+    "description": "TIRE09/VIS01 + TIRE10/VIS02 presentation bridge. Supplies authoritative native tire state to one authored GLB tire node; the renderer infers tire geometry and performs GPU-only deformation. VIS02 additionally uses the native road-contact normal and wheel-center-to-contact-plane distance so the footprint follows the physical contact plane on slopes/banking without changing physics or the source mesh."
   },
-  "Vehicle.GetWheelSuspensionGeometry": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
-    "returns": "provider, steeringAxisX, steeringAxisY, steeringAxisZ, staticCamberDegrees, camberGainDegreesPerM, camberProgressionDegreesPerM2, staticToeDegrees, toeGainDegreesPerM, toeProgressionDegreesPerM2",
-    "description": "Reads the exact native steering-axis and alignment-curve description assigned to one contact unit."
+  "Environment.GetSunDirection": {
+    "arguments": "()",
+    "returns": "x: number, y: number, z: number",
+    "description": "Returns the current normalized world-space direction from the scene toward the procedural sun."
   },
-  "Vehicle.SetWheelUnsprungMassModel": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, effectiveMassKg: number, tireRadialStiffnessNPerM: number, tireRadialDampingNsPerM: number, maximumTireDeflectionM: number, maximumNormalForceN: number)",
+  "Environment.GetTimeOfDay": {
+    "arguments": "()",
+    "returns": "number",
+    "description": "Returns the current procedural environment time of day in wrapped hours [0,24)."
+  },
+  "Environment.GetTimeScale": {
+    "arguments": "()",
+    "returns": "number",
+    "description": "Returns simulated environment seconds advanced per real second."
+  },
+  "Environment.IsCycleEnabled": {
+    "arguments": "()",
     "returns": "boolean",
-    "description": "Atomically configures the selected contact unit's scalar unsprung mass and radial tire compliance. Zero effective mass selects the legacy massless path."
+    "description": "Returns whether the procedural day/night clock advances automatically."
   },
-  "Vehicle.GetWheelUnsprungMassModel": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
-    "returns": "effectiveMassKg, tireRadialStiffnessNPerM, tireRadialDampingNsPerM, maximumTireDeflectionM, maximumNormalForceN",
-    "description": "Reads the exact native scalar unsprung-mass and radial-tire description assigned to one wheel/contact unit."
-  },
-  "Vehicle.SetTireModel": {
-    "arguments": "(vehicle: VehicleHandle, nominalLoad: number, peakFriction: number, longitudinalStiffness: number, corneringStiffness: number, loadSensitivity: number, longitudinalRelaxationLength: number, lateralRelaxationLength: number, wheelInertia: number, pneumaticTrail: number, stiffnessLoadExponent?: number, longitudinalShapeFactor?: number, lateralShapeFactor?: number, longitudinalCurvatureFactor?: number, lateralCurvatureFactor?: number, combinedSlipExponent?: number, pneumaticTrailFalloff?: number)",
+  "Environment.SetCycleEnabled": {
+    "arguments": "(enabled: boolean)",
     "returns": "boolean",
-    "description": "Configures the Step 29H vehicle-wide default road-tire profile and intentionally reapplies it to every existing wheel for backward-compatible all-wheel tuning."
+    "description": "Enables or pauses automatic procedural day/night progression."
   },
-  "Vehicle.SetWheelTireModel": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, nominalLoad: number, peakFriction: number, longitudinalStiffness: number, corneringStiffness: number, loadSensitivity: number, longitudinalRelaxationLength: number, lateralRelaxationLength: number, wheelInertia: number, pneumaticTrail: number, stiffnessLoadExponent?: number, longitudinalShapeFactor?: number, lateralShapeFactor?: number, longitudinalCurvatureFactor?: number, lateralCurvatureFactor?: number, combinedSlipExponent?: number, pneumaticTrailFalloff?: number)",
+  "Environment.SetTimeOfDay": {
+    "arguments": "(hours: number)",
     "returns": "boolean",
-    "description": "Assigns an independent advanced road-tire description to one wheel/contact unit without modifying any other wheel."
+    "description": "Sets the procedural environment time of day in hours; values wrap into the 24-hour clock."
   },
-  "Vehicle.GetWheelTireModel": {
-    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
-    "returns": "nominalLoad, peakFriction, longitudinalStiffness, corneringStiffness, loadSensitivity, longitudinalRelaxationLength, lateralRelaxationLength, wheelInertia, pneumaticTrail, stiffnessLoadExponent, longitudinalShapeFactor, lateralShapeFactor, longitudinalCurvatureFactor, lateralCurvatureFactor, combinedSlipExponent, pneumaticTrailFalloff",
-    "description": "Reads the exact native tire description currently assigned to one wheel so scripts and diagnostics do not need to guess which profile is active."
-  },
-  "UI.SliderFloat": {
-    "arguments": "(label: string, value: number, minimum: number, maximum: number, format?: string)",
-    "returns": "value: number, changed: boolean",
-    "description": "Draws a draggable numeric slider. Step 29J.2 also supports double-clicking the slider to switch it into exact keyboard-entry mode; Enter commits and clicking away exits text mode."
-  },
-  "UI.InputText": {
-    "arguments": "(label: string, value: string, maximumCharacters?: integer)",
-    "returns": "value: string, changed: boolean",
-    "description": "Draws a bounded single-line text editor. The native buffer is rebuilt from Lua-owned state each frame and is capped at 4096 characters."
+  "Environment.SetTimeScale": {
+    "arguments": "(simulatedSecondsPerRealSecond: number)",
+    "returns": "boolean",
+    "description": "Sets day/night preview speed. 1 is real time, 60 advances one simulated minute per real second, 1440 completes a day in one real minute."
   },
   "Module.AssetExists": {
     "arguments": "(assetsRelativePath: string)",
     "returns": "boolean",
     "description": "Checks whether a safe path beneath the active module's Assets directory identifies a regular file."
   },
+  "Module.GetAssetCount": {
+    "arguments": "(extension?: string, directoryPrefix?: string, fileNamePrefix?: string)",
+    "returns": "integer",
+    "description": "Counts currently discovered module assets matching optional extension, directory-prefix and filename-prefix filters."
+  },
+  "Module.GetAssetIndexRevision": {
+    "arguments": "()",
+    "returns": "integer",
+    "description": "Returns the active module asset-index revision. It changes when the once-per-second Assets scan observes file additions, removals, renames or write/size changes."
+  },
+  "Module.GetAssetPath": {
+    "arguments": "(oneBasedIndex: integer, extension?: string, directoryPrefix?: string, fileNamePrefix?: string)",
+    "returns": "string|nil",
+    "description": "Returns one stable module-asset-relative path from the current filtered asset index."
+  },
+  "Module.GetLatestAsset": {
+    "arguments": "(extension?: string, directoryPrefix?: string, fileNamePrefix?: string)",
+    "returns": "string|nil",
+    "description": "Returns the most recently written asset path matching the optional filters."
+  },
+  "Module.RefreshAssetIndex": {
+    "arguments": "()",
+    "returns": "integer",
+    "description": "Forces an immediate active-module Assets rescan and returns the resulting revision. Normal runtime refresh is already rate-limited to once per second."
+  },
   "Module.SelectAssetFile": {
     "arguments": "()",
     "returns": "assetsRelativePath: string|nil, errorText: string|nil",
-    "description": "Opens the Windows OBJ picker and accepts only an existing .obj already contained by the active module's Assets directory."
+    "description": "Opens the Windows mesh picker and accepts an existing .obj or .glb already contained by the active module's Assets directory."
   },
   "Module.WriteSaveText": {
     "arguments": "(saveRelativePath: string, contents: string)",
     "returns": "worked: boolean, pathOrError: string",
     "description": "Writes at most 2 MiB of text to a safe .lua, .json or .txt path beneath the active module's private Saves directory."
   },
-  "Entity.SetMesh": {
-    "arguments": "(entity: EntityHandle, assetPath: string, red?: number, green?: number, blue?: number, normalize?: boolean, doubleSided?: boolean, blenderCoordinates?: boolean)",
+  "Physics.ClearBodyInertiaLocalOverride": {
+    "arguments": "(bodyHandle)",
     "returns": "boolean",
-    "description": "Assigns an OBJ mesh to an entity. With blenderCoordinates=true, positions/normals authored as Blender X left/right, Y forward/backward, Z height are deterministically converted at the import boundary while preserving authored 1:1 scale."
+    "description": "Clears an explicit local-inertia override so collision geometry may derive the body's inertia again."
   },
-  "Entity.GetMesh": {
-    "arguments": "(entity: EntityHandle)",
-    "returns": "assetPath: string|nil, red: number, green: number, blue: number, visible: boolean, normalize: boolean, doubleSided: boolean, blenderCoordinates: boolean",
-    "description": "Reads the current mesh component, including whether Blender-coordinate import mode is active."
-  },
-  "Physics.LoadStaticBoxScene": {
-    "arguments": "(assetRelativePath: string, blenderCoordinates?: boolean)",
-    "returns": "collisionBoxCount: integer",
-    "description": "Loads the temporary Step 29J.2 OBJ collision-proxy scene. Each object/group with referenced faces becomes one native axis-aligned static box. Returns -1 on error; inspect Physics.GetLastError()."
-  },
-  "Physics.UnloadStaticBoxScene": {
-    "arguments": "()",
+  "Physics.DestroyBody": {
+    "arguments": "(body: BodyHandle)",
     "returns": "boolean",
-    "description": "Destroys all native static bodies/entities created by Physics.LoadStaticBoxScene for the active Lua runtime."
+    "description": "Destroys dependent vehicles, constraints, and colliders before invalidating the body handle."
+  },
+  "Physics.GetBodyCenterOfMassLocal": {
+    "arguments": "(body: BodyHandle)",
+    "returns": "x: number, y: number, z: number | nil, nil, nil",
+    "description": "Returns the body's physical center-of-mass offset in authored body/entity-local coordinates. The body origin remains a creator/reference datum and does not have to coincide with the COM."
+  },
+  "Physics.GetBodyCenterOfMassWorld": {
+    "arguments": "(body: BodyHandle)",
+    "returns": "x: number, y: number, z: number | nil, nil, nil",
+    "description": "Returns the current physical center of mass in world coordinates after applying body rotation to the authored local COM offset."
+  },
+  "Physics.GetBodyInertiaLocal": {
+    "arguments": "(bodyHandle)",
+    "returns": "pitchInertiaKgM2, yawInertiaKgM2, rollInertiaKgM2 | nil, nil, nil",
+    "description": "Returns the rigid body's active diagonal local inertia tensor. Heritage native axes are X=pitch, Y=yaw, Z=roll."
+  },
+  "Physics.GetColliderSurface": {
+    "arguments": "(collider: ColliderHandle)",
+    "returns": "materialName: string|nil, materialId: integer|nil, wetness: number|nil",
+    "description": "Reads the physical surface identity carried by one collider."
   },
   "Physics.GetStaticBoxSceneCount": {
     "arguments": "()",
     "returns": "integer",
     "description": "Returns the number of static collision proxy boxes currently owned by the Lua runtime."
   },
+  "Physics.GetStaticTriangleSceneCount": {
+    "arguments": "()",
+    "returns": "integer",
+    "description": "Returns the number of static drive-surface triangles currently participating in physics raycasts."
+  },
+  "Physics.GetSurfaceEnvironment": {
+    "arguments": "()",
+    "returns": "wetness: number, ambientTemperatureC: number, surfaceTemperatureC: number, surfaceTemperatureOverrideEnabled: boolean",
+    "description": "Returns the live world-surface weather inputs consumed by tire wet/winter/thermal simulation."
+  },
+  "Physics.GetSurfacePresentation": {
+    "arguments": "()",
+    "returns": "table",
+    "description": "Returns read-only driven-surface presentation telemetry: deformable track marks/particles, TIRE16 pressure-resolved continuous tire-mark segment count, cumulative emission/contact counts, rut intensity, normalized rolling/spray/dust/debris audio mechanism intensities, plus TIRE15C world-rubber cell/chunk/contact/generation counters. Presentation state never feeds tire or collision physics; the rubber counters describe authoritative shared track state."
+  },
+  "Physics.IsBodyInertiaLocalOverridden": {
+    "arguments": "(bodyHandle)",
+    "returns": "boolean | nil",
+    "description": "Returns whether the body currently uses an explicit local-inertia override rather than collider-derived inertia."
+  },
+  "Physics.LoadStaticBoxScene": {
+    "arguments": "(assetRelativePath: string, blenderCoordinates?: boolean)",
+    "returns": "collisionBoxCount: integer",
+    "description": "Loads the temporary Step 29J.2 OBJ collision-proxy scene. Each object/group with referenced faces becomes one native axis-aligned static box. Returns -1 on error; inspect Physics.GetLastError()."
+  },
   "Physics.LoadStaticTriangleScene": {
-    "arguments": "(collisionAssetRelativePath: string, spawnVisualAssetRelativePath?: string, blenderDefaultObjCoordinates?: boolean)",
+    "arguments": "(sceneAssetRelativePath: string, legacySpawnVisualAssetRelativePath?: string, blenderDefaultObjCoordinates?: boolean)",
     "returns": "triangleCount: integer, spawnX?: number, spawnGroundY?: number, spawnZ?: number, spawnMode: string",
-    "description": "Loads exact static OBJ triangles into the read-only world-query path used by suspension/tire raycasts. Optional visual OBJ may provide SPAWN_PLAYER metadata. Returns -1 on error; inspect Physics.GetLastError()."
+    "description": "Loads exact static query triangles from .glb or legacy .obj. GLB scenes read collision-marked nodes and SPAWN_PLAYER from the same container; OBJ keeps the optional second visual path for legacy spawn metadata. Returns -1 on error; inspect Physics.GetLastError()."
+  },
+  "Physics.Raycast": {
+    "arguments": "(originX: number, originY: number, originZ: number, directionX: number, directionY: number, directionZ: number, maxDistance: number, layerMask?: integer, includeTriggers?: boolean, ignoredBody?: BodyHandle)",
+    "returns": "hit: boolean, collider: ColliderHandle, body: BodyHandle, distance: number, pointX: number, pointY: number, pointZ: number, normalX: number, normalY: number, normalZ: number, trigger: boolean, surfaceName: string, surfaceId: integer, surfaceWetness: number",
+    "description": "Closest-hit raycast. Step 29F appends the contacted collider's surface identity and wetness without changing the first eleven return values."
+  },
+  "Physics.SetBodyCenterOfMassLocal": {
+    "arguments": "(body: BodyHandle, x: number, y: number, z: number)",
+    "returns": "boolean",
+    "description": "Sets the physical center-of-mass offset without moving authored body/entity coordinates, colliders, wheel mounts, suspension hardpoints, or visual children."
+  },
+  "Physics.SetBodyInertiaLocal": {
+    "arguments": "(bodyHandle, pitchInertiaKgM2, yawInertiaKgM2, rollInertiaKgM2)",
+    "returns": "boolean",
+    "description": "Sets an explicit positive diagonal local inertia tensor. The override remains authoritative over collider-derived inertia until cleared."
+  },
+  "Physics.SetColliderSurface": {
+    "arguments": "(collider: ColliderHandle, material: string, wetness?: number)",
+    "returns": "boolean",
+    "description": "Assigns a generic physical surface identity and 0..1 wetness to one collider. Valid materials: default, asphalt, gravel, dirt, grass, snow, ice, kerb/curb, painted_line."
+  },
+  "Physics.SetSurfaceEnvironment": {
+    "arguments": "(wetness: number, ambientTemperatureC: number, surfaceTemperatureC: number, surfaceTemperatureOverrideEnabled: boolean)",
+    "returns": "boolean",
+    "description": "Sets bounded global surface wetness and live air/road temperatures. Scene-authored local wetness/temperature remains the base when no road-temperature override is active."
+  },
+  "Physics.UnloadStaticBoxScene": {
+    "arguments": "()",
+    "returns": "boolean",
+    "description": "Destroys all native static bodies/entities created by Physics.LoadStaticBoxScene for the active Lua runtime."
   },
   "Physics.UnloadStaticTriangleScene": {
     "arguments": "()",
     "returns": "boolean",
     "description": "Clears the read-only static triangle drive-surface scene for the active physics world."
-  },
-  "Physics.GetStaticTriangleSceneCount": {
-    "arguments": "()",
-    "returns": "integer",
-    "description": "Returns the number of static drive-surface triangles currently participating in physics raycasts."
   },
   "UI.Button": {
     "arguments": "(label: string, widthPixels?: number, heightPixels?: number, centered?: boolean)",
@@ -214,20 +254,265 @@
     "returns": "widthPixels: number",
     "description": "Returns the horizontal content width remaining at the current cursor position."
   },
+  "UI.InputFloat": {
+    "arguments": "(label: string, value: number, minimum?: number, maximum?: number, step?: number, stepFast?: number, format?: string)",
+    "returns": "value: number, changed: boolean",
+    "description": "Draws a visible floating-point numeric editor for exact setup values. Values are clamped to the supplied engine-safe range; step and stepFast control the small/large increment buttons without quantizing typed values."
+  },
+  "UI.InputText": {
+    "arguments": "(label: string, value: string, maximumCharacters?: integer)",
+    "returns": "value: string, changed: boolean",
+    "description": "Draws a bounded single-line text editor. The native buffer is rebuilt from Lua-owned state each frame and is capped at 4096 characters."
+  },
   "UI.PlotLines": {
     "arguments": "(label: string, heightPixels: number, value1: number, ...)",
     "returns": "nothing",
     "description": "Draws an auto-scaled native line plot from up to 512 numeric arguments. Intended for bounded diagnostic series rather than gameplay rendering."
+  },
+  "UI.SliderFloat": {
+    "arguments": "(label: string, value: number, minimum: number, maximum: number, format?: string)",
+    "returns": "value: number, changed: boolean",
+    "description": "Draws a draggable numeric slider. Step 29J.2 also supports double-clicking the slider to switch it into exact keyboard-entry mode; Enter commits and clicking away exits text mode."
+  },
+  "Vegetation.AddInstance": {
+    "arguments": "(speciesId: string, globalX: number, globalY: number, globalZ: number, yawDeg: number=0, scale: number=1, variationSeed: number=0)",
+    "returns": "boolean",
+    "description": "Stores a large-world vegetation instance in 64 m chunks with 16-bit local placement."
+  },
+  "Vegetation.ClearInstances": {
+    "arguments": "()",
+    "returns": "boolean",
+    "description": "Clears vegetation placements while preserving registered species."
+  },
+  "Vegetation.GetLastError": {
+    "arguments": "()",
+    "returns": "string",
+    "description": "Returns the most recent vegetation registry validation error."
+  },
+  "Vegetation.GetRepresentation": {
+    "arguments": "(speciesId: string, distanceM: number)",
+    "returns": "string",
+    "description": "Returns the planned best representation band for a species at a distance, respecting available octahedral/coverage capabilities."
+  },
+  "Vegetation.GetStats": {
+    "arguments": "()",
+    "returns": "table",
+    "description": "Returns species, instance, chunk, packed-byte, chunk-size and quantization diagnostics."
+  },
+  "Vegetation.IsAvailable": {
+    "arguments": "()",
+    "returns": "boolean",
+    "description": "Returns whether the native VEG01 vegetation registry is available."
+  },
+  "Vegetation.RegisterSpecies": {
+    "arguments": "(id: string, kind: string, clusterOctahedral: boolean=false, wholePlantOctahedral: boolean=false, terrainCoverage: boolean=false)",
+    "returns": "boolean",
+    "description": "Registers one tree/shrub/grass/reed/flower/crop/generic species using native type-specific default LOD distances."
+  },
+  "Vegetation.Reset": {
+    "arguments": "()",
+    "returns": "boolean",
+    "description": "Clears vegetation species, instances, chunks, wind state and errors for a clean module reload."
+  },
+  "Vegetation.SetSpeciesLod": {
+    "arguments": "(id: string, detailedEndM: number, mergedClusterEndM: number, wholePlantEndM: number, terrainCoverageEndM: number)",
+    "returns": "boolean",
+    "description": "Overrides monotonically increasing LOD distance boundaries for a vegetation species."
+  },
+  "Vegetation.SetSpeciesWindResponse": {
+    "arguments": "(id: string, trunk: number, branch: number, foliage: number)",
+    "returns": "boolean",
+    "description": "Sets normalized hierarchical wind response weights for one species."
+  },
+  "Vegetation.SetWind": {
+    "arguments": "(xMps: number, yMps: number, zMps: number, gust01: number=0, turbulence01: number=0)",
+    "returns": "boolean",
+    "description": "Sets the shared vegetation wind field input used by future hierarchical wind rendering."
+  },
+  "Vehicle.ClearDynamicsLab": {
+    "arguments": "(vehicle: VehicleHandle)",
+    "returns": "boolean",
+    "description": "Stops and removes the retained native dynamics capture for one vehicle."
   },
   "Vehicle.CompileDefinitionV2": {
     "arguments": "(definition: VehicleDefinitionV2 table)",
     "returns": "valid: boolean, currentSolverReady: boolean, providerId: string, summary: string, diagnostics: string",
     "description": "Copies a bounded authored table into native data, resolves component references, and reports the matching runtime provider without retaining Lua pointers."
   },
+  "Vehicle.Create": {
+    "arguments": "(chassisBody: BodyHandle, highRateHertz?: number)",
+    "returns": "VehicleHandle",
+    "description": "Creates a generation-checked vehicle attached to a dynamic chassis body. Inspect the handler for all optional tuning arguments."
+  },
   "Vehicle.CreateFromDefinitionV2": {
     "arguments": "(definition: VehicleDefinitionV2 table, chassisBody: BodyHandle, highRateHertz?: number, maximumDriveForce?: number, maximumBrakeForce?: number, maximumSteerAngleDegrees?: number, tireFriction?: number, lateralStiffness?: number, rollingResistance?: number)",
     "returns": "vehicle: VehicleHandle, providerId: string, message: string",
     "description": "Compiles a version-2 component graph and creates it through the selected native provider. Returns zero without flattening unsupported topologies."
+  },
+  "Vehicle.EstimateChassisFlex": {
+    "arguments": "(massKg: number, wheelbaseM: number, frontTrackM: number, rearTrackM: number, centerOfMassHeightM: number, modelYear: integer, construction: string)",
+    "returns": "estimate: table|nil, error: string|nil",
+    "description": "Creates a versioned low-confidence first-mode chassis-flex estimate from broad construction and package data. The result carries provenance/confidence and is not a factory measurement."
+  },
+  "Vehicle.EstimateMacPhersonHardpoints": {
+    "arguments": "(wheelCenterX: number, wheelCenterY: number, wheelCenterZ: number, referencePackageScaleM: number, casterDegrees: number, steeringAxisInclinationDegrees: number)",
+    "returns": "estimate: table|nil, error: string|nil",
+    "description": "Builds the versioned low-confidence estimated_macpherson_road_v1 eight-point hardpoint package from chassis reference-package scale and alignment assumptions. The scale is suspension authoring data and must not be regenerated from a later wheel/tire swap."
+  },
+  "Vehicle.EstimateMassProperties": {
+    "arguments": "(totalMassKg, wheelbaseM, frontTrackM, rearTrackM, centerOfMassHeightM, frontStaticLoadFraction, leftStaticLoadFraction, massClassId)",
+    "returns": "estimateTable, nil | nil, errorMessage",
+    "description": "Builds a bounded, provenance-labelled low-confidence mass-property estimate containing total mass, local COM, pitch/yaw/roll inertia and static axle/side masses."
+  },
+  "Vehicle.EstimateTrailingArmHardpoints": {
+    "arguments": "(wheelCenterX: number, wheelCenterY: number, wheelCenterZ: number, referencePackageScaleM: number)",
+    "returns": "estimate: table|nil, error: string|nil",
+    "description": "Builds the versioned low-confidence estimated_trailing_arm_torsion_bar_road_v1 five-point trailing-arm/separate-damper hardpoint package from chassis reference-package scale. Returned coordinates are estimates and can be replaced point-by-point by stronger asset or measured evidence."
+  },
+  "Vehicle.ExportDynamicsLabCsv": {
+    "arguments": "(vehicle: VehicleHandle, plainCsvFilename?: string)",
+    "returns": "worked: boolean, pathOrError: string",
+    "description": "Exports all retained native samples below the active module's private Saves/DynamicsLab directory."
+  },
+  "Vehicle.GetAntiRollBar": {
+    "arguments": "(vehicle, barIndex)",
+    "returns": "leftWheel, rightWheel, stiffness, damping, leftLever, rightLever, leftMotionRatio, rightMotionRatio, maximumWheelForce, enabled, twistRadians, twistRateRadPerSec, torqueNm, leftWheelForceN, rightWheelForceN, totalAbsoluteWheelForceN",
+    "description": "Returns authored anti-roll-bar parameters plus the most recent high-rate torsional state and wheel-force corrections."
+  },
+  "Vehicle.GetAntiRollBarCount": {
+    "arguments": "(vehicle)",
+    "returns": "integer",
+    "description": "Returns the number of configured anti-roll-bar coupling slots for the vehicle."
+  },
+  "Vehicle.GetChassisFlexState": {
+    "arguments": "(vehicle: VehicleHandle)",
+    "returns": "state: table|nil",
+    "description": "Returns authored chassis-flex parameters plus live FP64 torsional twist/rate, front/rear reaction moments, structural torques, energy and front/rear section twist diagnostics."
+  },
+  "Vehicle.GetDynamicsLabSeries": {
+    "arguments": "(vehicle: VehicleHandle, metricName: string, oneBasedWheelIndex?: integer, maximumPoints?: integer)",
+    "returns": "zero or more numeric values",
+    "description": "Returns at most 240 chronological peak-preserving plot values for one supported global or per-wheel dynamics metric."
+  },
+  "Vehicle.GetDynamicsLabSummary": {
+    "arguments": "(vehicle: VehicleHandle)",
+    "returns": "recording, complete, samples, capacity, wheels, durationSeconds, captureHertz, peakSpeedKph, peakRollDegps, peakPitchDegps, peakYawDegps, peakSuspensionSpeedMps, peakSlipRatio, peakSlipAngleDeg, peakGripPercent, minimumGroundedLoadN, maximumGroundedLoadN, contactLossEvents, peakTravelStopForceN, peakDamperDissipationW, peakUnsprungVelocityMps, peakTireDeflectionMm, peakTireRadialDissipationW, peakAbsoluteCamberDeg, peakAbsoluteToeDeg",
+    "description": "Returns bounded-capture status and extrema, including suspension travel-stop loads, damper energy rate, wheel-hop speed, radial tire deflection, radial damping power, camber and toe calculated from authoritative native high-rate samples."
+  },
+  "Vehicle.GetWheelAlignment": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "localCamberDegrees, localToeDegrees, casterOverrideEnabled, casterDegrees | nil, nil, nil, nil",
+    "description": "Returns the active per-corner alignment setup used by suspension kinematics."
+  },
+  "Vehicle.GetWheelContactDiagnostic": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "statusName, statusId, lossTransitionCount, rayCandidateCount, exactTestCount, staticTriangleCandidateCount, staticSceneLoaded, originInsideStaticSceneBounds, rayBoundsOverlapStaticScene, selectedHitWasStaticTriangle, rawSupportDistanceM, suspensionBottomed, bottomOutPenetrationM",
+    "description": "Returns the native reason and query evidence for the wheel's latest support result. Diagnostics distinguish valid support, bottom-out, detected road with zero load, a surface behind the ray origin, scene-boundary exits, missing geometry, broadphase misses, narrowphase misses and support beyond suspension travel."
+  },
+  "Vehicle.GetWheelFitment": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "enabled, referenceOffsetEtMm, installedOffsetEtMm, spacerThicknessMm, rimDiameterIn, rimWidthIn, tireWidthMm, tireAspectRatio, tireRimDiameterIn, nominalTireRadiusM, outwardCenterlineDeltaM | nil...",
+    "description": "Returns reference/installed fitment plus the resolved nominal tire radius and outward wheel-centerline displacement."
+  },
+  "Vehicle.GetWheelFitmentGeometry": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "geometryTable | nil",
+    "description": "Returns resolved reference hub face, installed mounting plane, installed wheel centerline, tire inboard/outboard envelope, and live steering-axis ground geometry including scrub radius and mechanical trail. Suspension hardpoints remain immutable."
+  },
+  "Vehicle.GetWheelState": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "169 values; inspect Vehicles/Telemetry.lua for the canonical unpack order",
+    "description": "Returns wheel suspension force components, damper dissipation, unsprung velocity, radial tire deflection/power, advanced tire force telemetry, brake/driver-aid state, contact collider, and detected surface data, plus TIRE03 turn-slip/contact-twist diagnostics, TIRE04 free/loaded/effective rolling radii and finite footprint, TIRE05 enveloped-road plus translational rigid-ring state, TIRE06 adaptive 2D footprint/split-surface diagnostics plus rigid-ring yaw/wind-up state, TIRE07 tread/carcass/gas temperatures, dynamic inflation pressure, thermal grip/stiffness scales and heat-flow diagnostics, TIRE08 spatial tread temperature/wear/flat-spot state, TIRE09 material-fixed visual flat-spot sector, and TIRE10 average/contact tread-radius loss, signed contact-radius variation and native contact normal for physical flat-spot/visual contact-plane coupling, plus TIRE11 per-contact/average contamination, organic/dirt/gravel/rubber/mud pickup channels, contamination grip scale and cleaning rate, plus TIRE12 road-water depth, retained tread water, drainage demand/water-wedge state, progressive hydroplaning/pavement-contact fraction, hydrodynamic lift/drag, wet-friction scale and classical hydroplaning-speed diagnostic, plus TIRE13 snow/ice footprint fractions, winter friction/stiffness response, packed-snow state, interface melt-film depth, stud/interlock contributions and local winter surface temperature, plus TIRE14 gravel/dirt footprint fraction, loose-layer sinkage/contact pressure, tread effectiveness, granular shear capacity/forces, lateral bulldozing, plowing/compaction and MF-base friction scale, plus TIRE15 deformable-terrain footprint fraction, sinkage, persistent rut depth, compaction, moisture, loose depth, terrain shear/bulldozing/plowing forces, residual MF scale and shared SurfaceField pass count."
+  },
+  "Vehicle.GetWheelSuspensionGeometry": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "provider, steeringAxisX, steeringAxisY, steeringAxisZ, staticCamberDegrees, camberGainDegreesPerM, camberProgressionDegreesPerM2, staticToeDegrees, toeGainDegreesPerM, toeProgressionDegreesPerM2",
+    "description": "Reads the exact native steering-axis and alignment-curve description assigned to one contact unit."
+  },
+  "Vehicle.GetWheelSuspensionModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "provider, springPreloadN, springRateNPerM, springProgressionNPerM2, bumpDampingNsPerM, bumpHighSpeedDampingNsPerM, bumpDampingKneeVelocityMps, reboundDampingNsPerM, reboundHighSpeedDampingNsPerM, reboundDampingKneeVelocityMps, bumpStopEngagementM, bumpStopRateNPerM, bumpStopProgressionNPerM2, droopStopEngagementM, droopStopRateNPerM, motionRatio, maximumForceN",
+    "description": "Reads the exact native nonlinear suspension description assigned to one wheel so live tools never infer state from Lua defaults."
+  },
+  "Vehicle.GetWheelTelemetry": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "telemetry: table|nil",
+    "description": "Returns one named table containing the complete current wheel snapshot used by Racing United telemetry: suspension/contact forces, tire slip/geometry/ring/thermal/wear/contamination/wet/winter/granular/deformable-terrain state, TIRE15C deposited/loose track-rubber state and rubber friction scale, contact-query diagnostics, and authoritative upright orientation. This is the preferred extensible API; legacy GetWheelState remains only for compatibility."
+  },
+  "Vehicle.GetWheelTireModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "nominalLoad, peakFriction, longitudinalStiffness, corneringStiffness, loadSensitivity, longitudinalRelaxationLength, lateralRelaxationLength, wheelInertia, pneumaticTrail, stiffnessLoadExponent, longitudinalShapeFactor, lateralShapeFactor, longitudinalCurvatureFactor, lateralCurvatureFactor, combinedSlipExponent, pneumaticTrailFalloff",
+    "description": "Reads the exact native tire description currently assigned to one wheel so scripts and diagnostics do not need to guess which profile is active."
+  },
+  "Vehicle.GetWheelUnsprungMassModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "effectiveMassKg, tireRadialStiffnessNPerM, tireRadialDampingNsPerM, maximumTireDeflectionM, maximumNormalForceN",
+    "description": "Reads the exact native scalar unsprung-mass and radial-tire description assigned to one wheel/contact unit."
+  },
+  "Vehicle.GetWheelUprightPose": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
+    "returns": "camberDegrees, toeDegrees, localRotationXDegrees, localRotationYDegrees, localRotationZDegrees, worldSteeringAxisX, worldSteeringAxisY, worldSteeringAxisZ, worldForwardX, worldForwardY, worldForwardZ, worldRightX, worldRightY, worldRightZ, worldUpX, worldUpY, worldUpZ",
+    "description": "Returns the authoritative native upright orientation evaluated at the current suspension travel and Ackermann steering angle."
+  },
+  "Vehicle.InspectAssetMetadata": {
+    "arguments": "(assetPath: string)",
+    "returns": "metadata: table|nil, error: string|nil",
+    "description": "Inspects Heritage semantic metadata in a vehicle GLB, including authored vehicle parts, suspension hardpoint nodes, and explicit wheel-fitment datums. Wheel datums report corner/role, chassis-local position, local +X axis, provenance, and confidence without assuming arbitrary WH_* origins have engineering meaning."
+  },
+  "Vehicle.SetAntiRollBar": {
+    "arguments": "(vehicle, barIndex, leftWheel, rightWheel, torsionalStiffnessNmPerRad, torsionalDampingNmsPerRad, leftLeverArmM, rightLeverArmM, leftLinkMotionRatio, rightLinkMotionRatio, maximumWheelForceN, enabled)",
+    "returns": "boolean",
+    "description": "Creates or replaces a reusable torsional anti-roll bar slot coupling two wheel/contact units. Indices are Lua 1-based."
+  },
+  "Vehicle.SetChassisTorsionalCompliance": {
+    "arguments": "(vehicle: VehicleHandle, enabled: boolean, torsionalRigidityNmPerDegree: number, torsionalDampingNmsPerRad: number, effectiveTorsionalInertiaKgM2: number, torsionAxisLocalY: number, frontReferenceLocalZ: number, rearReferenceLocalZ: number, maximumTwistDegrees: number)",
+    "returns": "boolean",
+    "description": "Atomically enables/disables the reusable first chassis torsion mode. Gross rigid-body roll remains separate; this mechanism flexes the virtual suspension pickup frame."
+  },
+  "Vehicle.SetInputs": {
+    "arguments": "(vehicle: VehicleHandle, throttle: number, brake: number, steering: number, handbrake?: number)",
+    "returns": "boolean",
+    "description": "Sets normalized driver inputs for one native vehicle."
+  },
+  "Vehicle.SetTireModel": {
+    "arguments": "(vehicle: VehicleHandle, nominalLoad: number, peakFriction: number, longitudinalStiffness: number, corneringStiffness: number, loadSensitivity: number, longitudinalRelaxationLength: number, lateralRelaxationLength: number, wheelInertia: number, pneumaticTrail: number, stiffnessLoadExponent?: number, longitudinalShapeFactor?: number, lateralShapeFactor?: number, longitudinalCurvatureFactor?: number, lateralCurvatureFactor?: number, combinedSlipExponent?: number, pneumaticTrailFalloff?: number)",
+    "returns": "boolean",
+    "description": "Configures the Step 29H vehicle-wide default road-tire profile and intentionally reapplies it to every existing wheel for backward-compatible all-wheel tuning."
+  },
+  "Vehicle.SetWheelAlignment": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, localCamberDegrees: number, localToeDegrees: number, casterOverrideEnabled: boolean, casterDegrees: number)",
+    "returns": "boolean",
+    "description": "Applies a per-corner setup alignment independently from the authored neutral wheel mount. Camber/toe are signed native local values; caster adjusts the steering-axis target without moving suspension hardpoints."
+  },
+  "Vehicle.SetWheelFitment": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, enabled: boolean, referenceOffsetEtMm: number, installedOffsetEtMm: number, spacerThicknessMm: number, rimDiameterIn: number, rimWidthIn: number, tireWidthMm: number, tireAspectRatio: number, tireRimDiameterIn: number)",
+    "returns": "boolean",
+    "description": "Applies installed wheel/tire fitment to one contact unit while preserving its authored reference mount and all chassis suspension hardpoints. ET and spacers move only the installed wheel centerline; tire size updates nominal rolling radius."
+  },
+  "Vehicle.SetWheelSuspensionGeometry": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, steeringAxisX: number, steeringAxisY: number, steeringAxisZ: number, staticCamberDegrees: number, camberGainDegreesPerM: number, camberProgressionDegreesPerM2: number, staticToeDegrees: number, toeGainDegreesPerM: number, toeProgressionDegreesPerM2: number)",
+    "returns": "boolean",
+    "description": "Atomically validates and applies the selected contact unit's local steering axis plus signed quadratic camber and toe curves."
+  },
+  "Vehicle.SetWheelSuspensionHardpoints": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, providerId: string, hardpoints: table)",
+    "returns": "boolean",
+    "description": "Atomically activates a supported hardpoint suspension provider on one existing wheel using named chassis-local hardpoints while preserving the wheel’s existing alignment/tuning fields. Current supported mechanisms include MacPherson strut and trailing-arm/torsion-bar geometry."
+  },
+  "Vehicle.SetWheelSuspensionModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, springPreloadN: number, springRateNPerM: number, springProgressionNPerM2: number, bumpDampingNsPerM: number, bumpHighSpeedDampingNsPerM: number, bumpDampingKneeVelocityMps: number, reboundDampingNsPerM: number, reboundHighSpeedDampingNsPerM: number, reboundDampingKneeVelocityMps: number, bumpStopEngagementM: number, bumpStopRateNPerM: number, bumpStopProgressionNPerM2: number, droopStopEngagementM: number, droopStopRateNPerM: number, motionRatio: number, maximumForceN: number)",
+    "returns": "boolean",
+    "description": "Atomically validates and applies an independent healthy nonlinear suspension tune to one wheel/contact unit. Geometry and tire data are unchanged."
+  },
+  "Vehicle.SetWheelTireModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, nominalLoad: number, peakFriction: number, longitudinalStiffness: number, corneringStiffness: number, loadSensitivity: number, longitudinalRelaxationLength: number, lateralRelaxationLength: number, wheelInertia: number, pneumaticTrail: number, stiffnessLoadExponent?: number, longitudinalShapeFactor?: number, lateralShapeFactor?: number, longitudinalCurvatureFactor?: number, lateralCurvatureFactor?: number, combinedSlipExponent?: number, pneumaticTrailFalloff?: number)",
+    "returns": "boolean",
+    "description": "Assigns an independent advanced road-tire description to one wheel/contact unit without modifying any other wheel."
+  },
+  "Vehicle.SetWheelUnsprungMassModel": {
+    "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer, effectiveMassKg: number, tireRadialStiffnessNPerM: number, tireRadialDampingNsPerM: number, maximumTireDeflectionM: number, maximumNormalForceN: number)",
+    "returns": "boolean",
+    "description": "Atomically configures the selected contact unit's scalar unsprung mass and radial tire compliance. Zero effective mass selects the legacy massless path."
   },
   "Vehicle.StartDynamicsLab": {
     "arguments": "(vehicle: VehicleHandle, maximumDurationSeconds?: number, captureHertz?: number)",
@@ -239,24 +524,9 @@
     "returns": "boolean",
     "description": "Stops recording while retaining every captured sample and summary."
   },
-  "Vehicle.ClearDynamicsLab": {
-    "arguments": "(vehicle: VehicleHandle)",
+  "Entity.SetMeshNodeTireColliderTrianglesFromWheel": {
+    "arguments": "(entity: EntityHandle, nodeName: string, vehicle: VehicleHandle, wheelIndex: number)",
     "returns": "boolean",
-    "description": "Stops and removes the retained native dynamics capture for one vehicle."
-  },
-  "Vehicle.GetDynamicsLabSummary": {
-    "arguments": "(vehicle: VehicleHandle)",
-    "returns": "recording, complete, samples, capacity, wheels, durationSeconds, captureHertz, peakSpeedKph, peakRollDegps, peakPitchDegps, peakYawDegps, peakSuspensionSpeedMps, peakSlipRatio, peakSlipAngleDeg, peakGripPercent, minimumGroundedLoadN, maximumGroundedLoadN, contactLossEvents, peakTravelStopForceN, peakDamperDissipationW, peakUnsprungVelocityMps, peakTireDeflectionMm, peakTireRadialDissipationW, peakAbsoluteCamberDeg, peakAbsoluteToeDeg",
-    "description": "Returns bounded-capture status and extrema, including suspension travel-stop loads, damper energy rate, wheel-hop speed, radial tire deflection, radial damping power, camber and toe calculated from authoritative native high-rate samples."
-  },
-  "Vehicle.GetDynamicsLabSeries": {
-    "arguments": "(vehicle: VehicleHandle, metricName: string, oneBasedWheelIndex?: integer, maximumPoints?: integer)",
-    "returns": "zero or more numeric values",
-    "description": "Returns at most 240 chronological peak-preserving plot values for one supported global or per-wheel dynamics metric."
-  },
-  "Vehicle.ExportDynamicsLabCsv": {
-    "arguments": "(vehicle: VehicleHandle, plainCsvFilename?: string)",
-    "returns": "worked: boolean, pathOrError: string",
-    "description": "Exports all retained native samples below the active module's private Saves/DynamicsLab directory."
+    "description": "TIRE17C7/VIS10 native-to-native visual deformation bridge. Copies the bounded nearby static-collider triangle neighborhood selected for one wheel directly from VehicleSystem into an authored tire mesh node without pushing bulk triangle data through Lua."
   }
 }

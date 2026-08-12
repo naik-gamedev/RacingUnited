@@ -6,21 +6,21 @@
 namespace heritage::vehicles {
 namespace {
 
-float boundedNormalForce(
+VehicleScalar boundedNormalForce(
     const UnsprungMassDescription& description,
-    float deflectionM,
-    float deflectionVelocityMps)
+    VehicleScalar deflectionM,
+    VehicleScalar deflectionVelocityMps)
 {
-    if (deflectionM <= 0.0f && deflectionVelocityMps <= 0.0f)
-        return 0.0f;
-    const float force = description.tireRadialStiffnessNPerM
-            * std::max(deflectionM, 0.0f)
+    if (deflectionM <= 0.0 && deflectionVelocityMps <= 0.0)
+        return 0.0;
+    const VehicleScalar force = description.tireRadialStiffnessNPerM
+            * std::max(deflectionM, 0.0)
         + description.tireRadialDampingNsPerM
             * deflectionVelocityMps;
     return std::clamp(
         force,
-        0.0f,
-        std::max(description.maximumNormalForceN, 0.0f));
+        0.0,
+        std::max(description.maximumNormalForceN, 0.0));
 }
 
 } // namespace
@@ -31,14 +31,14 @@ UnsprungMassOutput advanceUnsprungMassModel(
     UnsprungMassState& state)
 {
     UnsprungMassOutput output;
-    const float deltaTime = std::max(input.deltaTimeSeconds, 0.0f);
-    const float minimumLength = std::min(
+    const VehicleScalar deltaTime = std::max(input.deltaTimeSeconds, 0.0);
+    const VehicleScalar minimumLength = std::min(
         input.minimumLengthM,
         input.maximumLengthM);
-    const float maximumLength = std::max(
+    const VehicleScalar maximumLength = std::max(
         input.minimumLengthM,
         input.maximumLengthM);
-    if (description.effectiveMassKg <= 0.0f || deltaTime <= 0.0f)
+    if (description.effectiveMassKg <= 0.0 || deltaTime <= 0.0)
     {
         output.suspensionLengthM = std::clamp(
             input.roadAvailable ? input.roadHubLengthM : input.restLengthM,
@@ -57,28 +57,28 @@ UnsprungMassOutput advanceUnsprungMassModel(
             maximumLength);
         state.suspensionLengthVelocityMps = input.roadAvailable
             ? input.roadHubLengthVelocityMps
-            : 0.0f;
+            : 0.0;
         state.initialized = true;
     }
 
-    float tireDeflection = input.roadAvailable
+    VehicleScalar tireDeflection = input.roadAvailable
         ? state.suspensionLengthM - input.roadHubLengthM
-        : 0.0f;
-    float tireDeflectionVelocity = input.roadAvailable
+        : 0.0;
+    VehicleScalar tireDeflectionVelocity = input.roadAvailable
         ? state.suspensionLengthVelocityMps
             - input.roadHubLengthVelocityMps
-        : 0.0f;
-    const float normalForce = input.roadAvailable
+        : 0.0;
+    const VehicleScalar normalForce = input.roadAvailable
         ? boundedNormalForce(
             description,
             tireDeflection,
             tireDeflectionVelocity)
-        : 0.0f;
-    const float normalAlignment = std::clamp(
+        : 0.0;
+    const VehicleScalar normalAlignment = std::clamp(
         input.roadNormalAlignment,
-        0.05f,
-        1.0f);
-    const float acceleration = (
+        0.05,
+        1.0);
+    const VehicleScalar acceleration = (
         input.suspensionForceN - normalForce * normalAlignment)
         / description.effectiveMassKg;
     state.suspensionLengthVelocityMps += acceleration * deltaTime;
@@ -90,22 +90,22 @@ UnsprungMassOutput advanceUnsprungMassModel(
         state.suspensionLengthM = minimumLength;
         state.suspensionLengthVelocityMps = std::max(
             state.suspensionLengthVelocityMps,
-            0.0f);
+            0.0);
     }
     if (state.suspensionLengthM >= maximumLength)
     {
         state.suspensionLengthM = maximumLength;
         state.suspensionLengthVelocityMps = std::min(
             state.suspensionLengthVelocityMps,
-            0.0f);
+            0.0);
     }
 
     if (input.roadAvailable)
     {
-        const float maximumTireDeflection = std::max(
+        const VehicleScalar maximumTireDeflection = std::max(
             description.maximumTireDeflectionM,
-            0.0f);
-        const float maximumHubLength = std::clamp(
+            0.0);
+        const VehicleScalar maximumHubLength = std::clamp(
             input.roadHubLengthM + maximumTireDeflection,
             minimumLength,
             maximumLength);
@@ -119,12 +119,12 @@ UnsprungMassOutput advanceUnsprungMassModel(
     }
 
     tireDeflection = input.roadAvailable
-        ? std::max(state.suspensionLengthM - input.roadHubLengthM, 0.0f)
-        : 0.0f;
+        ? std::max(state.suspensionLengthM - input.roadHubLengthM, 0.0)
+        : 0.0;
     tireDeflectionVelocity = input.roadAvailable
         ? state.suspensionLengthVelocityMps
             - input.roadHubLengthVelocityMps
-        : 0.0f;
+        : 0.0;
     output.suspensionLengthM = state.suspensionLengthM;
     output.suspensionLengthVelocityMps =
         state.suspensionLengthVelocityMps;
@@ -135,14 +135,14 @@ UnsprungMassOutput advanceUnsprungMassModel(
             description,
             tireDeflection,
             tireDeflectionVelocity)
-        : 0.0f;
-    output.grounded = output.normalForceN > 0.0f;
+        : 0.0;
+    output.grounded = output.normalForceN > 0.0;
     output.tireRadialDissipationW = output.grounded
         ? std::max(
             description.tireRadialDampingNsPerM
                 * tireDeflectionVelocity * tireDeflectionVelocity,
-            0.0f)
-        : 0.0f;
+            0.0)
+        : 0.0;
     return output;
 }
 

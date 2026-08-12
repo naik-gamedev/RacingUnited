@@ -8,6 +8,7 @@
 
 #include "../Core/Entities/EntityRegistry.hpp"
 #include "../Core/Math/Math.hpp"
+#include "../Core/Math/Quaternion.hpp"
 
 namespace heritage::physics {
 
@@ -30,6 +31,10 @@ struct RigidBodyDescription
     BodyMotionType motionType = BodyMotionType::Dynamic;
     heritage::math::Vec3 position{ 0.0f, 0.0f, 0.0f };
     heritage::math::Vec3 rotationDegrees{ 0.0f, 0.0f, 0.0f };
+    // Body/entity transforms keep their authored reference origin. Physics
+    // impulses rotate about this local centre of mass, which may differ from
+    // that origin (vehicles commonly author the datum near road level).
+    heritage::math::Vec3 centerOfMassLocal{ 0.0f, 0.0f, 0.0f };
     float mass = 1.0f;
     float gravityFactor = 1.0f;
     float linearDamping = 0.02f;
@@ -66,6 +71,20 @@ public:
     bool mass(BodyHandle handle, float& value) const;
     bool setMass(BodyHandle handle, float value);
 
+    // Optional creator/vehicle-authored diagonal inertia tensor in body-local
+    // axes, expressed in kg*m^2. Without an override CollisionSystem derives
+    // inertia from attached primitive colliders.
+    bool inertiaLocal(BodyHandle handle, heritage::math::Vec3& value) const;
+    bool setInertiaLocal(BodyHandle handle, const heritage::math::Vec3& value);
+    bool clearInertiaLocalOverride(BodyHandle handle);
+    bool inertiaLocalOverridden(BodyHandle handle, bool& value) const;
+
+    bool centerOfMassLocal(BodyHandle handle, heritage::math::Vec3& value) const;
+    bool setCenterOfMassLocal(
+        BodyHandle handle,
+        const heritage::math::Vec3& value);
+    bool centerOfMassWorld(BodyHandle handle, heritage::math::Vec3& value) const;
+
     bool gravityFactor(BodyHandle handle, float& value) const;
     bool setGravityFactor(BodyHandle handle, float value);
 
@@ -79,6 +98,18 @@ public:
 
     bool pose(BodyHandle handle, RigidBodyPose& value) const;
     bool interpolatedPose(BodyHandle handle, float alpha, RigidBodyPose& value) const;
+
+    // Returns the interpolated rigid-body orientation as an orthonormal basis
+    // without converting through Euler angles. Camera/vehicle presentation code
+    // should prefer this when it needs a direction vector: it remains stable
+    // through +/-180 degree yaw wrap and while the chassis is pitched/rolled.
+    bool interpolatedBasis(
+        BodyHandle handle,
+        float alpha,
+        heritage::math::Vec3& right,
+        heritage::math::Vec3& up,
+        heritage::math::Vec3& forward) const;
+
     bool setPose(BodyHandle handle, const RigidBodyPose& value);
     bool setPosition(BodyHandle handle, const heritage::math::Vec3& value);
     bool setRotationDegrees(BodyHandle handle, const heritage::math::Vec3& value);
@@ -109,6 +140,11 @@ public:
     std::size_t activeDynamicCount() const;
 
     void integrate(float fixedDeltaTime, const heritage::math::Vec3& gravity);
+
+    // Shifts the complete local physics frame without changing any relative
+    // body geometry, velocity, rotation, sleeping state or interpolation.
+    // PhysicsWorld uses this when its FP64 global origin follows an anchor.
+    void rebaseLocalOrigin(const heritage::math::Vec3& shift);
     void snapInterpolation();
 
     // Removes bodies whose bound entities no longer exist, then writes an
@@ -125,13 +161,7 @@ private:
     friend class ConstraintSystem;
 class ConstraintSystem;
 
-    struct Quaternion
-    {
-        float w = 1.0f;
-        float x = 0.0f;
-        float y = 0.0f;
-        float z = 0.0f;
-    };
+    using Quaternion = heritage::math::Quaternion;
 
     struct Record
     {
@@ -142,12 +172,19 @@ class ConstraintSystem;
         Quaternion previousRotation;
         Quaternion rotation;
         heritage::math::Vec3 linearVelocity{ 0.0f, 0.0f, 0.0f };
+        // Linear velocity is the velocity of the physical centre of mass.
+        // `position` remains the authored body/entity origin so existing scene
+        // hierarchies and collider/wheel local coordinates do not move when a
+        // non-zero COM is configured.
         heritage::math::Vec3 angularVelocityDegrees{ 0.0f, 0.0f, 0.0f };
+        heritage::math::Vec3 centerOfMassLocal{ 0.0f, 0.0f, 0.0f };
         heritage::math::Vec3 accumulatedForce{ 0.0f, 0.0f, 0.0f };
         // Diagonal inverse inertia in body-local space. CollisionSystem rebuilds
         // this from all attached primitive colliders whenever topology or mass
         // changes. World-space impulses rotate through this tensor.
         heritage::math::Vec3 inverseInertiaLocal{ 1.0f, 1.0f, 1.0f };
+        heritage::math::Vec3 inertiaLocalOverrideKgM2{};
+        bool hasInertiaLocalOverride = false;
         float mass = 1.0f;
         float inverseMass = 1.0f;
         float gravityFactor = 1.0f;
@@ -193,6 +230,7 @@ class ConstraintSystem;
     static heritage::math::Vec3 rotateVector(
         const Quaternion& rotation,
         const heritage::math::Vec3& value);
+    static heritage::math::Vec3 worldCenterOfMass(const Record& body);
     static heritage::math::Vec3 applyWorldInverseInertia(
         const Record& body,
         const heritage::math::Vec3& worldVector);

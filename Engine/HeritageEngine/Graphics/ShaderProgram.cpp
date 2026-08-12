@@ -28,10 +28,23 @@ GLuint compileShader(GLenum type, const char* source)
 
 GLuint buildShaderProgram(const char* vertexSource, const char* fragmentSource)
 {
+    return buildShaderProgram(vertexSource, nullptr, fragmentSource);
+}
+
+GLuint buildShaderProgram(
+    const char* vertexSource,
+    const char* geometrySource,
+    const char* fragmentSource)
+{
     const GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSource);
+    const GLuint geometryShader = geometrySource != nullptr
+        ? compileShader(GL_GEOMETRY_SHADER, geometrySource)
+        : 0;
     const GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSource);
     const GLuint program = glCreateProgram();
     glAttachShader(program, vertexShader);
+    if (geometryShader != 0)
+        glAttachShader(program, geometryShader);
     glAttachShader(program, fragmentShader);
     glLinkProgram(program);
 
@@ -45,6 +58,8 @@ GLuint buildShaderProgram(const char* vertexSource, const char* fragmentSource)
     }
 
     glDeleteShader(vertexShader);
+    if (geometryShader != 0)
+        glDeleteShader(geometryShader);
     glDeleteShader(fragmentShader);
     return program;
 }

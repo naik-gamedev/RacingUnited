@@ -1,7 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -9,15 +11,42 @@
 #include "../Physics/CollisionSystem.hpp"
 #include "../Physics/RigidBodySystem.hpp"
 #include "TireModel.hpp"
+#include "Tires/TireContactPatch.hpp"
+#include "Tires/Authoring/TirePartResolver.hpp"
 #include "SuspensionGeometry.hpp"
 #include "SuspensionModel.hpp"
+#include "Suspension/Common/SuspensionAntiRollBar.hpp"
+#include "Dynamics/ChassisFlex/ChassisTorsionalCompliance.hpp"
+#include "Wheels/Fitment/WheelFitment.hpp"
+#include "Wheels/Fitment/HubReferenceGeometry.hpp"
+#include "Wheels/Fitment/ScrubRadiusGeometry.hpp"
 #include "UnsprungMassModel.hpp"
 #include "VehicleDynamicsLab.hpp"
+#include "VehiclePrecision.hpp"
+
+namespace heritage::physics {
+class SurfaceWorld;
+}
 
 namespace heritage::vehicles {
 
 using VehicleHandle = std::uint64_t;
 inline constexpr VehicleHandle InvalidVehicle = 0;
+
+// TIRE17C7/VIS10 reference-quality GPU collider deformation. Physics selects
+// the exact nearby static collider triangles through the existing BVH, while
+// the GPU performs the per-tire-vertex non-penetration work. The triangle list
+// is intentionally bounded; it is a local surface neighborhood, not a copy of
+// the whole scene collision mesh.
+inline constexpr std::size_t TireVisualColliderTriangleLimit = 64;
+
+struct TireVisualColliderTriangle
+{
+    heritage::math::Vec3 a{};
+    heritage::math::Vec3 b{};
+    heritage::math::Vec3 c{};
+    heritage::math::Vec3 normal{ 0.0f, 1.0f, 0.0f };
+};
 
 enum class DifferentialMode
 {
@@ -121,11 +150,15 @@ struct WheelDescription
     float droopStopRate = 0.0f;
     SuspensionProviderKind suspensionProvider =
         SuspensionProviderKind::LinearRaycastV1;
+    MacPhersonHardpoints macPhersonHardpoints;
+    TrailingArmHardpoints trailingArmHardpoints;
     heritage::math::Vec3 localSteeringAxis{ 0.0f, 1.0f, 0.0f };
     float staticCamberDegrees = 0.0f;
     float camberGainDegreesPerM = 0.0f;
     float camberProgressionDegreesPerM2 = 0.0f;
     float staticToeDegrees = 0.0f;
+    bool casterOverrideEnabled = false;
+    float staticCasterDegrees = 0.0f;
     float toeGainDegreesPerM = 0.0f;
     float toeProgressionDegreesPerM2 = 0.0f;
     float suspensionMotionRatio = 1.0f;
@@ -139,6 +172,7 @@ struct WheelDescription
     float steerFactor = 0.0f;
     float brakeFactor = 1.0f;
     float handbrakeFactor = 0.0f;
+    WheelFitmentDescription fitment;
 };
 
 struct SteeringState
@@ -199,6 +233,26 @@ enum class WheelContactStatus
     NoSupportHit = 9
 };
 
+struct WheelFitmentGeometryState
+{
+    bool hubReferenceValid = false;
+    heritage::math::Vec3 referenceWheelCenterLocal{};
+    heritage::math::Vec3 referenceHubFaceCenterLocal{};
+    heritage::math::Vec3 installedMountFaceCenterLocal{};
+    heritage::math::Vec3 installedWheelCenterLocal{};
+    heritage::math::Vec3 installedInnerTirePlaneLocal{};
+    heritage::math::Vec3 installedOuterTirePlaneLocal{};
+    VehicleScalar inboardTireExtensionFromReferenceHubM = 0.0;
+    VehicleScalar outboardTireExtensionFromReferenceHubM = 0.0;
+
+    bool steeringGroundGeometryValid = false;
+    heritage::math::Vec3 worldSteeringAxisPoint{};
+    heritage::math::Vec3 steeringAxisGroundPointWorld{};
+    VehicleScalar signedScrubRadiusM = 0.0;
+    VehicleScalar scrubRadiusMagnitudeM = 0.0;
+    VehicleScalar mechanicalTrailM = 0.0;
+};
+
 struct WheelState
 {
     bool grounded = false;
@@ -211,61 +265,250 @@ struct WheelState
     bool originInsideStaticSceneBounds = false;
     bool rayBoundsOverlapStaticScene = false;
     bool selectedHitWasStaticTriangle = false;
-    float rawSupportDistance = 0.0f;
+    VehicleScalar rawSupportDistance = 0.0f;
     bool suspensionBottomed = false;
-    float bottomOutPenetration = 0.0f;
-    float suspensionLength = 0.0f;
-    float compression = 0.0f;
-    float compressionVelocity = 0.0f;
-    float suspensionSpringForce = 0.0f;
-    float suspensionDampingForce = 0.0f;
-    float suspensionBumpStopForce = 0.0f;
-    float suspensionDroopStopForce = 0.0f;
-    float suspensionUnclampedForce = 0.0f;
-    float damperDissipationWatts = 0.0f;
-    float unsprungVelocity = 0.0f;
-    float tireDeflection = 0.0f;
-    float tireDeflectionVelocity = 0.0f;
-    float tireRadialDissipationWatts = 0.0f;
-    float normalForce = 0.0f;
-    float longitudinalForce = 0.0f;
-    float lateralForce = 0.0f;
-    float steerAngleDegrees = 0.0f;
-    float camberAngleDegrees = 0.0f;
-    float toeAngleDegrees = 0.0f;
+    VehicleScalar bottomOutPenetration = 0.0f;
+    VehicleScalar suspensionLength = 0.0f;
+    VehicleScalar compression = 0.0f;
+    VehicleScalar compressionVelocity = 0.0f;
+    VehicleScalar suspensionSpringForce = 0.0f;
+    VehicleScalar suspensionDampingForce = 0.0f;
+    VehicleScalar suspensionBumpStopForce = 0.0f;
+    VehicleScalar suspensionDroopStopForce = 0.0f;
+    VehicleScalar suspensionUnclampedForce = 0.0f;
+    VehicleScalar antiRollBarForce = 0.0f;
+    VehicleScalar damperDissipationWatts = 0.0f;
+    VehicleScalar unsprungVelocity = 0.0f;
+    VehicleScalar tireDeflection = 0.0f;
+    VehicleScalar tireDeflectionVelocity = 0.0f;
+    VehicleScalar tireRadialDissipationWatts = 0.0f;
+    // TIRE04 quasi-static tire geometry. Loaded radius follows radial
+    // deflection; effective radius is the rolling/slip lever arm. The finite
+    // footprint becomes the input boundary for later SWIFT-like enveloping.
+    VehicleScalar tireFreeRollingRadius = 0.0f;
+    VehicleScalar tireLoadedRadius = 0.0f;
+    VehicleScalar tireEffectiveRollingRadius = 0.0f;
+    VehicleScalar tireContactPatchLength = 0.0f;
+    VehicleScalar tireContactPatchWidth = 0.0f;
+    VehicleScalar tireContactPatchArea = 0.0f;
+    // TIRE05 SWIFT-like structural/enveloping telemetry. The envelope offset
+    // is the road-height correction generated by the tandem-cam filter; ring
+    // offsets/velocities are belt motion relative to the rim.
+    VehicleScalar tireEnvelopeRoadOffset = 0.0f;
+    VehicleScalar tireEnvelopeSlopeDegrees = 0.0f;
+    VehicleScalar tireEnvelopeCrossSlopeDegrees = 0.0f;
+    VehicleScalar tireEnvelopeValidSamples = 0.0f;
+    VehicleScalar tireFootprintTotalSamples = 0.0f;
+    VehicleScalar tireFootprintSupportedFraction = 0.0f;
+    VehicleScalar tireFootprintRoughnessRange = 0.0f;
+    VehicleScalar tireFootprintSurfaceFriction = 1.0f;
+    VehicleScalar tireFootprintSurfaceSpread = 0.0f;
+    bool tireFootprintRefined = false;
+    // TIRE17C1/VIS03: refined 3x3 road-support residuals used only by the
+    // visual carcass/tread deformation. Physics remains authoritative in the
+    // adaptive road-enveloping provider; these values expose the already-
+    // sampled curb/step shape so presentation no longer collapses it to one
+    // infinite plane. Row-major order is lateral (-,0,+) x longitudinal (-,0,+).
+    bool tireVisualSupportGridValid = false;
+    VehicleScalar tireVisualSupportHalfLengthM = 0.0f;
+    VehicleScalar tireVisualSupportHalfWidthM = 0.0f;
+    std::array<VehicleScalar, 9> tireVisualSupportHeightResidualM{};
+    // TIRE17C7/VIS10 exact nearby static collider geometry for presentation.
+    // Normals are oriented toward the wheel centre when cached so the GPU can
+    // treat the negative half-space as penetration regardless of creator mesh
+    // winding. This is not tire force/contact authority; it is a visual hard
+    // non-penetration constraint derived from the same collision scene.
+    bool tireVisualColliderTrianglesValid = false;
+    std::uint32_t tireVisualColliderTriangleCount = 0;
+    std::array<TireVisualColliderTriangle, TireVisualColliderTriangleLimit>
+        tireVisualColliderTriangles{};
+    VehicleScalar tireRingRadialOffset = 0.0f;
+    VehicleScalar tireRingRadialVelocity = 0.0f;
+    VehicleScalar tireRingLongitudinalOffset = 0.0f;
+    VehicleScalar tireRingLongitudinalVelocity = 0.0f;
+    VehicleScalar tireRingLateralOffset = 0.0f;
+    VehicleScalar tireRingLateralVelocity = 0.0f;
+    VehicleScalar tireRingYawDegrees = 0.0f;
+    VehicleScalar tireRingYawRateDegreesPerSecond = 0.0f;
+    VehicleScalar tireRingWindupDegrees = 0.0f;
+    VehicleScalar tireRingWindupRateDegreesPerSecond = 0.0f;
+    // TIRE07 lumped thermal/pressure telemetry. Temperatures are stateful at
+    // the 1000 Hz tire rate; inflation pressure is gauge pressure.
+    VehicleScalar tireTreadTemperatureC = 20.0f;
+    VehicleScalar tireCarcassTemperatureC = 20.0f;
+    VehicleScalar tireGasTemperatureC = 20.0f;
+    VehicleScalar tireInflationPressurePa = 220000.0f;
+    VehicleScalar tireThermalFrictionScale = 1.0f;
+    VehicleScalar tireThermalStiffnessScale = 1.0f;
+    VehicleScalar tireSlipDissipationWatts = 0.0f;
+    VehicleScalar tireThermalLossDissipationWatts = 0.0f;
+    VehicleScalar tireRoadHeatFlowWatts = 0.0f;
+    VehicleScalar tireAirHeatFlowWatts = 0.0f;
+    // TIRE08 spatial tread telemetry. The 48-cell field stays inside the tire
+    // provider; WheelState exposes cheap aggregates for diagnostics/UI.
+    VehicleScalar tireTreadInsideSurfaceTemperatureC = 20.0f;
+    VehicleScalar tireTreadCenterSurfaceTemperatureC = 20.0f;
+    VehicleScalar tireTreadOutsideSurfaceTemperatureC = 20.0f;
+    VehicleScalar tireTreadHottestSurfaceTemperatureC = 20.0f;
+    VehicleScalar tireTreadInsideDepthMm = 7.0f;
+    VehicleScalar tireTreadCenterDepthMm = 7.0f;
+    VehicleScalar tireTreadOutsideDepthMm = 7.0f;
+    VehicleScalar tireTreadMinimumDepthMm = 7.0f;
+    VehicleScalar tireTreadWearFraction = 0.0f;
+    VehicleScalar tireFlatSpotDepthMm = 0.0f;
+    VehicleScalar tireFlatSpotSector = 0.0f;
+    // TIRE10 radius coupling. Average loss represents global tread-radius
+    // reduction; contact loss follows the current rotating sector/band blend;
+    // variation is the signed local departure that produces flat-spot thump.
+    VehicleScalar tireAverageTreadRadiusLossMm = 0.0f;
+    VehicleScalar tireContactTreadRadiusLossMm = 0.0f;
+    VehicleScalar tireContactRadiusVariationMm = 0.0f;
+    VehicleScalar tireSpatialFrictionScale = 1.0f;
+    VehicleScalar tireTreadContactSector = 0.0f;
+    VehicleScalar tireTreadHottestSector = 0.0f;
+    // TIRE11 local 16x3 contamination/pickup aggregates. The full channel
+    // history remains in TireWearState; WheelState exposes only cheap current
+    // contact/readback values.
+    VehicleScalar tireContaminationFrictionScale = 1.0f;
+    VehicleScalar tireContaminationTotal = 0.0f;
+    VehicleScalar tireContaminationAverage = 0.0f;
+    VehicleScalar tireOrganicContamination = 0.0f;
+    VehicleScalar tireMineralContamination = 0.0f;
+    VehicleScalar tireGravelFinesContamination = 0.0f;
+    VehicleScalar tireRubberPickupContamination = 0.0f;
+    VehicleScalar tireMudFilmContamination = 0.0f;
+    VehicleScalar tireContaminationCleaningRate = 0.0f;
+    // TIRE12 wet hard-surface / hydroplaning telemetry. Water depth comes
+    // from the spatial footprint wetness bridge; retained water remains in
+    // the 48 material-fixed tread cells.
+    VehicleScalar tireRoadWaterDepthMm = 0.0f;
+    VehicleScalar tireRetainedWaterDepthMm = 0.0f;
+    VehicleScalar tireDrainageDemandRatio = 0.0f;
+    VehicleScalar tireWaterWedgeFraction = 0.0f;
+    VehicleScalar tireHydroplaningFraction = 0.0f;
+    VehicleScalar tirePavementContactFraction = 1.0f;
+    VehicleScalar tireHydrodynamicLiftN = 0.0f;
+    VehicleScalar tireHydrodynamicDragN = 0.0f;
+    VehicleScalar tireWetFrictionScale = 1.0f;
+    VehicleScalar tireClassicalHydroplaningSpeedKph = 0.0f;
+    // TIRE13 compacted-snow / hard-ice telemetry. Snow/ice remain one MF6.2
+    // force evaluation with a dedicated winter-surface response around it.
+    VehicleScalar tireWinterSurfaceFraction = 0.0f;
+    VehicleScalar tireSnowSurfaceFraction = 0.0f;
+    VehicleScalar tireIceSurfaceFraction = 0.0f;
+    VehicleScalar tireWinterFrictionScale = 1.0f;
+    VehicleScalar tireWinterStiffnessScale = 1.0f;
+    VehicleScalar tirePackedSnowFraction = 0.0f;
+    VehicleScalar tireIceMeltFilmMicrometers = 0.0f;
+    VehicleScalar tireStudFrictionContribution = 0.0f;
+    VehicleScalar tireSnowInterlockContribution = 0.0f;
+    VehicleScalar tireWinterSurfaceTemperatureC = -5.0f;
+    // TIRE14 shallow gravel / hard-dirt hybrid telemetry. These values describe
+    // the loose layer around the one MF6.2 tire solve; fully deformable terrain
+    // and persistent rut/compaction memory remain TIRE15 SurfaceField work.
+    VehicleScalar tireGranularSurfaceFraction = 0.0f;
+    VehicleScalar tireGranularSinkageMm = 0.0f;
+    VehicleScalar tireGranularContactPressureKPa = 0.0f;
+    VehicleScalar tireGranularTreadEffectiveness = 0.0f;
+    VehicleScalar tireGranularShearCapacityN = 0.0f;
+    VehicleScalar tireGranularLongitudinalShearN = 0.0f;
+    VehicleScalar tireGranularLateralShearN = 0.0f;
+    VehicleScalar tireGranularBulldozingN = 0.0f;
+    VehicleScalar tireGranularPlowingDragN = 0.0f;
+    VehicleScalar tireGranularCompactionPowerW = 0.0f;
+    VehicleScalar tireGranularFrictionScale = 1.0f;
+    // TIRE15 persistent deformable-terrain / SurfaceField telemetry.
+    VehicleScalar tireTerrainSurfaceFraction = 0.0f;
+    VehicleScalar tireTerrainSinkageMm = 0.0f;
+    VehicleScalar tireTerrainRutDepthMm = 0.0f;
+    VehicleScalar tireTerrainCompaction = 0.0f;
+    VehicleScalar tireTerrainMoisture = 0.0f;
+    VehicleScalar tireTerrainLooseDepthMm = 0.0f;
+    VehicleScalar tireTerrainShearCapacityN = 0.0f;
+    VehicleScalar tireTerrainLongitudinalShearN = 0.0f;
+    VehicleScalar tireTerrainLateralShearN = 0.0f;
+    VehicleScalar tireTerrainBulldozingN = 0.0f;
+    VehicleScalar tireTerrainPlowingDragN = 0.0f;
+    VehicleScalar tireTerrainMfFrictionScale = 1.0f;
+    VehicleScalar tireTerrainPassCount = 0.0f;
+    // TIRE15C world-owned dynamic track-rubber telemetry. Deposited rubber is
+    // the rubbered racing-line state; loose rubber is the local marble/debris
+    // concentration sampled before this contact's force evaluation.
+    VehicleScalar tireTrackDepositedRubber = 0.0f;
+    VehicleScalar tireTrackLooseRubber = 0.0f;
+    VehicleScalar tireTrackMarbleMaturity = 0.0f;
+    VehicleScalar tireTrackRubberFrictionScale = 1.0f;
+    VehicleScalar tireTrackRubberPassCount = 0.0f;
+    VehicleScalar normalForce = 0.0f;
+    VehicleScalar longitudinalForce = 0.0f;
+    VehicleScalar lateralForce = 0.0f;
+    VehicleScalar steerAngleDegrees = 0.0f;
+    VehicleScalar camberAngleDegrees = 0.0f;
+    VehicleScalar toeAngleDegrees = 0.0f;
+    bool suspensionKinematicsValid = true;
+    bool suspensionTravelClamped = false;
+    VehicleScalar bumpSteerDegrees = 0.0f;
+    VehicleScalar strutCompression = 0.0f;
+    VehicleScalar instantaneousMotionRatio = 1.0f;
     heritage::math::Vec3 localUprightRotationDegrees{};
     heritage::math::Vec3 worldSteeringAxis{ 0.0f, 1.0f, 0.0f };
+    bool steeringAxisPointValid = false;
+    heritage::math::Vec3 worldSteeringAxisPoint{};
+    bool steeringGroundGeometryValid = false;
+    heritage::math::Vec3 steeringAxisGroundPointWorld{};
+    VehicleScalar signedScrubRadiusM = 0.0;
+    VehicleScalar scrubRadiusMagnitudeM = 0.0;
+    VehicleScalar mechanicalTrailM = 0.0;
     heritage::math::Vec3 worldWheelForward{ 0.0f, 0.0f, 1.0f };
     heritage::math::Vec3 worldWheelRight{ 1.0f, 0.0f, 0.0f };
     heritage::math::Vec3 worldWheelUp{ 0.0f, 1.0f, 0.0f };
-    float wheelAngularVelocity = 0.0f;
-    float appliedDriveTorque = 0.0f;
-    float appliedBrakeTorque = 0.0f;
-    float serviceBrakeTorque = 0.0f;
-    float handbrakeTorque = 0.0f;
-    float antiLockModulation = 1.0f;
-    float tractionControlModulation = 1.0f;
+    VehicleScalar wheelAngularVelocity = 0.0f;
+    VehicleScalar appliedDriveTorque = 0.0f;
+    VehicleScalar appliedBrakeTorque = 0.0f;
+    VehicleScalar serviceBrakeTorque = 0.0f;
+    VehicleScalar handbrakeTorque = 0.0f;
+    VehicleScalar antiLockModulation = 1.0f;
+    VehicleScalar tractionControlModulation = 1.0f;
     bool antiLockActive = false;
     bool tractionControlActive = false;
-    float wheelRotationDegrees = 0.0f;
-    float longitudinalSpeed = 0.0f;
-    float lateralSpeed = 0.0f;
-    float slipRatio = 0.0f;
-    float slipAngleDegrees = 0.0f;
-    float relaxedSlipRatio = 0.0f;
-    float relaxedSlipAngleDegrees = 0.0f;
-    float effectiveFriction = 0.0f;
-    float gripUtilization = 0.0f;
-    float pureLongitudinalForce = 0.0f;
-    float pureLateralForce = 0.0f;
-    float combinedSlipScale = 1.0f;
-    float pneumaticTrail = 0.0f;
-    float aligningTorque = 0.0f;
+    VehicleScalar wheelRotationDegrees = 0.0f;
+    VehicleScalar longitudinalSpeed = 0.0f;
+    VehicleScalar lateralSpeed = 0.0f;
+    VehicleScalar slipRatio = 0.0f;
+    VehicleScalar slipAngleDegrees = 0.0f;
+    VehicleScalar relaxedSlipRatio = 0.0f;
+    VehicleScalar relaxedSlipAngleDegrees = 0.0f;
+    VehicleScalar turnSlipPerM = 0.0f;
+    VehicleScalar normalizedTurnSlip = 0.0f;
+    VehicleScalar contactPatchTwistDegrees = 0.0f;
+    VehicleScalar parkingTurnMoment = 0.0f;
+    VehicleScalar turnSlipMoment = 0.0f;
+    VehicleScalar turnSlipLongitudinalReduction = 1.0f;
+    VehicleScalar turnSlipLateralReduction = 1.0f;
+    VehicleScalar turnSlipCorneringReduction = 1.0f;
+    VehicleScalar turnSlipTrailReduction = 1.0f;
+    VehicleScalar effectiveFriction = 0.0f;
+    VehicleScalar gripUtilization = 0.0f;
+    VehicleScalar pureLongitudinalForce = 0.0f;
+    VehicleScalar pureLateralForce = 0.0f;
+    VehicleScalar combinedSlipScale = 1.0f;
+    VehicleScalar pneumaticTrail = 0.0f;
+    VehicleScalar aligningTorque = 0.0f;
+    VehicleScalar overturningMoment = 0.0f;
+    VehicleScalar rollingResistanceMoment = 0.0f;
+    VehicleScalar residualAligningTorque = 0.0f;
+    VehicleScalar longitudinalSlipStiffness = 0.0f;
+    VehicleScalar corneringStiffness = 0.0f;
+    VehicleScalar camberStiffness = 0.0f;
+    bool motorcycleContourValid = false;
+    VehicleScalar motorcycleContactLateralOffset = 0.0f;
+    VehicleScalar motorcycleCenterToRoad = 0.0f;
     heritage::physics::ColliderHandle contactCollider =
         heritage::physics::InvalidCollider;
     heritage::physics::SurfaceMaterial surfaceMaterial =
         heritage::physics::SurfaceMaterial::Default;
-    float surfaceWetness = 0.0f;
+    VehicleScalar surfaceWetness = 0.0f;
+    VehicleScalar surfaceTemperatureC = 20.0f;
     heritage::math::Vec3 worldCenter{};
     heritage::math::Vec3 contactPoint{};
     heritage::math::Vec3 contactNormal{ 0.0f, 1.0f, 0.0f };
@@ -297,6 +540,13 @@ public:
     bool addWheel(VehicleHandle handle, const WheelDescription& description);
     std::size_t wheelCount(VehicleHandle handle) const;
     bool wheelState(VehicleHandle handle, std::size_t wheelIndex, WheelState& value) const;
+    // TIRE26/VIS18: render-time contact probing needs the authored physical
+    // wheel mount/width/radius without reaching into VehicleSystem internals.
+    // This is read-only configuration state; physics remains authoritative.
+    bool wheelDescription(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        WheelDescription& value) const;
     bool setWheelSuspensionModel(
         VehicleHandle handle,
         std::size_t wheelIndex,
@@ -313,6 +563,44 @@ public:
         VehicleHandle handle,
         std::size_t wheelIndex,
         SuspensionGeometryDescription& value) const;
+    bool setWheelFitment(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const WheelFitmentDescription& value);
+    bool wheelFitment(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        WheelFitmentDescription& value,
+        WheelFitmentResolved& resolved) const;
+    bool wheelFitmentGeometry(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        WheelFitmentGeometryState& value) const;
+    bool setWheelAlignment(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const WheelAlignmentSetup& value);
+    bool wheelAlignment(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        WheelAlignmentSetup& value) const;
+    bool setAntiRollBar(
+        VehicleHandle handle,
+        std::size_t antiRollBarIndex,
+        const SuspensionAntiRollBarDescription& value);
+    bool antiRollBar(
+        VehicleHandle handle,
+        std::size_t antiRollBarIndex,
+        SuspensionAntiRollBarDescription& description,
+        SuspensionAntiRollBarOutput& state) const;
+    std::size_t antiRollBarCount(VehicleHandle handle) const;
+    bool setChassisTorsionalCompliance(
+        VehicleHandle handle,
+        const ChassisTorsionalComplianceDescription& value);
+    bool chassisTorsionalCompliance(
+        VehicleHandle handle,
+        ChassisTorsionalComplianceDescription& description,
+        ChassisTorsionalComplianceState& state) const;
     bool setWheelUnsprungMassModel(
         VehicleHandle handle,
         std::size_t wheelIndex,
@@ -388,45 +676,80 @@ public:
 
     bool setTireModel(
         VehicleHandle handle,
-        float nominalLoad,
-        float peakFriction,
-        float longitudinalStiffness,
-        float corneringStiffness,
-        float loadSensitivity,
-        float longitudinalRelaxationLength,
-        float lateralRelaxationLength,
-        float wheelInertia,
-        float pneumaticTrail,
-        float stiffnessLoadExponent,
-        float longitudinalShapeFactor,
-        float lateralShapeFactor,
-        float longitudinalCurvatureFactor,
-        float lateralCurvatureFactor,
-        float combinedSlipExponent,
-        float pneumaticTrailFalloff);
+        VehicleScalar nominalLoad,
+        VehicleScalar peakFriction,
+        VehicleScalar longitudinalStiffness,
+        VehicleScalar corneringStiffness,
+        VehicleScalar loadSensitivity,
+        VehicleScalar longitudinalRelaxationLength,
+        VehicleScalar lateralRelaxationLength,
+        VehicleScalar wheelInertia,
+        VehicleScalar pneumaticTrail,
+        VehicleScalar stiffnessLoadExponent,
+        VehicleScalar longitudinalShapeFactor,
+        VehicleScalar lateralShapeFactor,
+        VehicleScalar longitudinalCurvatureFactor,
+        VehicleScalar lateralCurvatureFactor,
+        VehicleScalar combinedSlipExponent,
+        VehicleScalar pneumaticTrailFalloff);
     bool setWheelTireModel(
         VehicleHandle handle,
         std::size_t wheelIndex,
-        float nominalLoad,
-        float peakFriction,
-        float longitudinalStiffness,
-        float corneringStiffness,
-        float loadSensitivity,
-        float longitudinalRelaxationLength,
-        float lateralRelaxationLength,
-        float wheelInertia,
-        float pneumaticTrail,
-        float stiffnessLoadExponent,
-        float longitudinalShapeFactor,
-        float lateralShapeFactor,
-        float longitudinalCurvatureFactor,
-        float lateralCurvatureFactor,
-        float combinedSlipExponent,
-        float pneumaticTrailFalloff);
+        VehicleScalar nominalLoad,
+        VehicleScalar peakFriction,
+        VehicleScalar longitudinalStiffness,
+        VehicleScalar corneringStiffness,
+        VehicleScalar loadSensitivity,
+        VehicleScalar longitudinalRelaxationLength,
+        VehicleScalar lateralRelaxationLength,
+        VehicleScalar wheelInertia,
+        VehicleScalar pneumaticTrail,
+        VehicleScalar stiffnessLoadExponent,
+        VehicleScalar longitudinalShapeFactor,
+        VehicleScalar lateralShapeFactor,
+        VehicleScalar longitudinalCurvatureFactor,
+        VehicleScalar lateralCurvatureFactor,
+        VehicleScalar combinedSlipExponent,
+        VehicleScalar pneumaticTrailFalloff);
+    bool setWheelTireProvider(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        TireProviderKind provider);
+    bool setWheelTireDescription(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const TireModelDescription& description);
+    bool loadWheelTirePropertyFile(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const std::filesystem::path& path,
+        const std::string& provenance = {},
+        VehicleScalar confidence = 0.0);
+    bool assignWheelTirePart(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const tires::TirePartDefinition& definition,
+        const std::filesystem::path& propertyRoot = {},
+        const tires::TirePartFitment& fitment = {});
+    // TIRE17C1 development/fitment pressure controls. Pressure is gauge Pa.
+    // Changing cold pressure preserves thermal temperatures; the live pressure
+    // continues to follow the ideal-gas model from the new cold reference.
+    bool setWheelTireColdInflationPressure(
+        VehicleHandle handle, std::size_t wheelIndex, VehicleScalar pressurePa);
+    bool setTireColdInflationPressure(
+        VehicleHandle handle, VehicleScalar pressurePa);
+    bool tireColdInflationPressureRange(
+        VehicleHandle handle, VehicleScalar& minimumPa,
+        VehicleScalar& maximumPa, VehicleScalar& representativePressurePa) const;
+    bool wheelTirePartAssignment(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        tires::TirePartAssignmentInfo& value) const;
     bool wheelTireModel(
         VehicleHandle handle,
         std::size_t wheelIndex,
         TireModelDescription& value) const;
+    bool resetTirePhysicalState(VehicleHandle handle);
     bool setSurfacePreset(VehicleHandle handle, TireSurface surface);
     TireSurface surfacePreset(VehicleHandle handle) const;
 
@@ -462,6 +785,7 @@ public:
     void simulate(
         heritage::physics::RigidBodySystem& bodies,
         const heritage::physics::CollisionSystem& collisions,
+        heritage::physics::SurfaceWorld& surfaces,
         float worldDeltaTime,
         const heritage::math::Vec3& gravity = { 0.0f, -9.80665f, 0.0f });
 
@@ -473,8 +797,75 @@ private:
         WheelDescription description;
         WheelState state;
         TireModelDescription tireModel;
-        float previousSuspensionLength = 0.0f;
+        tires::TirePartAssignmentInfo tirePartAssignment;
+        VehicleScalar previousSuspensionLength = 0.0;
+        // TIRE16 stable wheel-owned stream identity for continuous surface marks.
+        std::uint64_t tireMarkStreamId = 0;
+        VehicleScalar previousSteerAngleDegrees = 0.0;
+        bool steerRateInitialized = false;
+        tires::TireContactPatchState contactPatchState;
+        tires::TireRigidRingState rigidRingState;
+        tires::TireThermalState thermalState;
+        tires::TireWearState wearState;
+        VehicleScalar roadEnvelopeQueryAccumulatorSeconds = 0.0;
+        bool roadEnvelopeInitialized = false;
+        VehicleScalar cachedRoadEnvelopeOffsetM = 0.0;
+        VehicleScalar cachedRoadEnvelopeSlopeRadians = 0.0;
+        VehicleScalar cachedRoadEnvelopeCrossSlopeRadians = 0.0;
+        VehicleScalar cachedRoadEnvelopeRoughnessRangeM = 0.0;
+        VehicleScalar cachedRoadEnvelopeSupportedFraction = 0.0;
+        std::size_t cachedRoadEnvelopeValidSamples = 0;
+        std::size_t cachedRoadEnvelopeTotalSamples = 0;
+        bool cachedRoadEnvelopeComplex = false;
+        bool cachedFootprintRefined = false;
+        bool cachedVisualSupportGridValid = false;
+        VehicleScalar visualColliderQueryAccumulatorSeconds = 0.0;
+        VehicleScalar cachedVisualSupportHalfLengthM = 0.0;
+        VehicleScalar cachedVisualSupportHalfWidthM = 0.0;
+        std::array<VehicleScalar, 9> cachedVisualSupportHeightResidualM{};
+        bool cachedFootprintSurfaceValid = false;
+        VehicleScalar cachedFootprintFrictionMultiplier = 1.0;
+        VehicleScalar cachedFootprintStiffnessMultiplier = 1.0;
+        VehicleScalar cachedFootprintRollingResistanceMultiplier = 1.0;
+        VehicleScalar cachedFootprintRelaxationMultiplier = 1.0;
+        // TIRE12 base surface blend: hard-surface samples are restored to
+        // their dry coefficients before the spatial water provider applies
+        // thin-film/hydroplaning physics; non-hard materials keep legacy wet
+        // behavior until their dedicated providers arrive.
+        VehicleScalar cachedFootprintWetBaseFrictionMultiplier = 1.0;
+        VehicleScalar cachedFootprintWetBaseStiffnessMultiplier = 1.0;
+        VehicleScalar cachedFootprintWetBaseRollingResistanceMultiplier = 1.0;
+        VehicleScalar cachedFootprintWetBaseRelaxationMultiplier = 1.0;
+        // TIRE13 combined dedicated-provider base: hard wet surfaces are dry
+        // before TIRE12, while snow/ice are neutral before TIRE13.
+        VehicleScalar cachedFootprintProviderBaseFrictionMultiplier = 1.0;
+        VehicleScalar cachedFootprintProviderBaseStiffnessMultiplier = 1.0;
+        VehicleScalar cachedFootprintProviderBaseRollingResistanceMultiplier = 1.0;
+        VehicleScalar cachedFootprintProviderBaseRelaxationMultiplier = 1.0;
+        VehicleScalar cachedFootprintFrictionSpread = 0.0;
+        bool cachedFootprintMaterialBlendValid = false;
+        VehicleScalar cachedFootprintGrassFraction = 0.0;
+        VehicleScalar cachedFootprintDirtFraction = 0.0;
+        VehicleScalar cachedFootprintGravelFraction = 0.0;
+        VehicleScalar cachedFootprintSnowFraction = 0.0;
+        VehicleScalar cachedFootprintIceFraction = 0.0;
+        VehicleScalar cachedFootprintMudFraction = 0.0;
+        VehicleScalar cachedFootprintSandFraction = 0.0;
+        VehicleScalar cachedFootprintSoftSoilFraction = 0.0;
+        VehicleScalar cachedFootprintDeepSnowFraction = 0.0;
+        VehicleScalar cachedFootprintCleanHardFraction = 0.0;
+        VehicleScalar cachedFootprintAverageWetness = 0.0;
+        VehicleScalar cachedFootprintAverageSurfaceTemperatureC = 20.0;
+        bool cachedFootprintDeformablePropertiesValid = false;
+        heritage::physics::SurfaceDeformableProperties
+            cachedFootprintDeformableProperties{};
         UnsprungMassState unsprungMass;
+    };
+
+    struct AntiRollBarRecord
+    {
+        SuspensionAntiRollBarDescription description;
+        SuspensionAntiRollBarOutput state;
     };
 
     struct Record
@@ -524,6 +915,31 @@ private:
         float requiredHoldForce = 0.0f;
         float availableBrakeHoldForce = 0.0f;
         VehicleDynamicsLab dynamicsLab;
+        // Reused high-rate scratch storage. Keeping this with the vehicle record
+        // avoids allocating a fresh drive-share vector on every 1000 Hz substep.
+        std::vector<VehicleScalar> driveSharesScratch;
+        // Suspension cross-coupling is solved from a same-instant snapshot so
+        // wheel iteration order cannot change anti-roll-bar forces.
+        std::vector<AntiRollBarRecord> antiRollBars;
+        std::vector<VehicleScalar> antiRollForcesScratch;
+        ChassisTorsionalComplianceDescription chassisFlex;
+        ChassisTorsionalComplianceState chassisFlexState;
+    };
+
+    struct SteeringSubstepState
+    {
+        float axleCenterX = 0.0f;
+        float centerMagnitudeDegrees = 0.0f;
+        float innerMagnitudeDegrees = 0.0f;
+        float outerMagnitudeDegrees = 0.0f;
+        float centerSign = 0.0f;
+    };
+
+    struct DrivelineSubstepState
+    {
+        VehicleScalar drivenOmega = 0.0;
+        float totalBrakeFactor = 1.0f;
+        float totalHandbrakeFactor = 1.0f;
     };
 
     struct Slot
@@ -542,10 +958,37 @@ private:
     const Slot* resolve(VehicleHandle handle) const;
     bool destroyResolved(std::uint32_t index, Slot& slot);
 
+    SteeringSubstepState updateSteeringSubstep(
+        Record& vehicle,
+        float chassisSpeed,
+        float substepDeltaTime);
+    DrivelineSubstepState updateDrivelineSubstep(
+        Record& vehicle,
+        float substepDeltaTime);
+    void simulateWheelSubstep(
+        Record& vehicle,
+        std::size_t wheelIndex,
+        const SteeringSubstepState& steering,
+        const DrivelineSubstepState& driveline,
+        const heritage::physics::RigidBodyPose& chassisPose,
+        const heritage::math::Vec3& chassisCenterOfMassLocal,
+        heritage::math::Vec3& chassisLinearVelocity,
+        heritage::math::Vec3& chassisAngularVelocityDegrees,
+        heritage::physics::RigidBodySystem& bodies,
+        const heritage::physics::CollisionSystem& collisions,
+        heritage::physics::SurfaceWorld& surfaces,
+        float substepDeltaTime,
+        VehicleScalar antiRollBarForceN,
+        VehicleScalar chassisSectionTwistRadians);
+    void prepareAntiRollBarForces(Record& vehicle);
+    void updateChassisFlexSubstep(
+        Record& vehicle,
+        float substepDeltaTime);
     void simulateVehicleSubstep(
         Record& vehicle,
         heritage::physics::RigidBodySystem& bodies,
         const heritage::physics::CollisionSystem& collisions,
+        heritage::physics::SurfaceWorld& surfaces,
         float substepDeltaTime);
     void captureDynamicsLabFrame(
         Record& vehicle,

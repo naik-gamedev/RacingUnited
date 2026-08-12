@@ -15,6 +15,8 @@ struct VideoSettings
 {
     int antiAliasingIndex = 2;
     int textureFilterIndex = 2;
+    int shadowQualityIndex = 3;
+    int shadowFilterIndex = 2;
     int scaleModeIndex = 0;
     int fpsCapIndex = 0;
     int renderApiIndex = 0;
@@ -41,6 +43,20 @@ struct VideoSettings
     int windowY = 0;
     int windowWidth = kDefaultWindowWidth;
     int windowHeight = kDefaultWindowHeight;
+};
+
+
+inline constexpr std::array<const char*, 4> kShadowQualityOptionNames = {
+    "Low (1024)",
+    "Medium (2048)",
+    "High (3072)",
+    "Ultra (4096)"
+};
+
+inline constexpr std::array<const char*, 3> kShadowFilterOptionNames = {
+    "Nearest",
+    "Poisson PCF",
+    "PCSS + Poisson"
 };
 
 inline constexpr std::array<const char*, 8> kFpsCapOptionNames = {

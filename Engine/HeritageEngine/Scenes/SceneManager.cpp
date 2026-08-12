@@ -2,7 +2,6 @@
 
 #include "LogoShowcaseScene.hpp"
 #include "ModuleDocumentScene.hpp"
-#include "RacingUnitedBootScene.hpp"
 
 #include <imgui.h>
 
@@ -121,8 +120,7 @@ private:
 
 bool isBuiltInScene(const std::string& sceneId)
 {
-    return sceneId == "logo_showcase"
-        || sceneId == "racing_united_boot";
+    return sceneId == "logo_showcase";
 }
 
 std::filesystem::path documentPathFor(
@@ -140,9 +138,6 @@ std::unique_ptr<Scene> createBuiltInScene(const std::string& sceneId)
 {
     if (sceneId == "logo_showcase")
         return std::make_unique<LogoShowcaseScene>();
-
-    if (sceneId == "racing_united_boot")
-        return std::make_unique<RacingUnitedBootScene>();
 
     return {};
 }

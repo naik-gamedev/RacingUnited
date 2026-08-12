@@ -16,6 +16,11 @@ namespace heritage::physics {
 class PhysicsWorld;
 }
 
+namespace heritage::graphics {
+class EnvironmentSystem;
+class VegetationSystem;
+}
+
 namespace heritage::modules {
 
 // Engine services intentionally exposed to the active module runtime.
@@ -27,6 +32,8 @@ struct ModuleRuntimeServices
     heritage::input::InputSystem* input = nullptr;
     heritage::entities::EntityRegistry* entities = nullptr;
     heritage::physics::PhysicsWorld* physics = nullptr;
+    heritage::graphics::EnvironmentSystem* environment = nullptr;
+    heritage::graphics::VegetationSystem* vegetation = nullptr;
 };
 
 } // namespace heritage::modules

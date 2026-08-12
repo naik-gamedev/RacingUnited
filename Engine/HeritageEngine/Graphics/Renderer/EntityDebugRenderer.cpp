@@ -379,40 +379,37 @@ void EntityDebugRenderer::draw(
     const heritage::entities::EntityRegistry& registry,
     const heritage::math::Mat4& projection,
     const heritage::settings::VideoSettings& videoSettings,
-    float elapsedSeconds) const
+    float elapsedSeconds,
+    const heritage::camera::CameraFrame& cameraFrame) const
 {
+    (void)elapsedSeconds;
     if (!m_program)
         return;
 
     const std::vector<heritage::entities::DebugPrimitiveInstance> instances =
         registry.debugPrimitiveInstances();
+    m_frameStats.instances += static_cast<std::uint64_t>(instances.size());
     if (instances.empty())
         return;
 
-    heritage::math::Vec3 cameraTarget{ 0.0f, 1.0f, 0.0f };
-    const heritage::entities::EntityHandle player =
-        registry.findByName("Player Vehicle Root");
-    heritage::math::Vec3 playerPosition{};
-    if (player != heritage::entities::InvalidEntity
-        && registry.worldPosition(player, playerPosition))
-    {
-        cameraTarget = {
-            playerPosition.x,
-            playerPosition.y + 0.9f,
-            playerPosition.z
-        };
-    }
-
-    const float orbitAngle = elapsedSeconds * 0.18f;
-    const heritage::math::Vec3 eye{
-        cameraTarget.x + std::sin(orbitAngle) * 8.5f,
-        cameraTarget.y + 3.4f,
-        cameraTarget.z + std::cos(orbitAngle) * 8.5f
+    const heritage::math::Vec3 eye = cameraFrame.valid
+        ? cameraFrame.eyeLocal
+        : heritage::math::Vec3{ 0.0f, 3.4f, 8.5f };
+    const heritage::math::Vec3 cameraTarget = cameraFrame.valid
+        ? cameraFrame.targetLocal
+        : heritage::math::Vec3{ 0.0f, 1.0f, 0.0f };
+    const heritage::math::Vec3 cameraUp = cameraFrame.valid
+        ? cameraFrame.up
+        : heritage::math::Vec3{ 0.0f, 1.0f, 0.0f };
+    const heritage::math::Vec3 cameraRelativeTarget{
+        cameraTarget.x - eye.x,
+        cameraTarget.y - eye.y,
+        cameraTarget.z - eye.z
     };
     const heritage::math::Mat4 view = lookAt(
-        eye,
-        cameraTarget,
-        { 0.0f, 1.0f, 0.0f });
+        { 0.0f, 0.0f, 0.0f },
+        cameraRelativeTarget,
+        cameraUp);
 
     glUseProgram(m_program);
     glUniformMatrix4fv(
@@ -421,7 +418,7 @@ void EntityDebugRenderer::draw(
     glUniformMatrix4fv(
         glGetUniformLocation(m_program, "uProjection"),
         1, GL_FALSE, projection.m);
-    glUniform3f(glGetUniformLocation(m_program, "uEye"), eye.x, eye.y, eye.z);
+    glUniform3f(glGetUniformLocation(m_program, "uEye"), 0.0f, 0.0f, 0.0f);
     glUniform1f(glGetUniformLocation(m_program, "uGamma"), videoSettings.gamma);
     glUniform1f(glGetUniformLocation(m_program, "uBrightness"), videoSettings.brightness);
     glUniform1f(glGetUniformLocation(m_program, "uContrast"), videoSettings.contrast);
@@ -434,7 +431,7 @@ void EntityDebugRenderer::draw(
     // permanent world/terrain system prematurely.
     heritage::entities::DebugPrimitiveInstance floor;
     floor.type = heritage::entities::DebugPrimitiveType::Box;
-    floor.position = { 0.0f, 0.38f, 0.0f };
+    floor.position = { -eye.x, 0.38f - eye.y, -eye.z };
     floor.scale = { 13.0f, 0.12f, 13.0f };
     floor.color = { 0.055f, 0.065f, 0.080f };
     const heritage::math::Mat4 floorModel = modelMatrix(floor);
@@ -442,11 +439,19 @@ void EntityDebugRenderer::draw(
     glUniform3f(glGetUniformLocation(m_program, "uColor"), floor.color.x, floor.color.y, floor.color.z);
     glBindVertexArray(m_box.vao);
     glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_box.indices.size()), GL_UNSIGNED_INT, nullptr);
+    ++m_frameStats.drawCalls;
+    m_frameStats.triangles += static_cast<std::uint64_t>(m_box.indices.size() / 3);
 
     for (const auto& instance : instances)
     {
         const Mesh& mesh = meshFor(instance.type, m_box, m_cylinder, m_sphere);
-        const heritage::math::Mat4 model = modelMatrix(instance);
+        heritage::entities::DebugPrimitiveInstance cameraRelativeInstance = instance;
+        cameraRelativeInstance.position = {
+            instance.position.x - eye.x,
+            instance.position.y - eye.y,
+            instance.position.z - eye.z
+        };
+        const heritage::math::Mat4 model = modelMatrix(cameraRelativeInstance);
         glUniformMatrix4fv(
             glGetUniformLocation(m_program, "uModel"),
             1, GL_FALSE, model.m);
@@ -461,6 +466,8 @@ void EntityDebugRenderer::draw(
             static_cast<GLsizei>(mesh.indices.size()),
             GL_UNSIGNED_INT,
             nullptr);
+        ++m_frameStats.drawCalls;
+        m_frameStats.triangles += static_cast<std::uint64_t>(mesh.indices.size() / 3);
     }
 
     glBindVertexArray(0);

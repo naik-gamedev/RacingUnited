@@ -23,6 +23,16 @@ function DrawVehicleTiresProfilesPanel()
             peakFriction or 0.0,
             longitudinalStiffness or 0.0,
             corneringStiffness or 0.0))
+        local imported, fitType, parameterSource, provenance, confidence, mapped, unsupported, measuredSide =
+            Vehicle.GetWheelTireParameterInfo(nativeVehicle, index)
+        if imported then
+            UI.TextDisabled(string.format(
+                "    MF%d .tir | confidence %.2f | mapped %d | unsupported %d | measured %s",
+                fitType or 0, confidence or 0.0, mapped or 0, unsupported or 0,
+                (measuredSide ~= nil and measuredSide ~= "") and measuredSide or "unspecified"))
+            UI.TextDisabled("    provenance: " .. tostring(provenance or "unspecified"))
+            UI.TextDisabled("    source: " .. tostring(parameterSource or ""))
+        end
     end
 
     UI.Spacing()

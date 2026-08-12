@@ -23,6 +23,50 @@ Changing render FPS must not change simulated time. The fixed-step accumulator h
 
 Specialized vehicle calculations apply forces at contact and attachment points to the general chassis body. Tire and suspension substeps must not force the entire world to run at 1000 Hz.
 
+## Authored body origin versus physical center of mass
+
+A rigid body's authored/entity origin is a reference datum and is not implicitly
+the physical center of mass. `RigidBodyDescription.centerOfMassLocal` stores an
+optional body-local COM offset while pose/collider/wheel/hardpoint coordinates
+remain in the authored-origin frame. Linear velocity is COM velocity; impulses,
+contacts, constraints and collider-derived inertia use the physical COM for their
+lever arms and parallel-axis terms. Rotational integration preserves COM motion
+while allowing an offset authored origin to orbit it. Zero-offset bodies preserve
+the legacy behavior. See ADR-028.
+
+This separation is required for real chassis pitch/roll/load transfer. Vehicle
+tire forces already act at the contact patch; an elevated physical COM gives
+those forces the correct torque arm instead of treating a road-level authoring
+datum as the mass center.
+
+### Combined chassis attitude and four-corner response
+
+Pitch, yaw and roll are not independent gameplay modes. They are the three
+rotational components of the same rigid-body state and may occur simultaneously
+under the same force/impulse accumulation. A braking turn can therefore produce
+nose-down pitch, body roll, yaw rotation, different travel at all four suspension
+corners, damper motion and anti-roll-bar torque in the same 1000 Hz vehicle loop.
+There is no additional "diagonal pitch/roll" degree of freedom; diagonal chassis
+attitude is a combination of the existing rotations, while diagonal load is an
+observable four-corner suspension/load-transfer quantity. ROLL02 permanently
+regression-locks this combined behavior before structural chassis compliance is
+introduced. See ADR-029.
+
+### Structural chassis compliance
+
+FLEX01 adds a first torsional compliance mode without replacing the ordinary rigid
+chassis. Gross 6-DOF motion remains in `RigidBodySystem`; the structural mode stores a
+small relative front-to-rear twist and twist rate. The difference between front and
+rear suspension roll reactions drives the mode, while stiffness and damping return it
+toward neutral. Virtual suspension pickup frames rotate by the local interpolated
+section twist before the wheel/contact solve.
+
+This keeps the effect physical and coupled to four-corner loads while avoiding a
+many-body or finite-element shell for every vehicle. The mode is generic: stiffness,
+damping, modal inertia, reference stations and evidence provenance are vehicle data.
+Estimated values are explicitly low-confidence and replaceable. The rendered body mesh
+is not structurally deformed by FLEX01. See ADR-030.
+
 Suspension force providers return explicit spring, damping, travel-stop and
 energy-dissipation terms. The linear-raycast provider remains a massless contact
 approximation; future linkage/unsprung-mass providers must preserve the same
@@ -51,10 +95,13 @@ A 150-car event cannot run every distant vehicle, AI controller, collision shape
 
 Networking-critical state uses fixed-step native calculations, stable iteration order, explicit input state, and reproducible data. Runtime tests should compare state hashes across render rates once the serialization layer exists.
 
-`Engine/HeritageEngine/Tests/PhysicsRegression.cpp` is the first headless native
-regression suite. It runs the same chassis, suspension, tire, brake, collision,
-and rigid-body code as the game and fails the process when parked stability,
-sleep/wake, rate behavior, or slope behavior leaves its numeric bounds.
+`Engine/HeritageEngine/Tests/` contains the headless native regression suite.
+`PhysicsRegression.cpp` is intentionally only the runner; shared world/test support
+and the collision/terrain, vehicle-dynamics, chassis-dynamics, chassis-flex, suspension, and definition/compiler
+regressions live in separate translation units so each domain can grow without
+recreating a monolithic test file. The suite runs the same chassis, suspension,
+tire, brake, collision, and rigid-body code as the game and fails the process
+when an established numeric/behavioral contract leaves its bounds.
 
 ## Surface metadata
 
@@ -64,16 +111,29 @@ wheel, while collision response itself remains independent from vehicle tire
 models. Do not reintroduce a scene-wide or vehicle-wide surface assumption when
 the contacted collider can provide the authoritative material.
 
-## Creator static triangle query bridge (Step 29J.4)
+## Creator static triangle world (Step 29J.4 onward)
 
-`PlayerScene_Collision.obj` may supply exact static triangles to the read-only
-world-query path. Vehicle suspension/tire raycasts can therefore follow a real
-sloped Blender terrain without approximating an entire terrain object as one
-AABB. These triangles are deliberately **not yet** part of the rigid-body
-contact solver; full chassis-vs-static-mesh collision requires a production
-static-mesh/convex contact system plus spatial acceleration and belongs to later
-world-physics work. Do not mistake the read-only query bridge for final mesh
-collision.
+The preferred Racing United path is a single `Scene_*.glb` containing both
+visible geometry and explicitly marked static collision nodes. Blender Custom
+Properties (`heritage.role=collision_mesh`,
+`heritage.collision_type=static_triangle_mesh`) are preferred; `_Collision` /
+`Collision_` node names remain a convenient fallback. Legacy OBJ import remains
+available to other/older module content.
+
+Imported triangles are now installed into an immutable `StaticTriangleBvh`. The
+same accelerated world participates in suspension/tire raycasts, camera/AI
+sphere casts, and first-generation rigid-body contact for dynamic sphere and
+box colliders against exact static triangles. Static contacts use bounded local
+manifolds, positional correction, cached/warm-started impulses, friction and the
+normal velocity solver. Headless regressions require both a dynamic sphere and
+a dynamic box to fall onto the triangle world and settle stably.
+
+This is intentionally narrower than a general triangle-mesh collider system.
+Static scene triangles do not become ordinary per-node `ColliderHandle` objects,
+and Heritage does not yet promise dynamic triangle meshes, mesh-vs-mesh contact,
+deformable meshes, or arbitrary concave moving bodies. Those capabilities must
+be added deliberately rather than inferred from the static-world path. See
+`SCENE_GLB_AUTHORING.md` and `TERRAIN_CONTACT_DIAGNOSTICS.md`.
 
 ## Observable terrain contact loss (Step 29Q)
 

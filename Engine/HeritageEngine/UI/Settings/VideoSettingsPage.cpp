@@ -544,6 +544,36 @@ void drawVideoSettingsPage(
         &videoSettings.textureFilterIndex,
         kTextureFilterOptions,
         IM_ARRAYSIZE(kTextureFilterOptions));
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::TextDisabled("Shadows");
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::SetNextItemWidth(220);
+    ImGui::Combo(
+        "Shadow Quality",
+        &videoSettings.shadowQualityIndex,
+        heritage::settings::kShadowQualityOptionNames.data(),
+        static_cast<int>(heritage::settings::kShadowQualityOptionNames.size()));
+
+    ImGui::SetNextItemWidth(220);
+    ImGui::Combo(
+        "Shadow Filtering",
+        &videoSettings.shadowFilterIndex,
+        heritage::settings::kShadowFilterOptionNames.data(),
+        static_cast<int>(heritage::settings::kShadowFilterOptionNames.size()));
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextDisabled("Shadow filtering modes");
+        ImGui::Separator();
+        ImGui::BulletText("Nearest - crisp single-compare shadows.");
+        ImGui::BulletText("Poisson PCF - smoother fixed-radius filtering.");
+        ImGui::BulletText("PCSS + Poisson - contact-hardening soft shadows.");
+        ImGui::EndTooltip();
+    }
 }
 
 } // namespace heritage::ui::settings

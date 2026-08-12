@@ -33,6 +33,18 @@ bool loadStaticTriangleSceneFromObj(
 // Scans an OBJ only for an authored SPAWN_PLAYER mesh. This lets the marker
 // live in the visual scene even if a creator exports a separate collision OBJ
 // without it.
+
+// Reads static triangle collision directly from a glTF Binary scene. Collision
+// geometry must be explicitly marked by Blender Custom Properties / glTF extras
+// (heritage.role=collision_mesh, heritage.collision_type=static_triangle_mesh)
+// or by a fallback *_Collision / Collision_* node name. A SPAWN_PLAYER Empty or
+// node is read from the same GLB and snapped to the imported drive surface.
+bool loadStaticTriangleSceneFromGlb(
+    const std::filesystem::path& path,
+    std::vector<StaticSceneTriangle>& output,
+    StaticTriangleSceneSpawn* spawn,
+    std::string& error);
+
 bool loadStaticTriangleSceneSpawnFromObj(
     const std::filesystem::path& path,
     bool blenderDefaultObjCoordinates,

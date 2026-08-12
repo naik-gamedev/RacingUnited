@@ -4,7 +4,9 @@ Status: Accepted in Step 29Q.
 
 ## Context
 
-The creator static triangle scene participates only in suspension/tire queries.
+At the time of Step 29Q, the creator static triangle scene participated only in
+suspension/tire queries. It has since gained BVH-backed dynamic primitive
+rigid-body contact; the wheel-support diagnostic decision below remains valid.
 A zero-width support ray can lose the road at a real mesh gap, outside scene
 bounds, beyond droop, after the ray origin crosses the surface, or because an
 exact triangle test rejects a broadphase candidate. All of those cases were
@@ -30,7 +32,8 @@ classification native; Lua only presents the authoritative result.
 - A real hole is distinct from tunnelling, bottom-out and scene-boundary exit.
 - Full-rate supported wheels retain one raycast per substep.
 - The transition-only reverse probe is diagnostic and cannot recover contact.
-- Static triangle query acceleration and rigid-body mesh contacts remain
-  Milestone 2 work.
+- Static triangle query acceleration and dynamic sphere/box-vs-static-triangle
+  contact have since landed; the diagnostic contract remains independent from
+  that solver. General dynamic/concave mesh collision is still separate work.
 - Future suspension/contact providers must preserve this observable contract or
   explicitly version it.

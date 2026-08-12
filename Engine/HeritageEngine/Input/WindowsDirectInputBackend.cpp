@@ -33,7 +33,6 @@ namespace {
 
 constexpr float kAxisCaptureThreshold = 0.55f;
 constexpr float kAxisNoiseFloor = 0.02f;
-constexpr double kDeviceRefreshSeconds = 2.0;
 
 std::string lower(std::string value)
 {
@@ -332,7 +331,6 @@ public:
     IDirectInput8W* directInput = nullptr;
     HWND window = nullptr;
     bool initialized = false;
-    double lastRefreshTime = -1000.0;
     std::vector<Device> devices;
 
     ~Impl()
@@ -350,7 +348,6 @@ public:
         }
         window = nullptr;
         initialized = false;
-        lastRefreshTime = -1000.0;
     }
 
     Device* find(const std::string& guid)
@@ -491,16 +488,15 @@ public:
         return DIENUM_CONTINUE;
     }
 
-    void refreshDevices(bool force)
+    void refreshDevices()
     {
         if (!directInput)
             return;
 
-        const double now = glfwGetTime();
-        if (!force && now - lastRefreshTime < kDeviceRefreshSeconds)
-            return;
-        lastRefreshTime = now;
-
+        // PERF06: DirectInput EnumDevices can block long enough to produce a
+        // visible frametime spike. Enumeration is therefore explicit: startup
+        // and the Input settings refresh button only. Per-frame polling below
+        // continues to read already-known devices without walking hardware.
         EnumerationContext context;
         context.self = this;
         directInput->EnumDevices(
@@ -569,7 +565,6 @@ public:
 
     void update()
     {
-        refreshDevices(false);
         for (Device& device : devices)
         {
             device.connected = false;
@@ -646,7 +641,7 @@ bool WindowsDirectInputBackend::initialize(
     }
 
     m_impl->initialized = true;
-    m_impl->refreshDevices(true);
+    m_impl->refreshDevices();
     m_impl->update();
 
     message = "DirectInput 8 ready: "
@@ -667,6 +662,15 @@ void WindowsDirectInputBackend::update()
 {
     if (m_impl && m_impl->initialized)
         m_impl->update();
+}
+
+void WindowsDirectInputBackend::refreshDevices()
+{
+    if (!m_impl || !m_impl->initialized)
+        return;
+
+    m_impl->refreshDevices();
+    m_impl->update();
 }
 
 bool WindowsDirectInputBackend::available() const
@@ -904,6 +908,7 @@ bool WindowsDirectInputBackend::initialize(GLFWwindow*, std::string& message)
 
 void WindowsDirectInputBackend::shutdown() {}
 void WindowsDirectInputBackend::update() {}
+void WindowsDirectInputBackend::refreshDevices() {}
 bool WindowsDirectInputBackend::available() const { return false; }
 std::vector<WindowsDirectInputBackend::DeviceInfo>
 WindowsDirectInputBackend::devices() const { return {}; }

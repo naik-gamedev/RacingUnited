@@ -1,491 +1,1087 @@
 #include "EntityMeshRenderer.hpp"
-
+#include "EntityMeshRendererInternal.hpp"
+#include "EntityMeshShadowConfig.hpp"
+#include "EntityMeshShaders.hpp"
 #include "../ShaderProgram.hpp"
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
+#include <utility>
 
 namespace heritage::graphics {
+using namespace entity_mesh_internal;
+using namespace entity_mesh_shadow_config;
+using namespace entity_mesh_shaders;
 namespace {
-
-#ifdef _WIN32
-#define HERITAGE_MESH_GLSL_VERSION "#version 460 core\n"
-#else
-#define HERITAGE_MESH_GLSL_VERSION "#version 330 core\n"
-#endif
-
-constexpr float kPi = 3.14159265358979323846f;
-
-const char* kVertexShader = HERITAGE_MESH_GLSL_VERSION R"glsl(
-layout(location=0) in vec3 aPos;
-layout(location=1) in vec3 aNormal;
-uniform mat4 uModel;
-uniform mat4 uView;
-uniform mat4 uProjection;
-out vec3 vNormal;
-out vec3 vWorldPosition;
-void main()
-{
-    vec4 world = uModel * vec4(aPos, 1.0);
-    vWorldPosition = world.xyz;
-    vNormal = mat3(transpose(inverse(uModel))) * aNormal;
-    gl_Position = uProjection * uView * world;
-}
-)glsl";
-
-const char* kFragmentShader = HERITAGE_MESH_GLSL_VERSION R"glsl(
-in vec3 vNormal;
-in vec3 vWorldPosition;
-uniform vec3 uColor;
-uniform vec3 uEye;
-uniform float uGamma;
-uniform float uBrightness;
-uniform float uContrast;
-uniform float uSaturation;
-out vec4 FragColor;
-void main()
-{
-    vec3 normal = normalize(vNormal);
-    // OBJ creator scenes can contain legacy/inverted face normals. When a
-    // double-sided surface is viewed from its back face, orient its shading
-    // normal toward the visible side. This makes the road top readable while
-    // the physical underside remains substantially darker under an overhead sun.
-    if (!gl_FrontFacing)
-        normal = -normal;
-
-    // Temporary readable-world lighting until the proper 29M lighting system.
-    // A directional sun stays consistent across creator scenes hundreds of
-    // metres wide; the old point light near world origin did not.
-    vec3 lightDirection = normalize(vec3(-0.35, 0.86, 0.38));
-    vec3 viewDirection = normalize(uEye - vWorldPosition);
-    vec3 halfwayDirection = normalize(lightDirection + viewDirection);
-
-    float upFacing = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
-    float hemisphere = mix(0.16, 0.34, upFacing);
-    float diffuse = max(dot(normal, lightDirection), 0.0);
-    float specular = pow(max(dot(normal, halfwayDirection), 0.0), 40.0) * 0.24;
-    float rim = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.8) * 0.10;
-    float slopeReadability = mix(0.82, 1.08, clamp(normal.y, 0.0, 1.0));
-    vec3 color = uColor * slopeReadability * (hemisphere + diffuse * 0.72)
-        + vec3(specular) + uColor * rim;
-
-    color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / max(uGamma, 0.01)));
-    color = (color - 0.5) * uContrast + 0.5 + uBrightness;
-    float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-    color = mix(vec3(luminance), color, uSaturation);
-    FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
-}
-)glsl";
-
-heritage::math::Mat4 multiply(
-    const heritage::math::Mat4& left,
-    const heritage::math::Mat4& right)
-{
-    heritage::math::Mat4 result{};
-    for (int column = 0; column < 4; ++column)
-    {
-        for (int row = 0; row < 4; ++row)
-        {
-            result.m[column * 4 + row] =
-                left.m[0 * 4 + row] * right.m[column * 4 + 0]
-                + left.m[1 * 4 + row] * right.m[column * 4 + 1]
-                + left.m[2 * 4 + row] * right.m[column * 4 + 2]
-                + left.m[3 * 4 + row] * right.m[column * 4 + 3];
-        }
-    }
-    return result;
+constexpr const char* kTextureMapFoundationMarker =
+    "HERITAGE_GFX2_STATIC_MESH_IMPORT HERITAGE_GFX3_GLB_SKINNING_ANIMATION HERITAGE_GFX4_ANIMATION_CONTROL HERITAGE_GFX5_GLB_SPECULAR_VERTEX_COLOR HERITAGE_GFX6_ENVIRONMENT_IBL HERITAGE_GFX7_SKY_DAY_NIGHT HERITAGE_GFX9_CASCADED_SUN_SHADOWS HERITAGE_VA02_GLB_NODE_BINDING HERITAGE_SC01_GLB_SCENE_COLLISION";
 }
 
-heritage::math::Mat4 translation(const heritage::math::Vec3& value)
-{
-    heritage::math::Mat4 result = heritage::math::identity();
-    result.m[12] = value.x;
-    result.m[13] = value.y;
-    result.m[14] = value.z;
-    return result;
-}
-
-heritage::math::Mat4 scaleMatrix(const heritage::math::Vec3& value)
-{
-    heritage::math::Mat4 result = heritage::math::identity();
-    result.m[0] = value.x;
-    result.m[5] = value.y;
-    result.m[10] = value.z;
-    return result;
-}
-
-heritage::math::Mat4 rotationX(float angle)
-{
-    heritage::math::Mat4 result = heritage::math::identity();
-    const float c = std::cos(angle);
-    const float s = std::sin(angle);
-    result.m[5] = c;
-    result.m[6] = s;
-    result.m[9] = -s;
-    result.m[10] = c;
-    return result;
-}
-
-heritage::math::Mat4 rotationY(float angle)
-{
-    heritage::math::Mat4 result = heritage::math::identity();
-    const float c = std::cos(angle);
-    const float s = std::sin(angle);
-    result.m[0] = c;
-    result.m[2] = -s;
-    result.m[8] = s;
-    result.m[10] = c;
-    return result;
-}
-
-heritage::math::Mat4 rotationZ(float angle)
-{
-    heritage::math::Mat4 result = heritage::math::identity();
-    const float c = std::cos(angle);
-    const float s = std::sin(angle);
-    result.m[0] = c;
-    result.m[1] = s;
-    result.m[4] = -s;
-    result.m[5] = c;
-    return result;
-}
-
-heritage::math::Mat4 modelMatrix(
-    const heritage::entities::MeshInstance& instance)
-{
-    const float toRadians = kPi / 180.0f;
-    const heritage::math::Mat4 rotation = multiply(
-        rotationZ(instance.rotationDegrees.z * toRadians),
-        multiply(
-            rotationY(instance.rotationDegrees.y * toRadians),
-            rotationX(instance.rotationDegrees.x * toRadians)));
-    return multiply(
-        translation(instance.position),
-        multiply(rotation, scaleMatrix(instance.scale)));
-}
-
-heritage::math::Vec3 subtract(
-    const heritage::math::Vec3& a,
-    const heritage::math::Vec3& b)
-{
-    return { a.x - b.x, a.y - b.y, a.z - b.z };
-}
-
-float dot(const heritage::math::Vec3& a, const heritage::math::Vec3& b)
-{
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-heritage::math::Vec3 cross(
-    const heritage::math::Vec3& a,
-    const heritage::math::Vec3& b)
-{
-    return {
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    };
-}
-
-heritage::math::Vec3 normalize(const heritage::math::Vec3& value)
-{
-    const float length = std::sqrt(dot(value, value));
-    if (length <= 0.000001f)
-        return { 0.0f, 0.0f, 0.0f };
-    return { value.x / length, value.y / length, value.z / length };
-}
-
-heritage::math::Mat4 lookAt(
-    const heritage::math::Vec3& eye,
-    const heritage::math::Vec3& target,
-    const heritage::math::Vec3& up)
-{
-    const heritage::math::Vec3 forward = normalize(subtract(target, eye));
-    const heritage::math::Vec3 side = normalize(cross(forward, up));
-    const heritage::math::Vec3 correctedUp = cross(side, forward);
-
-    heritage::math::Mat4 result = heritage::math::identity();
-    result.m[0] = side.x;
-    result.m[1] = correctedUp.x;
-    result.m[2] = -forward.x;
-    result.m[4] = side.y;
-    result.m[5] = correctedUp.y;
-    result.m[6] = -forward.y;
-    result.m[8] = side.z;
-    result.m[9] = correctedUp.z;
-    result.m[10] = -forward.z;
-    result.m[12] = -dot(side, eye);
-    result.m[13] = -dot(correctedUp, eye);
-    result.m[14] = dot(forward, eye);
-    return result;
-}
-
-bool pathBeginsWith(
-    const std::filesystem::path& candidate,
-    const std::filesystem::path& root)
-{
-    auto candidatePart = candidate.begin();
-    for (auto rootPart = root.begin(); rootPart != root.end(); ++rootPart, ++candidatePart)
-    {
-        if (candidatePart == candidate.end() || *candidatePart != *rootPart)
-            return false;
-    }
-    return true;
-}
-
-} // namespace
-
-bool EntityMeshRenderer::initialize(const std::filesystem::path& moduleAssetRoot)
+bool EntityMeshRenderer::initialize(
+    const std::filesystem::path& moduleAssetRoot,
+    EnvironmentSystem* environmentSystem)
 {
     shutdown();
 
+    m_environmentSystem = environmentSystem;
+
     std::error_code error;
-    m_assetRoot = std::filesystem::weakly_canonical(moduleAssetRoot, error);
+    m_assetRoot =
+        std::filesystem::weakly_canonical(moduleAssetRoot, error);
     if (error)
-        m_assetRoot = std::filesystem::absolute(moduleAssetRoot).lexically_normal();
+    {
+        m_assetRoot =
+            std::filesystem::absolute(moduleAssetRoot).lexically_normal();
+    }
 
     m_program = buildShaderProgram(kVertexShader, kFragmentShader);
     if (!m_program)
     {
-        m_lastError = "EntityMeshRenderer could not compile its shader.";
+        m_lastError =
+            "EntityMeshRenderer could not compile its material shader.";
         return false;
     }
+
+    glUseProgram(m_program);
+
+    // Resolve uniform locations exactly once. glGetUniformLocation is a driver
+    // query, and the old renderer repeated it thousands of times per frame
+    // (for every material primitive). That cost showed up directly as the
+    // 60+ ms "Render submit" CPU time in PERF01.
+    auto uniform = [&](const char* name)
+    {
+        return glGetUniformLocation(m_program, name);
+    };
+    m_uniforms.baseColorMap = uniform("uBaseColorMap");
+    m_uniforms.normalMap = uniform("uNormalMap");
+    m_uniforms.roughnessMap = uniform("uRoughnessMap");
+    m_uniforms.metallicMap = uniform("uMetallicMap");
+    m_uniforms.specularMap = uniform("uSpecularMap");
+    m_uniforms.ambientOcclusionMap = uniform("uAmbientOcclusionMap");
+    m_uniforms.emissiveMap = uniform("uEmissiveMap");
+    m_uniforms.opacityMap = uniform("uOpacityMap");
+    m_uniforms.specularFactorMap = uniform("uSpecularFactorMap");
+    m_uniforms.environmentMap = uniform("uEnvironmentMap");
+    m_uniforms.shadowMap = uniform("uShadowMap");
+    m_uniforms.shadowDepthMap = uniform("uShadowDepthMap");
+    m_uniforms.shadowFilterMode = uniform("uShadowFilterMode");
+    m_uniforms.shadowMatrices = uniform("uShadowMatrices[0]");
+    m_uniforms.shadowSplits = uniform("uShadowSplits");
+    m_uniforms.hasShadowMap = uniform("uHasShadowMap");
+    m_uniforms.shadowStrength = uniform("uShadowStrength");
+    m_uniforms.view = uniform("uView");
+    m_uniforms.projection = uniform("uProjection");
+    m_uniforms.eye = uniform("uEye");
+    m_uniforms.sunDirection = uniform("uSunDirection");
+    m_uniforms.sunRadiance = uniform("uSunRadiance");
+    m_uniforms.gamma = uniform("uGamma");
+    m_uniforms.brightness = uniform("uBrightness");
+    m_uniforms.contrast = uniform("uContrast");
+    m_uniforms.saturation = uniform("uSaturation");
+    m_uniforms.hasEnvironmentMap = uniform("uHasEnvironmentMap");
+    m_uniforms.environmentMaxLod = uniform("uEnvironmentMaxLod");
+    m_uniforms.model = uniform("uModel");
+    m_uniforms.useSkinning = uniform("uUseSkinning");
+    m_uniforms.jointMatrices = uniform("uJointMatrices");
+    m_uniforms.tireVisualEnabled = uniform("uTireVisualEnabled");
+    m_uniforms.tireVisualGrounded = uniform("uTireVisualGrounded");
+    m_uniforms.tireVisualCenter = uniform("uTireVisualCenter");
+    m_uniforms.tireVisualAxleAxis = uniform("uTireVisualAxleAxis");
+    m_uniforms.tireVisualHalfWidth = uniform("uTireVisualHalfWidth");
+    m_uniforms.tireVisualInnerRadius = uniform("uTireVisualInnerRadius");
+    m_uniforms.tireVisualOuterRadius = uniform("uTireVisualOuterRadius");
+    m_uniforms.tireReferenceRadiusM = uniform("uTireReferenceRadiusM");
+    m_uniforms.tireRadialDeflectionM = uniform("uTireRadialDeflectionM");
+    m_uniforms.tireContactPatchLengthM = uniform("uTireContactPatchLengthM");
+    m_uniforms.tireContactPatchWidthM = uniform("uTireContactPatchWidthM");
+    m_uniforms.tireRingRadialOffsetM = uniform("uTireRingRadialOffsetM");
+    m_uniforms.tireRingLongitudinalOffsetM = uniform("uTireRingLongitudinalOffsetM");
+    m_uniforms.tireRingLateralOffsetM = uniform("uTireRingLateralOffsetM");
+    m_uniforms.tireRingYawDegrees = uniform("uTireRingYawDegrees");
+    m_uniforms.tireRingWindupDegrees = uniform("uTireRingWindupDegrees");
+    m_uniforms.tireFlatSpotDepthM = uniform("uTireFlatSpotDepthM");
+    m_uniforms.tireFlatSpotSector = uniform("uTireFlatSpotSector");
+    m_uniforms.tireContactNormalWorld = uniform("uTireContactNormalWorld");
+    m_uniforms.tireWheelForwardWorld = uniform("uTireWheelForwardWorld");
+    m_uniforms.tireWheelRightWorld = uniform("uTireWheelRightWorld");
+    m_uniforms.tireNormalForceN = uniform("uTireNormalForceN");
+    m_uniforms.tireLongitudinalForceN = uniform("uTireLongitudinalForceN");
+    m_uniforms.tireLateralForceN = uniform("uTireLateralForceN");
+    m_uniforms.tireVisualMotionSpeedMps = uniform("uTireVisualMotionSpeedMps");
+    m_uniforms.tireContactPlaneDistanceM = uniform("uTireContactPlaneDistanceM");
+    m_uniforms.tireVisualSupportGridValid = uniform("uTireVisualSupportGridValid");
+    m_uniforms.tireVisualSupportHalfLengthM = uniform("uTireVisualSupportHalfLengthM");
+    m_uniforms.tireVisualSupportHalfWidthM = uniform("uTireVisualSupportHalfWidthM");
+    m_uniforms.tireVisualSupportHeightResidualM = uniform("uTireVisualSupportHeightResidualM");
+    m_uniforms.tireVisualProbeGridValid = uniform("uTireVisualProbeGridValid");
+    m_uniforms.tireVisualProbeCompressionM = uniform("uTireVisualProbeCompressionM[0]");
+    m_uniforms.tireProbeDebugVisible = uniform("uTireProbeDebugVisible");
+    m_uniforms.tireVisualColliderTriangleCount = uniform("uTireVisualColliderTriangleCount");
+    m_uniforms.tireVisualColliderTriangleA = uniform("uTireVisualColliderTriangleA[0]");
+    m_uniforms.tireVisualColliderTriangleB = uniform("uTireVisualColliderTriangleB[0]");
+    m_uniforms.tireVisualColliderTriangleC = uniform("uTireVisualColliderTriangleC[0]");
+    m_uniforms.tireVisualColliderTriangleNormal = uniform("uTireVisualColliderTriangleNormal[0]");
+    m_uniforms.materialBaseColor = uniform("uMaterialBaseColor");
+    m_uniforms.materialSpecularColor = uniform("uMaterialSpecularColor");
+    m_uniforms.materialEmissiveColor = uniform("uMaterialEmissiveColor");
+    m_uniforms.materialRoughness = uniform("uMaterialRoughness");
+    m_uniforms.materialMetallic = uniform("uMaterialMetallic");
+    m_uniforms.materialSpecularFactor = uniform("uMaterialSpecularFactor");
+    m_uniforms.materialOpacity = uniform("uMaterialOpacity");
+    m_uniforms.roughnessChannel = uniform("uRoughnessChannel");
+    m_uniforms.metallicChannel = uniform("uMetallicChannel");
+    m_uniforms.ambientOcclusionChannel = uniform("uAmbientOcclusionChannel");
+    m_uniforms.opacityChannel = uniform("uOpacityChannel");
+    m_uniforms.specularFactorChannel = uniform("uSpecularFactorChannel");
+    m_uniforms.useVertexColor = uniform("uUseVertexColor");
+    m_uniforms.tint = uniform("uTint");
+    m_uniforms.hasBaseColorMap = uniform("uHasBaseColorMap");
+    m_uniforms.hasNormalMap = uniform("uHasNormalMap");
+    m_uniforms.hasRoughnessMap = uniform("uHasRoughnessMap");
+    m_uniforms.hasMetallicMap = uniform("uHasMetallicMap");
+    m_uniforms.hasSpecularMap = uniform("uHasSpecularMap");
+    m_uniforms.hasAmbientOcclusionMap = uniform("uHasAmbientOcclusionMap");
+    m_uniforms.hasEmissiveMap = uniform("uHasEmissiveMap");
+    m_uniforms.hasOpacityMap = uniform("uHasOpacityMap");
+    m_uniforms.hasSpecularFactorMap = uniform("uHasSpecularFactorMap");
+
+    glUniform1i(m_uniforms.baseColorMap, 0);
+    glUniform1i(m_uniforms.normalMap, 1);
+    glUniform1i(m_uniforms.roughnessMap, 2);
+    glUniform1i(m_uniforms.metallicMap, 3);
+    glUniform1i(m_uniforms.specularMap, 4);
+    glUniform1i(m_uniforms.ambientOcclusionMap, 5);
+    glUniform1i(m_uniforms.emissiveMap, 6);
+    glUniform1i(m_uniforms.opacityMap, 7);
+    glUniform1i(m_uniforms.specularFactorMap, 8);
+    glUniform1i(m_uniforms.environmentMap, 9);
+    glUniform1i(m_uniforms.shadowMap, 10);
+    glUniform1i(m_uniforms.shadowDepthMap, 11);
+
+    m_hotReloadEpoch = 1;
+    m_textureCache.setHotReloadEpoch(m_hotReloadEpoch);
+
+    const EnvironmentLighting initialLighting = m_environmentSystem
+        ? m_environmentSystem->lighting()
+        : EnvironmentLighting{};
+    if (!m_environmentMap.initializeProcedural(initialLighting))
+    {
+        std::cerr
+            << "Heritage renderer warning: environment IBL unavailable: "
+            << m_environmentMap.lastError() << '\n';
+    }
+
+    if (!m_skyRenderer.initialize())
+    {
+        std::cerr
+            << "Heritage renderer warning: visible sky shader unavailable; "
+            << "environment reflections remain active.\n";
+    }
+
+    if (!initializeShadowResources())
+    {
+        std::cerr
+            << "Heritage renderer warning: real-time sun shadows unavailable; "
+            << "rendering continues without shadows.\n";
+    }
+
+    std::cout
+        << "Heritage renderer: OBJ/MTL + GLB static mesh import enabled ["
+        << kTextureMapFoundationMarker << "]\n";
 
     m_lastError.clear();
     return true;
 }
-
 void EntityMeshRenderer::shutdown()
 {
     clearCache();
+    m_skyRenderer.shutdown();
+    m_environmentMap.shutdown();
+    shutdownShadowResources();
+    m_environmentSystem = nullptr;
     if (m_program)
     {
         glDeleteProgram(m_program);
         m_program = 0;
     }
     m_assetRoot.clear();
+    m_resolvedTexturePaths.clear();
+    m_reportedTireVisualProofNodes.clear();
+    m_reportedTireColliderProofNodes.clear();
+    m_uniforms = {};
+    m_hotReloadEpoch = 1;
     m_lastError.clear();
 }
-
-void EntityMeshRenderer::clearCache()
-{
-    for (auto& [key, asset] : m_cache)
-        destroyMesh(asset.mesh);
-    m_cache.clear();
-}
-
-bool EntityMeshRenderer::resolveAsset(
-    const std::string& relativePath,
-    std::filesystem::path& resolved,
-    std::string& error) const
-{
-    const std::filesystem::path requested(relativePath);
-    if (relativePath.empty() || requested.is_absolute() || requested.has_root_name())
-    {
-        error = "Mesh path must be relative to the active module Assets directory.";
-        return false;
-    }
-
-    std::error_code canonicalError;
-    resolved = std::filesystem::weakly_canonical(
-        m_assetRoot / requested,
-        canonicalError);
-    if (canonicalError)
-        resolved = std::filesystem::absolute(m_assetRoot / requested).lexically_normal();
-
-    if (!pathBeginsWith(resolved, m_assetRoot))
-    {
-        error = "Mesh path escaped the active module Assets directory.";
-        return false;
-    }
-
-    if (!std::filesystem::is_regular_file(resolved))
-    {
-        error = "Mesh asset was not found: " + resolved.string();
-        return false;
-    }
-
-    error.clear();
-    return true;
-}
-
-const Mesh* EntityMeshRenderer::acquireMesh(
-    const std::string& relativePath,
-    bool normalize,
-    bool blenderCoordinates)
-{
-    std::filesystem::path resolved;
-    std::string resolveError;
-    const std::string cacheKey = relativePath
-        + (normalize ? "|normalized" : "|authored")
-        + (blenderCoordinates ? "|blender" : "|engine");
-    CachedAsset& asset = m_cache[cacheKey];
-
-    if (!resolveAsset(relativePath, resolved, resolveError))
-    {
-        if (!asset.attempted || asset.error != resolveError)
-            std::cerr << "Entity mesh warning: " << resolveError << '\n';
-        asset.attempted = true;
-        asset.loaded = false;
-        asset.error = resolveError;
-        m_lastError = resolveError;
-        return nullptr;
-    }
-
-    std::error_code timeError;
-    const auto writeTime = std::filesystem::last_write_time(resolved, timeError);
-    const bool changed = !asset.attempted
-        || (!timeError && writeTime != asset.lastWriteTime);
-    if (changed)
-    {
-        destroyMesh(asset.mesh);
-        asset.mesh = loadObjMesh(
-            resolved.string(), normalize, blenderCoordinates);
-        asset.attempted = true;
-        asset.lastWriteTime = writeTime;
-        asset.loaded = !asset.mesh.indices.empty();
-        if (asset.loaded)
-        {
-            uploadMesh(asset.mesh);
-            asset.loaded = asset.mesh.vao != 0;
-        }
-
-        if (!asset.loaded)
-        {
-            asset.error = "OBJ contained no renderable triangles: " + resolved.string();
-            std::cerr << "Entity mesh warning: " << asset.error << '\n';
-            m_lastError = asset.error;
-        }
-        else
-        {
-            asset.error.clear();
-            m_lastError.clear();
-        }
-    }
-
-    return asset.loaded ? &asset.mesh : nullptr;
-}
-
 void EntityMeshRenderer::draw(
     const heritage::entities::EntityRegistry& registry,
     const heritage::math::Mat4& projection,
     const heritage::settings::VideoSettings& videoSettings,
-    float elapsedSeconds)
+    float elapsedSeconds,
+    const heritage::camera::CameraFrame& cameraFrame,
+    bool wireframeVisible)
 {
     if (!m_program)
         return;
 
-    const std::vector<heritage::entities::MeshInstance> instances =
-        registry.meshInstances();
+    // PERF05: no periodic filesystem timestamp/hash polling in the draw path.
+    // F5 calls requestHotReloadPoll(), preserving authoring hot reload without
+    // introducing a rhythmic gameplay hitch.
+
+    using PerfClock = std::chrono::steady_clock;
+    const auto millisecondsSince = [](PerfClock::time_point start) -> double {
+        return std::chrono::duration<double, std::milli>(PerfClock::now() - start).count();
+    };
+
+    const auto instanceGatherStart = PerfClock::now();
+    registry.meshInstances(m_instanceScratch);
+    m_frameStats.instanceGatherMs += millisecondsSince(instanceGatherStart);
+    const auto& instances = m_instanceScratch;
+    m_frameStats.meshInstances += static_cast<std::uint64_t>(instances.size());
+
+    const heritage::math::Vec3 eye = cameraFrame.valid
+        ? cameraFrame.eyeLocal
+        : heritage::math::Vec3{ 0.0f, 3.4f, 8.5f };
+    const heritage::math::Vec3 cameraTarget = cameraFrame.valid
+        ? cameraFrame.targetLocal
+        : heritage::math::Vec3{ 0.0f, 1.0f, 0.0f };
+    const heritage::math::Vec3 cameraUp = cameraFrame.valid
+        ? cameraFrame.up
+        : heritage::math::Vec3{ 0.0f, 1.0f, 0.0f };
+
+    // GPU camera-relative rendering: the CPU/local world may be hundreds of
+    // metres from its floating origin, but shader coordinates are always built
+    // around an exact camera (0,0,0). ChaseCamera itself keeps FP64 absolute
+    // state so a CPU floating-origin rebase cannot kick the camera springs.
+    const heritage::math::Vec3 cameraRelativeTarget{
+        cameraTarget.x - eye.x,
+        cameraTarget.y - eye.y,
+        cameraTarget.z - eye.z
+    };
+    const heritage::math::Vec3 cameraRelativeEye{ 0.0f, 0.0f, 0.0f };
+    const heritage::math::Mat4 view =
+        lookAt(cameraRelativeEye, cameraRelativeTarget, cameraUp);
+    const ViewFrustum viewFrustum = extractViewFrustum(projection, view);
+
+    const EnvironmentLighting lighting = m_environmentSystem
+        ? m_environmentSystem->lighting()
+        : EnvironmentLighting{};
+
+    const auto shadowStart = PerfClock::now();
+    const bool shadowSettingsReady = synchronizeShadowSettings(videoSettings);
+    m_shadowsActive =
+        shadowSettingsReady
+        && lighting.sunIntensity > 0.01f
+        && buildShadowCascades(projection, view, lighting.sunDirection);
+    if (m_shadowsActive)
+        drawShadowMaps(instances, eye, elapsedSeconds);
+    m_frameStats.shadowCpuMs += millisecondsSince(shadowStart);
+    m_frameStats.shadowsActive = m_shadowsActive;
+    m_frameStats.shadowCascadeCount = m_shadowsActive ? kCascadeCount : 0;
+    m_frameStats.shadowResolution = m_shadowsActive ? m_shadowResolution : 0;
+    m_frameStats.shadowFilterMode = m_shadowFilterIndex;
+
+    const std::uint64_t environmentSerialBefore = m_environmentMap.generationSerial();
+    const auto environmentUpdateStart = PerfClock::now();
+    if (!m_environmentMap.updateProcedural(lighting))
+    {
+        const std::string warning =
+            "Environment cubemap refresh failed: " + m_environmentMap.lastError();
+        reportMaterialWarning(warning);
+    }
+    m_frameStats.environmentUpdateMs += millisecondsSince(environmentUpdateStart);
+    if (m_environmentMap.generationSerial() != environmentSerialBefore)
+        ++m_frameStats.environmentRefreshes;
+
+    const auto skyDrawStart = PerfClock::now();
+    m_skyRenderer.draw(
+        view,
+        projection,
+        m_environmentMap,
+        videoSettings.gamma,
+        videoSettings.brightness,
+        videoSettings.contrast,
+        videoSettings.saturation);
+    m_frameStats.skyDrawMs += millisecondsSince(skyDrawStart);
+
     if (instances.empty())
         return;
 
-    heritage::math::Vec3 cameraTarget{ 0.0f, 1.0f, 0.0f };
-    const heritage::entities::EntityHandle player =
-        registry.findByName("Player Vehicle Root");
-    heritage::math::Vec3 playerPosition{};
-    if (player != heritage::entities::InvalidEntity
-        && registry.worldPosition(player, playerPosition))
-    {
-        cameraTarget = {
-            playerPosition.x,
-            playerPosition.y + 0.9f,
-            playerPosition.z
-        };
-    }
-
-    heritage::math::Vec3 eye{};
-    const bool playerWorldActive =
-        registry.findByName("Player Scene Visual") != heritage::entities::InvalidEntity;
-    if (player != heritage::entities::InvalidEntity && playerWorldActive)
-    {
-        heritage::math::Vec3 rotationDegrees{};
-        registry.worldRotationDegrees(player, rotationDegrees);
-        const float yawRadians = rotationDegrees.y * (kPi / 180.0f);
-        const heritage::math::Vec3 forward{
-            std::sin(yawRadians),
-            0.0f,
-            std::cos(yawRadians)
-        };
-
-        // Temporary drive camera for creator scenes. Keep the camera behind
-        // the authoritative vehicle heading instead of orbiting continuously.
-        cameraTarget = {
-            playerPosition.x + forward.x * 2.0f,
-            playerPosition.y + 0.85f,
-            playerPosition.z + forward.z * 2.0f
-        };
-        eye = {
-            playerPosition.x - forward.x * 6.6f,
-            playerPosition.y + 2.7f,
-            playerPosition.z - forward.z * 6.6f
-        };
-    }
-    else
-    {
-        const float orbitAngle = elapsedSeconds * 0.18f;
-        eye = {
-            cameraTarget.x + std::sin(orbitAngle) * 8.5f,
-            cameraTarget.y + 3.4f,
-            cameraTarget.z + std::cos(orbitAngle) * 8.5f
-        };
-    }
-
-    const heritage::math::Mat4 view = lookAt(
-        eye,
-        cameraTarget,
-        { 0.0f, 1.0f, 0.0f });
+    // DEBUG-WIREFRAME01: only visible authored entity geometry switches to
+    // line rasterization. Restore fill before presentation/post/UI passes.
+    if (wireframeVisible)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     glUseProgram(m_program);
-    glUniformMatrix4fv(glGetUniformLocation(m_program, "uView"), 1, GL_FALSE, view.m);
-    glUniformMatrix4fv(glGetUniformLocation(m_program, "uProjection"), 1, GL_FALSE, projection.m);
-    glUniform3f(glGetUniformLocation(m_program, "uEye"), eye.x, eye.y, eye.z);
-    glUniform1f(glGetUniformLocation(m_program, "uGamma"), videoSettings.gamma);
-    glUniform1f(glGetUniformLocation(m_program, "uBrightness"), videoSettings.brightness);
-    glUniform1f(glGetUniformLocation(m_program, "uContrast"), videoSettings.contrast);
-    glUniform1f(glGetUniformLocation(m_program, "uSaturation"), videoSettings.saturation);
+    glUniformMatrix4fv(
+        m_uniforms.view,
+        1, GL_FALSE, view.m);
+    glUniformMatrix4fv(
+        m_uniforms.projection,
+        1, GL_FALSE, projection.m);
+    glUniform3f(
+        m_uniforms.eye,
+        0.0f, 0.0f, 0.0f);
+    glUniform3f(
+        m_uniforms.sunDirection,
+        lighting.sunDirection.x,
+        lighting.sunDirection.y,
+        lighting.sunDirection.z);
+    glUniform3f(
+        m_uniforms.sunRadiance,
+        lighting.sunColor.x * lighting.sunIntensity,
+        lighting.sunColor.y * lighting.sunIntensity,
+        lighting.sunColor.z * lighting.sunIntensity);
+    glUniform1f(
+        m_uniforms.gamma,
+        videoSettings.gamma);
+    glUniform1f(
+        m_uniforms.brightness,
+        videoSettings.brightness);
+    glUniform1f(
+        m_uniforms.contrast,
+        videoSettings.contrast);
+    glUniform1f(
+        m_uniforms.saturation,
+        videoSettings.saturation);
+    glUniform1i(
+        m_uniforms.tireProbeDebugVisible,
+        m_tireProbeDebugVisible ? 1 : 0);
 
+    glUniform1i(
+        m_uniforms.hasEnvironmentMap,
+        m_environmentMap.valid() ? 1 : 0);
+    glUniform1f(
+        m_uniforms.environmentMaxLod,
+        m_environmentMap.maximumLod());
+    if (m_environmentMap.valid())
+    {
+        glActiveTexture(GL_TEXTURE0 + 9);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, m_environmentMap.textureId());
+    }
+
+    glUniform1i(m_uniforms.hasShadowMap, m_shadowsActive ? 1 : 0);
+    glUniform4f(
+        m_uniforms.shadowSplits,
+        m_shadowSplits[0],
+        m_shadowSplits[1],
+        m_shadowSplits[2],
+        m_shadowSplits[3]);
+    glUniform1f(
+        m_uniforms.shadowStrength,
+        std::clamp(lighting.daylightFactor, 0.0f, 1.0f));
+    glUniform1i(m_uniforms.shadowFilterMode, m_shadowFilterIndex);
+    if (m_shadowsActive && m_shadowTextureArray)
+    {
+        glUniformMatrix4fv(
+            m_uniforms.shadowMatrices,
+            kCascadeCount,
+            GL_FALSE,
+            m_shadowMatrices[0].m);
+        glActiveTexture(GL_TEXTURE0 + 10);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, m_shadowTextureArray);
+        glBindSampler(10, m_shadowCompareSampler);
+        glActiveTexture(GL_TEXTURE0 + 11);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, m_shadowTextureArray);
+        glBindSampler(11, m_shadowRawSampler);
+    }
+    glActiveTexture(GL_TEXTURE0);
+
+    const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
+
+    std::array<GLuint, 9> boundTexture2D{};
+    boundTexture2D.fill(static_cast<GLuint>(~0u));
+    int activeTextureUnit = 0;
+    auto activateTextureUnit = [&](int unit)
+    {
+        if (activeTextureUnit == unit)
+            return;
+        glActiveTexture(GL_TEXTURE0 + unit);
+        activeTextureUnit = unit;
+    };
+
+    auto bindMap = [&](
+        const MaterialTextureReference& requested,
+        TextureColorSpace colorSpace,
+        int textureUnit,
+        GLint presenceLocation,
+        bool meshHasTexcoords) -> bool
+    {
+
+        if (requested.empty() || !meshHasTexcoords)
+        {
+            glUniform1i(presenceLocation, 0);
+            return false;
+        }
+
+        std::string textureError;
+        const Texture2D* texture = nullptr;
+        if (requested.embedded)
+        {
+            texture = m_textureCache.acquireEmbedded(
+                requested.embedded->key,
+                requested.embedded->bytes,
+                colorSpace,
+                videoSettings.textureFilterIndex,
+                requested.flipVerticalOnDecode,
+                textureError);
+        }
+        else
+        {
+            std::filesystem::path resolved;
+            std::string pathError;
+            if (!resolveMaterialTexture(
+                    requested.filePath, resolved, pathError))
+            {
+                reportMaterialWarning(pathError);
+                glUniform1i(presenceLocation, 0);
+                return false;
+            }
+
+            texture = m_textureCache.acquire(
+                resolved,
+                colorSpace,
+                videoSettings.textureFilterIndex,
+                requested.flipVerticalOnDecode,
+                textureError);
+        }
+
+        if (!texture)
+        {
+            reportMaterialWarning(textureError);
+            glUniform1i(presenceLocation, 0);
+            return false;
+        }
+
+        if (textureUnit >= 0
+            && textureUnit < static_cast<int>(boundTexture2D.size())
+            && boundTexture2D[static_cast<std::size_t>(textureUnit)] != texture->id)
+        {
+            activateTextureUnit(textureUnit);
+            glBindTexture(GL_TEXTURE_2D, texture->id);
+            ++m_frameStats.textureBinds;
+            boundTexture2D[static_cast<std::size_t>(textureUnit)] = texture->id;
+        }
+        glUniform1i(presenceLocation, 1);
+        return true;
+    };
+
+    const MaterialDefinition fallbackMaterial{};
+    const MaterialDefinition* lastMaterial = nullptr;
+    bool lastMaterialHasBaseColorTexture = false;
+    GLenum activeFrontFace = GL_CCW;
+    glFrontFace(activeFrontFace);
+
     for (const auto& instance : instances)
     {
-        const Mesh* mesh = acquireMesh(
-            instance.assetPath,
-            instance.normalize,
-            instance.blenderCoordinates);
+        const auto meshInstanceStart = PerfClock::now();
+        const Mesh* mesh =
+            acquireMesh(
+                instance.assetPath,
+                instance.normalize,
+                instance.blenderCoordinates);
         if (!mesh)
+        {
+            const double instanceMs = millisecondsSince(meshInstanceStart);
+            m_frameStats.meshInstancesCpuMs += instanceMs;
+            if (instanceMs > m_frameStats.slowestMeshInstanceMs)
+            {
+                m_frameStats.slowestMeshInstanceMs = instanceMs;
+                m_frameStats.slowestMeshAsset = instance.assetPath;
+            }
             continue;
+        }
 
         if (instance.doubleSided)
             glDisable(GL_CULL_FACE);
         else
             glEnable(GL_CULL_FACE);
 
-        const heritage::math::Mat4 model = modelMatrix(instance);
-        glUniformMatrix4fv(glGetUniformLocation(m_program, "uModel"), 1, GL_FALSE, model.m);
-        glUniform3f(
-            glGetUniformLocation(m_program, "uColor"),
-            instance.color.x,
-            instance.color.y,
-            instance.color.z);
+        heritage::entities::MeshInstance cameraRelativeInstance = instance;
+        cameraRelativeInstance.position = {
+            instance.position.x - eye.x,
+            instance.position.y - eye.y,
+            instance.position.z - eye.z
+        };
+        const heritage::math::Mat4 instanceModel =
+            modelMatrix(cameraRelativeInstance);
+        std::vector<heritage::math::Mat4> nodeGlobals =
+            animationTransformsForInstance(*mesh, instance, elapsedSeconds);
+        applyMeshNodeOverrides(
+            *mesh, instance, instanceModel, eye, nodeGlobals);
         glBindVertexArray(mesh->vao);
-        glDrawElements(
-            GL_TRIANGLES,
-            static_cast<GLsizei>(mesh->indices.size()),
-            GL_UNSIGNED_INT,
-            nullptr);
+        ++m_frameStats.vaoBinds;
+
+        const auto drawRange =
+            [&](const MeshDrawRange& range)
+        {
+            if (!nodeMatchesPrefixFilter(
+                    *mesh,
+                    range.nodeIndex,
+                    instance.nodeNamePrefixFilter))
+            {
+                return;
+            }
+
+            ++m_frameStats.candidateRanges;
+            if (range.hiddenByAuthoring)
+            {
+                ++m_frameStats.skippedAuthoringRanges;
+                return;
+            }
+
+            heritage::math::Mat4 rangeModel = instanceModel;
+            if (range.nodeIndex >= 0
+                && static_cast<std::size_t>(range.nodeIndex) < nodeGlobals.size())
+            {
+                rangeModel = multiply(instanceModel, nodeGlobals[static_cast<std::size_t>(range.nodeIndex)]);
+            }
+
+            const MeshNode* tireVisualNode = nullptr;
+            const heritage::entities::MeshNodeOverride* tireVisualState = nullptr;
+            if (range.nodeIndex >= 0
+                && static_cast<std::size_t>(range.nodeIndex) < mesh->nodes.size())
+            {
+                const MeshNode& candidate =
+                    mesh->nodes[static_cast<std::size_t>(range.nodeIndex)];
+                if (candidate.hasTireVisualGeometry)
+                {
+                    tireVisualNode = &candidate;
+                    for (const auto& overrideValue : instance.nodeOverrides)
+                    {
+                        if (overrideValue.nodeName == candidate.name
+                            && overrideValue.hasTireVisualDeformation)
+                        {
+                            tireVisualState = &overrideValue;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // PERF03: reject off-screen static/non-skinned primitives before
+            // touching shader uniforms, textures, material state or GL draws.
+            // Skinned ranges stay conservative for now because rest-pose bounds
+            // do not yet include arbitrary skin deformation.
+            if (range.hasBounds && range.skinIndex < 0)
+            {
+                const heritage::math::Vec3 boundsCenter =
+                    transformPoint(rangeModel, range.boundsCenter);
+                const float tireBoundsInflation = tireVisualState ? 1.12f : 1.0f;
+                const float boundsRadius =
+                    range.boundsRadius * tireBoundsInflation
+                    * maximumLinearScale(rangeModel);
+                if (sphereOutsideFrustum(viewFrustum, boundsCenter, boundsRadius))
+                {
+                    ++m_frameStats.culledRanges;
+                    m_frameStats.culledTriangles +=
+                        static_cast<std::uint64_t>(range.indexCount / 3);
+                    return;
+                }
+            }
+
+            // glTF/Blender assets often create the opposite side of a vehicle
+            // with a mirrored node transform (negative scale). A reflection
+            // reverses triangle winding. OpenGL's global CCW front-face rule
+            // would then make the mirrored wheel/rim look inside-out even
+            // though Blender shows it correctly. Treat the complete node/model
+            // determinant as authoritative and flip the front-face convention
+            // per draw range instead of baking vehicle-specific mirror hacks.
+            const bool reflectedRange =
+                linearDeterminant3x3(rangeModel) < 0.0f;
+            const GLenum requestedFrontFace = reflectedRange ? GL_CW : GL_CCW;
+            if (requestedFrontFace != activeFrontFace)
+            {
+                glFrontFace(requestedFrontFace);
+                ++m_frameStats.frontFaceChanges;
+                activeFrontFace = requestedFrontFace;
+            }
+
+            glUniformMatrix4fv(
+                m_uniforms.model,
+                1, GL_FALSE, rangeModel.m);
+
+            const bool useTireVisual =
+                tireVisualNode != nullptr && tireVisualState != nullptr;
+            glUniform1i(
+                m_uniforms.tireVisualEnabled,
+                useTireVisual ? 1 : 0);
+            if (useTireVisual)
+            {
+                if (m_reportedTireVisualProofNodes.insert(tireVisualNode->name).second)
+                {
+                    std::cout
+                        << "TIRE25 VIS17: live tire shader node="
+                        << tireVisualNode->name
+                        << " outerRadiusLocal=" << tireVisualNode->tireVisualOuterRadius
+                        << " innerRadiusLocal=" << tireVisualNode->tireVisualInnerRadius
+                        << " halfWidthLocal=" << tireVisualNode->tireVisualHalfWidth
+                        << '\n';
+                }
+                glUniform1i(
+                    m_uniforms.tireVisualGrounded,
+                    tireVisualState->tireGrounded ? 1 : 0);
+                glUniform3f(
+                    m_uniforms.tireVisualCenter,
+                    tireVisualNode->tireVisualCenter[0],
+                    tireVisualNode->tireVisualCenter[1],
+                    tireVisualNode->tireVisualCenter[2]);
+                glUniform1i(
+                    m_uniforms.tireVisualAxleAxis,
+                    tireVisualNode->tireVisualAxleAxis);
+                glUniform1f(
+                    m_uniforms.tireVisualHalfWidth,
+                    tireVisualNode->tireVisualHalfWidth);
+                glUniform1f(
+                    m_uniforms.tireVisualInnerRadius,
+                    tireVisualNode->tireVisualInnerRadius);
+                glUniform1f(
+                    m_uniforms.tireVisualOuterRadius,
+                    tireVisualNode->tireVisualOuterRadius);
+                glUniform1f(
+                    m_uniforms.tireReferenceRadiusM,
+                    tireVisualState->tireReferenceRadiusM);
+                glUniform1f(
+                    m_uniforms.tireRadialDeflectionM,
+                    tireVisualState->tireRadialDeflectionM);
+                glUniform1f(
+                    m_uniforms.tireContactPatchLengthM,
+                    tireVisualState->tireContactPatchLengthM);
+                glUniform1f(
+                    m_uniforms.tireContactPatchWidthM,
+                    tireVisualState->tireContactPatchWidthM);
+                glUniform1f(
+                    m_uniforms.tireRingRadialOffsetM,
+                    tireVisualState->tireRingRadialOffsetM);
+                glUniform1f(
+                    m_uniforms.tireRingLongitudinalOffsetM,
+                    tireVisualState->tireRingLongitudinalOffsetM);
+                glUniform1f(
+                    m_uniforms.tireRingLateralOffsetM,
+                    tireVisualState->tireRingLateralOffsetM);
+                glUniform1f(
+                    m_uniforms.tireRingYawDegrees,
+                    tireVisualState->tireRingYawDegrees);
+                glUniform1f(
+                    m_uniforms.tireRingWindupDegrees,
+                    tireVisualState->tireRingWindupDegrees);
+                glUniform1f(
+                    m_uniforms.tireFlatSpotDepthM,
+                    tireVisualState->tireFlatSpotDepthM);
+                glUniform1f(
+                    m_uniforms.tireFlatSpotSector,
+                    tireVisualState->tireFlatSpotSector);
+                glUniform3f(
+                    m_uniforms.tireContactNormalWorld,
+                    tireVisualState->tireContactNormalWorld.x,
+                    tireVisualState->tireContactNormalWorld.y,
+                    tireVisualState->tireContactNormalWorld.z);
+                glUniform3f(
+                    m_uniforms.tireWheelForwardWorld,
+                    tireVisualState->tireWheelForwardWorld.x,
+                    tireVisualState->tireWheelForwardWorld.y,
+                    tireVisualState->tireWheelForwardWorld.z);
+                glUniform3f(
+                    m_uniforms.tireWheelRightWorld,
+                    tireVisualState->tireWheelRightWorld.x,
+                    tireVisualState->tireWheelRightWorld.y,
+                    tireVisualState->tireWheelRightWorld.z);
+                glUniform1f(m_uniforms.tireNormalForceN, tireVisualState->tireNormalForceN);
+                glUniform1f(m_uniforms.tireLongitudinalForceN, tireVisualState->tireLongitudinalForceN);
+                glUniform1f(m_uniforms.tireLateralForceN, tireVisualState->tireLateralForceN);
+                glUniform1f(m_uniforms.tireVisualMotionSpeedMps, tireVisualState->tireVisualMotionSpeedMps);
+                glUniform1f(
+                    m_uniforms.tireContactPlaneDistanceM,
+                    tireVisualState->tireContactPlaneDistanceM);
+                glUniform1i(
+                    m_uniforms.tireVisualSupportGridValid,
+                    tireVisualState->tireVisualSupportGridValid ? 1 : 0);
+                glUniform1f(
+                    m_uniforms.tireVisualSupportHalfLengthM,
+                    tireVisualState->tireVisualSupportHalfLengthM);
+                glUniform1f(
+                    m_uniforms.tireVisualSupportHalfWidthM,
+                    tireVisualState->tireVisualSupportHalfWidthM);
+                glUniform1fv(
+                    m_uniforms.tireVisualSupportHeightResidualM,
+                    9,
+                    tireVisualState->tireVisualSupportHeightResidualM.data());
+                glUniform1i(
+                    m_uniforms.tireVisualProbeGridValid,
+                    tireVisualState->tireVisualProbeGridValid ? 1 : 0);
+                glUniform1fv(
+                    m_uniforms.tireVisualProbeCompressionM,
+                    static_cast<GLsizei>(heritage::entities::TireVisualProbeCount),
+                    tireVisualState->tireVisualProbeCompressionM.data());
+                const std::uint32_t colliderTriangleCount =
+                    tireVisualState->tireVisualColliderTrianglesValid
+                        ? (std::min)(
+                            tireVisualState->tireVisualColliderTriangleCount,
+                            static_cast<std::uint32_t>(heritage::entities::TireVisualColliderTriangleLimit))
+                        : 0u;
+                glUniform1i(
+                    m_uniforms.tireVisualColliderTriangleCount,
+                    static_cast<GLint>(colliderTriangleCount));
+                if (colliderTriangleCount > 0
+                    && m_reportedTireColliderProofNodes.insert(tireVisualNode->name).second)
+                {
+                    std::cout
+                        << "TIRE25 VIS17: collider bridge node="
+                        << tireVisualNode->name
+                        << " triangles=" << colliderTriangleCount
+                        << '\n';
+                }
+                if (colliderTriangleCount > 0)
+                {
+                    // TIRE22/VIS14: convert absolute FP64/physics-world collider
+                    // geometry into this spinning tire draw range's LOCAL space
+                    // before it reaches GLSL. rangeModel is camera-relative, so
+                    // feeding absolute world triangles directly to the shader
+                    // compares unrelated coordinate systems and can make every
+                    // contact appear inert. Local-space triangles also remain
+                    // correct through wheel spin, steering and mirrored GLB nodes.
+                    const heritage::math::Mat4 worldToTireLocal =
+                        inverseMatrix(rangeModel);
+                    const auto worldPointToTireLocal = [&](
+                        const heritage::math::Vec3& point)
+                    {
+                        return transformPoint(
+                            worldToTireLocal,
+                            std::array<float, 3>{
+                                point.x - eye.x,
+                                point.y - eye.y,
+                                point.z - eye.z });
+                    };
+                    const auto localTriangleNormal = [&](
+                        const heritage::math::Vec3& localA,
+                        const heritage::math::Vec3& localB,
+                        const heritage::math::Vec3& localC)
+                    {
+                        const heritage::math::Vec3 ab{
+                            localB.x - localA.x, localB.y - localA.y, localB.z - localA.z };
+                        const heritage::math::Vec3 ac{
+                            localC.x - localA.x, localC.y - localA.y, localC.z - localA.z };
+                        heritage::math::Vec3 normal{
+                            ab.y * ac.z - ab.z * ac.y,
+                            ab.z * ac.x - ab.x * ac.z,
+                            ab.x * ac.y - ab.y * ac.x };
+                        const float lengthSquared = normal.x * normal.x
+                            + normal.y * normal.y + normal.z * normal.z;
+                        if (lengthSquared > 1.0e-12f)
+                        {
+                            const float inverseLength = 1.0f / std::sqrt(lengthSquared);
+                            normal.x *= inverseLength;
+                            normal.y *= inverseLength;
+                            normal.z *= inverseLength;
+                        }
+                        else
+                        {
+                            normal = { 0.0f, 1.0f, 0.0f };
+                        }
+                        // Collision normals always point toward the tire interior.
+                        // This makes road, kerb, wall and mirrored-side triangles
+                        // share one stable "push rubber back toward the tire" rule.
+                        const float towardCenter =
+                            (tireVisualNode->tireVisualCenter[0] - localA.x) * normal.x
+                            + (tireVisualNode->tireVisualCenter[1] - localA.y) * normal.y
+                            + (tireVisualNode->tireVisualCenter[2] - localA.z) * normal.z;
+                        if (towardCenter < 0.0f)
+                        {
+                            normal.x = -normal.x;
+                            normal.y = -normal.y;
+                            normal.z = -normal.z;
+                        }
+                        return normal;
+                    };
+
+                    std::array<float, heritage::entities::TireVisualColliderTriangleLimit * 4> a{};
+                    std::array<float, heritage::entities::TireVisualColliderTriangleLimit * 4> b{};
+                    std::array<float, heritage::entities::TireVisualColliderTriangleLimit * 4> c{};
+                    std::array<float, heritage::entities::TireVisualColliderTriangleLimit * 4> n{};
+                    for (std::uint32_t triangleIndex = 0;
+                         triangleIndex < colliderTriangleCount; ++triangleIndex)
+                    {
+                        const auto& triangle =
+                            tireVisualState->tireVisualColliderTriangles[triangleIndex];
+                        const heritage::math::Vec3 localA =
+                            worldPointToTireLocal(triangle.a);
+                        const heritage::math::Vec3 localB =
+                            worldPointToTireLocal(triangle.b);
+                        const heritage::math::Vec3 localC =
+                            worldPointToTireLocal(triangle.c);
+                        const heritage::math::Vec3 localNormal =
+                            localTriangleNormal(localA, localB, localC);
+                        const std::size_t base = static_cast<std::size_t>(triangleIndex) * 4;
+                        a[base + 0] = localA.x; a[base + 1] = localA.y;
+                        a[base + 2] = localA.z; a[base + 3] = 1.0f;
+                        b[base + 0] = localB.x; b[base + 1] = localB.y;
+                        b[base + 2] = localB.z; b[base + 3] = 1.0f;
+                        c[base + 0] = localC.x; c[base + 1] = localC.y;
+                        c[base + 2] = localC.z; c[base + 3] = 1.0f;
+                        n[base + 0] = localNormal.x; n[base + 1] = localNormal.y;
+                        n[base + 2] = localNormal.z; n[base + 3] = 0.0f;
+                    }
+                    glUniform4fv(m_uniforms.tireVisualColliderTriangleA,
+                        static_cast<GLsizei>(colliderTriangleCount), a.data());
+                    glUniform4fv(m_uniforms.tireVisualColliderTriangleB,
+                        static_cast<GLsizei>(colliderTriangleCount), b.data());
+                    glUniform4fv(m_uniforms.tireVisualColliderTriangleC,
+                        static_cast<GLsizei>(colliderTriangleCount), c.data());
+                    glUniform4fv(m_uniforms.tireVisualColliderTriangleNormal,
+                        static_cast<GLsizei>(colliderTriangleCount), n.data());
+                }
+            }
+
+            if (range.skinIndex >= 0
+                && static_cast<std::size_t>(range.skinIndex) < mesh->skins.size()
+                && mesh->skins[static_cast<std::size_t>(range.skinIndex)].joints.size()
+                    > static_cast<std::size_t>(kMaxSkinJoints))
+            {
+                const std::string warning =
+                    "Skin in " + instance.assetPath + " has "
+                    + std::to_string(mesh->skins[static_cast<std::size_t>(range.skinIndex)].joints.size())
+                    + " joints; current GPU palette uses the first "
+                    + std::to_string(kMaxSkinJoints) + ".";
+                if (m_reportedAnimationWarnings.insert(warning).second)
+                    std::cerr << "GLB animation warning: " << warning << '\n';
+            }
+
+            std::vector<heritage::math::Mat4> palette = buildSkinPalette(*mesh, range, nodeGlobals);
+            const bool useSkinning = !palette.empty();
+            if (useSkinning)
+                ++m_frameStats.skinnedRanges;
+            glUniform1i(
+                m_uniforms.useSkinning,
+                useSkinning ? 1 : 0);
+            if (useSkinning)
+            {
+                std::array<float, 16 * kMaxSkinJoints> jointData{};
+                const heritage::math::Mat4 identity = heritage::math::identity();
+                for (int joint = 0; joint < kMaxSkinJoints; ++joint)
+                {
+                    const heritage::math::Mat4& source =
+                        joint < static_cast<int>(palette.size())
+                        ? palette[static_cast<std::size_t>(joint)]
+                        : identity;
+                    for (int value = 0; value < 16; ++value)
+                        jointData[static_cast<std::size_t>(joint) * 16 + value] = source.m[value];
+                }
+                glUniformMatrix4fv(
+                    m_uniforms.jointMatrices,
+                    kMaxSkinJoints,
+                    GL_FALSE,
+                    jointData.data());
+            }
+            const MaterialDefinition* material =
+                &fallbackMaterial;
+            if (!range.materialName.empty())
+            {
+                const auto found =
+                    mesh->materials.find(range.materialName);
+                if (found != mesh->materials.end())
+                    material = &found->second;
+            }
+
+            if (material != lastMaterial)
+            {
+                ++m_frameStats.materialSwitches;
+                glUniform3f(
+                    m_uniforms.materialBaseColor,
+                    material->baseColor.x,
+                    material->baseColor.y,
+                    material->baseColor.z);
+                glUniform3f(
+                    m_uniforms.materialSpecularColor,
+                    material->specularColor.x,
+                    material->specularColor.y,
+                    material->specularColor.z);
+                glUniform3f(
+                    m_uniforms.materialEmissiveColor,
+                    material->emissiveColor.x,
+                    material->emissiveColor.y,
+                    material->emissiveColor.z);
+                glUniform1f(
+                    m_uniforms.materialRoughness,
+                    material->roughness);
+                glUniform1f(
+                    m_uniforms.materialMetallic,
+                    material->metallic);
+                glUniform1f(
+                    m_uniforms.materialSpecularFactor,
+                    material->specularFactor);
+                glUniform1f(
+                    m_uniforms.materialOpacity,
+                    material->opacity);
+                glUniform1i(
+                    m_uniforms.roughnessChannel,
+                    static_cast<int>(material->roughnessMap.channel));
+                glUniform1i(
+                    m_uniforms.metallicChannel,
+                    static_cast<int>(material->metallicMap.channel));
+                glUniform1i(
+                    m_uniforms.ambientOcclusionChannel,
+                    static_cast<int>(material->ambientOcclusionMap.channel));
+                glUniform1i(
+                    m_uniforms.opacityChannel,
+                    static_cast<int>(material->opacityMap.channel));
+                glUniform1i(
+                    m_uniforms.specularFactorChannel,
+                    static_cast<int>(material->specularFactorMap.channel));
+
+                lastMaterialHasBaseColorTexture = bindMap(
+                    material->baseColorMap,
+                    TextureColorSpace::SRgb,
+                    0,
+                    m_uniforms.hasBaseColorMap,
+                    mesh->hasTexcoords);
+                bindMap(
+                    material->normalMap,
+                    TextureColorSpace::Linear,
+                    1,
+                    m_uniforms.hasNormalMap,
+                    mesh->hasTexcoords);
+                bindMap(
+                    material->roughnessMap,
+                    TextureColorSpace::Linear,
+                    2,
+                    m_uniforms.hasRoughnessMap,
+                    mesh->hasTexcoords);
+                bindMap(
+                    material->metallicMap,
+                    TextureColorSpace::Linear,
+                    3,
+                    m_uniforms.hasMetallicMap,
+                    mesh->hasTexcoords);
+                bindMap(
+                    material->specularMap,
+                    TextureColorSpace::SRgb,
+                    4,
+                    m_uniforms.hasSpecularMap,
+                    mesh->hasTexcoords);
+                bindMap(
+                    material->ambientOcclusionMap,
+                    TextureColorSpace::Linear,
+                    5,
+                    m_uniforms.hasAmbientOcclusionMap,
+                    mesh->hasTexcoords);
+                bindMap(
+                    material->emissiveMap,
+                    TextureColorSpace::SRgb,
+                    6,
+                    m_uniforms.hasEmissiveMap,
+                    mesh->hasTexcoords);
+                bindMap(
+                    material->opacityMap,
+                    TextureColorSpace::Linear,
+                    7,
+                    m_uniforms.hasOpacityMap,
+                    mesh->hasTexcoords);
+                bindMap(
+                    material->specularFactorMap,
+                    TextureColorSpace::Linear,
+                    8,
+                    m_uniforms.hasSpecularFactorMap,
+                    mesh->hasTexcoords);
+                lastMaterial = material;
+            }
+
+            glUniform1i(
+                m_uniforms.useVertexColor,
+                range.hasVertexColors ? 1 : 0);
+
+            // Existing MeshComponent color remains the fallback/tint for
+            // untextured geometry. Once an authored base-colour texture is
+            // actually present, show its real colour instead of multiplying it
+            // by legacy prototype tints (for example the very dark wheel tint).
+            glUniform3f(
+                m_uniforms.tint,
+                lastMaterialHasBaseColorTexture ? 1.0f : instance.color.x,
+                lastMaterialHasBaseColorTexture ? 1.0f : instance.color.y,
+                lastMaterialHasBaseColorTexture ? 1.0f : instance.color.z);
+
+            glDrawElements(
+                GL_TRIANGLES,
+                static_cast<GLsizei>(range.indexCount),
+                GL_UNSIGNED_INT,
+                reinterpret_cast<const void*>(
+                    range.firstIndex
+                    * sizeof(unsigned int)));
+            ++m_frameStats.drawCalls;
+            m_frameStats.triangles +=
+                static_cast<std::uint64_t>(range.indexCount / 3);
+        };
+
+        if (mesh->drawRanges.empty())
+        {
+            MeshDrawRange complete;
+            complete.indexCount = mesh->indices.size();
+            drawRange(complete);
+        }
+        else
+        {
+            for (const MeshDrawRange& range : mesh->drawRanges)
+            {
+                if (range.indexCount > 0)
+                    drawRange(range);
+            }
+        }
+
+        const double instanceMs = millisecondsSince(meshInstanceStart);
+        m_frameStats.meshInstancesCpuMs += instanceMs;
+        if (instanceMs > m_frameStats.slowestMeshInstanceMs)
+        {
+            m_frameStats.slowestMeshInstanceMs = instanceMs;
+            m_frameStats.slowestMeshAsset = instance.assetPath;
+        }
     }
 
     glBindVertexArray(0);
-    glEnable(GL_CULL_FACE);
-}
+    glActiveTexture(GL_TEXTURE0);
+    for (int unit = 0; unit < 9; ++unit)
+    {
+        glActiveTexture(GL_TEXTURE0 + unit);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    glActiveTexture(GL_TEXTURE0 + 9);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    glActiveTexture(GL_TEXTURE0 + 10);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    glBindSampler(10, 0);
+    glActiveTexture(GL_TEXTURE0 + 11);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    glBindSampler(11, 0);
+    glActiveTexture(GL_TEXTURE0);
 
+    glFrontFace(GL_CCW);
+    glEnable(GL_CULL_FACE);
+    if (!blendWasEnabled)
+        glDisable(GL_BLEND);
+    if (wireframeVisible)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
+void EntityMeshRenderer::requestHotReloadPoll()
+{
+    ++m_hotReloadEpoch;
+    if (m_hotReloadEpoch == 0)
+        m_hotReloadEpoch = 1;
+    m_textureCache.setHotReloadEpoch(m_hotReloadEpoch);
+}
 std::size_t EntityMeshRenderer::loadedAssetCount() const
 {
-    return static_cast<std::size_t>(std::count_if(
-        m_cache.begin(),
-        m_cache.end(),
-        [](const auto& item) { return item.second.loaded; }));
+    return static_cast<std::size_t>(
+        std::count_if(
+            m_cache.begin(),
+            m_cache.end(),
+            [](const auto& item)
+            {
+                return item.second.loaded;
+            }));
 }
 
 } // namespace heritage::graphics

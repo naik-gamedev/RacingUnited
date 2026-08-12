@@ -33,14 +33,15 @@ old gray physics laboratory.
   translation compensation is removed from the normal vehicle-visual workflow.
 - `Assets/Scenes/Player/PlayerScene.obj` is the temporary creator visual-scene
   slot and retains OBJ hot reload.
-- `PlayerScene_Collision.obj` is now queried as **exact authored triangles for
-  read-only world queries**, most importantly vehicle suspension/tire raycasts.
-  A large Blender terrain therefore remains a terrain surface instead of being
+- `PlayerScene_Collision.obj` supplies **exact authored static triangles**. The
+  query path uses them for suspension/tire raycasts, and the current static-world
+  solver also uses the same BVH for dynamic sphere/box rigid-body contacts. A
+  large Blender terrain therefore remains a terrain surface instead of being
   collapsed into one enormous axis-aligned box.
-- The triangle bridge is not yet full rigid-body triangle-mesh collision.
-  Chassis/body impacts against arbitrary scene triangles remain a later world-
-  physics feature. Existing primitive box/sphere colliders continue to handle
-  rigid-body contacts.
+- This decision originally introduced the triangle bridge as query-only. The
+  later static-world implementation now also resolves dynamic primitive
+  sphere/box bodies against exact static triangles through the shared BVH. It
+  still does not define general moving/concave triangle-mesh collision.
 - OBJ object names may identify asphalt/road, wet asphalt, gravel, dirt, grass,
   snow, ice, kerbs/curbs and painted lines so each tire receives surface identity.
 - OBJ does **not** preserve Blender object-origin/pivot metadata as spawn data.
@@ -59,7 +60,8 @@ Artists keep precise Blender geometry, dimensions and scene placement as source
 truth. A normal terrain OBJ can immediately support vehicle ground/suspension
 queries without manually reducing the whole landscape to giant collision boxes.
 
-This remains a temporary OBJ-era bridge. Step 29K should build on the same
-authoring contract with glTF hierarchy, named nodes and proper materials; later
-world-physics work should add production static-mesh/convex rigid-body contact
-and acceleration structures rather than overextending the prototype importer.
+The OBJ-era bridge was later superseded for Racing United by the GLB authoring
+path while preserving the same coordinate/source-truth contract. Static world
+triangles are now BVH accelerated and participate in primitive rigid-body
+contact; future world-physics work should extend capability through explicit
+contracts rather than overextending import-format special cases.

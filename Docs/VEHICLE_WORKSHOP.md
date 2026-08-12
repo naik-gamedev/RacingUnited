@@ -60,7 +60,7 @@ Workshop hardpoint fields and gizmos remain the next editor extension.
 
 ## Current workflow
 
-1. Run `Tools/LaunchExactFreshRelease.cmd`.
+1. Run `Tools/00_BuildAndRunCurrent.cmd`.
 2. Enter the prototype and open `Vehicle > WORKSHOP`.
 3. Choose a starting topology.
 4. Edit its ID, name, mass, torque, body/power/transmission/contact counts,

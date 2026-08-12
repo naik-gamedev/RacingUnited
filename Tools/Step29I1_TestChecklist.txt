@@ -1,7 +1,0 @@
-Heritage Engine - Step 29I.1 Window Recovery Hotfix
-
-1. Run Tools\BuildAndRunStep29I1.cmd.
-2. The engine should no longer reopen as an unusably tiny postage-stamp window.
-3. If the previous saved rectangle was below 800x450, it is discarded and the engine recovers to its normal centered startup size.
-4. Try resizing Windowed mode: the minimum usable size is now 800x450.
-5. Existing Step 29I custom PlayerCar.obj visual loading is unchanged.

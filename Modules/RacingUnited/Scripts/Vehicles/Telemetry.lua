@@ -75,129 +75,19 @@ function RefreshVehicleTelemetry()
     vehicleDriverAids.handbrakeInput = vehicleDriverAids.handbrakeInput or 0.0
     vehicleWheelTelemetry = {}
     for index = 1, Vehicle.GetWheelCount(nativeVehicle) do
-        local grounded, length, compression, compressionVelocity, normalForce,
-            longitudinalForce, lateralForce, steerAngle, angularVelocity,
-            rotationDegrees, centerX, centerY, centerZ,
-            contactX, contactY, contactZ, longitudinalSpeed, lateralSpeed,
-            slipRatio, slipAngleDegrees, relaxedSlipRatio,
-            relaxedSlipAngleDegrees, effectiveFriction, gripUtilization,
-            pureLongitudinalForce, pureLateralForce, combinedSlipScale,
-            pneumaticTrail, aligningTorque, driveTorque, brakeTorque,
-            serviceBrakeTorque, handbrakeTorque, antiLockModulation,
-            tractionControlModulation, antiLockActive,
-            tractionControlActive, contactCollider, surfaceName, surfaceId,
-            surfaceWetness, suspensionSpringForce, suspensionDampingForce,
-            suspensionBumpStopForce, suspensionDroopStopForce,
-            suspensionUnclampedForce, damperDissipationWatts,
-            unsprungVelocity, tireDeflection, tireDeflectionVelocity,
-            tireRadialDissipationWatts =
-            Vehicle.GetWheelState(nativeVehicle, index)
-        vehicleWheelTelemetry[index] = {
-            grounded = grounded,
-            length = length or 0.0,
-            compression = compression or 0.0,
-            compressionVelocity = compressionVelocity or 0.0,
-            normalForce = normalForce or 0.0,
-            longitudinalForce = longitudinalForce or 0.0,
-            lateralForce = lateralForce or 0.0,
-            steerAngle = steerAngle or 0.0,
-            angularVelocity = angularVelocity or 0.0,
-            rotationDegrees = rotationDegrees or 0.0,
-            centerX = centerX or 0.0,
-            centerY = centerY or 0.0,
-            centerZ = centerZ or 0.0,
-            contactX = contactX or 0.0,
-            contactY = contactY or 0.0,
-            contactZ = contactZ or 0.0,
-            longitudinalSpeed = longitudinalSpeed or 0.0,
-            lateralSpeed = lateralSpeed or 0.0,
-            slipRatio = slipRatio or 0.0,
-            slipAngleDegrees = slipAngleDegrees or 0.0,
-            relaxedSlipRatio = relaxedSlipRatio or 0.0,
-            relaxedSlipAngleDegrees = relaxedSlipAngleDegrees or 0.0,
-            effectiveFriction = effectiveFriction or 0.0,
-            gripUtilization = gripUtilization or 0.0,
-            pureLongitudinalForce = pureLongitudinalForce or 0.0,
-            pureLateralForce = pureLateralForce or 0.0,
-            combinedSlipScale = combinedSlipScale or 1.0,
-            pneumaticTrail = pneumaticTrail or 0.0,
-            aligningTorque = aligningTorque or 0.0,
-            driveTorque = driveTorque or 0.0,
-            brakeTorque = brakeTorque or 0.0,
-            serviceBrakeTorque = serviceBrakeTorque or 0.0,
-            handbrakeTorque = handbrakeTorque or 0.0,
-            antiLockModulation = antiLockModulation or 1.0,
-            tractionControlModulation =
-                tractionControlModulation or 1.0,
-            antiLockActive = antiLockActive or false,
-            tractionControlActive = tractionControlActive or false,
-            contactCollider = contactCollider or 0,
-            surfaceName = surfaceName or "default",
-            surfaceId = surfaceId or 0,
-            surfaceWetness = surfaceWetness or 0.0,
-            suspensionSpringForce = suspensionSpringForce or 0.0,
-            suspensionDampingForce = suspensionDampingForce or 0.0,
-            suspensionBumpStopForce = suspensionBumpStopForce or 0.0,
-            suspensionDroopStopForce = suspensionDroopStopForce or 0.0,
-            suspensionUnclampedForce = suspensionUnclampedForce or 0.0,
-            damperDissipationWatts = damperDissipationWatts or 0.0,
-            unsprungVelocity = unsprungVelocity or 0.0,
-            tireDeflection = tireDeflection or 0.0,
-            tireDeflectionVelocity = tireDeflectionVelocity or 0.0,
-            tireRadialDissipationWatts =
-                tireRadialDissipationWatts or 0.0
-        }
-        local contactStatus, contactStatusId, contactLossTransitions,
-            rayCandidates, rayExactTests, staticTriangleCandidates,
-            staticSceneLoaded, originInsideStaticSceneBounds,
-            rayBoundsOverlapStaticScene, selectedHitWasStaticTriangle,
-            rawSupportDistance, suspensionBottomed,
-            bottomOutPenetration =
-            Vehicle.GetWheelContactDiagnostic(nativeVehicle, index)
-        local contactTelemetry = vehicleWheelTelemetry[index]
-        contactTelemetry.contactStatus = contactStatus or "unavailable"
-        contactTelemetry.contactStatusId = contactStatusId or -1
-        contactTelemetry.contactLossTransitions =
-            contactLossTransitions or 0
-        contactTelemetry.rayCandidates = rayCandidates or 0
-        contactTelemetry.rayExactTests = rayExactTests or 0
-        contactTelemetry.staticTriangleCandidates =
-            staticTriangleCandidates or 0
-        contactTelemetry.staticSceneLoaded = staticSceneLoaded or false
-        contactTelemetry.originInsideStaticSceneBounds =
-            originInsideStaticSceneBounds or false
-        contactTelemetry.rayBoundsOverlapStaticScene =
-            rayBoundsOverlapStaticScene or false
-        contactTelemetry.selectedHitWasStaticTriangle =
-            selectedHitWasStaticTriangle or false
-        contactTelemetry.rawSupportDistance = rawSupportDistance or 0.0
-        contactTelemetry.suspensionBottomed = suspensionBottomed or false
-        contactTelemetry.bottomOutPenetration =
-            bottomOutPenetration or 0.0
-        local camberAngleDegrees, toeAngleDegrees,
-            uprightRotationX, uprightRotationY, uprightRotationZ,
-            steeringAxisX, steeringAxisY, steeringAxisZ,
-            wheelForwardX, wheelForwardY, wheelForwardZ,
-            wheelRightX, wheelRightY, wheelRightZ,
-            wheelUpX, wheelUpY, wheelUpZ =
-            Vehicle.GetWheelUprightPose(nativeVehicle, index)
-        local telemetry = vehicleWheelTelemetry[index]
-        telemetry.camberAngleDegrees = camberAngleDegrees or 0.0
-        telemetry.toeAngleDegrees = toeAngleDegrees or 0.0
-        telemetry.uprightRotationX = uprightRotationX or 0.0
-        telemetry.uprightRotationY = uprightRotationY or 0.0
-        telemetry.uprightRotationZ = uprightRotationZ or 0.0
-        telemetry.steeringAxisX = steeringAxisX or 0.0
-        telemetry.steeringAxisY = steeringAxisY or 1.0
-        telemetry.steeringAxisZ = steeringAxisZ or 0.0
-        telemetry.wheelForwardX = wheelForwardX or 0.0
-        telemetry.wheelForwardY = wheelForwardY or 0.0
-        telemetry.wheelForwardZ = wheelForwardZ or 1.0
-        telemetry.wheelRightX = wheelRightX or 1.0
-        telemetry.wheelRightY = wheelRightY or 0.0
-        telemetry.wheelRightZ = wheelRightZ or 0.0
-        telemetry.wheelUpX = wheelUpX or 0.0
-        telemetry.wheelUpY = wheelUpY or 1.0
-        telemetry.wheelUpZ = wheelUpZ or 0.0
+        -- CLEAN01: the native bridge returns one named table containing the
+        -- complete wheel/contact/upright snapshot. This replaces the fragile
+        -- 169-value positional ABI in first-party Racing United scripts.
+        vehicleWheelTelemetry[index] =
+            Vehicle.GetWheelTelemetry(nativeVehicle, index) or {}
+    end
+
+    -- ROLL02: keep anti-roll state synchronized with the same live chassis and
+    -- wheel telemetry frame used for load-transfer diagnostics.
+    if RefreshAntiRollBarTelemetry ~= nil then
+        RefreshAntiRollBarTelemetry()
+    end
+    if RefreshChassisFlexTelemetry ~= nil then
+        RefreshChassisFlexTelemetry()
     end
 end

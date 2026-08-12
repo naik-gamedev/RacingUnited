@@ -52,9 +52,9 @@ void PostFramebuffer::init(int width, int height, int samples)
     glBindRenderbuffer(GL_RENDERBUFFER, rbo);
 
     if (samples > 1)
-        glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, w, h);
+        glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH32F_STENCIL8, w, h);
     else
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, w, h);
 
     glFramebufferRenderbuffer(
         GL_FRAMEBUFFER,

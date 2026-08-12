@@ -1,5 +1,7 @@
 #include "StaticTriangleSceneImporter.hpp"
 
+#include "../Graphics/GltfSceneData.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -99,6 +101,238 @@ bool isSpawnMarkerName(const std::string& objectName)
         || name.find("playerspawn") != std::string::npos;
 }
 
+
+void inferSurface(
+    const std::string& objectName,
+    SurfaceMaterial& material,
+    float& wetness);
+
+const heritage::graphics::AssetMetadataValue* metadataValue(
+    const heritage::graphics::AssetMetadataMap& metadata,
+    const char* key)
+{
+    const auto found = metadata.find(key);
+    return found != metadata.end() ? &found->second : nullptr;
+}
+
+std::string metadataString(
+    const heritage::graphics::AssetMetadataMap& metadata,
+    const char* key)
+{
+    const auto* value = metadataValue(metadata, key);
+    return value && value->type == heritage::graphics::AssetMetadataValueType::String
+        ? value->stringValue
+        : std::string{};
+}
+
+float metadataNumber(
+    const heritage::graphics::AssetMetadataMap& metadata,
+    const char* key,
+    float fallback)
+{
+    const auto* value = metadataValue(metadata, key);
+    return value && value->type == heritage::graphics::AssetMetadataValueType::Number
+        ? static_cast<float>(value->numberValue)
+        : fallback;
+}
+
+bool metadataDouble(
+    const heritage::graphics::AssetMetadataMap& metadata,
+    const char* key,
+    double& value)
+{
+    const auto* metadataEntry = metadataValue(metadata, key);
+    if (!metadataEntry
+        || metadataEntry->type != heritage::graphics::AssetMetadataValueType::Number
+        || !std::isfinite(metadataEntry->numberValue))
+    {
+        return false;
+    }
+    value = metadataEntry->numberValue;
+    return true;
+}
+
+void applySurfaceDouble(
+    const heritage::graphics::AssetMetadataMap& metadata,
+    const char* key,
+    double minimum,
+    double maximum,
+    double& destination,
+    bool& authored)
+{
+    double value = 0.0;
+    if (!metadataDouble(metadata, key, value)
+        || value < minimum || value > maximum)
+    {
+        return;
+    }
+    destination = value;
+    authored = true;
+}
+
+void applySurfacePropertyMetadata(
+    const heritage::graphics::AssetMetadataMap& metadata,
+    heritage::physics::SurfaceMaterialProperties& properties)
+{
+    double temperature = 0.0;
+    if (metadataDouble(metadata, "heritage.surface.temperature_c", temperature)
+        && temperature >= -100.0 && temperature <= 150.0)
+    {
+        properties.hasAuthoredSurfaceTemperature = true;
+        properties.authoredSurfaceTemperatureC = temperature;
+    }
+
+    if (!properties.deformable.enabled)
+        return;
+
+    bool authored = properties.deformable.authored;
+    applySurfaceDouble(metadata, "heritage.surface.density_kg_m3",
+        25.0, 5000.0, properties.deformable.densityKgM3, authored);
+    applySurfaceDouble(metadata, "heritage.surface.loose_depth_m",
+        0.0, 2.0, properties.deformable.initialLooseDepthM, authored);
+    applySurfaceDouble(metadata, "heritage.surface.moisture",
+        0.0, 1.0, properties.deformable.initialMoisture, authored);
+    applySurfaceDouble(metadata, "heritage.surface.bekker_kc",
+        0.0, 1.0e8, properties.deformable.bekkerKc, authored);
+    applySurfaceDouble(metadata, "heritage.surface.bekker_kphi",
+        0.0, 1.0e9, properties.deformable.bekkerKphi, authored);
+    applySurfaceDouble(metadata, "heritage.surface.sinkage_exponent",
+        0.20, 4.0, properties.deformable.sinkageExponent, authored);
+    applySurfaceDouble(metadata, "heritage.surface.cohesion_pa",
+        0.0, 2.0e6, properties.deformable.cohesionPa, authored);
+    applySurfaceDouble(metadata, "heritage.surface.friction_angle_deg",
+        0.0, 60.0, properties.deformable.frictionAngleDegrees, authored);
+    applySurfaceDouble(metadata, "heritage.surface.shear_modulus_m",
+        0.001, 1.0, properties.deformable.shearDeformationModulusM, authored);
+    applySurfaceDouble(metadata, "heritage.surface.compaction_stiffness_gain",
+        0.0, 20.0, properties.deformable.compactionStiffnessGain, authored);
+    applySurfaceDouble(metadata, "heritage.surface.compaction_shear_gain",
+        0.0, 10.0, properties.deformable.compactionShearGain, authored);
+    applySurfaceDouble(metadata, "heritage.surface.plastic_rut_fraction",
+        0.0, 1.0, properties.deformable.plasticRutFraction, authored);
+    applySurfaceDouble(metadata, "heritage.surface.compaction_rate_hz",
+        0.0, 20.0, properties.deformable.compactionRateHz, authored);
+    applySurfaceDouble(metadata, "heritage.surface.loose_depth_loss_per_compaction_m",
+        0.0, 2.0, properties.deformable.looseDepthLossPerCompactionM, authored);
+    applySurfaceDouble(metadata, "heritage.surface.mf_friction_scale",
+        0.0, 1.0, properties.deformable.mfBaseFrictionScale, authored);
+    applySurfaceDouble(metadata, "heritage.surface.stiffness_scale",
+        0.0, 2.0, properties.deformable.baseStiffnessScale, authored);
+    applySurfaceDouble(metadata, "heritage.surface.rolling_resistance_scale",
+        0.0, 20.0, properties.deformable.rollingResistanceScale, authored);
+    applySurfaceDouble(metadata, "heritage.surface.relaxation_scale",
+        0.1, 20.0, properties.deformable.relaxationScale, authored);
+    properties.deformable.authored = authored;
+}
+
+bool surfaceFromText(
+    const std::string& text,
+    SurfaceMaterial& material,
+    float& wetness)
+{
+    const std::string name = lower(text);
+    if (name.empty())
+        return false;
+
+    if (name == "wet_asphalt" || name == "wetasphalt")
+    {
+        material = SurfaceMaterial::Asphalt;
+        wetness = 1.0f;
+        return true;
+    }
+    if (name == "asphalt" || name == "tarmac" || name == "road")
+        material = SurfaceMaterial::Asphalt;
+    else if (name == "gravel")
+        material = SurfaceMaterial::Gravel;
+    else if (name == "mud")
+        material = SurfaceMaterial::Mud;
+    else if (name == "sand")
+        material = SurfaceMaterial::Sand;
+    else if (name == "soft_soil" || name == "softsoil")
+        material = SurfaceMaterial::SoftSoil;
+    else if (name == "deep_snow" || name == "deepsnow" || name == "powder_snow")
+        material = SurfaceMaterial::DeepSnow;
+    else if (name == "dirt" || name == "soil")
+        material = SurfaceMaterial::Dirt;
+    else if (name == "grass")
+        material = SurfaceMaterial::Grass;
+    else if (name == "snow")
+        material = SurfaceMaterial::Snow;
+    else if (name == "ice")
+        material = SurfaceMaterial::Ice;
+    else if (name == "kerb" || name == "curb")
+        material = SurfaceMaterial::Kerb;
+    else if (name == "paint" || name == "painted_line" || name == "line")
+        material = SurfaceMaterial::PaintedLine;
+    else
+        return false;
+    return true;
+}
+
+void inferGlbSurface(
+    const heritage::graphics::GlbStaticCollisionScene& scene,
+    int nodeIndex,
+    SurfaceMaterial& material,
+    float& wetness,
+    heritage::physics::SurfaceMaterialProperties& properties)
+{
+    material = SurfaceMaterial::Default;
+    wetness = 0.0f;
+
+    // Child-most material identity wins, matching normal scene-authoring
+    // inheritance. Physical parameter overrides are applied root -> child so a
+    // broad parent terrain profile can be refined on one collision object.
+    int current = nodeIndex;
+    while (current >= 0 && static_cast<std::size_t>(current) < scene.nodes.size())
+    {
+        const auto& node = scene.nodes[static_cast<std::size_t>(current)];
+        const std::string authoredSurface = metadataString(node.metadata, "heritage.surface");
+        const std::string alternateSurface = metadataString(node.metadata, "heritage.surface_material");
+        if (surfaceFromText(
+                !authoredSurface.empty() ? authoredSurface : alternateSurface,
+                material,
+                wetness))
+        {
+            break;
+        }
+
+        SurfaceMaterial nameMaterial = SurfaceMaterial::Default;
+        float nameWetness = 0.0f;
+        inferSurface(node.name, nameMaterial, nameWetness);
+        if (nameMaterial != SurfaceMaterial::Default || nameWetness > 0.0f)
+        {
+            material = nameMaterial;
+            wetness = nameWetness;
+            break;
+        }
+        current = node.parentIndex;
+    }
+
+    properties = defaultSurfaceMaterialProperties(material);
+
+    std::vector<int> hierarchy;
+    current = nodeIndex;
+    while (current >= 0 && static_cast<std::size_t>(current) < scene.nodes.size())
+    {
+        hierarchy.push_back(current);
+        current = scene.nodes[static_cast<std::size_t>(current)].parentIndex;
+    }
+    std::reverse(hierarchy.begin(), hierarchy.end());
+
+    for (const int index : hierarchy)
+    {
+        const auto& metadata = scene.nodes[static_cast<std::size_t>(index)].metadata;
+        wetness = std::clamp(
+            metadataNumber(metadata, "heritage.wetness", wetness),
+            0.0f,
+            1.0f);
+        applySurfacePropertyMetadata(metadata, properties);
+    }
+
+    if (!validSurfaceMaterialProperties(properties))
+        properties = defaultSurfaceMaterialProperties(material);
+}
+
 void inferSurface(
     const std::string& objectName,
     SurfaceMaterial& material,
@@ -120,6 +354,19 @@ void inferSurface(
         material = SurfaceMaterial::Asphalt;
     else if (name.find("gravel") != std::string::npos)
         material = SurfaceMaterial::Gravel;
+    else if (name.find("deep_snow") != std::string::npos
+        || name.find("deepsnow") != std::string::npos
+        || name.find("powder_snow") != std::string::npos
+        || name.find("snow_deep") != std::string::npos)
+        material = SurfaceMaterial::DeepSnow;
+    else if (name.find("mud") != std::string::npos)
+        material = SurfaceMaterial::Mud;
+    else if (name.find("sand") != std::string::npos)
+        material = SurfaceMaterial::Sand;
+    else if (name.find("soft_soil") != std::string::npos
+        || name.find("softsoil") != std::string::npos
+        || name.find("soil_soft") != std::string::npos)
+        material = SurfaceMaterial::SoftSoil;
     else if (name.find("dirt") != std::string::npos)
         material = SurfaceMaterial::Dirt;
     else if (name.find("grass") != std::string::npos)
@@ -203,6 +450,69 @@ bool horizontalPointOnTriangle(
         + second * triangle.b.y
         + third * triangle.c.y;
     return true;
+}
+
+
+void resolveAutomaticSpawn(
+    const std::vector<StaticSceneTriangle>& triangles,
+    StaticTriangleSceneSpawn& spawn)
+{
+    if (spawn.found)
+        return;
+
+    bool foundAtOrigin = false;
+    float highestY = -(std::numeric_limits<float>::max)();
+    for (const StaticSceneTriangle& triangle : triangles)
+    {
+        if (std::abs(triangle.normal.y) < 0.15f)
+            continue;
+        float candidateY = 0.0f;
+        if (!horizontalPointOnTriangle(0.0f, 0.0f, triangle, candidateY))
+            continue;
+        if (!foundAtOrigin || candidateY > highestY)
+        {
+            highestY = candidateY;
+            foundAtOrigin = true;
+        }
+    }
+
+    if (foundAtOrigin)
+    {
+        spawn.groundPoint = { 0.0f, highestY, 0.0f };
+        spawn.found = true;
+        spawn.explicitMarker = false;
+        spawn.sourceName = "triangle-origin";
+        return;
+    }
+
+    bool foundNearest = false;
+    float nearestDistanceSquared = (std::numeric_limits<float>::max)();
+    heritage::math::Vec3 nearest{};
+    for (const StaticSceneTriangle& triangle : triangles)
+    {
+        if (std::abs(triangle.normal.y) < 0.15f)
+            continue;
+        const heritage::math::Vec3 center{
+            (triangle.a.x + triangle.b.x + triangle.c.x) / 3.0f,
+            (triangle.a.y + triangle.b.y + triangle.c.y) / 3.0f,
+            (triangle.a.z + triangle.b.z + triangle.c.z) / 3.0f
+        };
+        const float distanceSquared = center.x * center.x + center.z * center.z;
+        if (!foundNearest || distanceSquared < nearestDistanceSquared)
+        {
+            nearestDistanceSquared = distanceSquared;
+            nearest = center;
+            foundNearest = true;
+        }
+    }
+
+    if (foundNearest)
+    {
+        spawn.groundPoint = nearest;
+        spawn.found = true;
+        spawn.explicitMarker = false;
+        spawn.sourceName = "triangle-nearest-origin";
+    }
 }
 
 bool parseObj(
@@ -304,6 +614,7 @@ bool parseObj(
                     subtract(triangle.c, triangle.a)));
                 triangle.surfaceMaterial = surface;
                 triangle.surfaceWetness = wetness;
+                triangle.surfaceProperties = defaultSurfaceMaterialProperties(surface);
                 if (lengthSquared(cross(
                         subtract(triangle.b, triangle.a),
                         subtract(triangle.c, triangle.a))) > 1.0e-12f)
@@ -375,67 +686,80 @@ bool loadStaticTriangleSceneFromObj(
     }
 
     if (spawn)
-    {
-        // OBJ has no scene-origin metadata, but creator scenes are authored
-        // around meaningful world coordinates. Prefer the highest walkable
-        // surface directly beneath horizontal world origin. This produces a
-        // useful deterministic fallback without using a giant mesh AABB top.
-        bool foundAtOrigin = false;
-        float highestY = -(std::numeric_limits<float>::max)();
-        for (const StaticSceneTriangle& triangle : output)
-        {
-            if (std::abs(triangle.normal.y) < 0.15f)
-                continue;
-            float candidateY = 0.0f;
-            if (!horizontalPointOnTriangle(0.0f, 0.0f, triangle, candidateY))
-                continue;
-            if (!foundAtOrigin || candidateY > highestY)
-            {
-                highestY = candidateY;
-                foundAtOrigin = true;
-            }
-        }
+        resolveAutomaticSpawn(output, *spawn);
 
-        if (foundAtOrigin)
-        {
-            spawn->groundPoint = { 0.0f, highestY, 0.0f };
-            spawn->found = true;
-            spawn->explicitMarker = false;
-            spawn->sourceName = "triangle-origin";
-        }
-        else
-        {
-            bool foundNearest = false;
-            float nearestDistanceSquared = (std::numeric_limits<float>::max)();
-            heritage::math::Vec3 nearest{};
-            for (const StaticSceneTriangle& triangle : output)
-            {
-                if (std::abs(triangle.normal.y) < 0.15f)
-                    continue;
-                const heritage::math::Vec3 center{
-                    (triangle.a.x + triangle.b.x + triangle.c.x) / 3.0f,
-                    (triangle.a.y + triangle.b.y + triangle.c.y) / 3.0f,
-                    (triangle.a.z + triangle.b.z + triangle.c.z) / 3.0f
-                };
-                const float distanceSquared =
-                    center.x * center.x + center.z * center.z;
-                if (!foundNearest || distanceSquared < nearestDistanceSquared)
-                {
-                    nearestDistanceSquared = distanceSquared;
-                    nearest = center;
-                    foundNearest = true;
-                }
-            }
-            if (foundNearest)
-            {
-                spawn->groundPoint = nearest;
-                spawn->found = true;
-                spawn->explicitMarker = false;
-                spawn->sourceName = "triangle-nearest-origin";
-            }
-        }
+    return true;
+}
+
+
+bool loadStaticTriangleSceneFromGlb(
+    const std::filesystem::path& path,
+    std::vector<StaticSceneTriangle>& output,
+    StaticTriangleSceneSpawn* spawn,
+    std::string& error)
+{
+    output.clear();
+    error.clear();
+    if (spawn)
+        *spawn = {};
+
+    heritage::graphics::GlbStaticCollisionScene extracted;
+    if (!heritage::graphics::extractGlbStaticCollisionScene(
+            path,
+            extracted,
+            error))
+    {
+        return false;
     }
 
+    output.reserve(extracted.triangles.size());
+    for (const auto& source : extracted.triangles)
+    {
+        StaticSceneTriangle triangle;
+        triangle.a = source.a;
+        triangle.b = source.b;
+        triangle.c = source.c;
+        const heritage::math::Vec3 crossValue = cross(
+            subtract(triangle.b, triangle.a),
+            subtract(triangle.c, triangle.a));
+        if (lengthSquared(crossValue) <= 1.0e-12f)
+            continue;
+
+        triangle.normal = normalized(crossValue);
+        inferGlbSurface(
+            extracted,
+            source.nodeIndex,
+            triangle.surfaceMaterial,
+            triangle.surfaceWetness,
+            triangle.surfaceProperties);
+        output.push_back(triangle);
+    }
+
+    if (output.empty())
+    {
+        error = "Static triangle GLB contained no usable marked collision triangles.";
+        return false;
+    }
+
+    if (spawn && extracted.spawnFound)
+    {
+        spawn->groundPoint = extracted.spawnPosition;
+        spawn->found = true;
+        spawn->explicitMarker = true;
+        spawn->sourceName = extracted.spawnName.empty()
+            ? "SPAWN_PLAYER"
+            : extracted.spawnName;
+    }
+
+    if (spawn)
+    {
+        if (spawn->found)
+            snapStaticTriangleSceneSpawnToSurface(output, *spawn);
+        else
+            resolveAutomaticSpawn(output, *spawn);
+    }
+
+    error.clear();
     return true;
 }
 

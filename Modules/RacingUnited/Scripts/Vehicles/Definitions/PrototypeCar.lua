@@ -30,22 +30,118 @@ PrototypeCarDefinition = {
         wheelRadiusM = 0.2979
     },
 
-    -- Provisional Peugeot 206-family workshop alignment, not a claim of a
-    -- measured 206 RC setup. Peugeot repair data lists front toe-out near
-    -- 7 arcminutes per wheel, zero nominal front camber, roughly 3 deg 16 min
-    -- caster / 9 deg 42 min steering-axis inclination for power-steering cars,
-    -- and rear camber/toe near -1 deg / 16 arcminutes toe-in per wheel.
-    -- Static values are mirrored explicitly because geometry never assumes a
-    -- symmetric vehicle. Travel curves remain zero until measured traces or
-    -- hardpoints exist.
-    referenceAlignment = {
-        provenance = "provisional Peugeot 206-family workshop reference",
-        frontCasterDegrees = 3.266667,
-        frontSteeringAxisInclinationDegrees = 9.700000,
-        frontCamberDegrees = 0.0,
-        frontToeOutPerWheelDegrees = 0.116667,
-        rearCamberDegrees = -1.0,
-        rearToeInPerWheelDegrees = 0.266667
+    factoryAlignmentSpecification = Peugeot206RCAlignmentSpecification,
+    referenceAlignment = Peugeot206RCReferenceAlignment,
+
+    -- FITMENT01: the GLB is a neutral/reference assembly. Alignment and
+    -- installed fitment are setup data layered on top of the reference wheel
+    -- centers; neither is allowed to rewrite suspension hardpoints. The
+    -- current 17x7 ET28 / 205-40R17 information is trusted metadata even
+    -- though the provisional wheel/tire mesh shape will be replaced later.
+    referenceFitment = {
+        provenance = "asset_metadata_reference",
+        rimDiameterIn = 17.0,
+        rimWidthIn = 7.0,
+        offsetEtMm = 28.0,
+        tireWidthMm = 205.0,
+        tireAspectRatio = 40.0,
+        tireRimDiameterIn = 17.0
+    },
+
+    factorySetup = Peugeot206RCWorkshopAlignmentDefault,
+
+    -- Suspension estimates are chassis authoring data, NOT wheel-fitment data.
+    -- These package scales stay fixed when the player installs a different rim,
+    -- offset or tire size. Rebuild them only when the suspension reference itself
+    -- is intentionally revised from better measurements/asset geometry.
+    suspensionEstimation = {
+        frontReferencePackageScaleM = 0.2979,
+        rearReferencePackageScaleM = 0.2979
+    },
+
+    -- SUS03A authoring architecture. macpherson_strut_v1 is a real native
+    -- provider. linear_raycast_v1 remains the safe data-file fallback, while
+    -- SuspensionAuthoring.lua may promote each front corner to MacPherson using
+    -- a deterministic low-confidence estimate. Measured or GLB-authored points
+    -- always outrank and replace estimates; provenance is never hidden.
+    -- SUS04: reusable anti-roll bars couple the left/right suspension on each
+    -- axle. These are low-confidence project estimates, not claimed Peugeot
+    -- factory rates. The native mechanism is torsional (Nm/rad) with explicit
+    -- lever arms, so future measured bar geometry/rates can replace these data
+    -- without changing MacPherson or trailing-arm code.
+    antiRollBars = {
+        front = {
+            enabled = true,
+            leftWheel = "front_left",
+            rightWheel = "front_right",
+            torsionalStiffnessNmPerRad = 520.0,
+            torsionalDampingNmsPerRad = 18.0,
+            leftLeverArmM = 0.20,
+            rightLeverArmM = 0.20,
+            leftLinkMotionRatio = 1.0,
+            rightLinkMotionRatio = 1.0,
+            maximumWheelForceN = 7000.0,
+            provenance = "estimated",
+            confidence = 0.20
+        },
+        rear = {
+            enabled = true,
+            leftWheel = "rear_left",
+            rightWheel = "rear_right",
+            torsionalStiffnessNmPerRad = 380.0,
+            torsionalDampingNmsPerRad = 14.0,
+            leftLeverArmM = 0.20,
+            rightLeverArmM = 0.20,
+            leftLinkMotionRatio = 1.0,
+            rightLinkMotionRatio = 1.0,
+            maximumWheelForceN = 6000.0,
+            provenance = "estimated",
+            confidence = 0.20
+        }
+    },
+
+    suspensionArchitecture = {
+        front = {
+            kinematics = "macpherson_strut",
+            preferredProvider = "macpherson_strut_v1",
+            runtimeProvider = "linear_raycast_v1",
+            spring = "coil_spring",
+            damper = "strut_damper",
+            antiRollGroup = "front",
+            requiredHardpoints = {
+                "strut_top_mount",
+                "strut_upright_mount",
+                "lower_arm_inner_front",
+                "lower_arm_inner_rear",
+                "lower_ball_joint",
+                "tie_rod_inner",
+                "tie_rod_outer",
+                "wheel_center"
+            },
+            hardpointsByCorner = {
+                front_left = {},
+                front_right = {}
+            }
+        },
+        rear = {
+            kinematics = "trailing_arm",
+            preferredProvider = "trailing_arm_torsion_bar_v1",
+            runtimeProvider = "linear_raycast_v1",
+            spring = "torsion_bar",
+            damper = "separate_damper",
+            antiRollGroup = "rear",
+            requiredHardpoints = {
+                "arm_pivot_inner",
+                "arm_pivot_outer",
+                "wheel_center",
+                "damper_upper_mount",
+                "damper_lower_mount"
+            },
+            hardpointsByCorner = {
+                rear_left = {},
+                rear_right = {}
+            }
+        }
     },
 
     -- Visual presentation is deliberately separate from the physics chassis.
@@ -63,8 +159,10 @@ PrototypeCarDefinition = {
         -- translation/scaling is applied. Racing United vehicle assets use
         -- Blender X=right, Y=fore/aft, Z=up with the vehicle nose pointing -Y
         -- (matching Blender Front-view vehicle authoring). The native solver
-        -- drives toward +Z, so the temporary OBJ bridge applies one fixed
-        -- 180-degree yaw at attachment; this is format convention, not tuning.
+        -- drives toward +Z. The legacy OBJ bridge needs one fixed 180-degree
+        -- yaw at attachment; standard Blender -> glTF/GLB export already maps
+        -- the -Y nose into Heritage +Z, so GLB visuals intentionally bypass
+        -- this legacy yaw in Vehicles/Visuals.lua.
         offset = { 0.0, 0.0, 0.0 },
         rotationDegrees = { 0.0, 180.0, 0.0 },
         scale = 1.0,
@@ -87,12 +185,58 @@ PrototypeCarDefinition = {
 
     chassis = {
         massKg = 1100.0,
+
+        -- ROLL01: the prefab/root origin is an authoring datum close to road
+        -- level, not the physical centre of mass. Keeping these separate lets
+        -- tire/contact forces generate real pitch/roll torque without moving
+        -- the authored mesh, wheel mounts or suspension hardpoints. This is a
+        -- deliberately low-confidence compact-FWD-hatch estimate: ~60% front
+        -- static distribution and ~0.52 m CG height. Better measured/AI/photo
+        -- reconstructed data can replace it later without changing the solver.
+        centerOfMassLocal = { 0.0, 0.52, 0.20 },
+        centerOfMassProvenance = "estimated_compact_fwd_hatch_v1",
+        centerOfMassConfidence = 0.20,
+
+        -- MASS01: explicit rotational inertia is independent from the collision
+        -- proxy. X/Y/Z are pitch/yaw/roll axes in Heritage local coordinates.
+        -- These low-confidence values are generated by the native road-car
+        -- mass-property estimator and may later be replaced by CAD/component
+        -- reconstruction without changing the rigid-body solver.
+        inertiaLocalKgM2 = { 1212.8886, 1511.3550, 564.3155 },
+        frontStaticLoadFraction = 0.5819001,
+        leftStaticLoadFraction = 0.50,
+        massPropertiesProvenance = "estimated_mass_properties_road_car_v1",
+        massPropertiesConfidence = 0.20,
+
         halfExtents = { 1.08, 0.36, 1.72 },
         colliderOffset = { 0.0, 0.82, 0.0 },
         friction = 0.35,
         restitution = 0.05,
         linearDamping = 0.015,
         angularDamping = 0.18
+    },
+
+    -- FLEX01: first-mode torsional chassis compliance. This is deliberately
+    -- low-confidence estimated engineering data, not a claimed Peugeot factory
+    -- torsional-rigidity measurement. The values come from Heritage's generic
+    -- closed-unibody estimator using the known 2003-era mass/wheelbase/tracks
+    -- and the current estimated COM height. Better evidence can replace this
+    -- table without changing suspension or rigid-body code.
+    chassisFlex = {
+        enabled = true,
+        provider = "chassis_torsional_mode_v1",
+        mountBody = "chassis",
+        construction = "closed_unibody",
+        modelYear = 2003,
+        torsionalRigidityNmPerDegree = 8700.0,
+        torsionalDampingNmsPerRad = 11300.0,
+        effectiveTorsionalInertiaKgM2 = 525.0,
+        torsionAxisLocalY = 0.364,
+        frontReferenceLocalZ = 1.221,
+        rearReferenceLocalZ = -1.221,
+        maximumTwistDegrees = 1.25,
+        provenance = "estimated_chassis_flex_closed_unibody_v1",
+        confidence = 0.18
     },
 
     solver = {
@@ -104,6 +248,9 @@ PrototypeCarDefinition = {
         rollingResistance = 90.0
     },
 
+    -- Native steering sign is -LEFT / +RIGHT. maximumAngleDegrees is the
+    -- virtual steering-axle centre angle; ideal Ackermann can give the inside
+    -- physical road wheel more lock and the outside wheel less.
     steering = {
         maximumAngleDegrees = 38.0,
         ackermannPercent = 1.0,
@@ -203,7 +350,7 @@ PrototypeCarDefinition = {
             tireProfile = "prototype_road_front",
             steeringAxis = { 0.16845, 0.98406, -0.05698 },
             staticCamberDegrees = 0.0,
-            staticToeDegrees = -0.116667,
+            staticToeDegrees = 0.0,
             visualAsset = "Vehicles/Player/PlayerWheel.obj",
             visualFaceYawDegrees = 180.0,
             visualSpinSign = -1.0
@@ -217,7 +364,7 @@ PrototypeCarDefinition = {
             tireProfile = "prototype_road_front",
             steeringAxis = { -0.16845, 0.98406, -0.05698 },
             staticCamberDegrees = 0.0,
-            staticToeDegrees = 0.116667,
+            staticToeDegrees = 0.0,
             visualAsset = "Vehicles/Player/PlayerWheel.obj",
             visualFaceYawDegrees = 0.0,
             visualSpinSign = 1.0
@@ -230,8 +377,8 @@ PrototypeCarDefinition = {
             axle = "rear",
             tireProfile = "prototype_road_rear",
             steeringAxis = { 0.0, 1.0, 0.0 },
-            staticCamberDegrees = -1.0,
-            staticToeDegrees = 0.266667,
+            staticCamberDegrees = 0.0,
+            staticToeDegrees = 0.0,
             visualAsset = "Vehicles/Player/PlayerWheel.obj",
             visualFaceYawDegrees = 180.0,
             visualSpinSign = -1.0
@@ -244,8 +391,8 @@ PrototypeCarDefinition = {
             axle = "rear",
             tireProfile = "prototype_road_rear",
             steeringAxis = { 0.0, 1.0, 0.0 },
-            staticCamberDegrees = 1.0,
-            staticToeDegrees = -0.266667,
+            staticCamberDegrees = 0.0,
+            staticToeDegrees = 0.0,
             visualAsset = "Vehicles/Player/PlayerWheel.obj",
             visualFaceYawDegrees = 0.0,
             visualSpinSign = 1.0

@@ -9,14 +9,28 @@ This folder configures and orchestrates vehicles. High-frequency simulation rema
 - `Input.lua` — input action registration and interpretation.
 - `Formatting.lua` — human-readable names used by debug UI.
 - `Visuals.lua` — presentation-only authored body mesh assignment/alignment; never vehicle physics.
-- `VisualWheels.lua` — articulated wheel mesh presentation driven from native suspension/steering/spin telemetry.
+- `VisualWheels.lua` — compatibility loader for responsibility-owned wheel presentation under `Visual/`.
+- `Visual/TransformMath.lua` — presentation-only quaternion/transform helpers.
+- `Visual/ArticulatedWheels.lua` — separate/proxy wheel mesh presentation driven from native telemetry.
+- `Visual/EmbeddedWheelBinding.lua` — embedded GLB `WH_*` semantic binding and tire deformation.
+- `Visual/VisualWheels.lua` — per-frame wheel-presentation coordinator.
 - `Tuning.lua` — sends mutable tuning values to native systems.
 - `Factory.lua` — creates, resets, and destroys native vehicle instances.
 - `Telemetry.lua` — reads native state for UI and diagnostics.
 - `DynamicsLab.lua` — repeatable experiment control for the opt-in native high-rate recorder.
-- `Definitions/VehicleDefinitionV2.lua` — versioned component topology, templates, validation and deterministic export serialization.
+- `Definitions/VehicleDefinitionV2.lua` — schema version and Workshop template catalog only.
+- `Definitions/VehicleDefinitionV2Builder.lua` — Workshop draft construction and component-graph building.
+- `Definitions/VehicleDefinitionV2Validation.lua` — schema/core validation and report orchestration.
+- `Definitions/VehicleDefinitionV2DynamicsValidation.lua` — suspension/contact/ARB/chassis-flex/drive component validity.
+- `Definitions/VehicleDefinitionV2Compatibility.lua` — valid-definition versus current native preview readiness.
+- `Definitions/VehicleDefinitionV2Serialization.lua` — deterministic export serialization.
 - `Workshop.lua` — persistent authoring draft, current-solver preview bridge and module-private export.
-- `Lifecycle.lua` — scene entry/exit, fixed-step control, presentation, and shift commands.
+- `SuspensionAuthoring.lua` — compatibility loader for responsibility-owned authoring under `Suspension/`.
+- `Suspension/HardpointSources.lua` — hardpoint evidence/provenance and GLB metadata import.
+- `Suspension/HardpointEstimation.lua` — assisted low-confidence hardpoint estimation.
+- `Suspension/SuspensionAuthoring.lua` — native hardpoint activation and authoring facade.
+- `Suspension/HardpointGizmos.lua` — creator-only suspension marker presentation.
+- `Lifecycle.lua` — vehicle scene entry/exit, fixed-step control, presentation, and shift commands.
 - `../UI/VehicleDebugPanel.lua` — vehicle debug UI only; it contains no simulation logic.
 
 ## Rules for future work
@@ -41,8 +55,15 @@ only validated numeric data. The current `PrototypeRoad.lua` values are
 diagnostic templates used to prove front/rear and per-corner independence.
 They must not be treated as measured production tire data.
 
+TIRE02 lets a named preset reference a module-relative human-readable `.tir`
+file. `Vehicle.LoadWheelTirePropertyFile` performs per-wheel import and records
+provenance/confidence in the native tire description. The current front/rear `.tir`
+files under `Data/Tires/` are synthetic compatibility seeds, not measured production
+data; the numeric fields in `PrototypeRoad.lua` remain the fallback/debug path.
+
 Use `Vehicle.SetTireModel` only when an intentional all-wheel override is
-wanted. Use `Vehicle.SetWheelTireModel` for per-corner assignment and
+wanted. Use `Vehicle.SetWheelTireModel` for a numeric per-corner assignment,
+`Vehicle.LoadWheelTirePropertyFile` for imported MF parameters, and
 `Vehicle.GetWheelTireModel` for authoritative diagnostics/readback.
 
 

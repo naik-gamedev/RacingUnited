@@ -29,9 +29,28 @@ vehicleVisual = {
     },
     scale = definition.visual.scale,
     hideProxyWheels = definition.visual.hideProxyWheels,
+    isolateWheelAssembly = false,
     usingFallback = false
 }
 vehicleVisualMessage = "Player-car visual slot is ready"
+vehicleAssetMetadata = nil
+vehicleAssetMetadataMessage = "GLB metadata inspector is waiting for a vehicle GLB"
+vehicleAssetDiscovery = {
+    enabled = Save.GetBool("vehicle.visual.auto_discover_vehicle_glb", true),
+    lastRevision = -1,
+    latestVehicleGlb = "",
+    autoOwnedPath = "",
+    detectedCount = 0,
+    message = "Asset registry is waiting for Vehicle_*.glb under Assets/Vehicles"
+}
+
+vehicleEmbeddedWheelBinding = {
+    enabled = Save.GetBool("vehicle.visual.embedded_glb_wheel_binding", true),
+    active = false,
+    detectedCorners = 0,
+    bindPose = {},
+    message = "VA02 embedded GLB wheel hierarchy is waiting for WH_* semantic nodes"
+}
 
 vehicleWheelVisual = {
     enabled = definition.visual.articulatedWheels.enabled,
@@ -193,3 +212,25 @@ vehicleSuspension = {
     maximumTireDeflectionM = suspension.maximumTireDeflectionM,
     maximumTireNormalForceN = suspension.maximumTireNormalForceN
 }
+
+-- SUS01 creator-facing suspension authoring state. Gizmos are ordinary debug
+-- entities parented to the vehicle presentation root; they never participate in
+-- physics and therefore cannot perturb the regression-locked solver.
+vehicleAntiRollBars = {
+    nativeCount = 0,
+    front = {},
+    rear = {}
+}
+
+vehicleSuspensionAuthoring = {
+    enabled = false,
+    selectedWheelOnly = true,
+    markerScale = 0.045,
+    gizmoEntities = {},
+    estimateProfile = "",
+    estimatedCount = 0,
+    assetImportedCount = 0,
+    activeHardpointWheelCount = 0,
+    message = "Suspension authoring gizmos are hidden"
+}
+

@@ -4,13 +4,19 @@
 #include <string>
 #include <vector>
 
-#include <GLFW/glfw3.h>
+struct GLFWmonitor;
 
 #include "../Core/Math/Math.hpp"
 
 namespace heritage::graphics {
 
 using heritage::math::Mat4;
+
+// Heritage renders in metres. 0.10 m keeps cockpit/interior geometry practical
+// while 100,000 m provides the requested 100 km visual horizon. Reversed-Z and
+// 32-bit floating depth are used so this ratio remains usable.
+inline constexpr float kDefaultNearClipMeters = 0.10f;
+inline constexpr float kDefaultFarClipMeters = 100000.0f;
 
 struct MonitorMode
 {
@@ -67,13 +73,13 @@ public:
     void updateSpanFBO();
 
     // Rendering helpers
-    GLuint spanFBO() const { return m_spanFBO; }
+    unsigned int spanFBO() const { return m_spanFBO; }
     int spanWidth() const { return m_spanW; }
     int spanHeight() const { return m_spanH; }
     float spanScale() const { return m_spanScale; }
 
     // Off-axis projection for a specific monitor index (only valid when spanning)
-    Mat4 getOffAxisProjection(std::size_t monitorIndex, float nearZ = 0.1f, float farZ = 100.0f) const;
+    Mat4 getOffAxisProjection(std::size_t monitorIndex, float nearZ = kDefaultNearClipMeters, float farZ = kDefaultFarClipMeters) const;
 
     // Simple combined HFOV (for UI preview)
     float getCombinedHFOVDegrees() const;
@@ -86,15 +92,15 @@ private:
     std::vector<MonitorInfo> m_monitors;
     std::size_t m_primaryMonitorIndex = 0;
 
-    GLuint m_spanFBO = 0;
-    GLuint m_spanColor = 0;
-    GLuint m_spanDepth = 0;
+    unsigned int m_spanFBO = 0;
+    unsigned int m_spanColor = 0;
+    unsigned int m_spanDepth = 0;
     int m_spanW = 0;
     int m_spanH = 0;
     float m_spanScale = 1.0f;
 
     void destroySpanFBO();
-    Mat4 buildFrustum(float l, float r, float b, float t, float n, float f) const;
+    Mat4 buildFrustumReversedZ(float l, float r, float b, float t, float n, float f) const;
 };
 
 } // namespace heritage::graphics

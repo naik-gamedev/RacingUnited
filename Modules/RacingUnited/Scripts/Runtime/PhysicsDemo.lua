@@ -256,3 +256,202 @@ function CreateFastCcdDemo()
 
     return ResetFastCcdSphere(false)
 end
+
+function DestroyPhysicsDemo()
+    DestroySurfaceMaterialDemo()
+    for _, constraint in ipairs(physicsSpringConstraints) do
+        if constraint ~= 0 and Physics.ConstraintExists(constraint) then
+            Physics.DestroyConstraint(constraint)
+        end
+    end
+    physicsSpringConstraints = {}
+    for _, entity in ipairs(physicsSpringAnchorEntities) do
+        if entity ~= 0 and Entity.Exists(entity) then
+            Entity.Destroy(entity)
+        end
+    end
+    physicsSpringAnchorEntities = {}
+    DestroyBodyAndEntity(physicsProbeBody, physicsProbeEntity)
+    DestroyBodyAndEntity(physicsFloorBody, physicsFloorEntity)
+    DestroyBodyAndEntity(physicsCcdProjectileBody, physicsCcdProjectileEntity)
+    DestroyBodyAndEntity(physicsCcdWallBody, physicsCcdWallEntity)
+    if physicsRayOriginEntity ~= 0 and Entity.Exists(physicsRayOriginEntity) then
+        Entity.Destroy(physicsRayOriginEntity)
+    end
+    if physicsRayHitEntity ~= 0 and Entity.Exists(physicsRayHitEntity) then
+        Entity.Destroy(physicsRayHitEntity)
+    end
+    if physicsSphereCastHitEntity ~= 0 and Entity.Exists(physicsSphereCastHitEntity) then
+        Entity.Destroy(physicsSphereCastHitEntity)
+    end
+    physicsRayOriginEntity = 0
+    physicsRayHitEntity = 0
+    physicsSphereCastHitEntity = 0
+    physicsCcdProjectileEntity = 0
+    physicsCcdProjectileBody = 0
+    physicsCcdProjectileCollider = 0
+    physicsCcdWallEntity = 0
+    physicsCcdWallBody = 0
+    physicsCcdWallCollider = 0
+    physicsCcdLaunched = false
+    physicsProbeEntity = 0
+    physicsProbeBody = 0
+    physicsProbeCollider = 0
+    physicsFloorEntity = 0
+    physicsFloorBody = 0
+    physicsFloorCollider = 0
+end
+
+function RemoveExistingPhysicsDemo()
+    RemoveExistingSurfaceMaterialDemo()
+    RemoveEntitiesByName("Step 28B Native Body Probe")
+    RemoveEntitiesByName("Step 28C Native Collision Probe")
+    RemoveEntitiesByName("Step 28C Native Collision Floor")
+    RemoveEntitiesByName("Step 28D Angular Box Probe")
+    RemoveEntitiesByName("Step 28D OBB Collision Floor")
+    RemoveEntitiesByName("Step 28E Sleeping Box Probe")
+    RemoveEntitiesByName("Step 28E Sleeping Collision Floor")
+    RemoveEntitiesByName("Step 28F Query Box Probe")
+    RemoveEntitiesByName("Step 28F Query Collision Floor")
+    RemoveEntitiesByName("Step 28F Raycast Origin")
+    RemoveEntitiesByName("Step 28F Raycast Hit")
+    RemoveEntitiesByName("Step 28G Query Box Probe")
+    RemoveEntitiesByName("Step 28G Query Collision Floor")
+    RemoveEntitiesByName("Step 28G Raycast Origin")
+    RemoveEntitiesByName("Step 28G Raycast Hit")
+    RemoveEntitiesByName("Step 28G Fast Sphere")
+    RemoveEntitiesByName("Step 28G Thin CCD Wall")
+    RemoveEntitiesByName("Step 28G Sphere Cast Hit")
+    RemoveEntitiesByName("Step 28H Suspended Chassis")
+    RemoveEntitiesByName("Step 28H Suspension Floor")
+    RemoveEntitiesByName("Step 28H Spring Anchor FL")
+    RemoveEntitiesByName("Step 28H Spring Anchor FR")
+    RemoveEntitiesByName("Step 28H Spring Anchor RL")
+    RemoveEntitiesByName("Step 28H Spring Anchor RR")
+    RemoveEntitiesByName("Step 29A Vehicle Test Ground")
+    RemoveEntitiesByName("Step 29B Vehicle Test Ground")
+end
+
+-- CLEAN08: fixed-step implementation belongs to the physics demo, not module lifecycle.
+function PhysicsDemoFixedUpdate(fixedDeltaTime)
+    if physicsProbeBody == 0 or not Physics.BodyExists(physicsProbeBody) then
+        return
+    end
+
+    -- Native contacts should keep the probe above the floor. This is only a
+    -- safety reset for a malformed hot reload or a future collision regression.
+    local x, y, z = Physics.GetBodyPosition(physicsProbeBody)
+    if y ~= nil and y < -5.0 then
+        ResetPhysicsProbe()
+        physicsMessage = "Safety-reset a probe that escaped the collision demo"
+        return
+    end
+
+    local springCount = 0
+    local lengthTotal = 0.0
+    local extensionTotal = 0.0
+    local forceTotal = 0.0
+    local maximumAbsForce = 0.0
+    for _, constraint in ipairs(physicsSpringConstraints) do
+        if constraint ~= 0 and Physics.ConstraintExists(constraint) then
+            local springLength, extension, _, force =
+                Physics.GetSpringConstraintState(constraint)
+            if springLength ~= nil then
+                springCount = springCount + 1
+                lengthTotal = lengthTotal + springLength
+                extensionTotal = extensionTotal + extension
+                forceTotal = forceTotal + force
+                maximumAbsForce = math.max(maximumAbsForce, math.abs(force))
+            end
+        end
+    end
+    if springCount > 0 then
+        physicsSpringAverageLength = lengthTotal / springCount
+        physicsSpringAverageExtension = extensionTotal / springCount
+        physicsSpringTotalForce = forceTotal
+        physicsSpringMaximumAbsForce = maximumAbsForce
+    end
+
+    local ignoredBody = physicsRayIgnoreProbe and physicsProbeBody or 0
+    physicsRayHit, physicsRayCollider, physicsRayBody, physicsRayDistance,
+        physicsRayPointX, physicsRayPointY, physicsRayPointZ,
+        physicsRayNormalX, physicsRayNormalY, physicsRayNormalZ,
+        physicsRayTrigger = Physics.Raycast(
+            physicsRayOriginX, physicsRayOriginY, physicsRayOriginZ,
+            0.0, -1.0, 0.0,
+            20.0, 4294967295, false, ignoredBody)
+    physicsRayCandidateCount = Physics.GetLastQueryCandidateCount()
+    physicsRayExactTestCount = Physics.GetLastQueryExactTestCount()
+
+    if physicsRayHitEntity ~= 0 and Entity.Exists(physicsRayHitEntity) then
+        Entity.SetDebugVisible(
+            physicsRayHitEntity,
+            prototypeScenePreset == "physics" and physicsRayHit)
+        if physicsRayHit then
+            Entity.SetLocalPosition(
+                physicsRayHitEntity,
+                physicsRayPointX, physicsRayPointY, physicsRayPointZ)
+        end
+    end
+
+    physicsOverlapCount = Physics.OverlapSphereCount(
+        x, y, z,
+        0.85, 4294967295, false, physicsProbeBody)
+    physicsOverlapCandidateCount = Physics.GetLastQueryCandidateCount()
+    physicsOverlapExactTestCount = Physics.GetLastQueryExactTestCount()
+
+    physicsSphereCastHit, _, _, physicsSphereCastDistance,
+        physicsSphereCastPointX, physicsSphereCastPointY, physicsSphereCastPointZ,
+        physicsSphereCastNormalX, physicsSphereCastNormalY, physicsSphereCastNormalZ =
+        Physics.SphereCast(
+            physicsCcdStartX,
+            physicsCcdStartY,
+            physicsCcdStartZ,
+            physicsCcdRadius,
+            1.0, 0.0, 0.0,
+            8.0,
+            4294967295,
+            false,
+            physicsCcdProjectileBody)
+    physicsSphereCastCandidateCount = Physics.GetLastQueryCandidateCount()
+    physicsSphereCastExactTestCount = Physics.GetLastQueryExactTestCount()
+
+    if physicsSphereCastHitEntity ~= 0
+        and Entity.Exists(physicsSphereCastHitEntity) then
+        Entity.SetDebugVisible(
+            physicsSphereCastHitEntity,
+            prototypeScenePreset == "physics" and physicsSphereCastHit)
+        if physicsSphereCastHit then
+            Entity.SetLocalPosition(
+                physicsSphereCastHitEntity,
+                physicsSphereCastPointX,
+                physicsSphereCastPointY,
+                physicsSphereCastPointZ)
+        end
+    end
+
+    if physicsCcdProjectileBody ~= 0
+        and Physics.BodyExists(physicsCcdProjectileBody) then
+        local projectileX = Physics.GetBodyPosition(physicsCcdProjectileBody)
+        if physicsCcdLaunched and projectileX ~= nil then
+            if physicsCcdEnabled
+                and projectileX > 4.15
+                and projectileX < 4.35 then
+                physicsCcdLaunched = false
+                physicsCcdOutcome =
+                    "PROTECTED: stopped at the thin wall instead of tunnelling"
+                physicsMessage =
+                    "Continuous collision caught the 600 m/s sphere between fixed steps"
+            elseif not physicsCcdEnabled and projectileX > 7.5 then
+                Physics.SetBodyLinearVelocity(
+                    physicsCcdProjectileBody,
+                    0.0, 0.0, 0.0)
+                physicsCcdLaunched = false
+                physicsCcdOutcome =
+                    "TUNNELLED: discrete collision missed the 6 cm wall"
+                physicsMessage =
+                    "Without CCD the fast sphere crossed the thin wall between fixed steps"
+            end
+        end
+    end
+end

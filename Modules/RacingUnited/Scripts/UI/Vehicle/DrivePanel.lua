@@ -14,7 +14,22 @@ function DrawVehicleDrivePanel()
         vehicleSteeringInput, vehicleSteeringTarget, vehicleSteeringCenter))
     UI.Text(string.format("Ackermann inner / outer: %.1f / %.1f deg",
         vehicleSteeringInner, vehicleSteeringOuter))
-    UI.Text(string.format("Detected wheelbase / steer track: %.2f / %.2f m",
+    local rawLeft, rawRight = ReadVehicleSteeringActions()
+    UI.Text(string.format(
+        "Raw steer actions L / R: %.2f / %.2f   | native input: %.2f (-L / +R)",
+        rawLeft, rawRight, vehicleSteeringInput))
+    local fl = vehicleWheelTelemetry[1]
+    local fr = vehicleWheelTelemetry[2]
+    if fl ~= nil and fr ~= nil then
+        UI.Text(string.format(
+            "Front road-wheel angles FL / FR: %.2f / %.2f deg",
+            fl.steerAngle or 0.0, fr.steerAngle or 0.0))
+        UI.Text(string.format(
+            "Front forward X/Z FL: %.3f/%.3f  FR: %.3f/%.3f",
+            fl.wheelForwardX or 0.0, fl.wheelForwardZ or 1.0,
+            fr.wheelForwardX or 0.0, fr.wheelForwardZ or 1.0))
+    end
+    UI.Text(string.format("Detected wheelbase / steer track: %.3f / %.3f m",
         vehicleDetectedWheelbase, vehicleDetectedSteerTrack))
     UI.TextWrapped("W throttle | S brake | A/D steer | Left Shift handbrake | E/Q shift | R reverse | N neutral")
 
@@ -31,25 +46,43 @@ function DrawVehicleDrivePanel()
     vehicleMaximumSteerAngle, changed = UI.SliderFloat(
         "Maximum steering lock", vehicleMaximumSteerAngle, 20.0, 60.0, "%.1f degrees")
     if changed and nativeVehicle ~= 0 and Vehicle.Exists(nativeVehicle) then
-        Vehicle.SetTuning(nativeVehicle, vehicleMaximumDriveForce,
-            vehicleMaximumBrakeForce, vehicleMaximumSteerAngle,
-            vehicleTireFriction, vehicleLateralStiffness, vehicleRollingResistance)
+        ApplyVehicleSteeringTuning()
     end
 
     vehicleAckermannPercent, changed = UI.SliderFloat(
         "Ackermann geometry", vehicleAckermannPercent, -0.50, 1.50, "%.2f")
     if changed and nativeVehicle ~= 0 and Vehicle.Exists(nativeVehicle) then
-        Vehicle.SetSteeringGeometry(nativeVehicle, vehicleAckermannPercent,
-            vehicleSteeringRate, vehicleSteeringReturnRate,
-            vehicleHighSpeedSteeringRateFactor, vehicleHighSpeedReferenceMps)
+        ApplyVehicleSteeringTuning()
     end
 
     vehicleSteeringRate, changed = UI.SliderFloat(
         "Road-wheel steering rate", vehicleSteeringRate, 60.0, 720.0, "%.0f deg/s")
     if changed and nativeVehicle ~= 0 and Vehicle.Exists(nativeVehicle) then
-        Vehicle.SetSteeringGeometry(nativeVehicle, vehicleAckermannPercent,
-            vehicleSteeringRate, vehicleSteeringReturnRate,
-            vehicleHighSpeedSteeringRateFactor, vehicleHighSpeedReferenceMps)
+        ApplyVehicleSteeringTuning()
+    end
+
+    vehicleSteeringReturnRate, changed = UI.SliderFloat(
+        "Steering return rate", vehicleSteeringReturnRate, 60.0, 1080.0, "%.0f deg/s")
+    if changed and nativeVehicle ~= 0 and Vehicle.Exists(nativeVehicle) then
+        ApplyVehicleSteeringTuning()
+    end
+
+    vehicleHighSpeedSteeringRateFactor, changed = UI.SliderFloat(
+        "High-speed steering rate factor", vehicleHighSpeedSteeringRateFactor,
+        0.05, 1.0, "%.2f")
+    if changed and nativeVehicle ~= 0 and Vehicle.Exists(nativeVehicle) then
+        ApplyVehicleSteeringTuning()
+    end
+
+    vehicleHighSpeedReferenceMps, changed = UI.SliderFloat(
+        "High-speed steering reference", vehicleHighSpeedReferenceMps,
+        5.0, 100.0, "%.1f m/s")
+    if changed and nativeVehicle ~= 0 and Vehicle.Exists(nativeVehicle) then
+        ApplyVehicleSteeringTuning()
+    end
+
+    if UI.Button("RESET STEERING FROM VEHICLE DEFINITION") then
+        ResetVehicleSteeringTuning()
     end
 
     vehicleMaximumDriveForce, changed = UI.SliderFloat(

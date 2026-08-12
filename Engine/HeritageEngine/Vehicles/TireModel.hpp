@@ -1,62 +1,166 @@
 #pragma once
 
+#include "VehiclePrecision.hpp"
+#include "Tires/MagicFormula/MagicFormula62.hpp"
+#include "Tires/MagicFormula/TirePropertyFile.hpp"
+#include "Tires/MotorcycleTireProfile.hpp"
+#include "Tires/TireSlipDynamics.hpp"
+#include "Tires/TireContactGeometry.hpp"
+#include "Tires/TireRigidRing.hpp"
+#include "Tires/TireRoadEnveloping.hpp"
+#include "Tires/TireThermal.hpp"
+#include "Tires/TireWear.hpp"
+#include "Tires/TireSurfaceInteraction.hpp"
+#include "Tires/TireWetSurfaceInteraction.hpp"
+#include "Tires/TireWinterSurfaceInteraction.hpp"
+#include "Tires/TireShallowGranularInteraction.hpp"
+#include "Tires/TireDeformableTerrainInteraction.hpp"
+
+#include <cstddef>
+#include <string>
+
 namespace heritage::vehicles {
 
-// Step 29G advanced road-tire data. The force law is an original native
-// implementation built from public generalized sine/arctangent tire-curve
-// principles. It is deliberately data-driven and independent of Lua so later
-// road, motorcycle-profile, low-pressure and deformable-terrain providers can
-// share a stable vehicle/contact boundary.
+enum class TireProviderKind
+{
+    // Public MF-Tyre 6.x / FITTYP=62-compatible steady-state branch.
+    MagicFormula62,
+
+    // Same MF force/moment branch plus motorcycle contour metadata. Contact
+    // geometry is evaluated separately by MotorcycleTireProfile.
+    MagicFormula62Motorcycle,
+
+    // Step 29G Heritage generalized curve retained as a regression/fallback
+    // provider while MF62 datasets are being authored.
+    LegacyGeneralizedRoad
+};
+
+// TIRE01/TIRE02 tire data. Existing Heritage controls remain as a compatibility
+// bridge: while magicFormulaUsesLegacySeed is true they seed a coherent MF6.2
+// coefficient set at evaluation time. TIRE02 property-file import sets it false
+// and provides an identified coefficient set without changing the solver API.
 struct TireModelDescription
 {
-    float nominalLoad = 3500.0f;
-    float peakFriction = 1.15f;
-    float longitudinalStiffness = 90000.0f;
-    float corneringStiffness = 80000.0f;
-    float loadSensitivity = 0.12f;
-    float longitudinalRelaxationLength = 0.35f;
-    float lateralRelaxationLength = 0.45f;
-    float wheelInertia = 1.55f;
-    float pneumaticTrail = 0.075f;
+    VehicleScalar nominalLoad = 3500.0;
+    VehicleScalar peakFriction = 1.15;
+    VehicleScalar longitudinalStiffness = 90000.0;
+    VehicleScalar corneringStiffness = 80000.0;
+    VehicleScalar loadSensitivity = 0.12;
+    VehicleScalar longitudinalRelaxationLength = 0.35;
+    VehicleScalar lateralRelaxationLength = 0.45;
+    VehicleScalar wheelInertia = 1.55;
+    VehicleScalar pneumaticTrail = 0.075;
 
-    // Advanced curve controls. Existing SetTireModel callers remain valid
-    // because the Lua binding appends these as optional arguments.
-    float stiffnessLoadExponent = 0.85f;
-    float longitudinalShapeFactor = 1.65f;
-    float lateralShapeFactor = 1.30f;
-    float longitudinalCurvatureFactor = 0.20f;
-    float lateralCurvatureFactor = 0.15f;
-    float combinedSlipExponent = 2.0f;
-    float pneumaticTrailFalloff = 0.70f;
+    // Compatibility curve controls used by the legacy provider and by the
+    // MF62 seed bridge. Existing SetTireModel callers therefore remain valid.
+    VehicleScalar stiffnessLoadExponent = 0.85;
+    VehicleScalar longitudinalShapeFactor = 1.65;
+    VehicleScalar lateralShapeFactor = 1.30;
+    VehicleScalar longitudinalCurvatureFactor = 0.20;
+    VehicleScalar lateralCurvatureFactor = 0.15;
+    VehicleScalar combinedSlipExponent = 2.0;
+    VehicleScalar pneumaticTrailFalloff = 0.70;
+
+    TireProviderKind provider = TireProviderKind::MagicFormula62;
+    bool magicFormulaUsesLegacySeed = true;
+    tires::MagicFormula62Parameters magicFormula;
+    VehicleScalar inflationPressurePa = 220000.0;
+    tires::MotorcycleTireProfileDescription motorcycleProfile;
+    tires::TireSlipDynamicsCoefficients slipDynamicsCoefficients;
+    tires::TireContactGeometryDescription contactGeometry;
+    tires::TireRigidRingDescription rigidRing;
+    tires::TireRoadEnvelopingDescription roadEnveloping;
+    tires::TireThermalDescription thermal;
+    tires::TireWearDescription wear;
+    tires::TireContaminationDescription contamination;
+    tires::TireWetSurfaceDescription wetSurface;
+    tires::TireWinterSurfaceDescription winterSurface;
+    tires::TireShallowGranularDescription shallowGranularSurface;
+    tires::TireDeformableTerrainDescription deformableTerrainSurface;
+
+    // TIRE02 parameter provenance. These fields never alter the equations;
+    // they make it explicit whether a wheel is running a fitted/imported
+    // dataset or the compatibility seed.
+    bool importedPropertyFile = false;
+    int importedFitType = 0;
+    std::string parameterSource;
+    std::string parameterProvenance;
+    std::string parameterTireSide;
+    VehicleScalar parameterConfidence = 0.0;
+    std::size_t importedMappedParameterCount = 0;
+    std::size_t importedUnsupportedParameterCount = 0;
 };
 
 struct TireContactInput
 {
-    float normalLoad = 0.0f;
-    float longitudinalSlip = 0.0f;
-    float slipAngleRadians = 0.0f;
-    float frictionMultiplier = 1.0f;
-    float stiffnessMultiplier = 1.0f;
+    VehicleScalar normalLoad = 0.0;
+    VehicleScalar longitudinalSlip = 0.0;
+    VehicleScalar slipAngleRadians = 0.0;
+    VehicleScalar camberAngleRadians = 0.0;
+    VehicleScalar forwardSpeedMps = 0.0;
+    VehicleScalar turnSlipPerM = 0.0;
+    VehicleScalar contactPatchTurnMomentNm = 0.0;
+    VehicleScalar wheelRadiusM = 0.0;
+    VehicleScalar inflationPressurePa = 0.0;
+    VehicleScalar frictionMultiplier = 1.0;
+    VehicleScalar stiffnessMultiplier = 1.0;
 };
 
 struct TireForceResult
 {
-    float longitudinalForce = 0.0f;
-    float lateralForce = 0.0f;
-    float pureLongitudinalForce = 0.0f;
-    float pureLateralForce = 0.0f;
-    float effectiveFriction = 0.0f;
-    float gripUtilization = 0.0f;
-    float combinedSlipScale = 1.0f;
-    float pneumaticTrail = 0.0f;
-    float aligningTorque = 0.0f;
+    VehicleScalar longitudinalForce = 0.0;
+    VehicleScalar lateralForce = 0.0;
+    VehicleScalar pureLongitudinalForce = 0.0;
+    VehicleScalar pureLateralForce = 0.0;
+    VehicleScalar effectiveFriction = 0.0;
+    VehicleScalar gripUtilization = 0.0;
+    VehicleScalar combinedSlipScale = 1.0;
+    VehicleScalar pneumaticTrail = 0.0;
+    VehicleScalar aligningTorque = 0.0;
+
+    // MF6.x outputs retained for steering/FFB, wheel dynamics and diagnostics.
+    VehicleScalar overturningMoment = 0.0;
+    VehicleScalar rollingResistanceMoment = 0.0;
+    VehicleScalar residualAligningTorque = 0.0;
+    VehicleScalar longitudinalSlipStiffness = 0.0;
+    VehicleScalar corneringStiffness = 0.0;
+    VehicleScalar camberStiffness = 0.0;
+    VehicleScalar combinedLongitudinalWeight = 1.0;
+    VehicleScalar combinedLateralWeight = 1.0;
+    VehicleScalar turnSlipMoment = 0.0;
+    VehicleScalar normalizedTurnSlip = 0.0;
+    VehicleScalar turnSlipLongitudinalReduction = 1.0;
+    VehicleScalar turnSlipLateralReduction = 1.0;
+    VehicleScalar turnSlipCorneringReduction = 1.0;
+    VehicleScalar turnSlipTrailReduction = 1.0;
+
+    // Motorcycle contour telemetry. The current chassis contact ray remains
+    // authoritative until the future SWIFT/enveloping contact provider is
+    // promoted; this value is already usable by motorcycle wheel kinematics.
+    bool motorcycleContourValid = false;
+    VehicleScalar motorcycleContactLateralOffset = 0.0;
+    VehicleScalar motorcycleCenterToRoad = 0.0;
 };
 
 bool validTireModelDescription(const TireModelDescription& value);
 
-// Evaluates the advanced road-tire provider at one already-relaxed contact
-// state. Loose/deformable terrain still uses temporary surface multipliers in
-// Step 29G; a later terramechanics provider will replace that approximation.
+// Maps the long-standing Heritage tuning controls into a coherent MF6.2 seed
+// set. It is intentionally an approximation, not a replacement for tire-rig
+// identification. It lets existing vehicle definitions adopt the new solver
+// without an abrupt content break.
+tires::MagicFormula62Parameters seededMagicFormula62Parameters(
+    const TireModelDescription& description,
+    VehicleScalar wheelRadiusM);
+
+
+TireModelDescription tireModelDescriptionFromPropertyFile(
+    const tires::TirePropertyFileData& propertyFile,
+    TireProviderKind provider,
+    const std::string& source,
+    const std::string& provenance,
+    VehicleScalar confidence,
+    const TireModelDescription& fallback = {});
+
 TireForceResult evaluateAdvancedRoadTire(
     const TireModelDescription& description,
     const TireContactInput& input);

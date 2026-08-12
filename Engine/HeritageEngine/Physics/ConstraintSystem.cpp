@@ -115,7 +115,11 @@ heritage::math::Vec3 ConstraintSystem::pointVelocity(
     };
     return add(
         body.linearVelocity,
-        cross(angularRadians, subtract(worldPoint, body.position)));
+        cross(
+            angularRadians,
+            subtract(
+                worldPoint,
+                RigidBodySystem::worldCenterOfMass(body))));
 }
 
 void ConstraintSystem::clear()
@@ -370,6 +374,22 @@ BodyHandle ConstraintSystem::bodyB(ConstraintHandle handle) const
     }
     clearError();
     return slot->record.bodyB;
+}
+
+void ConstraintSystem::rebaseLocalOrigin(
+    const heritage::math::Vec3& shift)
+{
+    for (Slot& slot : m_slots)
+    {
+        if (!slot.alive || slot.record.bodyB != InvalidBody)
+            continue;
+
+        slot.record.anchorB.x -= shift.x;
+        slot.record.anchorB.y -= shift.y;
+        slot.record.anchorB.z -= shift.z;
+    }
+
+    clearError();
 }
 
 void ConstraintSystem::simulate(

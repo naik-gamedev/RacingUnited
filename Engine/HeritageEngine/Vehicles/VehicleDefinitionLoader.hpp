@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 
 #include "VehicleDefinition.hpp"
@@ -10,6 +11,7 @@ namespace heritage::vehicles {
 struct VehicleDefinitionLoadSettings
 {
     VehicleDescription vehicle;
+    std::filesystem::path moduleRoot;
 };
 
 // Adapter from an immutable compiled topology into a particular native solver.
@@ -21,7 +23,7 @@ public:
     static VehicleHandle create(
         const CompiledVehicleDefinition& definition,
         const VehicleDefinitionLoadSettings& settings,
-        const heritage::physics::RigidBodySystem& bodies,
+        heritage::physics::RigidBodySystem& bodies,
         VehicleSystem& vehicles,
         std::string& errorMessage);
 };

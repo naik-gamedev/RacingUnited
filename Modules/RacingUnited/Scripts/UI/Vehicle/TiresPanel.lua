@@ -20,6 +20,10 @@ function DrawVehicleTiresPanel()
             DrawVehicleTiresLivePanel()
             UI.EndTabItem()
         end
+        if UI.BeginTabItem("LAB") then
+            DrawVehicleTiresLabPanel()
+            UI.EndTabItem()
+        end
         UI.EndTabBar()
     end
 

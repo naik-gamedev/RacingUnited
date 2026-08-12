@@ -18,6 +18,18 @@ struct VehicleBodyDefinition
     std::string id;
     std::string role;
     float massKg = 1.0f;
+
+    // MASS01: body mass properties are distinct from collision geometry.
+    // Optional values let measured/CAD/estimated data override collider-derived
+    // COM/inertia without forcing every legacy definition to provide them.
+    bool hasCenterOfMassLocal = false;
+    heritage::math::Vec3 centerOfMassLocal{};
+    bool hasInertiaLocalKgM2 = false;
+    heritage::math::Vec3 inertiaLocalKgM2{};
+    float frontStaticLoadFraction = 0.50f;
+    float leftStaticLoadFraction = 0.50f;
+    std::string massPropertiesProvenance;
+    float massPropertiesConfidence = 0.0f;
 };
 
 struct VehiclePowerUnitDefinition
@@ -45,11 +57,25 @@ struct VehicleTransmissionDefinition
     float clutchEngagementRate = 5.0f;
 };
 
+struct VehicleSuspensionHardpointDefinition
+{
+    std::string id;
+    heritage::math::Vec3 localPosition{};
+    // Epistemic provenance is authoring metadata, not a simulation branch.
+    // Examples: measured, asset_authored, estimated. Unknown/legacy data may
+    // leave provenance empty and confidence at zero.
+    std::string provenance;
+    float confidence = 0.0f;
+};
+
 struct VehicleSuspensionDefinition
 {
     std::string id;
     std::string provider;
     std::string mountBody;
+    // Optional creator/asset/estimator linkage anchors. Compatibility providers
+    // ignore them; mechanism-specific providers such as MacPherson consume them.
+    std::vector<VehicleSuspensionHardpointDefinition> hardpoints;
     float restLengthM = 0.50f;
     float maximumCompressionM = 0.18f;
     float maximumDroopM = 0.15f;
@@ -91,6 +117,9 @@ struct VehicleContactUnitDefinition
     bool serviceBrake = true;
     bool parkingBrake = false;
     std::string tireProvider;
+    std::string tireParameterFile;
+    std::string tireParameterProvenance;
+    float tireParameterConfidence = 0.0f;
     float radiusM = 0.35f;
     float effectiveUnsprungMassKg = 0.0f;
     float tireRadialStiffnessNPerM = 220000.0f;
@@ -99,6 +128,39 @@ struct VehicleContactUnitDefinition
     float maximumTireNormalForceN = 250000.0f;
     float serviceBrakeFactor = 0.25f;
     float parkingBrakeFactor = 0.0f;
+};
+
+struct VehicleAntiRollBarDefinition
+{
+    std::string id;
+    std::string leftContactUnit;
+    std::string rightContactUnit;
+    bool enabled = true;
+    float torsionalStiffnessNmPerRad = 0.0f;
+    float torsionalDampingNmsPerRad = 0.0f;
+    float leftLeverArmM = 0.20f;
+    float rightLeverArmM = 0.20f;
+    float leftLinkMotionRatio = 1.0f;
+    float rightLinkMotionRatio = 1.0f;
+    float maximumWheelForceN = 12000.0f;
+    std::string provenance;
+    float confidence = 0.0f;
+};
+
+struct VehicleChassisFlexDefinition
+{
+    bool enabled = false;
+    std::string provider = "chassis_torsional_mode_v1";
+    std::string mountBody = "chassis";
+    float torsionalRigidityNmPerDegree = 10000.0f;
+    float torsionalDampingNmsPerRad = 12000.0f;
+    float effectiveTorsionalInertiaKgM2 = 500.0f;
+    float torsionAxisLocalY = 0.45f;
+    float frontReferenceLocalZ = 1.20f;
+    float rearReferenceLocalZ = -1.20f;
+    float maximumTwistDegrees = 1.0f;
+    std::string provenance;
+    float confidence = 0.0f;
 };
 
 struct VehicleDriveConnectionDefinition
@@ -130,6 +192,8 @@ struct VehicleDefinitionV2Source
     std::vector<VehicleTransmissionDefinition> transmissions;
     std::vector<VehicleSuspensionDefinition> suspensions;
     std::vector<VehicleContactUnitDefinition> contactUnits;
+    std::vector<VehicleAntiRollBarDefinition> antiRollBars;
+    VehicleChassisFlexDefinition chassisFlex;
     std::vector<VehicleDriveConnectionDefinition> driveConnections;
 };
 
@@ -173,6 +237,19 @@ struct CompiledVehicleContactUnit
     float driveFactor = 0.0f;
 };
 
+struct CompiledVehicleAntiRollBar
+{
+    VehicleAntiRollBarDefinition authored;
+    std::size_t leftContactUnitIndex = kInvalidVehicleComponentIndex;
+    std::size_t rightContactUnitIndex = kInvalidVehicleComponentIndex;
+};
+
+struct CompiledVehicleChassisFlex
+{
+    VehicleChassisFlexDefinition authored;
+    std::size_t mountBodyIndex = kInvalidVehicleComponentIndex;
+};
+
 struct CompiledVehicleDriveConnection
 {
     std::string id;
@@ -193,6 +270,8 @@ struct CompiledVehicleDefinition
     std::vector<CompiledVehicleTransmission> transmissions;
     std::vector<CompiledVehicleSuspension> suspensions;
     std::vector<CompiledVehicleContactUnit> contactUnits;
+    std::vector<CompiledVehicleAntiRollBar> antiRollBars;
+    CompiledVehicleChassisFlex chassisFlex;
     std::vector<CompiledVehicleDriveConnection> driveConnections;
     std::string runtimeProvider;
 };

@@ -1,4 +1,10 @@
 #include <glad/glad.h>
+
+#ifndef GLFW_INCLUDE_NONE
+#define GLFW_INCLUDE_NONE
+#endif
+#include <GLFW/glfw3.h>
+
 #include "DisplaySystem.hpp"
 #include <fstream>
 #include <sstream>
@@ -183,7 +189,7 @@ void DisplaySystem::updateSpanFBO()
 
     glGenRenderbuffers(1, &m_spanDepth);
     glBindRenderbuffer(GL_RENDERBUFFER, m_spanDepth);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, fboW, fboH);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, fboW, fboH);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_spanDepth);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
@@ -194,17 +200,17 @@ void DisplaySystem::updateSpanFBO()
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-Mat4 DisplaySystem::buildFrustum(float l, float r, float b, float t, float n, float f) const
+Mat4 DisplaySystem::buildFrustumReversedZ(float l, float r, float b, float t, float n, float f) const
 {
     Mat4 m{};
-    float A = (2.0f * n) / (r - l);
-    float B = (2.0f * n) / (t - b);
-    float C = (r + l) / (r - l);
-    float D = (t + b) / (t - b);
+    const float A = (2.0f * n) / (r - l);
+    const float B = (2.0f * n) / (t - b);
+    const float C = (r + l) / (r - l);
+    const float D = (t + b) / (t - b);
     m.m[0] = A;  m.m[5] = B;
     m.m[8] = C;  m.m[9] = D;
-    m.m[10] = -(f + n) / (f - n);
-    m.m[14] = -(2.0f * f * n) / (f - n);
+    m.m[10] = (f + n) / (f - n);
+    m.m[14] = (2.0f * f * n) / (f - n);
     m.m[11] = -1.0f;
     return m;
 }
@@ -212,7 +218,7 @@ Mat4 DisplaySystem::buildFrustum(float l, float r, float b, float t, float n, fl
 Mat4 DisplaySystem::getOffAxisProjection(size_t monitorIndex, float nearZ, float farZ) const
 {
     if (monitorIndex >= m_monitors.size() || !selected[monitorIndex])
-        return heritage::math::perspective(0.6f, 16.0f/9.0f, nearZ, farZ);
+        return heritage::math::perspectiveReversedZ(0.6f, 16.0f/9.0f, nearZ, farZ);
 
     // Compute selected desktop bounds & physical totals
     int minX = INT_MAX, maxX = INT_MIN;
@@ -250,7 +256,7 @@ Mat4 DisplaySystem::getOffAxisProjection(size_t monitorIndex, float nearZ, float
     float b = (-halfH - centerOffsetY) * (nearZ / eyeM);
     float t = ( halfH - centerOffsetY) * (nearZ / eyeM);
 
-    return buildFrustum(l, r, b, t, nearZ, farZ);
+    return buildFrustumReversedZ(l, r, b, t, nearZ, farZ);
 }
 
 float DisplaySystem::getCombinedHFOVDegrees() const

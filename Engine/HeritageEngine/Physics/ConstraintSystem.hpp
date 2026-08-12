@@ -76,6 +76,10 @@ public:
     // anchor points. Called before rigid-body integration in each fixed step.
     void simulate(RigidBodySystem& bodies, float fixedDeltaTime);
 
+    // Fixed world anchors must follow the same local-frame shift as bodies.
+    // Body-local anchors remain untouched.
+    void rebaseLocalOrigin(const heritage::math::Vec3& shift);
+
     const std::string& lastError() const { return m_lastError; }
 
 private:

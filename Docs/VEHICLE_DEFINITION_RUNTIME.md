@@ -30,8 +30,25 @@ The first provider is `raycast_wheel_v1`. It currently accepts:
 - one drivetrain route reaching at least one contact;
 - exactly four wheel contacts;
 - resolved `linear_raycast_v1` suspension components;
-- `advanced_road` tire contacts; and
+- MF6.2 tire contacts (`advanced_road`/`mf62_road`, with
+  `motorcycle_profile`/`mf62_motorcycle` available at the tire layer); and
 - no requested lean, articulation or continuous-track capability.
+
+
+TIRE01 changes the tire-provider meaning without changing topology selection:
+`advanced_road` is now a compatibility alias for the MF6.2 road core and
+`motorcycle_profile` selects the MF6.2 large-camber/contour branch. A complete
+motorcycle remains unresolved by `raycast_wheel_v1` when lean dynamics or a
+two-contact topology is requested; tire capability must not be confused with a
+complete motorcycle chassis solver. See `TIRE_MODEL.md`.
+
+TIRE02 adds optional per-contact `tireParameterFile`, `tireParameterProvenance`
+and `tireParameterConfidence`. The loader only accepts safe module-relative paths,
+loads the human-readable `.tir` before the vehicle is released to the caller, and
+rolls the partially created vehicle back on import failure. A property file with
+valid `MC_CONTOUR_A/B` automatically promotes a non-legacy MF contact to the
+motorcycle tire provider. Unknown future TIR sections remain diagnostics rather
+than silently changing solver capability.
 
 Other topologies can still be structurally valid. The compiler reports
 `unresolved` plus the exact missing provider capabilities instead of deleting

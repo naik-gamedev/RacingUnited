@@ -1,4 +1,6 @@
 #include "VehicleDefinitionCompiler.hpp"
+#include "Suspension/Geometry/MacPherson/MacPhersonKinematics.hpp"
+#include "Suspension/Geometry/TrailingArm/TrailingArmKinematics.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -19,6 +21,62 @@ bool finite(const heritage::math::Vec3& value)
     return finite(value.x) && finite(value.y) && finite(value.z);
 }
 
+
+bool readHardpoint(
+    const VehicleSuspensionDefinition& suspension,
+    const char* id,
+    heritage::math::Vec3& value)
+{
+    for (const VehicleSuspensionHardpointDefinition& hardpoint
+         : suspension.hardpoints)
+    {
+        if (hardpoint.id == id)
+        {
+            value = hardpoint.localPosition;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool buildMacPhersonHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    MacPhersonHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readHardpoint(suspension, "strut_top_mount", value.strutTopMount)
+        && readHardpoint(
+            suspension, "strut_upright_mount", value.strutUprightMount)
+        && readHardpoint(
+            suspension, "lower_arm_inner_front", value.lowerArmInnerFront)
+        && readHardpoint(
+            suspension, "lower_arm_inner_rear", value.lowerArmInnerRear)
+        && readHardpoint(
+            suspension, "lower_ball_joint", value.lowerBallJoint)
+        && readHardpoint(suspension, "tie_rod_inner", value.tieRodInner)
+        && readHardpoint(suspension, "tie_rod_outer", value.tieRodOuter)
+        && readHardpoint(suspension, "wheel_center", value.wheelCenter);
+    value.authored = complete;
+    return complete;
+}
+
+bool buildTrailingArmHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    TrailingArmHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readHardpoint(suspension, "arm_pivot_inner", value.armPivotInner)
+        && readHardpoint(suspension, "arm_pivot_outer", value.armPivotOuter)
+        && readHardpoint(suspension, "wheel_center", value.wheelCenter)
+        && readHardpoint(
+            suspension, "damper_upper_mount", value.damperUpperMount)
+        && readHardpoint(
+            suspension, "damper_lower_mount", value.damperLowerMount);
+    value.authored = complete;
+    return complete;
+}
 bool safeId(const std::string& value)
 {
     if (value.empty() || value.size() > 64)
@@ -185,6 +243,8 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
         addError(result, "suspension_count", "A vehicle requires 1 to 32 suspension components.");
     if (source.contactUnits.empty() || source.contactUnits.size() > 32)
         addError(result, "contact_count", "A vehicle requires 1 to 32 contact units.");
+    if (source.antiRollBars.size() > 16)
+        addError(result, "anti_roll_bar_count", "At most 16 anti-roll bars are allowed.");
     if (source.driveConnections.size() > 16)
         addError(result, "drive_connection_count", "At most 16 drive connections are allowed.");
 
@@ -196,6 +256,7 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
         source.suspensions, "Suspension", result);
     const auto contactIndices = indexComponents(
         source.contactUnits, "Contact unit", result);
+    indexComponents(source.antiRollBars, "Anti-roll bar", result);
     indexComponents(source.driveConnections, "Drive connection", result);
 
     std::size_t primaryBodyCount = 0;
@@ -209,6 +270,53 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
                 result,
                 "body_mass",
                 "Body '" + body.id + "' needs a finite positive mass.");
+        }
+        if (body.hasCenterOfMassLocal && !finite(body.centerOfMassLocal))
+        {
+            addError(
+                result,
+                "body_center_of_mass",
+                "Body '" + body.id + "' has a non-finite centre of mass.");
+        }
+        if (body.hasInertiaLocalKgM2
+            && (!finite(body.inertiaLocalKgM2)
+                || body.inertiaLocalKgM2.x <= 0.0f
+                || body.inertiaLocalKgM2.y <= 0.0f
+                || body.inertiaLocalKgM2.z <= 0.0f))
+        {
+            addError(
+                result,
+                "body_inertia",
+                "Body '" + body.id + "' needs finite positive local inertia values.");
+        }
+        if (!finite(body.frontStaticLoadFraction)
+            || body.frontStaticLoadFraction <= 0.0f
+            || body.frontStaticLoadFraction >= 1.0f
+            || !finite(body.leftStaticLoadFraction)
+            || body.leftStaticLoadFraction <= 0.0f
+            || body.leftStaticLoadFraction >= 1.0f)
+        {
+            addError(
+                result,
+                "body_static_load_fraction",
+                "Body '" + body.id + "' needs front/left static-load fractions between zero and one.");
+        }
+        if (!finite(body.massPropertiesConfidence)
+            || body.massPropertiesConfidence < 0.0f
+            || body.massPropertiesConfidence > 1.0f)
+        {
+            addError(
+                result,
+                "body_mass_properties_confidence",
+                "Body '" + body.id + "' mass-property confidence must be between zero and one.");
+        }
+        if ((body.hasCenterOfMassLocal || body.hasInertiaLocalKgM2)
+            && body.massPropertiesProvenance.empty())
+        {
+            addWarning(
+                result,
+                "body_mass_properties_provenance",
+                "Body '" + body.id + "' has explicit mass properties without provenance metadata.");
         }
     }
     if (primaryBodyCount != 1)
@@ -305,6 +413,105 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
             "body",
             result);
         result.definition.suspensions.push_back(std::move(compiled));
+
+        if (suspension.hardpoints.size() > 32)
+        {
+            addError(
+                result,
+                "suspension_hardpoint_count",
+                "Suspension '" + suspension.id
+                    + "' contains more than 32 authored hardpoints.");
+        }
+        std::unordered_set<std::string> hardpointIds;
+        for (const VehicleSuspensionHardpointDefinition& hardpoint
+             : suspension.hardpoints)
+        {
+            if (!safeId(hardpoint.id))
+            {
+                addError(
+                    result,
+                    "unsafe_suspension_hardpoint_id",
+                    "Suspension '" + suspension.id
+                        + "' contains an unsafe hardpoint identifier.");
+            }
+            else if (!hardpointIds.insert(hardpoint.id).second)
+            {
+                addError(
+                    result,
+                    "duplicate_suspension_hardpoint_id",
+                    "Suspension '" + suspension.id
+                        + "' repeats hardpoint ID '" + hardpoint.id + "'.");
+            }
+            if (!finite(hardpoint.localPosition))
+            {
+                addError(
+                    result,
+                    "suspension_hardpoint_position",
+                    "Suspension '" + suspension.id
+                        + "' contains a non-finite hardpoint position.");
+            }
+            if (!hardpoint.provenance.empty()
+                && !safeId(hardpoint.provenance))
+            {
+                addError(
+                    result,
+                    "suspension_hardpoint_provenance",
+                    "Suspension '" + suspension.id
+                        + "' contains an unsafe hardpoint provenance ID.");
+            }
+            if (!finite(hardpoint.confidence)
+                || hardpoint.confidence < 0.0f
+                || hardpoint.confidence > 1.0f)
+            {
+                addError(
+                    result,
+                    "suspension_hardpoint_confidence",
+                    "Suspension '" + suspension.id
+                        + "' contains a hardpoint confidence outside 0..1.");
+            }
+        }
+
+        if (suspension.provider == "macpherson_strut_v1")
+        {
+            MacPhersonHardpoints macPherson;
+            if (!buildMacPhersonHardpoints(suspension, macPherson))
+            {
+                addError(
+                    result,
+                    "macpherson_required_hardpoints",
+                    "MacPherson suspension '" + suspension.id
+                        + "' requires all eight named hardpoints.");
+            }
+            else if (!validMacPhersonHardpoints(macPherson))
+            {
+                addError(
+                    result,
+                    "macpherson_hardpoint_geometry",
+                    "MacPherson suspension '" + suspension.id
+                        + "' has degenerate hardpoint geometry.");
+            }
+        }
+
+        if (suspension.provider == "trailing_arm_torsion_bar_v1")
+        {
+            TrailingArmHardpoints trailingArm;
+            if (!buildTrailingArmHardpoints(suspension, trailingArm))
+            {
+                addError(
+                    result,
+                    "trailing_arm_required_hardpoints",
+                    "Trailing-arm torsion-bar suspension '" + suspension.id
+                        + "' requires all five named hardpoints.");
+            }
+            else if (!validTrailingArmHardpoints(trailingArm))
+            {
+                addError(
+                    result,
+                    "trailing_arm_hardpoint_geometry",
+                    "Trailing-arm torsion-bar suspension '" + suspension.id
+                        + "' has degenerate hardpoint geometry.");
+            }
+        }
 
         if (!finite(suspension.restLengthM) || suspension.restLengthM <= 0.0f
             || !finite(suspension.maximumCompressionM)
@@ -428,6 +635,110 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
         }
     }
 
+    for (const VehicleAntiRollBarDefinition& bar : source.antiRollBars)
+    {
+        CompiledVehicleAntiRollBar compiled;
+        compiled.authored = bar;
+        compiled.leftContactUnitIndex = resolveReference(
+            contactIndices,
+            bar.leftContactUnit,
+            "Anti-roll bar '" + bar.id + "'",
+            "left contact unit",
+            result);
+        compiled.rightContactUnitIndex = resolveReference(
+            contactIndices,
+            bar.rightContactUnit,
+            "Anti-roll bar '" + bar.id + "'",
+            "right contact unit",
+            result);
+        result.definition.antiRollBars.push_back(std::move(compiled));
+
+        if (bar.leftContactUnit == bar.rightContactUnit)
+        {
+            addError(
+                result,
+                "anti_roll_bar_same_contact",
+                "Anti-roll bar '" + bar.id
+                    + "' must couple two different contact units.");
+        }
+        if (!finite(bar.torsionalStiffnessNmPerRad)
+            || bar.torsionalStiffnessNmPerRad < 0.0f
+            || bar.torsionalStiffnessNmPerRad > 10000000.0f
+            || !finite(bar.torsionalDampingNmsPerRad)
+            || bar.torsionalDampingNmsPerRad < 0.0f
+            || bar.torsionalDampingNmsPerRad > 1000000.0f
+            || !finite(bar.leftLeverArmM) || bar.leftLeverArmM <= 0.0f
+            || bar.leftLeverArmM > 10.0f
+            || !finite(bar.rightLeverArmM) || bar.rightLeverArmM <= 0.0f
+            || bar.rightLeverArmM > 10.0f
+            || !finite(bar.leftLinkMotionRatio)
+            || bar.leftLinkMotionRatio <= 0.0f
+            || bar.leftLinkMotionRatio > 10.0f
+            || !finite(bar.rightLinkMotionRatio)
+            || bar.rightLinkMotionRatio <= 0.0f
+            || bar.rightLinkMotionRatio > 10.0f
+            || !finite(bar.maximumWheelForceN)
+            || bar.maximumWheelForceN < 0.0f
+            || bar.maximumWheelForceN > 10000000.0f
+            || !finite(bar.confidence)
+            || bar.confidence < 0.0f || bar.confidence > 1.0f
+            || (!bar.provenance.empty() && !safeId(bar.provenance)))
+        {
+            addError(
+                result,
+                "anti_roll_bar_parameters",
+                "Anti-roll bar '" + bar.id
+                    + "' has invalid geometry, stiffness, damping or provenance data.");
+        }
+    }
+
+    result.definition.chassisFlex.authored = source.chassisFlex;
+    if (source.chassisFlex.enabled)
+    {
+        result.definition.chassisFlex.mountBodyIndex = resolveReference(
+            bodyIndices,
+            source.chassisFlex.mountBody,
+            "Chassis-flex component",
+            "body",
+            result);
+        if (source.chassisFlex.provider != "chassis_torsional_mode_v1")
+        {
+            addError(
+                result,
+                "chassis_flex_provider",
+                "Enabled chassis flex requires provider 'chassis_torsional_mode_v1'.");
+        }
+        if (!finite(source.chassisFlex.torsionalRigidityNmPerDegree)
+            || source.chassisFlex.torsionalRigidityNmPerDegree <= 0.0f
+            || source.chassisFlex.torsionalRigidityNmPerDegree > 1000000.0f
+            || !finite(source.chassisFlex.torsionalDampingNmsPerRad)
+            || source.chassisFlex.torsionalDampingNmsPerRad < 0.0f
+            || source.chassisFlex.torsionalDampingNmsPerRad > 10000000.0f
+            || !finite(source.chassisFlex.effectiveTorsionalInertiaKgM2)
+            || source.chassisFlex.effectiveTorsionalInertiaKgM2 <= 0.001f
+            || source.chassisFlex.effectiveTorsionalInertiaKgM2 > 10000000.0f
+            || !finite(source.chassisFlex.torsionAxisLocalY)
+            || std::abs(source.chassisFlex.torsionAxisLocalY) > 10.0f
+            || !finite(source.chassisFlex.frontReferenceLocalZ)
+            || !finite(source.chassisFlex.rearReferenceLocalZ)
+            || source.chassisFlex.frontReferenceLocalZ
+                - source.chassisFlex.rearReferenceLocalZ < 0.10f
+            || !finite(source.chassisFlex.maximumTwistDegrees)
+            || source.chassisFlex.maximumTwistDegrees <= 0.0f
+            || source.chassisFlex.maximumTwistDegrees > 20.0f
+            || !finite(source.chassisFlex.confidence)
+            || source.chassisFlex.confidence < 0.0f
+            || source.chassisFlex.confidence > 1.0f
+            || (!source.chassisFlex.provenance.empty()
+                && !safeId(source.chassisFlex.provenance)))
+        {
+            addError(
+                result,
+                "chassis_flex_parameters",
+                "Chassis-flex stiffness, damping, modal inertia, axis, references or provenance are invalid.");
+        }
+    }
+
     std::vector<std::size_t> driveReferenceCounts(source.contactUnits.size(), 0);
     for (const VehicleDriveConnectionDefinition& connection : source.driveConnections)
     {
@@ -524,7 +835,9 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
     }
     for (const VehicleSuspensionDefinition& suspension : source.suspensions)
     {
-        if (suspension.provider != "linear_raycast_v1")
+        if (suspension.provider != "linear_raycast_v1"
+            && suspension.provider != "macpherson_strut_v1"
+            && suspension.provider != "trailing_arm_torsion_bar_v1")
         {
             addReason(
                 providerReasons,
@@ -535,8 +848,21 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
     {
         if (contact.kind != "wheel")
             addReason(providerReasons, "contact provider '" + contact.kind + "'");
-        if (contact.tireProvider != "advanced_road")
+        if (contact.tireProvider != "advanced_road"
+            && contact.tireProvider != "mf62_road"
+            && contact.tireProvider != "motorcycle_profile"
+            && contact.tireProvider != "mf62_motorcycle"
+            && contact.tireProvider != "legacy_generalized_road")
+        {
             addReason(providerReasons, "tire provider '" + contact.tireProvider + "'");
+        }
+    }
+    if (source.chassisFlex.enabled
+        && source.chassisFlex.provider != "chassis_torsional_mode_v1")
+    {
+        addReason(
+            providerReasons,
+            "chassis-flex provider '" + source.chassisFlex.provider + "'");
     }
     if (!source.contactUnits.empty()
         && std::all_of(
@@ -574,6 +900,8 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
         << " | " << source.transmissions.size() << " transmissions"
         << " | " << source.suspensions.size() << " suspensions"
         << " | " << source.contactUnits.size() << " contacts"
+        << " | " << source.antiRollBars.size() << " anti-roll bars"
+        << " | chassis flex " << (source.chassisFlex.enabled ? "enabled" : "rigid")
         << " | provider " << result.definition.runtimeProvider;
     result.summary = summary.str();
     return result;

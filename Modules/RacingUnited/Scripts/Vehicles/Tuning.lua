@@ -45,25 +45,35 @@ function ApplyNativeWheelTireProfile(wheelIndex, profile)
         return false
     end
 
-    local success = Vehicle.SetWheelTireModel(
-        nativeVehicle,
-        wheelIndex,
-        profile.nominalLoad,
-        profile.peakFriction,
-        profile.longitudinalStiffness,
-        profile.corneringStiffness,
-        profile.loadSensitivity,
-        profile.longitudinalRelaxation,
-        profile.lateralRelaxation,
-        profile.wheelInertia,
-        profile.pneumaticTrail,
-        profile.stiffnessLoadExponent,
-        profile.longitudinalShapeFactor,
-        profile.lateralShapeFactor,
-        profile.longitudinalCurvatureFactor,
-        profile.lateralCurvatureFactor,
-        profile.combinedSlipExponent,
-        profile.pneumaticTrailFalloff)
+    local success = false
+    if profile.parameterFile ~= nil and profile.parameterFile ~= "" then
+        success = Vehicle.LoadWheelTirePropertyFile(
+            nativeVehicle,
+            wheelIndex,
+            profile.parameterFile,
+            profile.parameterProvenance or "unspecified_property_file",
+            profile.parameterConfidence or 0.0)
+    else
+        success = Vehicle.SetWheelTireModel(
+            nativeVehicle,
+            wheelIndex,
+            profile.nominalLoad,
+            profile.peakFriction,
+            profile.longitudinalStiffness,
+            profile.corneringStiffness,
+            profile.loadSensitivity,
+            profile.longitudinalRelaxation,
+            profile.lateralRelaxation,
+            profile.wheelInertia,
+            profile.pneumaticTrail,
+            profile.stiffnessLoadExponent,
+            profile.longitudinalShapeFactor,
+            profile.lateralShapeFactor,
+            profile.longitudinalCurvatureFactor,
+            profile.lateralCurvatureFactor,
+            profile.combinedSlipExponent,
+            profile.pneumaticTrailFalloff)
+    end
     if not success then
         vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
         return false
@@ -141,4 +151,46 @@ function ApplyVehicleBrakeBias()
         vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
     end
     return success
+end
+
+
+function ApplyVehicleSteeringTuning()
+    if nativeVehicle == 0 or not Vehicle.Exists(nativeVehicle) then
+        return false
+    end
+    local tuningOk = Vehicle.SetTuning(
+        nativeVehicle,
+        vehicleMaximumDriveForce,
+        vehicleMaximumBrakeForce,
+        vehicleMaximumSteerAngle,
+        vehicleTireFriction,
+        vehicleLateralStiffness,
+        vehicleRollingResistance)
+    local geometryOk = Vehicle.SetSteeringGeometry(
+        nativeVehicle,
+        vehicleAckermannPercent,
+        vehicleSteeringRate,
+        vehicleSteeringReturnRate,
+        vehicleHighSpeedSteeringRateFactor,
+        vehicleHighSpeedReferenceMps)
+    if not tuningOk or not geometryOk then
+        vehicleMessage = "VEHICLE STEERING ERROR: " .. Vehicle.GetLastError()
+        return false
+    end
+    return true
+end
+
+function ResetVehicleSteeringTuning()
+    local steering = PrototypeCarDefinition.steering
+    vehicleMaximumSteerAngle = steering.maximumAngleDegrees
+    vehicleAckermannPercent = steering.ackermannPercent
+    vehicleSteeringRate = steering.rateDegreesPerSecond
+    vehicleSteeringReturnRate = steering.returnRateDegreesPerSecond
+    vehicleHighSpeedSteeringRateFactor = steering.highSpeedRateFactor
+    vehicleHighSpeedReferenceMps = steering.highSpeedReferenceMps
+    if ApplyVehicleSteeringTuning() then
+        vehicleMessage = "Restored steering from vehicle definition (-LEFT / +RIGHT native convention)"
+        return true
+    end
+    return false
 end

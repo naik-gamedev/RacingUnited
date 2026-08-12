@@ -208,6 +208,7 @@ bool LuaApi::resolveAllSymbols(std::string& errorMessage)
     HERITAGE_RESOLVE_LUA(lua_getglobal);
     HERITAGE_RESOLVE_LUA(lua_getfield);
     HERITAGE_RESOLVE_LUA(lua_rawgeti);
+    HERITAGE_RESOLVE_LUA(lua_rawseti);
     HERITAGE_RESOLVE_LUA(lua_rawlen);
     HERITAGE_RESOLVE_LUA(lua_setglobal);
     HERITAGE_RESOLVE_LUA(lua_createtable);
@@ -245,6 +246,7 @@ void LuaApi::clearSymbols()
     lua_getglobal = nullptr;
     lua_getfield = nullptr;
     lua_rawgeti = nullptr;
+    lua_rawseti = nullptr;
     lua_rawlen = nullptr;
     lua_setglobal = nullptr;
     lua_createtable = nullptr;

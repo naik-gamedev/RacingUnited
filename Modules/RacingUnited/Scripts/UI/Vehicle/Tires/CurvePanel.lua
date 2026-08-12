@@ -1,4 +1,4 @@
--- Step 29H: advanced generalized sine/arctangent road-tire curve controls.
+-- TIRE01: legacy compatibility controls used to seed the MF6.2 parameter set when no fitted .tir data is loaded.
 function DrawVehicleTiresCurvePanel()
     UI.TextDisabled("ALL-WHEEL MANUAL OVERRIDE")
     local changed = false

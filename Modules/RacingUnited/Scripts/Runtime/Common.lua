@@ -129,50 +129,6 @@ function DestroyBodyAndEntity(bodyHandle, entityHandle)
     end
 end
 
-function DestroyPhysicsDemo()
-    DestroySurfaceMaterialDemo()
-    for _, constraint in ipairs(physicsSpringConstraints) do
-        if constraint ~= 0 and Physics.ConstraintExists(constraint) then
-            Physics.DestroyConstraint(constraint)
-        end
-    end
-    physicsSpringConstraints = {}
-    for _, entity in ipairs(physicsSpringAnchorEntities) do
-        if entity ~= 0 and Entity.Exists(entity) then
-            Entity.Destroy(entity)
-        end
-    end
-    physicsSpringAnchorEntities = {}
-    DestroyBodyAndEntity(physicsProbeBody, physicsProbeEntity)
-    DestroyBodyAndEntity(physicsFloorBody, physicsFloorEntity)
-    DestroyBodyAndEntity(physicsCcdProjectileBody, physicsCcdProjectileEntity)
-    DestroyBodyAndEntity(physicsCcdWallBody, physicsCcdWallEntity)
-    if physicsRayOriginEntity ~= 0 and Entity.Exists(physicsRayOriginEntity) then
-        Entity.Destroy(physicsRayOriginEntity)
-    end
-    if physicsRayHitEntity ~= 0 and Entity.Exists(physicsRayHitEntity) then
-        Entity.Destroy(physicsRayHitEntity)
-    end
-    if physicsSphereCastHitEntity ~= 0 and Entity.Exists(physicsSphereCastHitEntity) then
-        Entity.Destroy(physicsSphereCastHitEntity)
-    end
-    physicsRayOriginEntity = 0
-    physicsRayHitEntity = 0
-    physicsSphereCastHitEntity = 0
-    physicsCcdProjectileEntity = 0
-    physicsCcdProjectileBody = 0
-    physicsCcdProjectileCollider = 0
-    physicsCcdWallEntity = 0
-    physicsCcdWallBody = 0
-    physicsCcdWallCollider = 0
-    physicsCcdLaunched = false
-    physicsProbeEntity = 0
-    physicsProbeBody = 0
-    physicsProbeCollider = 0
-    physicsFloorEntity = 0
-    physicsFloorBody = 0
-    physicsFloorCollider = 0
-end
 
 function RemoveEntitiesByName(name)
     while true do
@@ -183,34 +139,4 @@ function RemoveEntitiesByName(name)
         local body = Physics.FindBodyByEntity(entity)
         DestroyBodyAndEntity(body, entity)
     end
-end
-
-function RemoveExistingPhysicsDemo()
-    RemoveExistingSurfaceMaterialDemo()
-    RemoveEntitiesByName("Step 28B Native Body Probe")
-    RemoveEntitiesByName("Step 28C Native Collision Probe")
-    RemoveEntitiesByName("Step 28C Native Collision Floor")
-    RemoveEntitiesByName("Step 28D Angular Box Probe")
-    RemoveEntitiesByName("Step 28D OBB Collision Floor")
-    RemoveEntitiesByName("Step 28E Sleeping Box Probe")
-    RemoveEntitiesByName("Step 28E Sleeping Collision Floor")
-    RemoveEntitiesByName("Step 28F Query Box Probe")
-    RemoveEntitiesByName("Step 28F Query Collision Floor")
-    RemoveEntitiesByName("Step 28F Raycast Origin")
-    RemoveEntitiesByName("Step 28F Raycast Hit")
-    RemoveEntitiesByName("Step 28G Query Box Probe")
-    RemoveEntitiesByName("Step 28G Query Collision Floor")
-    RemoveEntitiesByName("Step 28G Raycast Origin")
-    RemoveEntitiesByName("Step 28G Raycast Hit")
-    RemoveEntitiesByName("Step 28G Fast Sphere")
-    RemoveEntitiesByName("Step 28G Thin CCD Wall")
-    RemoveEntitiesByName("Step 28G Sphere Cast Hit")
-    RemoveEntitiesByName("Step 28H Suspended Chassis")
-    RemoveEntitiesByName("Step 28H Suspension Floor")
-    RemoveEntitiesByName("Step 28H Spring Anchor FL")
-    RemoveEntitiesByName("Step 28H Spring Anchor FR")
-    RemoveEntitiesByName("Step 28H Spring Anchor RL")
-    RemoveEntitiesByName("Step 28H Spring Anchor RR")
-    RemoveEntitiesByName("Step 29A Vehicle Test Ground")
-    RemoveEntitiesByName("Step 29B Vehicle Test Ground")
 end

@@ -68,6 +68,7 @@ public:
     int (HERITAGE_LUA_CALL* lua_getglobal)(lua_State*, const char*) = nullptr;
     int (HERITAGE_LUA_CALL* lua_getfield)(lua_State*, int, const char*) = nullptr;
     int (HERITAGE_LUA_CALL* lua_rawgeti)(lua_State*, int, LuaInteger) = nullptr;
+    void (HERITAGE_LUA_CALL* lua_rawseti)(lua_State*, int, LuaInteger) = nullptr;
     std::size_t (HERITAGE_LUA_CALL* lua_rawlen)(lua_State*, int) = nullptr;
     void (HERITAGE_LUA_CALL* lua_setglobal)(lua_State*, const char*) = nullptr;
     void (HERITAGE_LUA_CALL* lua_createtable)(lua_State*, int, int) = nullptr;

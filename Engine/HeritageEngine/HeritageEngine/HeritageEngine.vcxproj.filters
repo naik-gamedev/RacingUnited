@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version='1.0' encoding='utf-8'?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <Filter Include="Source Files">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
@@ -13,12 +13,90 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Lua Bindings">
+      <UniqueIdentifier>{9D1A4F43-2AD3-45D5-89F9-0B8597E0A501}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lua Bindings\Physics">
+      <UniqueIdentifier>{46B01FB9-C965-4094-8904-39E9292A2A7D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lua Bindings\Vehicle">
+      <UniqueIdentifier>{C8C75C95-2D83-4C29-AD90-EE0127EE2BC1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Lua Bindings\Entity">
+      <UniqueIdentifier>{97778E08-1F24-4912-B36C-BB70BC052DC0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core Math">
+      <UniqueIdentifier>{D47D2C9C-26C4-4E18-89A7-38AE7C6E93D8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Collision Architecture">
+      <UniqueIdentifier>{B0F0D6B5-6FA0-4E8A-92C1-55D4CF3FC03B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Collision Architecture\Queries">
+      <UniqueIdentifier>{3F03A8E8-E3A2-45B8-94E1-1412383E2BDD}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Collision Architecture\Narrowphase">
+      <UniqueIdentifier>{9962F616-9C93-4DCB-90E2-50C0EA4E950B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Collision Architecture\Solver">
+      <UniqueIdentifier>{2428E096-C2C2-4CBF-8400-D4D0C0B123A0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Collision Architecture\CCD">
+      <UniqueIdentifier>{5512EBDB-3A82-42E5-91B5-99EA0A03048E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Collision Architecture\Islands">
+      <UniqueIdentifier>{81D39F0F-FFEA-4C5A-BD73-D4E1737C59A9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine Runtime">
+      <UniqueIdentifier>{5146BDE5-7395-4AD9-87DD-789868FA9101}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine Runtime\Display">
+      <UniqueIdentifier>{5146BDE5-7395-4AD9-87DD-789868FA9102}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine Runtime\Diagnostics">
+      <UniqueIdentifier>{5146BDE5-7395-4AD9-87DD-789868FA9103}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine Runtime\Platform">
+      <UniqueIdentifier>{5146BDE5-7395-4AD9-87DD-789868FA9104}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine Runtime\Lua Registration">
+      <UniqueIdentifier>{5146BDE5-7395-4AD9-87DD-789868FA9105}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Graphics\Mesh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\EnvironmentMap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\EnvironmentSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Material.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Texture2D.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfBinary.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfJson.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfDocument.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfMeshImporter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfMetadata.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfCollisionImporter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Graphics\AntiAliasing.cpp">
@@ -75,10 +153,25 @@
     <ClCompile Include="..\UI\Settings\InputSettingsPage.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\UI\Settings\InputSettingsCommon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\Settings\InputSettingsBindings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\Settings\InputSettingsAnalogue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\Settings\InputSettingsProfiles.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Graphics\Framebuffer\PostFramebuffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Camera\OrbitCamera.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Camera\ChaseCamera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Audio\AudioSystem.cpp">
@@ -87,10 +180,55 @@
     <ClCompile Include="$(ProjectDir)..\Input\InputSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="$(ProjectDir)..\Input\InputBindings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ProjectDir)..\Input\InputAnalog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ProjectDir)..\Input\InputCapture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ProjectDir)..\Input\InputBindingEvaluation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ProjectDir)..\Input\InputBindingParser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ProjectDir)..\Input\InputDevices.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ProjectDir)..\Input\InputProfiles.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ProjectDir)..\Input\InputPersistence.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="$(ProjectDir)..\Input\WindowsDirectInputBackend.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Physics\CollisionSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Collision\Broadphase\CollisionBroadphase.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\SurfaceField.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\SurfaceMaterialProperties.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\SurfaceWorld.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\Presentation\SurfacePresentation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\Rubber\TrackRubberState.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\StaticTriangleBvh.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Physics\StaticBoxSceneImporter.cpp">
@@ -111,6 +249,51 @@
     <ClCompile Include="..\Vehicles\TireModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\MagicFormula\MagicFormula62.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\MagicFormula\TirePropertyFile.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyParsing.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyMapping.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyMagicFormula.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyCommonMetadata.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyHeritageExtensions.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyStructuralMetadata.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyDiagnostics.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePartDefinition.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePartResolver.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TireFamilyBaseline.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\Authoring\TirePerformanceBiasMapping.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\MotorcycleTireProfile.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireSlipDynamics.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
     <ClCompile Include="..\Vehicles\SuspensionModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -126,13 +309,85 @@
     <ClCompile Include="..\Vehicles\VehicleDefinitionLoader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Vehicles\VehicleAssetMetadata.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Vehicles\VehicleDynamicsLab.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Vehicles\VehicleSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Vehicles\Suspension\VehicleSuspensionConfiguration.cpp">
+      <Filter>Vehicle Architecture\Suspension</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Wheels\Fitment\VehicleWheelFitmentConfiguration.cpp">
+      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Wheels\Alignment\VehicleWheelAlignmentConfiguration.cpp">
+      <Filter>Vehicle Architecture\Wheels\Alignment</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Suspension\Common\VehicleAntiRollBarConfiguration.cpp">
+      <Filter>Vehicle Architecture\Suspension\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Dynamics\ChassisFlex\VehicleChassisComplianceConfiguration.cpp">
+      <Filter>Vehicle Architecture\Dynamics\Chassis Flex</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleUnsprungMassConfiguration.cpp">
+      <Filter>Vehicle Architecture\Dynamics\Mass Properties</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Core\VehicleRuntimeConfiguration.cpp">
+      <Filter>Vehicle Architecture\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Steering\VehicleSteeringConfiguration.cpp">
+      <Filter>Vehicle Architecture\Steering</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Brakes\VehicleBrakeConfiguration.cpp">
+      <Filter>Vehicle Architecture\Brakes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\DriverAids\VehicleDriverAidConfiguration.cpp">
+      <Filter>Vehicle Architecture\Driver Aids</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Drivetrain\VehicleDrivetrainConfiguration.cpp">
+      <Filter>Vehicle Architecture\Drivetrain</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\VehicleTireConfiguration.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\VehicleTelemetry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\VehicleSimulation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\VehicleWheelSimulation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Wheels\Fitment\WheelFitment.cpp">
+      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Wheels\Fitment\HubReferenceGeometry.cpp">
+      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Wheels\Fitment\ScrubRadiusGeometry.cpp">
+      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Diagnostics\PerformanceMonitor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Core\Entities\EntityRegistry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Entities\EntityHierarchy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Entities\EntityTransforms.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Entities\EntityDebugComponents.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Entities\EntityMeshComponents.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Core\Entities\EntitySceneDocument.cpp">
@@ -141,10 +396,34 @@
     <ClCompile Include="..\Graphics\PostProcessing\PostProcessor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Graphics\VegetationSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Graphics\Renderer\SceneRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Graphics\Renderer\EntityDebugRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\SurfacePresentationRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshAssetCache.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshAnimation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshShadows.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshRenderMath.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\SkyRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Graphics\RenderScaler.cpp">
@@ -165,6 +444,9 @@
     <ClCompile Include="..\Core\Modules\ModuleContext.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Core\Modules\ModuleAssetRegistry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Core\Modules\ModuleSaveStore.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -177,6 +459,96 @@
     <ClCompile Include="..\Core\Modules\LuaModuleRuntime.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityCoreBindings.cpp">
+      <Filter>Lua Bindings\Entity</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityDebugBindings.cpp">
+      <Filter>Lua Bindings\Entity</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityMeshBindings.cpp">
+      <Filter>Lua Bindings\Entity</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTransformBindings.cpp">
+      <Filter>Lua Bindings\Entity</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaAudioBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaEngineBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaEnvironmentBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaInputBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaModuleBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaPrefabBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaSaveBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaSceneBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaScriptBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaUiBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaVegetationBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsBodyBindings.cpp">
+      <Filter>Lua Bindings\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsColliderBindings.cpp">
+      <Filter>Lua Bindings\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsConstraintBindings.cpp">
+      <Filter>Lua Bindings\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsQueryBindings.cpp">
+      <Filter>Lua Bindings\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsWorldBindings.cpp">
+      <Filter>Lua Bindings\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleControlBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionParser.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDrivetrainBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDynamicsLabBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleMassBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleFitmentBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleSuspensionBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTelemetryBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
     <ClCompile Include="..\Core\Modules\ModuleRuntimeManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -186,24 +558,108 @@
     <ClCompile Include="..\Scenes\LogoShowcaseScene.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Scenes\RacingUnitedBootScene.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\Scenes\SceneManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Scenes\ModuleDocumentScene.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Vehicles\Suspension\Geometry\TrailingArm\TrailingArmKinematics.cpp">
+      <Filter>Vehicle Architecture\Suspension\Geometry\TrailingArm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Suspension\Springs\TorsionBar.cpp">
+      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Suspension\Authoring\TrailingArmHardpointEstimator.cpp">
+      <Filter>Vehicle Architecture\Suspension\Authoring</Filter>
+    </ClCompile>
+    <ClCompile Include="HeritageEngine.cpp">
+      <Filter>Engine Runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="Runtime\EngineStartup.cpp">
+      <Filter>Engine Runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="Runtime\EngineUiStyle.cpp">
+      <Filter>Engine Runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="Display\DisplayModeController.cpp">
+      <Filter>Engine Runtime\Display</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Diagnostics\PerformanceOverlay.cpp">
+      <Filter>Engine Runtime\Diagnostics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Platform\Windows\BackbufferClipboard.cpp">
+      <Filter>Engine Runtime\Platform</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityBindingRegistration.cpp">
+      <Filter>Engine Runtime\Lua Registration</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsBindingRegistration.cpp">
+      <Filter>Engine Runtime\Lua Registration</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleBindingRegistration.cpp">
+      <Filter>Engine Runtime\Lua Registration</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\ThirdParty\IMGUI\imgui.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Graphics\AssetMetadata.hpp">
+      <Filter>Graphics</Filter>
+    </ClInclude>
     <ClInclude Include="..\Graphics\Mesh.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Graphics\EnvironmentMap.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\EnvironmentSystem.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\VegetationSystem.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\LodTransitionPolicy.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\PresentationPrecision.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\TireMarkChunking.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Material.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Texture2D.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\GltfBinary.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Gltf\GltfInternal.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\GltfSceneData.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Graphics\AntiAliasing.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\EntityMeshRenderer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\EntityMeshRendererInternal.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\EntityMeshShaders.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\EntityMeshShadowConfig.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\SkyRenderer.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Graphics\ShaderProgram.hpp">
@@ -236,10 +692,16 @@
     <ClInclude Include="..\UI\Settings\InputSettingsPage.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\UI\Settings\InputSettingsPageInternal.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Graphics\Framebuffer\PostFramebuffer.hpp">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Camera\OrbitCamera.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Camera\ChaseCamera.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Audio\AudioSystem.hpp">
@@ -248,10 +710,34 @@
     <ClInclude Include="$(ProjectDir)..\Input\InputSystem.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="$(ProjectDir)..\Input\InputSystemInternal.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="$(ProjectDir)..\Input\WindowsDirectInputBackend.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Physics\CollisionSystem.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\SurfaceField.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\SurfaceField.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\SurfaceMaterialProperties.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\SurfaceWorld.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\Presentation\SurfacePresentation.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\Rubber\TrackRubberState.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\StaticTriangleBvh.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Physics\StaticBoxSceneImporter.hpp">
@@ -272,11 +758,62 @@
     <ClInclude Include="..\Vehicles\TireModel.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\MagicFormula\MagicFormula62.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\MagicFormula\TirePropertyFile.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\Authoring\TirePropertyImportInternal.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\Authoring\TirePartDefinition.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\Authoring\TirePartResolver.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\Authoring\TireFamilyBaseline.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\Authoring\TirePerformanceBiasMapping.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\MotorcycleTireProfile.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireSlipDynamics.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireContactPatch.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireContactGeometry.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireRigidRing.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireRoadEnveloping.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireThermal.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\VehiclePrecision.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Vehicles\SuspensionModel.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Vehicles\SuspensionGeometry.hpp">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Suspension\Geometry\MacPherson\MacPhersonKinematics.hpp">
+      <Filter>Vehicle Architecture\Suspension\Geometry\MacPherson</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Suspension\Authoring\MacPhersonHardpointEstimator.hpp">
+      <Filter>Vehicle Architecture\Suspension\Authoring</Filter>
     </ClInclude>
     <ClInclude Include="..\Vehicles\UnsprungMassModel.hpp">
       <Filter>Header Files</Filter>
@@ -290,13 +827,61 @@
     <ClInclude Include="..\Vehicles\VehicleDefinitionLoader.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Vehicles\VehicleAssetMetadata.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Vehicles\VehicleDynamicsLab.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Vehicles\VehicleSystem.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Vehicles\VehicleSystemInternal.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\00_PrepareWheelAndSupportQuery.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\01_TelemetryAndAirbornePolicy.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\02_SteeringBrakingAndFreeWheel.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\03_RoadEnvelopeAndFootprintSampling.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\04_TireStructureAndTerrainSupport.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\05_SuspensionAndContactResolution.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\06_ContactKinematicsAndPatchGeometry.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\07_SurfaceProvidersAndContactPatch.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\08_TireForcesAndSurfaceReactions.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\09_TirePhysicalStateUpdate.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\10_ApplyForcesAndIntegrateWheel.inl">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Math\Quaternion.hpp">
+      <Filter>Core Math</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Math\TransformMath.hpp">
+      <Filter>Core Math</Filter>
+    </ClInclude>
     <ClInclude Include="..\Core\Entities\EntityRegistry.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Entities\EntityRegistryInternal.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Core\Entities\EntitySceneDocument.hpp">
@@ -309,6 +894,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Graphics\Renderer\EntityDebugRenderer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\SurfacePresentationRenderer.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Graphics\RenderScaler.hpp">
@@ -329,7 +917,13 @@
     <ClInclude Include="..\Core\Timing\FrameLimiter.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Core\Paths\Utf8Path.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Core\Diagnostics\BuildIdentity.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Diagnostics\PerformanceMonitor.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Core\Diagnostics\GeneratedBuildIdentity.hpp">
@@ -342,6 +936,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Core\Modules\ModuleContext.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Modules\ModuleAssetRegistry.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Core\Modules\ModuleSaveStore.hpp">
@@ -358,6 +955,24 @@
     </ClInclude>
     <ClInclude Include="..\Core\Modules\LuaModuleRuntime.hpp">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Modules\LuaBindings\LuaBindingInternals.hpp">
+      <Filter>Lua Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Modules\LuaBindings\LuaCoreBindingHandlers.hpp">
+      <Filter>Lua Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsBindingHandlers.hpp">
+      <Filter>Lua Bindings\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleBindingHandlers.hpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityBindingHandlers.hpp">
+      <Filter>Lua Bindings\Entity</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionParser.hpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
     </ClInclude>
     <ClInclude Include="..\Core\Modules\ModuleRuntimeManager.hpp">
       <Filter>Header Files</Filter>
@@ -377,14 +992,438 @@
     <ClInclude Include="..\Scenes\LogoShowcaseScene.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\Scenes\RacingUnitedBootScene.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\Scenes\SceneManager.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Scenes\ModuleDocumentScene.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Vehicles\Suspension\Geometry\TrailingArm\TrailingArmKinematics.hpp">
+      <Filter>Vehicle Architecture\Suspension\Geometry\TrailingArm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Suspension\Common\SuspensionAntiRollBar.hpp">
+      <Filter>Vehicle Architecture\Suspension\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Suspension\Springs\TorsionBar.hpp">
+      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Suspension\Authoring\TrailingArmHardpointEstimator.hpp">
+      <Filter>Vehicle Architecture\Suspension\Authoring</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Wheels\Fitment\WheelFitment.hpp">
+      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Wheels\Fitment\HubReferenceGeometry.hpp">
+      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Wheels\Fitment\ScrubRadiusGeometry.hpp">
+      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
+    </ClInclude>
+    <ClInclude Include="HeritageEngine.hpp">
+      <Filter>Engine Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="Runtime\EngineStartup.hpp">
+      <Filter>Engine Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="Runtime\EngineUiStyle.hpp">
+      <Filter>Engine Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="Runtime\EngineRuntimeState.hpp">
+      <Filter>Engine Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="Runtime\EngineFrame.hpp">
+      <Filter>Engine Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="Runtime\EngineHotkeys.hpp">
+      <Filter>Engine Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="Runtime\EngineRendering.hpp">
+      <Filter>Engine Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="Runtime\EngineSimulation.hpp">
+      <Filter>Engine Runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="Display\DisplayModeController.hpp">
+      <Filter>Engine Runtime\Display</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Diagnostics\PerformanceOverlay.hpp">
+      <Filter>Engine Runtime\Diagnostics</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Platform\Windows\BackbufferClipboard.hpp">
+      <Filter>Engine Runtime\Platform</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Vehicle Architecture\Core">
+      <UniqueIdentifier>{EE4C7DC0-65D9-524B-9BDC-F00460A08297}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Steering">
+      <UniqueIdentifier>{3F1E3CC6-0809-51D9-A629-CE8EB9C5A18C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension">
+      <UniqueIdentifier>{6F93B08C-2813-505E-A0EB-B2FE3D3E7A8F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Common">
+      <UniqueIdentifier>{E554E95C-3306-5DDE-BFDD-8E1FFC4B1968}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Geometry">
+      <UniqueIdentifier>{F485563E-B1E5-5C3A-9672-E990775A137D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Authoring">
+      <UniqueIdentifier>{C5B0E3D7-98A1-4E5B-8B7A-3A52334E2B41}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Geometry\MacPherson">
+      <UniqueIdentifier>{89664730-9366-5371-BDDF-4CCB0F31E522}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Geometry\DoubleWishbone">
+      <UniqueIdentifier>{21519861-7AE5-5362-A5B7-7C0533407155}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Geometry\TrailingArm">
+      <UniqueIdentifier>{4EE0C8DD-4E0A-56D1-8E1B-08AAD8FEAE88}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Geometry\SemiTrailingArm">
+      <UniqueIdentifier>{6B4A403B-5160-521F-93F2-7D54E3F05711}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Geometry\MultiLink">
+      <UniqueIdentifier>{B681ACFD-FA5B-538D-94B3-5398CED0496C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Axles">
+      <UniqueIdentifier>{69D97DE6-30AB-5019-AA8D-5D689314983B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Axles\SolidAxle">
+      <UniqueIdentifier>{FACF77A7-D23A-5D3D-909E-09D145A11EA7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Axles\TorsionBeam">
+      <UniqueIdentifier>{0A6A2FAF-6843-59EF-B097-3E52662460E2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Springs">
+      <UniqueIdentifier>{220AC72B-9387-581C-BA1B-C26921BEA4AE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Suspension\Motorcycle">
+      <UniqueIdentifier>{89356417-381A-53A4-A499-8597DC98F892}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Wheels">
+      <UniqueIdentifier>{9C5622A7-2CAB-5377-9095-01A5ED351903}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Wheels\Fitment">
+      <UniqueIdentifier>{B2D63087-4E53-4D76-84E6-A3F325906B61}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Wheels\Alignment">
+      <UniqueIdentifier>{71364207-b01b-49d8-9fc0-5ce615a8fb01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Driver Aids">
+      <UniqueIdentifier>{c67c58e2-6887-4ff7-b1de-a9f2531d505c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Simulation">
+      <UniqueIdentifier>{2F9B4F69-58F6-48FA-92C9-94C3D5739A9A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Simulation\Wheel Substep">
+      <UniqueIdentifier>{D39CBFE9-59B7-4C1A-9FDE-F80C31082084}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Topology">
+      <UniqueIdentifier>{0e3d1b8e-6c50-4e40-8f6d-b053da19a7cd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Topology\Common">
+      <UniqueIdentifier>{94494d9f-91ce-485c-b834-852585fc9bbf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Topology\Two Wheel">
+      <UniqueIdentifier>{8c412701-7b2b-4622-afd8-a87ca1ce8214}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Topology\Three Wheel">
+      <UniqueIdentifier>{ee5df1d5-1d4a-4f3c-b98b-ff5f9618940b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Topology\Four Plus Wheel">
+      <UniqueIdentifier>{ba9b3c82-644c-420d-88cd-0c2e5745987c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Tires">
+      <UniqueIdentifier>{C5D86C92-DFA3-5B6F-8D38-9371939C7853}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Drivetrain">
+      <UniqueIdentifier>{DFF15572-69AC-5284-AC7F-E283C32724B2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Drivetrain\Differentials">
+      <UniqueIdentifier>{2C7935A0-9672-51FC-9E70-65A5B47C6E34}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Brakes">
+      <UniqueIdentifier>{25CA998D-2E8B-5AA3-9228-490B14C5A20A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Aerodynamics">
+      <UniqueIdentifier>{C3FFE277-9C2E-5E4A-A0CF-C47719163129}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Dynamics">
+      <UniqueIdentifier>{6E0E652F-DF7B-50AC-BB4D-E60C1230BAB4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Dynamics\Chassis Flex">
+      <UniqueIdentifier>{C2F7C781-84CB-4E77-AF7E-7F77A5839B5A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Dynamics\Mass Properties">
+      <UniqueIdentifier>{9A4C4E72-D3D8-4D9B-8E0F-8FB39BB7CC41}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Vehicle Architecture\Articulation">
+      <UniqueIdentifier>{27F5797A-B32B-5E9C-8700-A46652A1FCE0}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Vehicles\Simulation\WheelSubstep\README.md">
+      <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
+    </None>
+    <None Include="..\Vehicles\VehicleConfiguration.cpp">
+      <Filter>Vehicle Architecture\Core</Filter>
+    </None>
+    <None Include="..\Vehicles\Topology\Common\VehicleTopologyCoordinator.cpp">
+      <Filter>Vehicle Architecture\Topology\Common</Filter>
+    </None>
+    <None Include="..\Vehicles\Topology\TwoWheel\TwoWheelVehicleDynamics.cpp">
+      <Filter>Vehicle Architecture\Topology\Two Wheel</Filter>
+    </None>
+    <None Include="..\Vehicles\Topology\ThreeWheel\ThreeWheelVehicleDynamics.cpp">
+      <Filter>Vehicle Architecture\Topology\Three Wheel</Filter>
+    </None>
+    <None Include="..\Vehicles\Topology\FourPlusWheel\FourPlusWheelVehicleDynamics.cpp">
+      <Filter>Vehicle Architecture\Topology\Four Plus Wheel</Filter>
+    </None>
+    <None Include="..\Vehicles\Core\VehicleAssembly.cpp">
+      <Filter>Vehicle Architecture\Core</Filter>
+    </None>
+    <None Include="..\Vehicles\Core\VehicleSimulationScheduler.cpp">
+      <Filter>Vehicle Architecture\Core</Filter>
+    </None>
+    <None Include="..\Vehicles\Steering\SteeringSystem.cpp">
+      <Filter>Vehicle Architecture\Steering</Filter>
+    </None>
+    <None Include="..\Vehicles\Steering\AckermannGeometry.cpp">
+      <Filter>Vehicle Architecture\Steering</Filter>
+    </None>
+    <None Include="..\Vehicles\Steering\PowerSteering.cpp">
+      <Filter>Vehicle Architecture\Steering</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Common\SuspensionSpringDamper.cpp">
+      <Filter>Vehicle Architecture\Suspension\Common</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Common\SuspensionBumpStop.cpp">
+      <Filter>Vehicle Architecture\Suspension\Common</Filter>
+    </None>
+    <ClCompile Include="..\Vehicles\Suspension\Common\SuspensionAntiRollBar.cpp">
+      <Filter>Vehicle Architecture\Suspension\Common</Filter>
+    </ClCompile>
+    <None Include="..\Vehicles\Suspension\Common\SuspensionHeaveSpring.cpp">
+      <Filter>Vehicle Architecture\Suspension\Common</Filter>
+    </None>
+    <ClCompile Include="..\Vehicles\Suspension\Geometry\MacPherson\MacPhersonKinematics.cpp">
+      <Filter>Vehicle Architecture\Suspension\Geometry\MacPherson</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Suspension\Authoring\MacPhersonHardpointEstimator.cpp">
+      <Filter>Vehicle Architecture\Suspension\Authoring</Filter>
+    </ClCompile>
+    <None Include="..\Vehicles\Suspension\Geometry\DoubleWishbone\DoubleWishboneKinematics.cpp">
+      <Filter>Vehicle Architecture\Suspension\Geometry\DoubleWishbone</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Geometry\SemiTrailingArm\SemiTrailingArmKinematics.cpp">
+      <Filter>Vehicle Architecture\Suspension\Geometry\SemiTrailingArm</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Geometry\MultiLink\MultiLinkKinematics.cpp">
+      <Filter>Vehicle Architecture\Suspension\Geometry\MultiLink</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Axles\SolidAxle\SolidAxleKinematics.cpp">
+      <Filter>Vehicle Architecture\Suspension\Axles\SolidAxle</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Axles\TorsionBeam\TorsionBeamKinematics.cpp">
+      <Filter>Vehicle Architecture\Suspension\Axles\TorsionBeam</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Springs\CoilSpring.cpp">
+      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Springs\LeafSpring.cpp">
+      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Springs\AirSpring.cpp">
+      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Springs\HydropneumaticSpring.cpp">
+      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Motorcycle\TelescopicFork.cpp">
+      <Filter>Vehicle Architecture\Suspension\Motorcycle</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Motorcycle\Telelever.cpp">
+      <Filter>Vehicle Architecture\Suspension\Motorcycle</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Motorcycle\RearSwingarm.cpp">
+      <Filter>Vehicle Architecture\Suspension\Motorcycle</Filter>
+    </None>
+    <None Include="..\Vehicles\Suspension\Motorcycle\RearLinkage.cpp">
+      <Filter>Vehicle Architecture\Suspension\Motorcycle</Filter>
+    </None>
+    <None Include="..\Vehicles\Wheels\WheelDynamics.cpp">
+      <Filter>Vehicle Architecture\Wheels</Filter>
+    </None>
+    <None Include="..\Vehicles\Wheels\WheelHub.cpp">
+      <Filter>Vehicle Architecture\Wheels</Filter>
+    </None>
+    <None Include="..\Vehicles\Wheels\Fitment\WheelClearance.cpp">
+      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
+    </None>
+    <None Include="..\Vehicles\Wheels\Fitment\InstalledWheelMassProperties.cpp">
+      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
+    </None>
+    <ClCompile Include="..\Vehicles\Tires\TireContactPatch.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireContactGeometry.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireRoadEnveloping.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireThermal.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <None Include="..\Vehicles\Tires\TireWear.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </None>
+    <ClCompile Include="..\Vehicles\Tires\TireSurfaceInteraction.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireWetSurfaceInteraction.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireWinterSurfaceInteraction.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireShallowGranularInteraction.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireDeformableTerrainInteraction.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <None Include="..\Vehicles\Tires\LowPressureTireModel.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </None>
+    <None Include="..\Vehicles\Drivetrain\PowerUnit.cpp">
+      <Filter>Vehicle Architecture\Drivetrain</Filter>
+    </None>
+    <None Include="..\Vehicles\Drivetrain\Clutch.cpp">
+      <Filter>Vehicle Architecture\Drivetrain</Filter>
+    </None>
+    <None Include="..\Vehicles\Drivetrain\Gearbox.cpp">
+      <Filter>Vehicle Architecture\Drivetrain</Filter>
+    </None>
+    <None Include="..\Vehicles\Drivetrain\TransferCase.cpp">
+      <Filter>Vehicle Architecture\Drivetrain</Filter>
+    </None>
+    <None Include="..\Vehicles\Drivetrain\ChainFinalDrive.cpp">
+      <Filter>Vehicle Architecture\Drivetrain</Filter>
+    </None>
+    <None Include="..\Vehicles\Drivetrain\Differentials\OpenDifferential.cpp">
+      <Filter>Vehicle Architecture\Drivetrain\Differentials</Filter>
+    </None>
+    <None Include="..\Vehicles\Drivetrain\Differentials\LimitedSlipDifferential.cpp">
+      <Filter>Vehicle Architecture\Drivetrain\Differentials</Filter>
+    </None>
+    <None Include="..\Vehicles\Drivetrain\Differentials\LockedDifferential.cpp">
+      <Filter>Vehicle Architecture\Drivetrain\Differentials</Filter>
+    </None>
+    <None Include="..\Vehicles\Drivetrain\Differentials\ActiveDifferential.cpp">
+      <Filter>Vehicle Architecture\Drivetrain\Differentials</Filter>
+    </None>
+    <None Include="..\Vehicles\Brakes\BrakeSystem.cpp">
+      <Filter>Vehicle Architecture\Brakes</Filter>
+    </None>
+    <None Include="..\Vehicles\Brakes\BrakeThermal.cpp">
+      <Filter>Vehicle Architecture\Brakes</Filter>
+    </None>
+    <None Include="..\Vehicles\Brakes\ABSController.cpp">
+      <Filter>Vehicle Architecture\Brakes</Filter>
+    </None>
+    <None Include="..\Vehicles\Aerodynamics\AerodynamicsSystem.cpp">
+      <Filter>Vehicle Architecture\Aerodynamics</Filter>
+    </None>
+    <None Include="..\Vehicles\Aerodynamics\AeroSurface.cpp">
+      <Filter>Vehicle Architecture\Aerodynamics</Filter>
+    </None>
+    <None Include="..\Vehicles\Aerodynamics\GroundEffect.cpp">
+      <Filter>Vehicle Architecture\Aerodynamics</Filter>
+    </None>
+    <None Include="..\Vehicles\Dynamics\MotorcycleLeanDynamics.cpp">
+      <Filter>Vehicle Architecture\Dynamics</Filter>
+    </None>
+    <None Include="..\Vehicles\Dynamics\KartChassisFlex.cpp">
+      <Filter>Vehicle Architecture\Dynamics</Filter>
+    </None>
+    <ClCompile Include="..\Vehicles\Dynamics\ChassisFlex\ChassisTorsionalCompliance.cpp">
+      <Filter>Vehicle Architecture\Dynamics\Chassis Flex</Filter>
+    </ClCompile>
+    <ClInclude Include="..\Vehicles\Dynamics\ChassisFlex\ChassisTorsionalCompliance.hpp">
+      <Filter>Vehicle Architecture\Dynamics\Chassis Flex</Filter>
+    </ClInclude>
+    <ClCompile Include="..\Vehicles\Dynamics\ChassisFlex\ChassisFlexEstimator.cpp">
+      <Filter>Vehicle Architecture\Dynamics\Chassis Flex</Filter>
+    </ClCompile>
+    <ClInclude Include="..\Vehicles\Dynamics\ChassisFlex\ChassisFlexEstimator.hpp">
+      <Filter>Vehicle Architecture\Dynamics\Chassis Flex</Filter>
+    </ClInclude>
+    <ClCompile Include="..\Vehicles\Dynamics\ChassisFlex\ChassisFlexDiagnostics.cpp">
+      <Filter>Vehicle Architecture\Dynamics\Chassis Flex</Filter>
+    </ClCompile>
+    <ClInclude Include="..\Vehicles\Dynamics\ChassisFlex\ChassisFlexDiagnostics.hpp">
+      <Filter>Vehicle Architecture\Dynamics\Chassis Flex</Filter>
+    </ClInclude>
+    <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesEstimator.cpp">
+      <Filter>Vehicle Architecture\Dynamics\Mass Properties</Filter>
+    </ClCompile>
+    <ClInclude Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesEstimator.hpp">
+      <Filter>Vehicle Architecture\Dynamics\Mass Properties</Filter>
+    </ClInclude>
+    <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesDiagnostics.cpp">
+      <Filter>Vehicle Architecture\Dynamics\Mass Properties</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesAccumulator.cpp">
+      <Filter>Vehicle Architecture\Dynamics\Mass Properties</Filter>
+    </ClCompile>
+    <ClInclude Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesAccumulator.hpp">
+      <Filter>Vehicle Architecture\Dynamics\Mass Properties</Filter>
+    </ClInclude>
+    <None Include="..\Vehicles\Articulation\ArticulatedVehicle.cpp">
+      <Filter>Vehicle Architecture\Articulation</Filter>
+    </None>
+    <None Include="..\Vehicles\Articulation\FifthWheel.cpp">
+      <Filter>Vehicle Architecture\Articulation</Filter>
+    </None>
+    <None Include="..\Vehicles\Articulation\TrailerCoupling.cpp">
+      <Filter>Vehicle Architecture\Articulation</Filter>
+    </None>
+    <ClCompile Include="..\Physics\Collision\Queries\CollisionQueries.cpp">
+      <Filter>Collision Architecture\Queries</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Collision\Narrowphase\CollisionNarrowphase.cpp">
+      <Filter>Collision Architecture\Narrowphase</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Collision\Solver\CollisionSolver.cpp">
+      <Filter>Collision Architecture\Solver</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Collision\CCD\CollisionCCD.cpp">
+      <Filter>Collision Architecture\CCD</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Collision\Islands\CollisionIslands.cpp">
+      <Filter>Collision Architecture\Islands</Filter>
+    </ClCompile>
+    <ClInclude Include="..\Physics\Collision\CollisionInternal.hpp">
+      <Filter>Collision Architecture</Filter>
+    </ClInclude>
+    <ClCompile Include="Runtime\EngineFrame.cpp">
+      <Filter>Engine Runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="Runtime\EngineSimulation.cpp">
+      <Filter>Engine Runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="Runtime\EngineRendering.cpp">
+      <Filter>Engine Runtime</Filter>
+    </ClCompile>
+    <ClCompile Include="Runtime\EngineHotkeys.cpp">
+      <Filter>Engine Runtime</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

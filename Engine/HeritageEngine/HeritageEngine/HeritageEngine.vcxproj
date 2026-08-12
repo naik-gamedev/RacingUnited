@@ -77,6 +77,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -104,6 +105,7 @@ user32.lib
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -129,6 +131,7 @@ user32.lib
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
@@ -156,6 +159,7 @@ user32.lib
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
@@ -185,36 +189,134 @@ user32.lib
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_tables.cpp" />
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_widgets.cpp" />
     <ClCompile Include="..\Camera\OrbitCamera.cpp" />
+    <ClCompile Include="..\Camera\ChaseCamera.cpp" />
     <ClCompile Include="..\Audio\AudioSystem.cpp" />
     <ClCompile Include="$(ProjectDir)..\Input\InputSystem.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\InputBindings.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\InputAnalog.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\InputCapture.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\InputBindingEvaluation.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\InputBindingParser.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\InputDevices.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\InputProfiles.cpp" />
+    <ClCompile Include="$(ProjectDir)..\Input\InputPersistence.cpp" />
     <ClCompile Include="$(ProjectDir)..\Input\WindowsDirectInputBackend.cpp" />
     <ClCompile Include="..\Physics\CollisionSystem.cpp" />
+    <ClCompile Include="..\Physics\Collision\Broadphase\CollisionBroadphase.cpp" />
+    <ClCompile Include="..\Physics\Collision\Queries\CollisionQueries.cpp" />
+    <ClCompile Include="..\Physics\Collision\Narrowphase\CollisionNarrowphase.cpp" />
+    <ClCompile Include="..\Physics\Collision\Solver\CollisionSolver.cpp" />
+    <ClCompile Include="..\Physics\Collision\CCD\CollisionCCD.cpp" />
+    <ClCompile Include="..\Physics\Collision\Islands\CollisionIslands.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\SurfaceField.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\SurfaceMaterialProperties.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\SurfaceWorld.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\Presentation\SurfacePresentation.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\Rubber\TrackRubberState.cpp" />
+    <ClCompile Include="..\Physics\StaticTriangleBvh.cpp" />
     <ClCompile Include="..\Physics\StaticBoxSceneImporter.cpp" />
     <ClCompile Include="..\Physics\StaticTriangleSceneImporter.cpp" />
     <ClCompile Include="..\Physics\ConstraintSystem.cpp" />
     <ClCompile Include="..\Physics\PhysicsWorld.cpp" />
     <ClCompile Include="..\Physics\RigidBodySystem.cpp" />
       <ClCompile Include="..\Vehicles\TireModel.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\MagicFormula\MagicFormula62.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\MagicFormula\TirePropertyFile.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyParsing.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyMapping.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyMagicFormula.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyCommonMetadata.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyHeritageExtensions.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyStructuralMetadata.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePropertyDiagnostics.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePartDefinition.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePartResolver.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TireFamilyBaseline.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\Authoring\TirePerformanceBiasMapping.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\MotorcycleTireProfile.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireSlipDynamics.cpp" />
       <ClCompile Include="..\Vehicles\SuspensionModel.cpp" />
       <ClCompile Include="..\Vehicles\SuspensionGeometry.cpp" />
+      <ClCompile Include="..\Vehicles\Suspension\Geometry\MacPherson\MacPhersonKinematics.cpp" />
+      <ClCompile Include="..\Vehicles\Suspension\Authoring\MacPhersonHardpointEstimator.cpp" />
       <ClCompile Include="..\Vehicles\UnsprungMassModel.cpp" />
     <ClCompile Include="..\Vehicles\VehicleDefinitionCompiler.cpp" />
     <ClCompile Include="..\Vehicles\VehicleDefinitionLoader.cpp" />
+    <ClCompile Include="..\Vehicles\VehicleAssetMetadata.cpp" />
     <ClCompile Include="..\Vehicles\VehicleDynamicsLab.cpp" />
     <ClCompile Include="..\Vehicles\VehicleSystem.cpp" />
+    <ClCompile Include="..\Vehicles\Suspension\VehicleSuspensionConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Wheels\Fitment\VehicleWheelFitmentConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Wheels\Alignment\VehicleWheelAlignmentConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Suspension\Common\VehicleAntiRollBarConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Dynamics\ChassisFlex\VehicleChassisComplianceConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleUnsprungMassConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Core\VehicleRuntimeConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Steering\VehicleSteeringConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Brakes\VehicleBrakeConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\DriverAids\VehicleDriverAidConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Drivetrain\VehicleDrivetrainConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\VehicleTireConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\VehicleTelemetry.cpp" />
+    <ClCompile Include="..\Vehicles\VehicleSimulation.cpp" />
+    <ClCompile Include="..\Vehicles\VehicleWheelSimulation.cpp" />
+    <ClCompile Include="..\Vehicles\Wheels\Fitment\WheelFitment.cpp" />
+    <ClCompile Include="..\Vehicles\Wheels\Fitment\HubReferenceGeometry.cpp" />
+    <ClCompile Include="..\Vehicles\Wheels\Fitment\ScrubRadiusGeometry.cpp" />
+    <ClCompile Include="..\Vehicles\Dynamics\ChassisFlex\ChassisTorsionalCompliance.cpp" />
+    <ClCompile Include="..\Vehicles\Dynamics\ChassisFlex\ChassisFlexEstimator.cpp" />
+    <ClCompile Include="..\Vehicles\Dynamics\ChassisFlex\ChassisFlexDiagnostics.cpp" />
+    <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesEstimator.cpp" />
+    <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesAccumulator.cpp" />
+    <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesDiagnostics.cpp" />
+    <ClCompile Include="..\Core\Diagnostics\PerformanceMonitor.cpp" />
     <ClCompile Include="..\Core\Entities\EntityRegistry.cpp" />
+    <ClCompile Include="..\Core\Entities\EntityHierarchy.cpp" />
+    <ClCompile Include="..\Core\Entities\EntityTransforms.cpp" />
+    <ClCompile Include="..\Core\Entities\EntityDebugComponents.cpp" />
+    <ClCompile Include="..\Core\Entities\EntityMeshComponents.cpp" />
     <ClCompile Include="..\Core\Entities\EntitySceneDocument.cpp" />
     <ClCompile Include="..\Core\Entities\EntityPrefabDocument.cpp" />
     <ClCompile Include="..\Core\Modules\ModuleLoader.cpp" />
     <ClCompile Include="..\Core\Modules\ModuleContext.cpp" />
+    <ClCompile Include="..\Core\Modules\ModuleAssetRegistry.cpp" />
     <ClCompile Include="..\Core\Modules\ModuleSaveStore.cpp" />
     <ClCompile Include="..\Core\Modules\BuiltInSceneRuntime.cpp" />
     <ClCompile Include="..\Core\Modules\LuaApi.cpp" />
     <ClCompile Include="..\Core\Modules\LuaModuleRuntime.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityCoreBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityDebugBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityMeshBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTransformBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaAudioBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaEngineBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaEnvironmentBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaInputBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaModuleBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaPrefabBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaSaveBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaSceneBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaScriptBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaUiBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaVegetationBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsBodyBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsColliderBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsConstraintBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsQueryBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsWorldBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleControlBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionParser.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDrivetrainBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDynamicsLabBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleMassBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleFitmentBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleSuspensionBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTelemetryBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireBindings.cpp" />
     <ClCompile Include="..\Core\Modules\ModuleRuntimeManager.cpp" />
     <ClCompile Include="..\Core\Modules\ScriptedUiRuntime.cpp" />
     <ClCompile Include="..\Scenes\LogoShowcaseScene.cpp" />
-    <ClCompile Include="..\Scenes\RacingUnitedBootScene.cpp" />
     <ClCompile Include="..\Scenes\SceneManager.cpp" />
     <ClCompile Include="..\Scenes\ModuleDocumentScene.cpp" />
     <ClCompile Include="..\Core\Settings\VideoSettingsStorage.cpp" />
@@ -223,11 +325,28 @@ user32.lib
     <ClCompile Include="..\Graphics\DisplaySystem.cpp" />
     <ClCompile Include="..\Graphics\Framebuffer\PostFramebuffer.cpp" />
     <ClCompile Include="..\Graphics\Mesh.cpp" />
+    <ClCompile Include="..\Graphics\EnvironmentMap.cpp" />
+    <ClCompile Include="..\Graphics\EnvironmentSystem.cpp" />
+    <ClCompile Include="..\Graphics\VegetationSystem.cpp" />
+    <ClCompile Include="..\Graphics\Material.cpp" />
+    <ClCompile Include="..\Graphics\Texture2D.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfBinary.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfJson.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfDocument.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfMeshImporter.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfMetadata.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfCollisionImporter.cpp" />
     <ClCompile Include="..\Graphics\AntiAliasing.cpp" />
     <ClCompile Include="..\Graphics\PostProcessing\PostProcessor.cpp" />
     <ClCompile Include="..\Graphics\Renderer\SceneRenderer.cpp" />
     <ClCompile Include="..\Graphics\Renderer\EntityDebugRenderer.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\SurfacePresentationRenderer.cpp" />
     <ClCompile Include="..\Graphics\Renderer\EntityMeshRenderer.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshAssetCache.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshAnimation.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshShadows.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshRenderMath.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\SkyRenderer.cpp" />
     <ClCompile Include="..\Graphics\RenderScaler.cpp" />
     <ClCompile Include="..\Graphics\ShaderProgram.cpp" />
     <ClCompile Include="..\Graphics\WindowSystem.cpp" />
@@ -236,51 +355,137 @@ user32.lib
     <ClCompile Include="..\UI\Settings\AudioSettingsPage.cpp" />
     <ClCompile Include="..\UI\Settings\GameplaySettingsPage.cpp" />
     <ClCompile Include="..\UI\Settings\InputSettingsPage.cpp" />
+    <ClCompile Include="..\UI\Settings\InputSettingsCommon.cpp" />
+    <ClCompile Include="..\UI\Settings\InputSettingsBindings.cpp" />
+    <ClCompile Include="..\UI\Settings\InputSettingsAnalogue.cpp" />
+    <ClCompile Include="..\UI\Settings\InputSettingsProfiles.cpp" />
     <ClCompile Include="..\UI\Settings\SettingsMenu.cpp" />
     <ClCompile Include="..\UI\Settings\VideoSettingsPage.cpp" />
+    <ClCompile Include="HeritageEngine.cpp" />
+    <ClCompile Include="Runtime\EngineStartup.cpp" />
+    <ClCompile Include="Runtime\EngineUiStyle.cpp" />
+    <ClCompile Include="Display\DisplayModeController.cpp" />
+    <ClCompile Include="..\Core\Diagnostics\PerformanceOverlay.cpp" />
+    <ClCompile Include="..\Platform\Windows\BackbufferClipboard.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityBindingRegistration.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsBindingRegistration.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleBindingRegistration.cpp" />
     <ClCompile Include="main.cpp" />
+  <ClCompile Include="..\Vehicles\Suspension\Geometry\TrailingArm\TrailingArmKinematics.cpp" />
+  <ClCompile Include="..\Vehicles\Suspension\Common\SuspensionAntiRollBar.cpp" />
+    <ClCompile Include="..\Vehicles\Suspension\Springs\TorsionBar.cpp" />
+    <ClCompile Include="..\Vehicles\Suspension\Authoring\TrailingArmHardpointEstimator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\ThirdParty\IMGUI\imgui.h" />
     <ClInclude Include="..\Camera\OrbitCamera.hpp" />
+    <ClInclude Include="..\Camera\ChaseCamera.hpp" />
     <ClInclude Include="..\Audio\AudioSystem.hpp" />
     <ClInclude Include="$(ProjectDir)..\Input\InputSystem.hpp" />
+    <ClInclude Include="$(ProjectDir)..\Input\InputSystemInternal.hpp" />
     <ClInclude Include="$(ProjectDir)..\Input\WindowsDirectInputBackend.hpp" />
     <ClInclude Include="..\Physics\CollisionSystem.hpp" />
+    <ClInclude Include="..\Physics\Collision\CollisionInternal.hpp" />
+    <ClInclude Include="..\Physics\SurfaceField.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\SurfaceField.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\SurfaceMaterialProperties.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\SurfaceWorld.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\Presentation\SurfacePresentation.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\Rubber\TrackRubberState.hpp" />
+    <ClInclude Include="..\Physics\StaticTriangleBvh.hpp" />
     <ClInclude Include="..\Physics\StaticBoxSceneImporter.hpp" />
     <ClInclude Include="..\Physics\StaticTriangleSceneImporter.hpp" />
     <ClInclude Include="..\Physics\ConstraintSystem.hpp" />
     <ClInclude Include="..\Physics\PhysicsWorld.hpp" />
     <ClInclude Include="..\Physics\RigidBodySystem.hpp" />
       <ClInclude Include="..\Vehicles\TireModel.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\MagicFormula\MagicFormula62.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\MagicFormula\TirePropertyFile.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\Authoring\TirePropertyImportInternal.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\Authoring\TirePartDefinition.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\Authoring\TirePartResolver.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\Authoring\TireFamilyBaseline.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\Authoring\TirePerformanceBiasMapping.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\MotorcycleTireProfile.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireSlipDynamics.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireContactPatch.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireContactGeometry.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireRigidRing.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireRoadEnveloping.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireThermal.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireWear.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireSurfaceInteraction.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireWetSurfaceInteraction.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireWinterSurfaceInteraction.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireShallowGranularInteraction.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireDeformableTerrainInteraction.hpp" />
+      <ClInclude Include="..\Vehicles\VehiclePrecision.hpp" />
       <ClInclude Include="..\Vehicles\SuspensionModel.hpp" />
       <ClInclude Include="..\Vehicles\SuspensionGeometry.hpp" />
+    <ClInclude Include="..\Vehicles\Suspension\Geometry\MacPherson\MacPhersonKinematics.hpp" />
+    <ClInclude Include="..\Vehicles\Suspension\Authoring\MacPhersonHardpointEstimator.hpp" />
       <ClInclude Include="..\Vehicles\UnsprungMassModel.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDefinition.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDefinitionCompiler.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDefinitionLoader.hpp" />
+    <ClInclude Include="..\Vehicles\VehicleAssetMetadata.hpp" />
     <ClInclude Include="..\Vehicles\VehicleDynamicsLab.hpp" />
     <ClInclude Include="..\Vehicles\VehicleSystem.hpp" />
+    <ClInclude Include="..\Vehicles\VehicleSystemInternal.hpp" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\00_PrepareWheelAndSupportQuery.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\01_TelemetryAndAirbornePolicy.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\02_SteeringBrakingAndFreeWheel.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\03_RoadEnvelopeAndFootprintSampling.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\04_TireStructureAndTerrainSupport.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\05_SuspensionAndContactResolution.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\06_ContactKinematicsAndPatchGeometry.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\07_SurfaceProvidersAndContactPatch.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\08_TireForcesAndSurfaceReactions.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\09_TirePhysicalStateUpdate.inl" />
+    <ClInclude Include="..\Vehicles\Simulation\WheelSubstep\10_ApplyForcesAndIntegrateWheel.inl" />
+    <ClCompile Include="Runtime\EngineFrame.cpp" />
+    <ClCompile Include="Runtime\EngineSimulation.cpp" />
+    <ClCompile Include="Runtime\EngineRendering.cpp" />
+    <ClCompile Include="Runtime\EngineHotkeys.cpp" />
+    <None Include="..\Vehicles\Simulation\WheelSubstep\README.md" />
+    <ClInclude Include="..\Vehicles\Wheels\Fitment\WheelFitment.hpp" />
+    <ClInclude Include="..\Vehicles\Wheels\Fitment\HubReferenceGeometry.hpp" />
+    <ClInclude Include="..\Vehicles\Wheels\Fitment\ScrubRadiusGeometry.hpp" />
+    <ClInclude Include="..\Vehicles\Dynamics\ChassisFlex\ChassisTorsionalCompliance.hpp" />
+    <ClInclude Include="..\Vehicles\Dynamics\ChassisFlex\ChassisFlexEstimator.hpp" />
+    <ClInclude Include="..\Vehicles\Dynamics\ChassisFlex\ChassisFlexDiagnostics.hpp" />
+    <ClInclude Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesEstimator.hpp" />
+    <ClInclude Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesAccumulator.hpp" />
+    <ClInclude Include="..\Core\Math\Quaternion.hpp" />
+    <ClInclude Include="..\Core\Math\TransformMath.hpp" />
     <ClInclude Include="..\Core\Entities\EntityRegistry.hpp" />
+    <ClInclude Include="..\Core\Entities\EntityRegistryInternal.hpp" />
     <ClInclude Include="..\Core\Entities\EntitySceneDocument.hpp" />
     <ClInclude Include="..\Core\Entities\EntityPrefabDocument.hpp" />
     <ClInclude Include="..\Core\Diagnostics\BuildIdentity.hpp" />
+    <ClInclude Include="..\Core\Diagnostics\PerformanceMonitor.hpp" />
     <ClInclude Include="..\Core\Diagnostics\GeneratedBuildIdentity.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleInfo.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleLoader.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleContext.hpp" />
+    <ClInclude Include="..\Core\Modules\ModuleAssetRegistry.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleSaveStore.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleRuntime.hpp" />
     <ClInclude Include="..\Core\Modules\BuiltInSceneRuntime.hpp" />
     <ClInclude Include="..\Core\Modules\LuaApi.hpp" />
     <ClInclude Include="..\Core\Modules\LuaModuleRuntime.hpp" />
+    <ClInclude Include="..\Core\Modules\LuaBindings\LuaBindingInternals.hpp" />
+    <ClInclude Include="..\Core\Modules\LuaBindings\LuaCoreBindingHandlers.hpp" />
+    <ClInclude Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsBindingHandlers.hpp" />
+    <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleBindingHandlers.hpp" />
+    <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityBindingHandlers.hpp" />
+    <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionParser.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleRuntimeManager.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleRuntimeAction.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleRuntimeServices.hpp" />
     <ClInclude Include="..\Core\Modules\ScriptedUiRuntime.hpp" />
     <ClInclude Include="..\Scenes\Scene.hpp" />
     <ClInclude Include="..\Scenes\LogoShowcaseScene.hpp" />
-    <ClInclude Include="..\Scenes\RacingUnitedBootScene.hpp" />
     <ClInclude Include="..\Scenes\SceneManager.hpp" />
     <ClInclude Include="..\Scenes\ModuleDocumentScene.hpp" />
     <ClInclude Include="..\Core\Settings\VideoSettings.hpp" />
@@ -288,14 +493,32 @@ user32.lib
     <ClInclude Include="..\Core\Settings\VideoSettingsStorage.hpp" />
     <ClInclude Include="..\Core\Settings\AudioSettingsStorage.hpp" />
     <ClInclude Include="..\Core\Timing\FrameLimiter.hpp" />
+    <ClInclude Include="..\Core\Paths\Utf8Path.hpp" />
     <ClInclude Include="..\Graphics\DisplaySystem.hpp" />
     <ClInclude Include="..\Graphics\Framebuffer\PostFramebuffer.hpp" />
+    <ClInclude Include="..\Graphics\AssetMetadata.hpp" />
     <ClInclude Include="..\Graphics\Mesh.hpp" />
+    <ClInclude Include="..\Graphics\EnvironmentMap.hpp" />
+    <ClInclude Include="..\Graphics\EnvironmentSystem.hpp" />
+    <ClInclude Include="..\Graphics\VegetationSystem.hpp" />
+    <ClInclude Include="..\Graphics\LodTransitionPolicy.hpp" />
+    <ClInclude Include="..\Graphics\PresentationPrecision.hpp" />
+    <ClInclude Include="..\Graphics\TireMarkChunking.hpp" />
+    <ClInclude Include="..\Graphics\Material.hpp" />
+    <ClInclude Include="..\Graphics\Texture2D.hpp" />
+    <ClInclude Include="..\Graphics\GltfBinary.hpp" />
+    <ClInclude Include="..\Graphics\Gltf\GltfInternal.hpp" />
+    <ClInclude Include="..\Graphics\GltfSceneData.hpp" />
     <ClInclude Include="..\Graphics\AntiAliasing.hpp" />
     <ClInclude Include="..\Graphics\PostProcessing\PostProcessor.hpp" />
     <ClInclude Include="..\Graphics\Renderer\SceneRenderer.hpp" />
     <ClInclude Include="..\Graphics\Renderer\EntityDebugRenderer.hpp" />
+    <ClInclude Include="..\Graphics\Renderer\SurfacePresentationRenderer.hpp" />
     <ClInclude Include="..\Graphics\Renderer\EntityMeshRenderer.hpp" />
+    <ClInclude Include="..\Graphics\Renderer\EntityMeshRendererInternal.hpp" />
+    <ClInclude Include="..\Graphics\Renderer\EntityMeshShaders.hpp" />
+    <ClInclude Include="..\Graphics\Renderer\EntityMeshShadowConfig.hpp" />
+    <ClInclude Include="..\Graphics\Renderer\SkyRenderer.hpp" />
     <ClInclude Include="..\Graphics\RenderScaler.hpp" />
     <ClInclude Include="..\Graphics\ShaderProgram.hpp" />
     <ClInclude Include="..\Graphics\WindowSystem.hpp" />
@@ -304,8 +527,88 @@ user32.lib
     <ClInclude Include="..\UI\Settings\AudioSettingsPage.hpp" />
     <ClInclude Include="..\UI\Settings\GameplaySettingsPage.hpp" />
     <ClInclude Include="..\UI\Settings\InputSettingsPage.hpp" />
+    <ClInclude Include="..\UI\Settings\InputSettingsPageInternal.hpp" />
     <ClInclude Include="..\UI\Settings\SettingsMenu.hpp" />
     <ClInclude Include="..\UI\Settings\VideoSettingsPage.hpp" />
+    <ClInclude Include="..\Platform\Windows\BackbufferClipboard.hpp" />
+    <ClInclude Include="..\Core\Diagnostics\PerformanceOverlay.hpp" />
+    <ClInclude Include="Display\DisplayModeController.hpp" />
+    <ClInclude Include="Runtime\EngineUiStyle.hpp" />
+    <ClInclude Include="Runtime\EngineStartup.hpp" />
+    <ClInclude Include="Runtime\EngineRuntimeState.hpp" />
+    <ClInclude Include="Runtime\EngineFrame.hpp" />
+    <ClInclude Include="Runtime\EngineHotkeys.hpp" />
+    <ClInclude Include="Runtime\EngineRendering.hpp" />
+    <ClInclude Include="Runtime\EngineSimulation.hpp" />
+    <ClInclude Include="HeritageEngine.hpp" />
+  <ClInclude Include="..\Vehicles\Suspension\Geometry\TrailingArm\TrailingArmKinematics.hpp" />
+    <ClInclude Include="..\Vehicles\Suspension\Common\SuspensionAntiRollBar.hpp" />
+    <ClInclude Include="..\Vehicles\Suspension\Springs\TorsionBar.hpp" />
+    <ClInclude Include="..\Vehicles\Suspension\Authoring\TrailingArmHardpointEstimator.hpp" />
+  </ItemGroup>
+  <ItemGroup Label="VehicleArchitectureScaffolds">
+    <None Include="..\Vehicles\VehicleConfiguration.cpp" />
+    <None Include="..\Vehicles\Topology\Common\VehicleTopologyCoordinator.cpp" />
+    <None Include="..\Vehicles\Topology\TwoWheel\TwoWheelVehicleDynamics.cpp" />
+    <None Include="..\Vehicles\Topology\ThreeWheel\ThreeWheelVehicleDynamics.cpp" />
+    <None Include="..\Vehicles\Topology\FourPlusWheel\FourPlusWheelVehicleDynamics.cpp" />
+    <None Include="..\Vehicles\Core\VehicleAssembly.cpp" />
+    <None Include="..\Vehicles\Core\VehicleSimulationScheduler.cpp" />
+    <None Include="..\Vehicles\Steering\SteeringSystem.cpp" />
+    <None Include="..\Vehicles\Steering\AckermannGeometry.cpp" />
+    <None Include="..\Vehicles\Steering\PowerSteering.cpp" />
+    <None Include="..\Vehicles\Suspension\Common\SuspensionSpringDamper.cpp" />
+    <None Include="..\Vehicles\Suspension\Common\SuspensionBumpStop.cpp" />
+    <None Include="..\Vehicles\Suspension\Common\SuspensionHeaveSpring.cpp" />
+    <None Include="..\Vehicles\Suspension\Geometry\DoubleWishbone\DoubleWishboneKinematics.cpp" />
+    <None Include="..\Vehicles\Suspension\Geometry\SemiTrailingArm\SemiTrailingArmKinematics.cpp" />
+    <None Include="..\Vehicles\Suspension\Geometry\MultiLink\MultiLinkKinematics.cpp" />
+    <None Include="..\Vehicles\Suspension\Axles\SolidAxle\SolidAxleKinematics.cpp" />
+    <None Include="..\Vehicles\Suspension\Axles\TorsionBeam\TorsionBeamKinematics.cpp" />
+    <None Include="..\Vehicles\Suspension\Springs\CoilSpring.cpp" />
+    <None Include="..\Vehicles\Suspension\Springs\LeafSpring.cpp" />
+    <None Include="..\Vehicles\Suspension\Springs\AirSpring.cpp" />
+    <None Include="..\Vehicles\Suspension\Springs\HydropneumaticSpring.cpp" />
+    <None Include="..\Vehicles\Suspension\Motorcycle\TelescopicFork.cpp" />
+    <None Include="..\Vehicles\Suspension\Motorcycle\Telelever.cpp" />
+    <None Include="..\Vehicles\Suspension\Motorcycle\RearSwingarm.cpp" />
+    <None Include="..\Vehicles\Suspension\Motorcycle\RearLinkage.cpp" />
+    <None Include="..\Vehicles\Wheels\WheelDynamics.cpp" />
+    <None Include="..\Vehicles\Wheels\WheelHub.cpp" />
+    <None Include="..\Vehicles\Wheels\Fitment\WheelClearance.cpp" />
+    <None Include="..\Vehicles\Wheels\Fitment\InstalledWheelMassProperties.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireContactPatch.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireContactGeometry.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireRoadEnveloping.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireThermal.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireWear.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireSurfaceInteraction.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireWetSurfaceInteraction.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireWinterSurfaceInteraction.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireShallowGranularInteraction.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireDeformableTerrainInteraction.cpp" />
+    <None Include="..\Vehicles\Tires\LowPressureTireModel.cpp" />
+    <None Include="..\Vehicles\Drivetrain\PowerUnit.cpp" />
+    <None Include="..\Vehicles\Drivetrain\Clutch.cpp" />
+    <None Include="..\Vehicles\Drivetrain\Gearbox.cpp" />
+    <None Include="..\Vehicles\Drivetrain\TransferCase.cpp" />
+    <None Include="..\Vehicles\Drivetrain\ChainFinalDrive.cpp" />
+    <None Include="..\Vehicles\Drivetrain\Differentials\OpenDifferential.cpp" />
+    <None Include="..\Vehicles\Drivetrain\Differentials\LimitedSlipDifferential.cpp" />
+    <None Include="..\Vehicles\Drivetrain\Differentials\LockedDifferential.cpp" />
+    <None Include="..\Vehicles\Drivetrain\Differentials\ActiveDifferential.cpp" />
+    <None Include="..\Vehicles\Brakes\BrakeSystem.cpp" />
+    <None Include="..\Vehicles\Brakes\BrakeThermal.cpp" />
+    <None Include="..\Vehicles\Brakes\ABSController.cpp" />
+    <None Include="..\Vehicles\Aerodynamics\AerodynamicsSystem.cpp" />
+    <None Include="..\Vehicles\Aerodynamics\AeroSurface.cpp" />
+    <None Include="..\Vehicles\Aerodynamics\GroundEffect.cpp" />
+    <None Include="..\Vehicles\Dynamics\MotorcycleLeanDynamics.cpp" />
+    <None Include="..\Vehicles\Dynamics\KartChassisFlex.cpp" />
+    <None Include="..\Vehicles\Articulation\ArticulatedVehicle.cpp" />
+    <None Include="..\Vehicles\Articulation\FifthWheel.cpp" />
+    <None Include="..\Vehicles\Articulation\TrailerCoupling.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyLuaRuntime" AfterTargets="Build" Condition="Exists('$(ProjectDir)..\..\..\ThirdParty\Lua\bin\lua54.dll')">
@@ -313,4 +616,5 @@ user32.lib
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+
 </Project>

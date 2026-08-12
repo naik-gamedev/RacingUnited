@@ -15,7 +15,7 @@ This workflow exists to prevent context-window drift, invented function signatur
 - Identify the exact Visual Studio project and files that compile.
 - Search the current source for every function, type, and binding being changed.
 - Regenerate `Build/Reports/LuaAPI.md` instead of recalling Lua names from memory.
-- Read the relevant ownership and architecture documents.
+- Read the relevant ownership and architecture documents. During the current tire/contact program, read `TIRE_MODEL.md` and `TIRE_SURFACE_ROADMAP.md` before changing tire or surface behavior.
 - Check recent milestone notes and existing tests.
 - State any assumption that cannot be verified from the repository.
 
@@ -26,6 +26,7 @@ This workflow exists to prevent context-window drift, invented function signatur
 - Use generation-checked handles across Lua and subsystem boundaries.
 - Do not store unmanaged raw pointers to lifetime-owned engine objects.
 - Add or update validation beside the feature.
+- Treat validator source discovery as part of the contract: if implementations move between files, update validator scans in the same change before deleting the old layout.
 - Keep heavy deterministic simulation in native C++ and Lua orchestration/data in named modules.
 - Update documentation when a contract or ownership rule changes.
 
@@ -62,3 +63,10 @@ A future project ZIP should include at minimum:
 - Git metadata when practical, or at least the commit hash recorded by build identity.
 
 Never rely on a chat transcript as the only record of a technical decision.
+### Validator ownership rule (CLEAN12)
+
+Run `Tools/ValidateProject.ps1` as the only static-validation entry point. Do not create
+step-specific validator scripts. Put new checks in the appropriate responsibility module
+under `Tools/Validation/`; keep the top-level runner limited to shared setup, ordered module
+loading, reporting and exit status.
+

@@ -219,7 +219,7 @@ void WindowSystem::drawTitlebar(GLFWwindow* window, int fbW, int fbH, bool& shou
     ImGui::SetCursorPosY(7);
     const char* modeName = (m_mode == WindowMode::Windowed) ? "Windowed" :
                            (m_mode == WindowMode::Borderless) ? "Borderless" : "Exclusive";
-    ImGui::TextDisabled("|  %s  |  F11  |  ESC = Menu", modeName);
+    ImGui::TextDisabled("|  %s  |  F6 Sky  |  F7 Time  |  F9 Wire  |  Insert TireDbg  |  F11  |  ESC = Menu", modeName);
 
     // Buttons
     ImGui::SetCursorPos(ImVec2((float)fbW - 112, 1));

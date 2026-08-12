@@ -22,6 +22,99 @@ local function CopyVisualDefinitionToRuntime()
     vehicleVisual.usingFallback = false
 end
 
+local function IsLegacyDefaultVehicleAsset(path)
+    return tostring(path or "") == tostring(PrototypeCarDefinition.visual.bodyAsset or "")
+end
+
+local function LatestDiscoveredVehicleGlb()
+    return Module.GetLatestAsset(".glb", "Vehicles", "Vehicle_")
+end
+
+function RefreshVehicleAssetDiscovery(forceRefresh, applyWhenChanged)
+    if forceRefresh then
+        Module.RefreshAssetIndex()
+    end
+
+    local revision = Module.GetAssetIndexRevision()
+    if not forceRefresh and revision == vehicleAssetDiscovery.lastRevision then
+        return false
+    end
+    vehicleAssetDiscovery.lastRevision = revision
+    vehicleAssetDiscovery.detectedCount = Module.GetAssetCount(
+        ".glb", "Vehicles", "Vehicle_")
+
+    local latest = LatestDiscoveredVehicleGlb()
+    vehicleAssetDiscovery.latestVehicleGlb = latest or ""
+    if latest == nil or latest == "" then
+        vehicleAssetDiscovery.message = "No Vehicle_*.glb detected under Assets/Vehicles"
+        return false
+    end
+
+    vehicleAssetDiscovery.message = "Detected latest vehicle GLB: " .. tostring(latest)
+
+    if vehicleAssetDiscovery.enabled then
+        local current = tostring(vehicleVisual.assetPath or "")
+        local autoOwnsCurrent = vehicleAssetDiscovery.autoOwnedPath ~= ""
+            and current == vehicleAssetDiscovery.autoOwnedPath
+        if current == tostring(latest) then
+            vehicleAssetDiscovery.autoOwnedPath = tostring(latest)
+            RefreshVehicleAssetMetadata()
+            return false
+        end
+
+        if IsLegacyDefaultVehicleAsset(current) or autoOwnsCurrent then
+            vehicleVisual.assetPath = tostring(latest)
+            vehicleVisual.usingFallback = false
+            vehicleAssetDiscovery.autoOwnedPath = tostring(latest)
+            vehicleAssetDiscovery.message = "Auto-loaded discovered vehicle GLB: "
+                .. tostring(latest)
+            if applyWhenChanged then
+                return ApplyVehicleVisualMesh()
+            end
+            return true
+        end
+    end
+
+    return false
+end
+
+function SetVehicleAssetAutoDiscoveryEnabled(enabled)
+    vehicleAssetDiscovery.enabled = enabled
+    Save.SetBool("vehicle.visual.auto_discover_vehicle_glb", enabled)
+    if enabled then
+        RefreshVehicleAssetDiscovery(true, true)
+    else
+        vehicleAssetDiscovery.message = "Automatic Vehicle_*.glb loading disabled"
+    end
+end
+
+function UseLatestDiscoveredVehicleGlb()
+    local latest = LatestDiscoveredVehicleGlb()
+    if latest == nil or latest == "" then
+        vehicleVisualMessage = "No Vehicle_*.glb exists under Assets/Vehicles"
+        return false
+    end
+    vehicleVisual.assetPath = tostring(latest)
+    vehicleVisual.usingFallback = false
+    vehicleAssetDiscovery.autoOwnedPath = tostring(latest)
+    return ApplyVehicleVisualMesh()
+end
+
+local function VehicleVisualRotationForCurrentAsset()
+    local path = string.lower(tostring(vehicleVisual.assetPath or ""))
+    if string.match(path, "%.glb$") then
+        -- Blender glTF export already converts the Racing United authoring
+        -- convention (X=width, Y=length, Z=height, nose toward -Y) into
+        -- glTF/Heritage coordinates. Do not apply the old OBJ-only 180-degree
+        -- yaw bridge a second time. The complete GLB should therefore appear
+        -- in Heritage with the same fore/aft orientation authored in Blender.
+        return 0.0, 0.0, 0.0
+    end
+    return vehicleVisual.rotationDegrees[1],
+        vehicleVisual.rotationDegrees[2],
+        vehicleVisual.rotationDegrees[3]
+end
+
 function ApplyVehicleVisualTransform()
     if chassisEntity == 0 or not Entity.Exists(chassisEntity) then
         vehicleVisualMessage = "VISUAL ERROR: Player Chassis is missing"
@@ -33,17 +126,80 @@ function ApplyVehicleVisualTransform()
         vehicleVisual.offset[1],
         vehicleVisual.offset[2],
         vehicleVisual.offset[3])
+    local rotationX, rotationY, rotationZ =
+        VehicleVisualRotationForCurrentAsset()
     Entity.SetLocalRotation(
-        chassisEntity,
-        vehicleVisual.rotationDegrees[1],
-        vehicleVisual.rotationDegrees[2],
-        vehicleVisual.rotationDegrees[3])
+        chassisEntity, rotationX, rotationY, rotationZ)
     Entity.SetLocalScale(
         chassisEntity,
         vehicleVisual.scale,
         vehicleVisual.scale,
         vehicleVisual.scale)
     return true
+end
+
+
+function RefreshVehicleAssetMetadata()
+    vehicleAssetMetadata = nil
+    local path = string.lower(tostring(vehicleVisual.assetPath or ""))
+    if not string.match(path, "%.glb$") then
+        vehicleAssetMetadataMessage = "Current visual is not GLB; semantic Custom Properties are available on GLB assets."
+        if RefreshEmbeddedVehicleWheelBinding ~= nil then
+            RefreshEmbeddedVehicleWheelBinding()
+        end
+        return false
+    end
+
+    local metadata, errorMessage = Vehicle.InspectAssetMetadata(vehicleVisual.assetPath)
+    if metadata == nil then
+        vehicleAssetMetadataMessage = "METADATA ERROR: " .. tostring(errorMessage)
+        if RefreshEmbeddedVehicleWheelBinding ~= nil then
+            RefreshEmbeddedVehicleWheelBinding()
+        end
+        return false
+    end
+
+    vehicleAssetMetadata = metadata
+    vehicleAssetMetadataMessage = "Heritage discovered "
+        .. tostring(metadata.part_count or 0)
+        .. " semantic parts + "
+        .. tostring(metadata.suspension_hardpoint_count or 0)
+        .. " suspension hardpoints from GLB metadata"
+    if SuspensionAuthoringImportHardpointsFromMetadata ~= nil then
+        SuspensionAuthoringImportHardpointsFromMetadata(metadata)
+    end
+    if VehicleFitmentImportReferenceFromMetadata ~= nil then
+        VehicleFitmentImportReferenceFromMetadata(metadata)
+    end
+    if RefreshEmbeddedVehicleWheelBinding ~= nil then
+        RefreshEmbeddedVehicleWheelBinding()
+    end
+    return true
+end
+
+local function ApplyVehicleVisualNodeFilter()
+    if chassisEntity == 0 or not Entity.Exists(chassisEntity)
+        or not Entity.HasMesh(chassisEntity) then
+        return false
+    end
+
+    local prefix = vehicleVisual.isolateWheelAssembly and "WH_" or ""
+    if not Entity.SetMeshNodePrefixFilter(chassisEntity, prefix) then
+        vehicleVisualMessage = "VISUAL FILTER ERROR: " .. Entity.GetLastError()
+        return false
+    end
+    return true
+end
+
+function SetVehicleWheelAssemblyIsolation(enabled)
+    vehicleVisual.isolateWheelAssembly = enabled
+    local ok = ApplyVehicleVisualNodeFilter()
+    if ok then
+        vehicleVisualMessage = enabled
+            and "Diagnostic isolation: showing only WH_* wheel/tire/brake nodes"
+            or "Diagnostic isolation disabled: showing complete vehicle GLB"
+    end
+    return ok
 end
 
 function ApplyVehicleVisualMesh()
@@ -66,19 +222,23 @@ function ApplyVehicleVisualMesh()
     end
 
     Entity.SetMeshVisible(chassisEntity, true)
+    ApplyVehicleVisualNodeFilter()
     ApplyVehicleVisualTransform()
     SetVehicleDebugVisible(prototypeScenePreset ~= "visual")
-    vehicleVisualMessage = "Using vehicle OBJ: " .. vehicleVisual.assetPath
+    vehicleVisualMessage = "Using vehicle asset: " .. vehicleVisual.assetPath
+    RefreshVehicleAssetMetadata()
     return true
 end
 
 function UsePlayerVehicleVisual()
+    vehicleAssetDiscovery.autoOwnedPath = ""
     vehicleVisual.assetPath = PrototypeCarDefinition.visual.bodyAsset
     vehicleVisual.usingFallback = false
     return ApplyVehicleVisualMesh()
 end
 
 function UseFallbackVehicleVisual()
+    vehicleAssetDiscovery.autoOwnedPath = ""
     vehicleVisual.assetPath = PrototypeCarDefinition.visual.fallbackBodyAsset
     vehicleVisual.usingFallback = true
     return ApplyVehicleVisualMesh()
@@ -97,6 +257,10 @@ end
 
 function VehicleVisualOnPrototypeEnter()
     CopyVisualDefinitionToRuntime()
+    -- AS01A: do not force a filesystem scan while the scene is entering.
+    -- The engine-level registry performs its first lazy scan after startup,
+    -- then OnUpdate reacts to the revision normally.
+    vehicleAssetDiscovery.lastRevision = Module.GetAssetIndexRevision()
     ApplyVehicleVisualMesh()
     ApplyVehicleWheelMeshes()
     SetArticulatedWheelVisualsEnabled(vehicleWheelVisual.enabled)

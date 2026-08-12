@@ -61,6 +61,24 @@ heritage::math::Vec3 normalized(
     return scale(value, 1.0f / std::sqrt(magnitudeSquared));
 }
 
+heritage::math::Vec3 steeringAxisWithCaster(
+    const heritage::math::Vec3& value,
+    float casterDegrees)
+{
+    const heritage::math::Vec3 axis = normalized(
+        value, { 0.0f, 1.0f, 0.0f });
+    const float yzMagnitude = std::sqrt(
+        axis.y * axis.y + axis.z * axis.z);
+    if (yzMagnitude <= kVectorEpsilon)
+        return axis;
+    const float caster = radians(casterDegrees);
+    return normalized(
+        { axis.x,
+          yzMagnitude * std::cos(caster),
+          -yzMagnitude * std::sin(caster) },
+        axis);
+}
+
 heritage::math::Vec3 rotateAroundAxis(
     const heritage::math::Vec3& value,
     const heritage::math::Vec3& unitAxis,
@@ -115,8 +133,85 @@ SuspensionGeometryOutput evaluateSuspensionGeometry(
     const SuspensionGeometryInput& input)
 {
     SuspensionGeometryOutput output;
-    if (description.provider != SuspensionProviderKind::LinearRaycastV1)
+    if (description.provider == SuspensionProviderKind::MacPhersonStrutV1)
+    {
+        const MacPhersonKinematicsOutput macPherson =
+            evaluateMacPhersonKinematics(
+                description.macPherson,
+                { input.compressionM,
+                  input.steeringDegrees,
+                  input.localSuspensionDirection,
+                  description.staticCamberDegrees,
+                  description.staticToeDegrees,
+                  description.casterOverrideEnabled,
+                  description.staticCasterDegrees });
+        if (!macPherson.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        output.camberDegrees = macPherson.camberDegrees;
+        output.toeDegrees = macPherson.toeDegrees;
+        output.localSteeringAxis = macPherson.localSteeringAxis;
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = macPherson.localSteeringAxisPoint;
+        output.localWheelForward = macPherson.localWheelForward;
+        output.localWheelRight = macPherson.localWheelRight;
+        output.localWheelUp = macPherson.localWheelUp;
+        output.localUprightRotationDegrees =
+            macPherson.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = macPherson.travelClamped;
+        output.bumpSteerDegrees = macPherson.bumpSteerDegrees;
+        output.strutCompressionM = macPherson.strutCompressionM;
+        output.springMotionRatio = macPherson.springMotionRatio;
+        output.damperCompressionM = macPherson.strutCompressionM;
+        output.damperMotionRatio = macPherson.springMotionRatio;
+        output.localWheelCenter = macPherson.localWheelCenter;
         return output;
+    }
+    if (description.provider == SuspensionProviderKind::TrailingArmTorsionBarV1)
+    {
+        const TrailingArmKinematicsOutput trailingArm =
+            evaluateTrailingArmKinematics(
+                description.trailingArm,
+                { input.compressionM,
+                  input.localSuspensionDirection,
+                  description.staticCamberDegrees,
+                  description.staticToeDegrees });
+        if (!trailingArm.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        output.camberDegrees = trailingArm.camberDegrees;
+        output.toeDegrees = trailingArm.toeDegrees;
+        output.localSteeringAxis = { 0.0f, 1.0f, 0.0f };
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = description.localSteeringAxisPoint;
+        output.localWheelForward = trailingArm.localWheelForward;
+        output.localWheelRight = trailingArm.localWheelRight;
+        output.localWheelUp = trailingArm.localWheelUp;
+        output.localUprightRotationDegrees =
+            trailingArm.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = trailingArm.travelClamped;
+        output.damperCompressionM = trailingArm.damperCompressionM;
+        output.damperMotionRatio = trailingArm.damperMotionRatio;
+        output.springMotionRatio = trailingArm.damperMotionRatio;
+        output.springTwistRadians = trailingArm.torsionBarTwistRadians;
+        output.springAngularMotionRatioRadPerM =
+            trailingArm.torsionBarAngularMotionRatioRadPerM;
+        output.referenceSpringAngularMotionRatioRadPerM =
+            trailingArm.referenceTorsionBarAngularMotionRatioRadPerM;
+        output.localWheelCenter = trailingArm.localWheelCenter;
+        return output;
+    }
+    if (description.provider != SuspensionProviderKind::LinearRaycastV1)
+    {
+        output.kinematicsValid = false;
+        return output;
+    }
 
     output.camberDegrees = travelCurve(
         description.staticCamberDegrees,
@@ -128,9 +223,15 @@ SuspensionGeometryOutput evaluateSuspensionGeometry(
         description.toeGainDegreesPerM,
         description.toeProgressionDegreesPerM2,
         input.compressionM);
-    output.localSteeringAxis = normalized(
-        description.localSteeringAxis,
-        { 0.0f, 1.0f, 0.0f });
+    output.localSteeringAxis = description.casterOverrideEnabled
+        ? steeringAxisWithCaster(
+            description.localSteeringAxis,
+            description.staticCasterDegrees)
+        : normalized(
+            description.localSteeringAxis,
+            { 0.0f, 1.0f, 0.0f });
+    output.steeringAxisPointValid = true;
+    output.localSteeringAxisPoint = description.localSteeringAxisPoint;
 
     heritage::math::Vec3 forward = rotateAroundAxis(
         { 0.0f, 0.0f, 1.0f },

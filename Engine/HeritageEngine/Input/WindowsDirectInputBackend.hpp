@@ -57,6 +57,11 @@ public:
     void shutdown();
     void update();
 
+    // Device enumeration can be surprisingly expensive on Windows and must not
+    // happen periodically on the gameplay thread. Heritage enumerates once at
+    // startup; the settings UI calls this explicitly when hardware changes.
+    void refreshDevices();
+
     bool available() const;
     std::vector<DeviceInfo> devices() const;
     std::string deviceName(const std::string& instanceGuid) const;

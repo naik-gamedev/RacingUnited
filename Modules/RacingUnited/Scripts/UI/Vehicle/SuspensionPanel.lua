@@ -8,6 +8,9 @@ local function DrawSuspensionWheelSelector()
             and Vehicle.GetWheelCount(nativeVehicle) or 1
         requested = math.max(1, math.min(wheelCount, requested))
         ReadVehicleSuspensionModel(requested)
+        if vehicleSuspensionAuthoring.enabled then
+            RefreshSuspensionAuthoringGizmos()
+        end
     end
     UI.TextDisabled("Provider: " .. tostring(vehicleSuspension.provider))
 end
@@ -177,7 +180,7 @@ local function DrawSuspensionGeometryControls()
             -1000.0, 1000.0, "%.3f deg/m^2")
     changed = changed or fieldChanged
     ApplySelectedSuspensionWhenChanged(changed)
-    UI.TextDisabled("Signed local curves approximate measured kinematics now; future hardpoint providers will calculate them directly.")
+    UI.TextDisabled("The linear provider uses signed local curves; hardpoint providers derive alignment and motion ratio from linkage geometry.")
 end
 
 local function DrawSuspensionLiveTelemetry()
@@ -265,6 +268,10 @@ function DrawVehicleSuspensionPanel()
         end
         if UI.BeginTabItem("GEOMETRY") then
             DrawSuspensionGeometryControls()
+            UI.EndTabItem()
+        end
+        if UI.BeginTabItem("AUTHORING") then
+            DrawVehicleSuspensionAuthoringPanel()
             UI.EndTabItem()
         end
         if UI.BeginTabItem("LIVE") then

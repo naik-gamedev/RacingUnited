@@ -1,5 +1,7 @@
 #pragma once
 
+#include "VehiclePrecision.hpp"
+
 #include <string_view>
 
 namespace heritage::vehicles {
@@ -9,45 +11,53 @@ namespace heritage::vehicles {
 // a compatible force/geometry implementation pair.
 enum class SuspensionProviderKind
 {
-    LinearRaycastV1 = 0
+    LinearRaycastV1 = 0,
+    MacPhersonStrutV1 = 1,
+    TrailingArmTorsionBarV1 = 2
 };
 
 struct SuspensionModelDescription
 {
     SuspensionProviderKind provider = SuspensionProviderKind::LinearRaycastV1;
-    float springPreloadN = 0.0f;
-    float springRateNPerM = 35000.0f;
-    float springProgressionNPerM2 = 0.0f;
-    float bumpDampingNsPerM = 3200.0f;
-    float bumpHighSpeedDampingNsPerM = 3200.0f;
-    float bumpDampingKneeVelocityMps = 1.0f;
-    float reboundDampingNsPerM = 4200.0f;
-    float reboundHighSpeedDampingNsPerM = 4200.0f;
-    float reboundDampingKneeVelocityMps = 1.0f;
-    float bumpStopEngagementM = 0.18f;
-    float bumpStopRateNPerM = 0.0f;
-    float bumpStopProgressionNPerM2 = 0.0f;
-    float droopStopEngagementM = 0.15f;
-    float droopStopRateNPerM = 0.0f;
-    float motionRatio = 1.0f;
-    float maximumForceN = 250000.0f;
+    VehicleScalar springPreloadN = 0.0;
+    VehicleScalar springRateNPerM = 35000.0;
+    VehicleScalar springProgressionNPerM2 = 0.0;
+    VehicleScalar bumpDampingNsPerM = 3200.0;
+    VehicleScalar bumpHighSpeedDampingNsPerM = 3200.0;
+    VehicleScalar bumpDampingKneeVelocityMps = 1.0;
+    VehicleScalar reboundDampingNsPerM = 4200.0;
+    VehicleScalar reboundHighSpeedDampingNsPerM = 4200.0;
+    VehicleScalar reboundDampingKneeVelocityMps = 1.0;
+    VehicleScalar bumpStopEngagementM = 0.18;
+    VehicleScalar bumpStopRateNPerM = 0.0;
+    VehicleScalar bumpStopProgressionNPerM2 = 0.0;
+    VehicleScalar droopStopEngagementM = 0.15;
+    VehicleScalar droopStopRateNPerM = 0.0;
+    VehicleScalar motionRatio = 1.0;
+    VehicleScalar maximumForceN = 250000.0;
 };
 
 struct SuspensionModelInput
 {
-    float compressionM = 0.0f;
-    float compressionVelocityMps = 0.0f;
+    VehicleScalar compressionM = 0.0;
+    VehicleScalar compressionVelocityMps = 0.0;
+    // Mechanism-specific generalized spring coordinates. They remain zero for
+    // linear and MacPherson providers. A trailing-arm torsion-bar provider
+    // supplies the actual arm/torsion rotation and its instantaneous leverage.
+    VehicleScalar springTwistRadians = 0.0;
+    VehicleScalar springAngularMotionRatioRadPerM = 0.0;
+    VehicleScalar referenceSpringAngularMotionRatioRadPerM = 0.0;
 };
 
 struct SuspensionModelOutput
 {
-    float springForceN = 0.0f;
-    float dampingForceN = 0.0f;
-    float bumpStopForceN = 0.0f;
-    float droopStopForceN = 0.0f;
-    float unclampedForceN = 0.0f;
-    float normalForceN = 0.0f;
-    float damperDissipationW = 0.0f;
+    VehicleScalar springForceN = 0.0;
+    VehicleScalar dampingForceN = 0.0;
+    VehicleScalar bumpStopForceN = 0.0;
+    VehicleScalar droopStopForceN = 0.0;
+    VehicleScalar unclampedForceN = 0.0;
+    VehicleScalar normalForceN = 0.0;
+    VehicleScalar damperDissipationW = 0.0;
 };
 
 const char* suspensionProviderId(SuspensionProviderKind provider);

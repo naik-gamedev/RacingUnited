@@ -33,17 +33,29 @@ function VehicleFixedUpdate(fixedDeltaTime)
         nativeVehicle, throttle, brake, steering, handbrake)
     RefreshVehicleTelemetry()
 
+    -- Keep the small prototype laboratory tightly bounded, but authored worlds
+    -- are allowed to contain real hills, valleys and kilometres of free-roam
+    -- space. The only automatic authored-world rescue is now a genuine deep-fall
+    -- failsafe: 500 metres below the configured player spawn height.
     if nativeVehicleBody ~= 0 and Physics.BodyExists(nativeVehicleBody) then
         local x, y, z = Physics.GetBodyPosition(nativeVehicleBody)
-        local horizontalLimit = playerWorld.loaded and 1000.0 or 80.0
-        if y < -20.0 or math.abs(x) > horizontalLimit or math.abs(z) > horizontalLimit then
-            if playerWorld.loaded then
+        if playerWorld.loaded then
+            local spawnY = playerWorld.spawnPosition[2] or 0.0
+            if y < spawnY - 500.0 then
                 ResetVehicleAtPlayerWorldSpawn(
-                    "Safety-reset vehicle at Player Scene spawn")
-            else
-                ResetNativeVehicle()
+                    "Safety-reset after falling 500 m below Player World spawn")
+                vehicleMessage =
+                    "Safety-reset the vehicle after a 500 m world fall"
             end
-            vehicleMessage = "Safety-reset the vehicle after it left the active test world"
+        else
+            local horizontalLimit = 80.0
+            if y < -20.0
+                or math.abs(x) > horizontalLimit
+                or math.abs(z) > horizontalLimit then
+                ResetNativeVehicle()
+                vehicleMessage =
+                    "Safety-reset the vehicle after it left the prototype test world"
+            end
         end
     end
 end

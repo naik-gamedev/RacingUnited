@@ -12,6 +12,10 @@ function DrawVehicleVisualPanel()
             DrawVehicleVisualWheelsPanel()
             UI.EndTabItem()
         end
+        if UI.BeginTabItem("ASSET DATA") then
+            DrawVehicleAssetMetadataPanel()
+            UI.EndTabItem()
+        end
         UI.EndTabBar()
     end
 end

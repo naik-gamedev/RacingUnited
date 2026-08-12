@@ -45,6 +45,8 @@ void sanitize(VideoSettings& settings)
 {
     settings.antiAliasingIndex = std::clamp(settings.antiAliasingIndex, 0, 6);
     settings.textureFilterIndex = std::clamp(settings.textureFilterIndex, 0, 6);
+    settings.shadowQualityIndex = std::clamp(settings.shadowQualityIndex, 0, 3);
+    settings.shadowFilterIndex = std::clamp(settings.shadowFilterIndex, 0, 2);
     settings.scaleModeIndex = std::clamp(settings.scaleModeIndex, 0, 5);
     settings.fpsCapIndex = std::clamp(
         settings.fpsCapIndex,
@@ -95,6 +97,8 @@ bool VideoSettingsStorage::load(const std::string& path, VideoSettings& settings
 
         if (key == "antiAliasingIndex") parseInt(value, settings.antiAliasingIndex);
         else if (key == "textureFilterIndex") parseInt(value, settings.textureFilterIndex);
+        else if (key == "shadowQualityIndex") parseInt(value, settings.shadowQualityIndex);
+        else if (key == "shadowFilterIndex") parseInt(value, settings.shadowFilterIndex);
         else if (key == "scaleModeIndex") parseInt(value, settings.scaleModeIndex);
         else if (key == "fpsCapIndex") parseInt(value, settings.fpsCapIndex);
         else if (key == "vsyncEnabled") settings.vsyncEnabled = (value == "1" || value == "true");
@@ -124,9 +128,11 @@ bool VideoSettingsStorage::save(const std::string& path, const VideoSettings& se
     if (!file)
         return false;
 
-    file << "version=3\n";
+    file << "version=5\n";
     file << "antiAliasingIndex=" << settings.antiAliasingIndex << '\n';
     file << "textureFilterIndex=" << settings.textureFilterIndex << '\n';
+    file << "shadowQualityIndex=" << settings.shadowQualityIndex << '\n';
+    file << "shadowFilterIndex=" << settings.shadowFilterIndex << '\n';
     file << "scaleModeIndex=" << settings.scaleModeIndex << '\n';
     file << "fpsCapIndex=" << settings.fpsCapIndex << '\n';
     file << "vsyncEnabled=" << (settings.vsyncEnabled ? 1 : 0) << '\n';

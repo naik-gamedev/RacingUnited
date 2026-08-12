@@ -1,5 +1,6 @@
 -- Standalone semantic regression for the data-only topology contract.
--- The test runner loads Definitions/VehicleDefinitionV2.lua first.
+-- The test runner loads the VehicleDefinitionV2 schema, builder, core/dynamics/compatibility
+-- validation phases and serialization files before this test module.
 Module = {
     AssetExists = function(_) return true end
 }
@@ -9,6 +10,20 @@ PrototypeCarDefinition = {
         { mount = { 0.70, 0.80, 1.20 } },
         { mount = { -0.70, 0.80, -1.20 } },
         { mount = { 0.70, 0.80, -1.20 } }
+    },
+    chassisFlex = {
+        enabled = true,
+        provider = "chassis_torsional_mode_v1",
+        mountBody = "chassis",
+        torsionalRigidityNmPerDegree = 8700.0,
+        torsionalDampingNmsPerRad = 11300.0,
+        effectiveTorsionalInertiaKgM2 = 525.0,
+        torsionAxisLocalY = 0.364,
+        frontReferenceLocalZ = 1.221,
+        rearReferenceLocalZ = -1.221,
+        maximumTwistDegrees = 1.25,
+        provenance = "estimated_chassis_flex_closed_unibody_v1",
+        confidence = 0.18
     }
 }
 
@@ -45,6 +60,12 @@ assert(road.contactUnits[1].effectiveUnsprungMassKg > 0.0
     "unsprung-mass and radial tire parameters were not authored")
 assert(road.transmissions[1].finalDriveRatio > 0.0,
     "runtime transmission parameters were not authored")
+assert(road.chassisFlex.enabled == true
+    and road.chassisFlex.provider == "chassis_torsional_mode_v1"
+    and road.chassisFlex.torsionalRigidityNmPerDegree == 8700.0
+    and road.chassisFlex.provenance == "estimated_chassis_flex_closed_unibody_v1"
+    and road.chassisFlex.confidence == 0.18,
+    "road-car chassis-flex component/provenance was not preserved")
 
 local motorcycle = BuildVehicleDefinitionV2(
     CreateVehicleWorkshopDraft("motorcycle"))
@@ -81,6 +102,12 @@ local brokenGeometry = BuildVehicleDefinitionV2(
 brokenGeometry.suspensions[1].steeringAxis = { 0.0, 0.0, 0.0 }
 assert(not ValidateVehicleDefinitionV2(brokenGeometry).valid,
     "a zero steering axis must fail structural validation")
+
+local brokenFlex = BuildVehicleDefinitionV2(
+    CreateVehicleWorkshopDraft("road_car"))
+brokenFlex.chassisFlex.torsionalRigidityNmPerDegree = 0.0
+assert(not ValidateVehicleDefinitionV2(brokenFlex).valid,
+    "invalid chassis-flex parameters must fail structural validation")
 
 local formula = BuildVehicleDefinitionV2(CreateVehicleWorkshopDraft("formula"))
 local formulaReport = ValidateVehicleDefinitionV2(formula)
