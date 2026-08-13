@@ -35,9 +35,14 @@ Check ($headerText.Contains("kMilestone")) "generated build identity header is v
 $incrementalFreshnessPath = Join-Path $Root "Tools\EnsureIncrementalBuildFreshness.ps1"
 $incrementalFreshness = if (Test-Path $incrementalFreshnessPath) { [IO.File]::ReadAllText($incrementalFreshnessPath) } else { "" }
 $rollingBuildHelper = if (Test-Path (Join-Path $Root "Tools\00_BuildAndRunCurrent.cmd")) { [IO.File]::ReadAllText((Join-Path $Root "Tools\00_BuildAndRunCurrent.cmd")) } else { "" }
+$launchCurrentPath = Join-Path $Root "Tools\01_LaunchCurrent.cmd"
+$launchCurrent = if (Test-Path $launchCurrentPath) { [IO.File]::ReadAllText($launchCurrentPath) } else { "" }
 Check (Test-Path $incrementalFreshnessPath) "CLEAN10B content-hash incremental-build freshness guard exists"
 Check ($incrementalFreshness.Contains("Get-FileHash") -and $incrementalFreshness.Contains("IncrementalSourceHashes.tsv") -and $incrementalFreshness.Contains("LastWriteTimeUtc")) "CLEAN10B freshness guard hashes build inputs and touches changed content"
 Check ($rollingBuildHelper.Contains("EnsureIncrementalBuildFreshness.ps1") -and $rollingBuildHelper.Contains("[0/4] Incremental-build freshness guard")) "rolling build helper invokes CLEAN10B freshness guard before incremental MSBuild"
+Check ($rollingBuildHelper.Contains('set "ENGINE=%ROOT%\Engine\HeritageEngine\x64\Release\HeritageEngine.exe"') -and $rollingBuildHelper.Contains('set "TEST_EXE=%ROOT%\Engine\HeritageEngine\x64\Release\HeritagePhysicsTests.exe"')) "build helper launches solution-level Release outputs rather than stale project-local binaries"
+Check ($rollingBuildHelper.Contains('set "SOLUTION=%ROOT%\Engine\HeritageEngine\HeritageEngine.slnx"') -and $rollingBuildHelper.Contains('"%MSBUILD%" "%SOLUTION%"') -and -not $rollingBuildHelper.Contains('"%MSBUILD%" "%ENGINE_PROJECT%"') -and -not $rollingBuildHelper.Contains('"%MSBUILD%" "%TEST_PROJECT%"')) "build helper builds through the solution so MSBuild and launch paths share one output directory"
+Check ($launchCurrent.Contains('set "ENGINE=%ROOT%\Engine\HeritageEngine\x64\Release\HeritageEngine.exe"') -and -not $launchCurrent.Contains('HeritageEngine\HeritageEngine\x64')) "launch-only helper uses the current solution-level engine executable"
 
 
 

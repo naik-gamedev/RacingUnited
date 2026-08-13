@@ -133,7 +133,7 @@ source on the physics side.
 The four `WH_*_Tire` child nodes now have an optional physics-driven GPU deformation path.
 Heritage identifies a tire/tyre node by name at mesh upload and infers its centre, shortest-axis
 axle, section half-width, inner/bead radius and outer radius from the node's indexed vertices.
-Racing United then calls `Entity.SetMeshNodeTireDeformation(...)` with the matching live wheel
+Racing United then calls `Entity.SetMeshNodeTireFlexibleRingFromWheel(...)` with the matching live wheel
 state every presentation update.
 
 The current Peugeot asset therefore needs no tire bones, blend shapes or painted deformation

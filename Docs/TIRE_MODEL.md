@@ -72,18 +72,27 @@ specialty tire families and the final calibration/scalability gate.
 ## TIRE09 / VIS01 status
 
 TIRE09/VIS01 adds physics-driven visual deformation to the actual rendered tire mesh without
-turning mesh vertices into physics particles. `Entity.SetMeshNodeTireDeformation` carries a
+turning mesh vertices into physics particles. `Entity.SetMeshNodeTireFlexibleRingFromWheel`
+carries a
 compact presentation state from native wheel telemetry to a named GLB node. `Mesh.cpp`
 automatically recognizes tire/tyre node names and infers centre, axle axis, section half-width,
 inner/bead radius and outer radius from indexed authored geometry. The source asset is not
 modified and no tire-specific bones or vertex colours are required for this first path.
 
 The main and shadow vertex shaders deform only tire nodes. Physical radial deflection produces
-a finite road-facing tread flattening and lower-sidewall bulge; SWIFT-like ring translation,
-yaw and wind-up provide bounded outer-carcass motion; and TIRE08's deepest material-fixed
+a finite road-facing tread flattening and lower-sidewall bulge; non-radial SWIFT-like ring
+translation, yaw and wind-up provide bounded outer-carcass motion; and TIRE08's deepest material-fixed
 circumferential wear sector creates a local visual flat-spot dent. The bead region remains
 nearly rigid, so separate wheel/rim/brake nodes are not squashed. Physics dimensions are
 converted into authored local mesh scale from the tire's physics reference radius.
+
+TIRE41 keeps radial presentation under the flexible-ring contact solve alone. The road-envelope
+radial support mode is not added again as a translation of the complete belt relative to the rim;
+doing so double-counts a curb and makes the unloaded crown balloon while the footprint collapses.
+Dynamic pressure supplies reduced-order hoop tension, authored vertical construction stiffness
+modulates the permitted compliance, and a pressure-dependent radial envelope retains bead/rim
+clearance. Over-pressure permits only bounded construction strain at the crown rather than a
+load-driven increase of the complete unloaded radius.
 
 TIRE17C7/VIS10 adds an exact-collider presentation constraint for reference-quality
 deformation. The collision BVH selects up to 64 real nearby static creator triangles per wheel

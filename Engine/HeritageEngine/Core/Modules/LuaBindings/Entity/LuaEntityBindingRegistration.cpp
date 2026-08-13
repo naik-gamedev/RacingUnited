@@ -65,8 +65,7 @@ void LuaModuleRuntime::registerEntityBindings()
     registerFunction("Entity", "SetMeshNodeLocalRotationOffset", &LuaEntityBindingHandlers::luaEntitySetMeshNodeLocalRotationOffset);
     registerFunction("Entity", "SetMeshNodeAnchoredWorldPose", &LuaEntityBindingHandlers::luaEntitySetMeshNodeAnchoredWorldPose);
     registerFunction("Entity", "SetMeshNodeAnchoredWorldDelta", &LuaEntityBindingHandlers::luaEntitySetMeshNodeAnchoredWorldDelta);
-    registerFunction("Entity", "SetMeshNodeTireDeformation", &LuaEntityBindingHandlers::luaEntitySetMeshNodeTireDeformation);
-    registerFunction("Entity", "SetMeshNodeTireColliderTrianglesFromWheel", &LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel);
+    registerFunction("Entity", "SetMeshNodeTireFlexibleRingFromWheel", &LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel);
     registerFunction("Entity", "ClearMeshNodeOverrides", &LuaEntityBindingHandlers::luaEntityClearMeshNodeOverrides);
     registerFunction("Entity", "GetMesh", &LuaEntityBindingHandlers::luaEntityGetMesh);
     registerFunction("Entity", "GetLastError", &LuaEntityBindingHandlers::luaEntityGetLastError);

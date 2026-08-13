@@ -2,16 +2,18 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
-set "ENGINE_PROJECT=%ROOT%\Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj"
-set "TEST_PROJECT=%ROOT%\Engine\HeritageEngine\Tests\HeritagePhysicsTests.vcxproj"
-set "ENGINE=%ROOT%\Engine\HeritageEngine\HeritageEngine\x64\Release\HeritageEngine.exe"
-set "TEST_EXE=%ROOT%\Engine\HeritageEngine\Tests\x64\Release\HeritagePhysicsTests.exe"
+set "SOLUTION=%ROOT%\Engine\HeritageEngine\HeritageEngine.slnx"
+rem Both projects use the solution-level OutDir under Engine\HeritageEngine.
+rem Do not point back into the individual project folders: those contain stale
+rem historical binaries and caused new Lua to run against an old native API.
+set "ENGINE=%ROOT%\Engine\HeritageEngine\x64\Release\HeritageEngine.exe"
+set "TEST_EXE=%ROOT%\Engine\HeritageEngine\x64\Release\HeritagePhysicsTests.exe"
 set "MODULE=%ROOT%\Modules\RacingUnited"
 set "REPORTS=%ROOT%\Build\Reports"
 set "DIAGNOSTICS=%ROOT%\UserData\Diagnostics"
 set "BUILD_LOG=%REPORTS%\CurrentBuild.log"
 set "TEST_LOG=%DIAGNOSTICS%\physics_regression_current.txt"
-set "MILESTONE=TIRE35-TWO-SCALE-LOWER-CARCASS-EQUILIBRIUM"
+set "MILESTONE=TIRE41-SINGLE-AUTHORITY-FLEXIBLE-RING-FIELD"
 set "MSBUILD_TARGET=Build"
 set "BUILD_MODE=incremental"
 if /I "%~1"=="full" (
@@ -25,15 +27,14 @@ if not exist "%DIAGNOSTICS%" mkdir "%DIAGNOSTICS%"
 cls
 echo ============================================================
 echo Heritage Engine - CURRENT build + run [%MILESTONE%]
-echo TIRE35 broad physics equilibrium + dense 21x13 irregular road detail
+echo TIRE41 one pressure/load/contact-driven flexible-ring displacement field
 echo ============================================================
 echo Root: %ROOT%
 echo Build mode: %BUILD_MODE%  ^(pass FULL for an explicit full rebuild^)
 echo.
 
 for %%F in (
-    "%ENGINE_PROJECT%"
-    "%TEST_PROJECT%"
+    "%SOLUTION%"
     "%ROOT%\Tools\ValidateProject.ps1"
     "%ROOT%\Tools\GenerateLuaApiManifest.ps1"
     "%ROOT%\Tools\GenerateBuildIdentity.ps1"
@@ -92,22 +93,20 @@ if not defined MSBUILD (
 if not defined MSBUILD goto :msbuild_missing
 
 echo.
-echo [3/4] Headless native physics regressions...
-"%MSBUILD%" "%TEST_PROJECT%" /t:%MSBUILD_TARGET% /p:Configuration=Release /p:Platform=x64 /m /nologo /v:minimal
-if errorlevel 1 goto :test_build_failed
+echo [3/4] Building the current solution Release x64 [%BUILD_MODE%]...
+taskkill /IM HeritageEngine.exe /F >nul 2>nul
+if exist "%ENGINE%" del /q "%ENGINE%" >nul 2>nul
+"%MSBUILD%" "%SOLUTION%" /t:%MSBUILD_TARGET% /p:Configuration=Release /p:Platform=x64 /m /nologo /v:minimal /fl /flp:"logfile=%BUILD_LOG%;verbosity=normal"
+if errorlevel 1 goto :solution_build_failed
 if not exist "%TEST_EXE%" goto :test_exe_missing
+if not exist "%ENGINE%" goto :engine_exe_missing
+
+echo.
+echo [4/4] Headless native physics regressions...
 "%TEST_EXE%" > "%TEST_LOG%" 2>&1
 set "TEST_RESULT=!ERRORLEVEL!"
 type "%TEST_LOG%"
 if not "!TEST_RESULT!"=="0" goto :test_run_failed
-
-echo.
-echo [4/4] Building Heritage Engine Release x64 [%BUILD_MODE%]...
-taskkill /IM HeritageEngine.exe /F >nul 2>nul
-if exist "%ENGINE%" del /q "%ENGINE%" >nul 2>nul
-"%MSBUILD%" "%ENGINE_PROJECT%" /t:%MSBUILD_TARGET% /p:Configuration=Release /p:Platform=x64 /m /nologo /v:minimal /fl /flp:"logfile=%BUILD_LOG%;verbosity=normal"
-if errorlevel 1 goto :engine_build_failed
-if not exist "%ENGINE%" goto :engine_exe_missing
 
 echo.
 echo ============================================================
@@ -148,10 +147,11 @@ echo ERROR: MSBuild.exe could not be found.
 echo Install/repair the Visual Studio Desktop development with C++ workload.
 goto :failed
 
-:test_build_failed
+:solution_build_failed
 echo.
-echo ERROR: HeritagePhysicsTests Release x64 did not build.
+echo ERROR: Heritage Engine solution Release x64 did not build.
 echo Send the first compiler/linker error above.
+echo Full build log: %BUILD_LOG%
 goto :failed
 
 :test_exe_missing
@@ -164,13 +164,6 @@ goto :failed
 echo.
 echo ERROR: Native physics regression failed.
 echo Send: %TEST_LOG%
-goto :failed
-
-:engine_build_failed
-echo.
-echo ERROR: Heritage Engine Release x64 build failed.
-echo Send the first compiler/linker error plus:
-echo %BUILD_LOG%
 goto :failed
 
 :engine_exe_missing

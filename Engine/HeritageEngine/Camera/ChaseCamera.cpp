@@ -83,6 +83,11 @@ void ChaseCamera::reset()
     m_followYawDegrees = 0.0;
     m_followYawVelocity = 0.0;
     m_headingLagDegrees = 0.0;
+    m_orbitYawDegrees = 0.0;
+    m_orbitYawVelocity = 0.0;
+    m_orbitPitchDegrees = 0.0;
+    m_orbitPitchVelocity = 0.0;
+    m_orbitReturnActive = false;
     m_verticalLagMeters = 0.0;
     m_verticalLagVelocity = 0.0;
     m_collisionRayDistanceMeters = 0.0;
@@ -179,30 +184,60 @@ void ChaseCamera::rebuildDesiredPose(
     const heritage::math::DVec3& chassisGlobalPosition,
     const heritage::math::Vec3& horizontalForward)
 {
-    const double cameraYawRadians = m_followYawDegrees * (kPi / 180.0);
+    const double cameraYawRadians =
+        (m_followYawDegrees + m_orbitYawDegrees) * (kPi / 180.0);
     const double cameraForwardX = std::sin(cameraYawRadians);
     const double cameraForwardZ = std::cos(cameraYawRadians);
 
+    // Rotate the existing default eye/target separation on a sphere. At zero
+    // orbit pitch this reproduces the original chase pose exactly.
+    const double baseVerticalSeparation =
+        m_tuning.eyeHeightMeters - m_tuning.targetHeightMeters;
+    const double orbitRadius = std::hypot(
+        m_tuning.distanceMeters,
+        baseVerticalSeparation);
+    const double baseElevationRadians = std::atan2(
+        baseVerticalSeparation,
+        m_tuning.distanceMeters);
+    const double elevationRadians = baseElevationRadians
+        + m_orbitPitchDegrees * (kPi / 180.0);
+    const double horizontalDistance =
+        std::cos(elevationRadians) * orbitRadius;
+    const double eyeHeight = m_tuning.targetHeightMeters
+        + std::sin(elevationRadians) * orbitRadius;
+
     m_desiredEyeGlobal = {
         chassisGlobalPosition.x
-            - cameraForwardX * m_tuning.distanceMeters,
+            - cameraForwardX * horizontalDistance,
         chassisGlobalPosition.y
-            + m_tuning.eyeHeightMeters
+            + eyeHeight
             + m_verticalLagMeters,
         chassisGlobalPosition.z
-            - cameraForwardZ * m_tuning.distanceMeters
+            - cameraForwardZ * horizontalDistance
     };
+
+    // A manually orbited view should look at the car rather than a point two
+    // metres beyond it. Blend the normal chase look-ahead back in as the orbit
+    // offset returns to centre.
+    const double orbitInfluence = std::clamp(
+        std::max(
+            std::abs(m_orbitYawDegrees) / 25.0,
+            std::abs(m_orbitPitchDegrees) / 15.0),
+        0.0,
+        1.0);
+    const double lookAhead =
+        m_tuning.lookAheadMeters * (1.0 - orbitInfluence);
 
     m_targetGlobal = {
         chassisGlobalPosition.x
             + static_cast<double>(horizontalForward.x)
-                * m_tuning.lookAheadMeters,
+                * lookAhead,
         chassisGlobalPosition.y
             + m_tuning.targetHeightMeters
             + m_verticalLagMeters * m_tuning.targetVerticalResponse,
         chassisGlobalPosition.z
             + static_cast<double>(horizontalForward.z)
-                * m_tuning.lookAheadMeters
+                * lookAhead
     };
 
     m_collisionAnchorGlobal = {
@@ -233,6 +268,70 @@ void ChaseCamera::rebuildDesiredPose(
     rebuildCollisionResolvedEye();
 }
 
+void ChaseCamera::updateOrbit(
+    const ChaseCameraInput& input,
+    double deltaSeconds)
+{
+    const bool finitePointer = std::isfinite(input.pointerDeltaX)
+        && std::isfinite(input.pointerDeltaY);
+    if (input.orbitDragActive && finitePointer)
+    {
+        m_orbitYawDegrees = wrapDegrees(
+            m_orbitYawDegrees
+            + input.pointerDeltaX * m_tuning.orbitDegreesPerPixel);
+        m_orbitPitchDegrees = std::clamp(
+            m_orbitPitchDegrees
+                - input.pointerDeltaY * m_tuning.orbitDegreesPerPixel,
+            m_tuning.minimumOrbitPitchDegrees,
+            m_tuning.maximumOrbitPitchDegrees);
+        m_orbitYawVelocity = 0.0;
+        m_orbitPitchVelocity = 0.0;
+        m_orbitReturnActive = false;
+        return;
+    }
+
+    if (std::isfinite(input.forwardSpeedMetersPerSecond)
+        && input.forwardSpeedMetersPerSecond
+            >= m_tuning.orbitReturnForwardSpeedMetersPerSecond
+        && (std::abs(m_orbitYawDegrees) > 0.001
+            || std::abs(m_orbitPitchDegrees) > 0.001))
+    {
+        // Latch the return so braking below the threshold cannot strand the
+        // camera halfway between the inspected view and chase view.
+        m_orbitReturnActive = true;
+    }
+
+    if (!m_orbitReturnActive)
+        return;
+
+    stepSpring(
+        m_orbitYawDegrees,
+        m_orbitYawVelocity,
+        0.0,
+        m_tuning.orbitReturnSpringFrequencyHz,
+        m_tuning.orbitReturnDampingRatio,
+        deltaSeconds);
+    stepSpring(
+        m_orbitPitchDegrees,
+        m_orbitPitchVelocity,
+        0.0,
+        m_tuning.orbitReturnSpringFrequencyHz,
+        m_tuning.orbitReturnDampingRatio,
+        deltaSeconds);
+
+    if (std::abs(m_orbitYawDegrees) < 0.01
+        && std::abs(m_orbitPitchDegrees) < 0.01
+        && std::abs(m_orbitYawVelocity) < 0.05
+        && std::abs(m_orbitPitchVelocity) < 0.05)
+    {
+        m_orbitYawDegrees = 0.0;
+        m_orbitYawVelocity = 0.0;
+        m_orbitPitchDegrees = 0.0;
+        m_orbitPitchVelocity = 0.0;
+        m_orbitReturnActive = false;
+    }
+}
+
 void ChaseCamera::rebuildCollisionResolvedEye()
 {
     const heritage::math::DVec3 ray = subtract(
@@ -260,7 +359,8 @@ void ChaseCamera::rebuildCollisionResolvedEye()
 void ChaseCamera::update(
     const heritage::math::DVec3& chassisGlobalPosition,
     const heritage::math::Vec3& chassisForwardWorld,
-    float deltaSeconds)
+    float deltaSeconds,
+    const ChaseCameraInput& input)
 {
     if (!finite(chassisGlobalPosition))
     {
@@ -285,6 +385,7 @@ void ChaseCamera::update(
         static_cast<double>(deltaSeconds),
         0.0,
         0.13333333333333333);
+    updateOrbit(input, dt);
 
     if (!m_initialized
         || dt <= 0.0

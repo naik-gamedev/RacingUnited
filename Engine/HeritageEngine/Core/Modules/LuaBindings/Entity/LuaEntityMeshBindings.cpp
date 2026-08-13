@@ -2,6 +2,7 @@
 #include "../../../../Physics/PhysicsWorld.hpp"
 #include <array>
 #include "LuaEntityBindingHandlers.hpp"
+#include "LuaEntityTireFlexibleRingBridge.hpp"
 #include "../LuaBindingInternals.hpp"
 
 #include <algorithm>
@@ -310,63 +311,8 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeAnchoredWorldDelta(lua_State* 
     return 1;
 }
 
-int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireDeformation(lua_State* state)
-{
-    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
-    if (!runtime)
-        return 0;
 
-    const bool result = runtime->m_entities
-        && runtime->m_entities->setMeshNodeTireDeformation(
-            LuaModuleRuntime::entityHandleArgument(*runtime, state, 1),
-            LuaModuleRuntime::stringArgument(*runtime, state, 2),
-            LuaModuleRuntime::booleanArgument(*runtime, state, 3, false),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 4, 0.30)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 5, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 6, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 7, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 8, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 9, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 10, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 11, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 12, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 13, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 14, 0.0)),
-            heritage::math::Vec3{
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 15, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 16, 1.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 17, 0.0)) },
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 18, 0.30)),
-            LuaModuleRuntime::booleanArgument(*runtime, state, 19, false),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 20, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 21, 0.0)),
-            std::array<float, 9>{
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 22, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 23, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 24, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 25, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 26, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 27, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 28, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 29, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 30, 0.0)) },
-            heritage::math::Vec3{
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 31, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 32, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 33, 1.0)) },
-            heritage::math::Vec3{
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 34, 1.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 35, 0.0)),
-                static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 36, 0.0)) },
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 37, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 38, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 39, 0.0)),
-            static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 40, 0.0)));
-    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
-    return 1;
-}
-
-int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel(lua_State* state)
+int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
     if (!runtime)
@@ -497,10 +443,8 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
             // scalar physical compression to presentation.  No absolute contact
             // position survives this boundary, so stale WheelState/world/model
             // coordinate disagreements cannot make the visual contact disappear.
-            std::array<float, heritage::entities::TireVisualProbeCount>
+            std::array<float, heritage::entities::TireVisualContactSampleCount>
                 compressionM{};
-            std::array<float, heritage::entities::TireVisualProbeCount>
-                compressionCapacityM{};
 
             heritage::math::Vec3 chassisWorldPosition{};
             heritage::math::Vec3 chassisWorldRotationDegrees{};
@@ -585,6 +529,19 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
             if (dot3(wheelUp, wheelState.worldWheelUp) < 0.0f)
                 wheelUp = scale3(wheelUp, -1.0f);
 
+            // The ordinary support plane is already represented by native tire
+            // deflection/contact-patch state. Side-facing casts against that same
+            // plane are rejected so the contact sampler cannot manufacture a
+            // second local indentation on top of the flexible-ring equilibrium.
+            const heritage::math::Vec3 primarySupportNormal = normalize3(
+                wheelState.contactNormal, wheelUp);
+            const heritage::math::Vec3 primarySupportPoint = wheelState.contactPoint;
+            const bool primarySupportPlaneValid = wheelState.grounded
+                && std::isfinite(primarySupportPoint.x)
+                && std::isfinite(primarySupportPoint.y)
+                && std::isfinite(primarySupportPoint.z)
+                && dot3(primarySupportNormal, primarySupportNormal) > 0.99f;
+
             const float tireRadiusM = std::clamp(
                 static_cast<float>(wheelState.tireFreeRollingRadius > 0.05
                     ? wheelState.tireFreeRollingRadius
@@ -640,10 +597,8 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
             const float expectedTouchDistanceM = (std::max)(
                 probeDepthM - kProbeSphereRadiusM, 0.001f);
 
-            std::size_t activeProbeCount = 0;
-            float maximumProbeCompression = 0.0f;
             for (std::size_t station = 0;
-                 station < heritage::entities::TireVisualProbeCircumferenceStations;
+                 station < heritage::entities::TireVisualContactSampleStations;
                  ++station)
             {
                 // TIRE27: non-uniform station spacing.  Indices 4..16 cover
@@ -651,7 +606,7 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
                 // resolution in the loaded region below the user's green-line
                 // chord while retaining front/rear lower-half coverage.
                 const float phi =
-                    heritage::entities::TireVisualProbeStationPhiRadians[station];
+                    heritage::entities::TireVisualContactSamplePhiRadians[station];
                 const heritage::math::Vec3 radialDirection = normalize3(
                     add3(
                         scale3(wheelForward, std::cos(phi)),
@@ -659,11 +614,11 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
                     scale3(wheelUp, -1.0f));
 
                 for (std::size_t band = 0;
-                     band < heritage::entities::TireVisualProbeWidthBands;
+                     band < heritage::entities::TireVisualContactSampleBands;
                      ++band)
                 {
                     const float widthCoordinate =
-                        heritage::entities::TireVisualProbeWidthCoordinates[band];
+                        heritage::entities::TireVisualContactSampleWidthCoordinates[band];
                     const float absWidth = std::abs(widthCoordinate);
 
                     // Rounded tire cross-section: centre tread probes mainly
@@ -719,374 +674,50 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireColliderTrianglesFromWheel
                     }
 
                     const std::size_t index = station
-                        * heritage::entities::TireVisualProbeWidthBands + band;
+                        * heritage::entities::TireVisualContactSampleBands + band;
+                    bool duplicatePrimarySupport = false;
+                    if (hitSomething && primarySupportPlaneValid)
+                    {
+                        const heritage::math::Vec3 hitNormal = normalize3(
+                            hit.normal, primarySupportNormal);
+                        const float supportNormalAlignment = dot3(
+                            hitNormal, primarySupportNormal);
+                        const heritage::math::Vec3 pointFromSupport = add3(
+                            hit.point, scale3(primarySupportPoint, -1.0f));
+                        const float supportPlaneOffsetM = std::abs(dot3(
+                            pointFromSupport, primarySupportNormal));
+                        duplicatePrimarySupport =
+                            supportNormalAlignment >= 0.965f
+                            && supportPlaneOffsetM <= 0.006f;
+                    }
+                    if (duplicatePrimarySupport && sideNormalBlend > 0.08f)
+                        compression = 0.0f;
                     compressionM[index] = compression;
-                    compressionCapacityM[index] = regionalCompressionCapacityM;
-                    if (compression > 0.0005f)
-                    {
-                        ++activeProbeCount;
-                        maximumProbeCompression = (std::max)(
-                            maximumProbeCompression, compression);
-                    }
                 }
             }
 
-            // TIRE35/VIS28 separates the low-frequency pneumatic equilibrium
-            // shape from high-frequency road detail. Previously the baseline
-            // footprint and collider penetration were blurred together, then the
-            // vertex shader applied the resulting scalar only to nearby vertices.
-            // That is why a loaded tire could look like three or four vertices had
-            // been pinched upward while the rest of the lower carcass stayed round.
-            //
-            // The equilibrium field below is derived from the authoritative native
-            // deflection and finite contact-patch length. It is sent in the same
-            // total-compression grid for compatibility, but relaxation operates
-            // only on the collider residual above this field. The shader consumes
-            // the equilibrium as one broad carcass mode and applies only the
-            // residual locally for kerbs, rocks and broken road.
-            std::array<float, heritage::entities::TireVisualProbeCount>
-                equilibriumCompressionM{};
-            if (wheelState.grounded && wheelState.tireDeflection > 0.0001)
-            {
-                const float baseline = std::clamp(
-                    static_cast<float>(wheelState.tireDeflection),
-                    0.0f,
-                    maximumCompressionM);
-                const float patchLengthM = std::clamp(
-                    static_cast<float>(wheelState.tireContactPatchLength > 0.01
-                        ? wheelState.tireContactPatchLength
-                        : tireRadiusM * 0.34f),
-                    0.025f,
-                    tireRadiusM * 0.95f);
-                const float patchHalfAngle = std::clamp(
-                    0.62f * patchLengthM / (std::max)(tireRadiusM, 0.05f),
-                    0.075f,
-                    0.34f);
-
-                for (std::size_t station = 0;
-                     station < heritage::entities::TireVisualProbeCircumferenceStations;
-                     ++station)
-                {
-                    const float phi =
-                        heritage::entities::TireVisualProbeStationPhiRadians[station];
-                    const float angleFromBottom = std::abs(phi - 0.5f * kPi);
-                    if (angleFromBottom >= patchHalfAngle)
-                        continue;
-                    const float longitudinalT = angleFromBottom / patchHalfAngle;
-                    const float longitudinalWeight =
-                        1.0f - longitudinalT * longitudinalT
-                            * (3.0f - 2.0f * longitudinalT);
-
-                    for (std::size_t band = 0;
-                         band < heritage::entities::TireVisualProbeWidthBands;
-                         ++band)
-                    {
-                        const float widthCoordinate =
-                            heritage::entities::TireVisualProbeWidthCoordinates[band];
-                        const float absWidth = std::abs(widthCoordinate);
-                        const float widthWeight = std::clamp(
-                            (1.0f - absWidth) / 0.42f, 0.0f, 1.0f);
-                        const float shoulderWeight = std::clamp(
-                            (0.90f - absWidth) / 0.48f, 0.0f, 1.0f);
-                        const float treadWeight = (std::max)(
-                            widthWeight, 0.42f * shoulderWeight);
-                        if (treadWeight <= 0.001f)
-                            continue;
-
-                        const float shapedBaseline = baseline
-                            * longitudinalWeight * treadWeight;
-                        const std::size_t index = station
-                            * heritage::entities::TireVisualProbeWidthBands + band;
-                        equilibriumCompressionM[index] = shapedBaseline;
-                    }
-                }
-            }
-
-            // Remove the analytically represented equilibrium from the direct
-            // collision samples before carcass coupling. Adding the fields back at
-            // the end preserves max(equilibrium, direct collision) exactly at every
-            // probe while preventing normal flat-road load from becoming a second,
-            // narrow deformation layered over the broad carcass mode.
-            std::array<float, heritage::entities::TireVisualProbeCount>
-                rawIrregularCompressionM{};
-            for (std::size_t index = 0; index < rawIrregularCompressionM.size(); ++index)
-            {
-                rawIrregularCompressionM[index] = (std::max)(
-                    compressionM[index] - equilibriumCompressionM[index], 0.0f);
-            }
-
-            // Retain the dense TIRE33 reduced-order belt/sidewall relaxation, but
-            // solve only the irregular residual. Local road detail spreads smoothly
-            // through its neighboring carcass; the ordinary loaded shape is handled
-            // once, by the physics-driven equilibrium mode.
-            const auto rawCompressionM = rawIrregularCompressionM;
-            auto locallyCoupledCompressionM = rawIrregularCompressionM;
-            for (std::size_t station = 0;
-                 station < heritage::entities::TireVisualProbeCircumferenceStations;
-                 ++station)
-            {
-                for (std::size_t band = 0;
-                     band < heritage::entities::TireVisualProbeWidthBands;
-                     ++band)
-                {
-                    const std::size_t index = station
-                        * heritage::entities::TireVisualProbeWidthBands + band;
-                    float coupled = rawCompressionM[index];
-
-                    auto inherit = [&](int stationOffset, int bandOffset, float weight)
-                    {
-                        const int sampleStation = static_cast<int>(station) + stationOffset;
-                        const int sampleBand = static_cast<int>(band) + bandOffset;
-                        if (sampleStation < 0
-                            || sampleStation >= static_cast<int>(
-                                heritage::entities::TireVisualProbeCircumferenceStations)
-                            || sampleBand < 0
-                            || sampleBand >= static_cast<int>(
-                                heritage::entities::TireVisualProbeWidthBands))
-                        {
-                            return;
-                        }
-                        const std::size_t sampleIndex = static_cast<std::size_t>(sampleStation)
-                            * heritage::entities::TireVisualProbeWidthBands
-                            + static_cast<std::size_t>(sampleBand);
-                        coupled = (std::max)(
-                            coupled, rawCompressionM[sampleIndex] * weight);
-                    };
-
-                    inherit(-1,  0, 0.72f);
-                    inherit(+1,  0, 0.72f);
-                    inherit(-2,  0, 0.38f);
-                    inherit(+2,  0, 0.38f);
-                    inherit( 0, -1, 0.64f);
-                    inherit( 0, +1, 0.64f);
-                    inherit( 0, -2, 0.34f);
-                    inherit( 0, +2, 0.34f);
-                    inherit(-1, -1, 0.44f);
-                    inherit(-1, +1, 0.44f);
-                    inherit(+1, -1, 0.44f);
-                    inherit(+1, +1, 0.44f);
-
-                    locallyCoupledCompressionM[index] = coupled;
-                }
-            }
-
-            constexpr int kDenseBottomStationFirst = 4;
-            constexpr int kDenseBottomStationLast = 16;
-            constexpr int kDenseBottomFeatherFirst = 3;
-            constexpr int kDenseBottomFeatherLast = 17;
-            auto relaxedCompressionM = locallyCoupledCompressionM;
-            std::array<float, heritage::entities::TireVisualProbeCount> relaxationScratch{};
-
-            // Three iterations of a compact [1 4 6 4 1]-style separable kernel
-            // are enough to involve essentially the whole 13x13 dense bottom domain
-            // while remaining cheap for large grids.  Clamp at the green-line
-            // boundary so upper/front/rear probe rows do not get dragged into normal
-            // road-footprint shear.
-            for (int iteration = 0; iteration < 3; ++iteration)
-            {
-                relaxationScratch = relaxedCompressionM;
-                for (int station = kDenseBottomFeatherFirst;
-                     station <= kDenseBottomFeatherLast;
-                     ++station)
-                {
-                    for (int band = 0;
-                         band < static_cast<int>(heritage::entities::TireVisualProbeWidthBands);
-                         ++band)
-                    {
-                        const auto sample = [&](int sampleStation, int sampleBand)
-                        {
-                            sampleStation = std::clamp(
-                                sampleStation,
-                                kDenseBottomFeatherFirst,
-                                kDenseBottomFeatherLast);
-                            sampleBand = std::clamp(
-                                sampleBand,
-                                0,
-                                static_cast<int>(heritage::entities::TireVisualProbeWidthBands) - 1);
-                            return relaxedCompressionM[
-                                static_cast<std::size_t>(sampleStation)
-                                    * heritage::entities::TireVisualProbeWidthBands
-                                + static_cast<std::size_t>(sampleBand)];
-                        };
-                        const float circumferentiallyRelaxed =
-                            (sample(station - 2, band)
-                                + 4.0f * sample(station - 1, band)
-                                + 6.0f * sample(station, band)
-                                + 4.0f * sample(station + 1, band)
-                                + sample(station + 2, band)) / 16.0f;
-                        const std::size_t index = static_cast<std::size_t>(station)
-                            * heritage::entities::TireVisualProbeWidthBands
-                            + static_cast<std::size_t>(band);
-                        relaxationScratch[index] = (std::max)(
-                            rawCompressionM[index], circumferentiallyRelaxed);
-                    }
-                }
-
-                relaxedCompressionM = relaxationScratch;
-                for (int station = kDenseBottomFeatherFirst;
-                     station <= kDenseBottomFeatherLast;
-                     ++station)
-                {
-                    for (int band = 0;
-                         band < static_cast<int>(heritage::entities::TireVisualProbeWidthBands);
-                         ++band)
-                    {
-                        const auto sample = [&](int sampleBand)
-                        {
-                            sampleBand = std::clamp(
-                                sampleBand,
-                                0,
-                                static_cast<int>(heritage::entities::TireVisualProbeWidthBands) - 1);
-                            return relaxedCompressionM[
-                                static_cast<std::size_t>(station)
-                                    * heritage::entities::TireVisualProbeWidthBands
-                                + static_cast<std::size_t>(sampleBand)];
-                        };
-                        const float laterallyRelaxed =
-                            (sample(band - 2)
-                                + 4.0f * sample(band - 1)
-                                + 6.0f * sample(band)
-                                + 4.0f * sample(band + 1)
-                                + sample(band + 2)) / 16.0f;
-                        const std::size_t index = static_cast<std::size_t>(station)
-                            * heritage::entities::TireVisualProbeWidthBands
-                            + static_cast<std::size_t>(band);
-                        relaxationScratch[index] = (std::max)(
-                            rawCompressionM[index], laterallyRelaxed);
-                    }
-                }
-                relaxedCompressionM = relaxationScratch;
-            }
-
-            // Core rows below the green line use the fully relaxed field.  The two
-            // neighbouring rows are blended at 50% so there is no visible hinge at
-            // the dense-region boundary.  Outside that feather the original local
-            // contact coupling remains authoritative for curb-face/rock contacts.
-            auto coupledIrregularCompressionM = locallyCoupledCompressionM;
-            for (int station = kDenseBottomFeatherFirst;
-                 station <= kDenseBottomFeatherLast;
-                 ++station)
-            {
-                const float regionWeight =
-                    (station >= kDenseBottomStationFirst
-                        && station <= kDenseBottomStationLast)
-                    ? 1.0f : 0.50f;
-                for (int band = 0;
-                     band < static_cast<int>(heritage::entities::TireVisualProbeWidthBands);
-                     ++band)
-                {
-                    const std::size_t index = static_cast<std::size_t>(station)
-                        * heritage::entities::TireVisualProbeWidthBands
-                        + static_cast<std::size_t>(band);
-                    const float blended = locallyCoupledCompressionM[index]
-                        + (relaxedCompressionM[index]
-                            - locallyCoupledCompressionM[index]) * regionWeight;
-                    coupledIrregularCompressionM[index] = (std::max)(
-                        rawCompressionM[index], blended);
-                }
-            }
-
-            for (std::size_t index = 0; index < compressionM.size(); ++index)
-            {
-                // equilibrium + max(collision - equilibrium, 0) is exactly
-                // max(equilibrium, collision). Relaxation may raise neighboring
-                // residuals, but never beyond this tire section's geometric room.
-                compressionM[index] = std::clamp(
-                    equilibriumCompressionM[index]
-                        + coupledIrregularCompressionM[index],
-                    0.0f,
-                    compressionCapacityM[index]);
-            }
-
-            // Recompute diagnostics from the actual coupled field sent to the GPU.
-            activeProbeCount = 0;
-            maximumProbeCompression = 0.0f;
-            for (float compression : compressionM)
-            {
-                if (compression > 0.0005f)
-                    ++activeProbeCount;
-                maximumProbeCompression = (std::max)(
-                    maximumProbeCompression, compression);
-            }
-
-            const bool probeValid = maximumProbeCompression > 0.0001f;
-
-            // TIRE30 diagnostic: report which physical half of the 13-band field
-            // carries obstacle compression.  Positive bands are generated along
-            // +wheelRight and must be consumed with this same basis by the shader.
-            float negativeWidthCompression = 0.0f;
-            float positiveWidthCompression = 0.0f;
-            for (std::size_t station = 0;
-                 station < heritage::entities::TireVisualProbeCircumferenceStations;
-                 ++station)
-            {
-                for (std::size_t band = 0;
-                     band < heritage::entities::TireVisualProbeWidthBands;
-                     ++band)
-                {
-                    const float width =
-                        heritage::entities::TireVisualProbeWidthCoordinates[band];
-                    const float value = compressionM[station
-                        * heritage::entities::TireVisualProbeWidthBands + band];
-                    if (width < -0.001f) negativeWidthCompression += value;
-                    if (width >  0.001f) positiveWidthCompression += value;
-                }
-            }
-            static std::unordered_set<std::string> reportedProbeBasisNodes;
-            if (reportedProbeBasisNodes.insert(nodeName).second)
-            {
-                std::cout
-                    << "TIRE30 VIS23 probe basis node=" << nodeName
-                    << " resolved=" << (wheelIndex + 1)
-                    << " right=(" << wheelRight.x << ',' << wheelRight.y << ','
-                    << wheelRight.z << ")"
-                    << " widthSum[-]=" << negativeWidthCompression * 1000.0f
-                    << " widthSum[+]=" << positiveWidthCompression * 1000.0f
-                    << " mm\n";
-            }
-
-            static std::unordered_set<std::string> reportedLiveProbeNodes;
-            static std::unordered_set<std::string> reportedDeepProbeNodes;
-            if (probeValid && reportedLiveProbeNodes.insert(nodeName).second)
-            {
-                std::cout
-                    << "TIRE27 VIS20 dense probe lattice LIVE node=" << nodeName
-                    << " active=" << activeProbeCount
-                    << " max_mm=" << (maximumProbeCompression * 1000.0f)
-                    << " render_center=(" << probeCenter.x << ','
-                    << probeCenter.y << ',' << probeCenter.z << ")\n";
-            }
-            if (maximumProbeCompression >= 0.020f
-                && reportedDeepProbeNodes.insert(nodeName).second)
-            {
-                std::cout
-                    << "TIRE27 VIS20 DEEP CONTACT node=" << nodeName
-                    << " active=" << activeProbeCount
-                    << " max_mm=" << (maximumProbeCompression * 1000.0f)
-                    << "\n";
-            }
-
-            // TIRE30/VIS23: publish the compression field together with the exact
-            // resolved wheel basis used to generate it.  This removes the last
-            // split-brain path where SetMeshNodeTireDeformation() could leave a
-            // different wheel's right-vector on the same visual node.
-            const bool probeResult = runtime->m_entities->setMeshNodeTireProbeGrid(
+            // One contact sampler, one flexible-ring solve, one final renderer
+            // field.  No broad plane, curb dent, sidewall bulge or probe pass is
+            // permitted to move a vertex after this solve.
+            heritage::vehicles::TireModelDescription tireModel;
+            const bool haveTireModel = runtime->m_physics->vehicles().wheelTireModel(
+                vehicleHandle, wheelIndex, tireModel);
+            const auto flexibleRingField = solveTireFlexibleRingPresentationField(
+                wheelState, haveTireModel ? &tireModel : nullptr,
+                tireRadiusM, rimRadiusM, tireHalfWidthM,
+                maximumCompressionM, compressionM);
+            result = runtime->m_entities->setMeshNodeTireDeformationField(
                 entityHandle,
                 nodeName,
-                probeValid,
-                compressionM,
+                flexibleRingField.valid,
+                tireRadiusM,
+                flexibleRingField.forwardDisplacementM,
+                flexibleRingField.downDisplacementM,
+                flexibleRingField.lateralDisplacementM,
                 wheelForward,
-                wheelRight);
+                wheelRight,
+                wheelUp);
 
-            // Disable the TIRE17/TIRE25 world-triangle presentation bridge.
-            // TIRE27 intentionally has one visual irregular-contact authority:
-            // the bottom-biased 21x13 CollisionSystem probe lattice above.
-            std::array<
-                heritage::entities::TireVisualColliderTriangle,
-                heritage::entities::TireVisualColliderTriangleLimit> noTriangles{};
-            const bool triangleResult = runtime->m_entities->setMeshNodeTireColliderTriangles(
-                entityHandle, nodeName, false, 0, noTriangles);
-            result = probeResult && triangleResult;
         }
     }
     runtime->m_api.lua_pushboolean(state, result ? 1 : 0);

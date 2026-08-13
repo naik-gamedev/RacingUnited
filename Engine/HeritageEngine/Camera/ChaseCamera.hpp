@@ -15,11 +15,24 @@ struct CameraFrame
     bool valid = false;
 };
 
+// Per-frame player intent for the chase camera. Pointer deltas are consumed
+// only while orbitDragActive; forward speed is physical chassis speed along
+// its own forward axis, so reversing does not cancel a deliberately parked
+// inspection view.
+struct ChaseCameraInput
+{
+    bool orbitDragActive = false;
+    double pointerDeltaX = 0.0;
+    double pointerDeltaY = 0.0;
+    double forwardSpeedMetersPerSecond = 0.0;
+};
+
 // CAM03 chase camera policy:
 // - heading follows the ACTUAL interpolated chassis forward vector, never an
 //   Euler yaw component or steering-input sign;
-// - heading inertia is spring-damped and hard-bounded so the eye always stays
-//   inside a narrow cone behind the vehicle, even through roundabouts/spins;
+// - automatic heading inertia is spring-damped and hard-bounded, while an
+//   explicit mouse orbit remains a separate persistent player-authored offset;
+// - beginning forward travel releases that offset smoothly back to chase view;
 // - jump/landing heave keeps the light under-damped response from CAM01;
 // - collision is resolved from a chassis-height anchor toward the desired eye.
 //   The camera snaps inward immediately, but springs outward after the obstacle
@@ -39,6 +52,16 @@ public:
         double maximumHeadingLagDegrees = 7.0;
         double headingSpringFrequencyHz = 1.15;
         double headingDampingRatio = 0.95;
+
+        // Hold the primary pointer button and drag to orbit. The chosen view
+        // persists at rest; once the chassis travels forward, it returns to
+        // centre through this critically damped spring.
+        double orbitDegreesPerPixel = 0.20;
+        double minimumOrbitPitchDegrees = -12.0;
+        double maximumOrbitPitchDegrees = 45.0;
+        double orbitReturnForwardSpeedMetersPerSecond = 0.50;
+        double orbitReturnSpringFrequencyHz = 1.15;
+        double orbitReturnDampingRatio = 1.0;
 
         // Jump/landing response.
         double verticalInertia = 0.68;
@@ -70,7 +93,8 @@ public:
     void update(
         const heritage::math::DVec3& chassisGlobalPosition,
         const heritage::math::Vec3& chassisForwardWorld,
-        float deltaSeconds);
+        float deltaSeconds,
+        const ChaseCameraInput& input = {});
 
     // The collision query should sweep the configured camera sphere from
     // collisionAnchorGlobal() toward desiredEyeGlobal(). Pass the hit-distance
@@ -91,6 +115,9 @@ public:
         return m_collisionAnchorGlobal;
     }
     double headingLagDegrees() const { return m_headingLagDegrees; }
+    double orbitYawDegrees() const { return m_orbitYawDegrees; }
+    double orbitPitchDegrees() const { return m_orbitPitchDegrees; }
+    bool orbitReturning() const { return m_orbitReturnActive; }
     double verticalLagMeters() const { return m_verticalLagMeters; }
     double currentCollisionDistanceMeters() const
     {
@@ -119,6 +146,7 @@ private:
         const heritage::math::DVec3& chassisGlobalPosition,
         const heritage::math::Vec3& horizontalForward);
     void rebuildCollisionResolvedEye();
+    void updateOrbit(const ChaseCameraInput& input, double deltaSeconds);
 
     Tuning m_tuning{};
     bool m_initialized = false;
@@ -131,6 +159,11 @@ private:
     double m_followYawDegrees = 0.0;
     double m_followYawVelocity = 0.0;
     double m_headingLagDegrees = 0.0;
+    double m_orbitYawDegrees = 0.0;
+    double m_orbitYawVelocity = 0.0;
+    double m_orbitPitchDegrees = 0.0;
+    double m_orbitPitchVelocity = 0.0;
+    bool m_orbitReturnActive = false;
     double m_verticalLagMeters = 0.0;
     double m_verticalLagVelocity = 0.0;
     double m_collisionRayDistanceMeters = 0.0;

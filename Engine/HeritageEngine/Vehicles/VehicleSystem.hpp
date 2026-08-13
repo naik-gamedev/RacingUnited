@@ -33,21 +33,6 @@ namespace heritage::vehicles {
 using VehicleHandle = std::uint64_t;
 inline constexpr VehicleHandle InvalidVehicle = 0;
 
-// TIRE17C7/VIS10 reference-quality GPU collider deformation. Physics selects
-// the exact nearby static collider triangles through the existing BVH, while
-// the GPU performs the per-tire-vertex non-penetration work. The triangle list
-// is intentionally bounded; it is a local surface neighborhood, not a copy of
-// the whole scene collision mesh.
-inline constexpr std::size_t TireVisualColliderTriangleLimit = 64;
-
-struct TireVisualColliderTriangle
-{
-    heritage::math::Vec3 a{};
-    heritage::math::Vec3 b{};
-    heritage::math::Vec3 c{};
-    heritage::math::Vec3 normal{ 0.0f, 1.0f, 0.0f };
-};
-
 enum class DifferentialMode
 {
     Open = 0,
@@ -304,24 +289,6 @@ struct WheelState
     VehicleScalar tireFootprintSurfaceFriction = 1.0f;
     VehicleScalar tireFootprintSurfaceSpread = 0.0f;
     bool tireFootprintRefined = false;
-    // TIRE17C1/VIS03: refined 3x3 road-support residuals used only by the
-    // visual carcass/tread deformation. Physics remains authoritative in the
-    // adaptive road-enveloping provider; these values expose the already-
-    // sampled curb/step shape so presentation no longer collapses it to one
-    // infinite plane. Row-major order is lateral (-,0,+) x longitudinal (-,0,+).
-    bool tireVisualSupportGridValid = false;
-    VehicleScalar tireVisualSupportHalfLengthM = 0.0f;
-    VehicleScalar tireVisualSupportHalfWidthM = 0.0f;
-    std::array<VehicleScalar, 9> tireVisualSupportHeightResidualM{};
-    // TIRE17C7/VIS10 exact nearby static collider geometry for presentation.
-    // Normals are oriented toward the wheel centre when cached so the GPU can
-    // treat the negative half-space as penetration regardless of creator mesh
-    // winding. This is not tire force/contact authority; it is a visual hard
-    // non-penetration constraint derived from the same collision scene.
-    bool tireVisualColliderTrianglesValid = false;
-    std::uint32_t tireVisualColliderTriangleCount = 0;
-    std::array<TireVisualColliderTriangle, TireVisualColliderTriangleLimit>
-        tireVisualColliderTriangles{};
     VehicleScalar tireRingRadialOffset = 0.0f;
     VehicleScalar tireRingRadialVelocity = 0.0f;
     VehicleScalar tireRingLongitudinalOffset = 0.0f;
@@ -818,11 +785,6 @@ private:
         std::size_t cachedRoadEnvelopeTotalSamples = 0;
         bool cachedRoadEnvelopeComplex = false;
         bool cachedFootprintRefined = false;
-        bool cachedVisualSupportGridValid = false;
-        VehicleScalar visualColliderQueryAccumulatorSeconds = 0.0;
-        VehicleScalar cachedVisualSupportHalfLengthM = 0.0;
-        VehicleScalar cachedVisualSupportHalfWidthM = 0.0;
-        std::array<VehicleScalar, 9> cachedVisualSupportHeightResidualM{};
         bool cachedFootprintSurfaceValid = false;
         VehicleScalar cachedFootprintFrictionMultiplier = 1.0;
         VehicleScalar cachedFootprintStiffnessMultiplier = 1.0;

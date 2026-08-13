@@ -53,8 +53,7 @@ struct LuaEntityBindingHandlers
     static int luaEntitySetMeshNodeLocalRotationOffset(lua_State* state);
     static int luaEntitySetMeshNodeAnchoredWorldPose(lua_State* state);
     static int luaEntitySetMeshNodeAnchoredWorldDelta(lua_State* state);
-    static int luaEntitySetMeshNodeTireDeformation(lua_State* state);
-    static int luaEntitySetMeshNodeTireColliderTrianglesFromWheel(lua_State* state);
+    static int luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_State* state);
     static int luaEntityClearMeshNodeOverrides(lua_State* state);
     static int luaEntityGetMesh(lua_State* state);
     static int luaEntityGetLastError(lua_State* state);

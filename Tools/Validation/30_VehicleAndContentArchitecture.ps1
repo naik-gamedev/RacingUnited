@@ -66,7 +66,7 @@ Check ($luaAnnotations.Contains('"Vehicle.GetWheelAlignment"')) "FITMENT01 align
 Check ($luaAnnotations.Contains('"Vehicle.GetWheelFitmentGeometry"')) "FITMENT02 hub/scrub geometry Lua API is annotated"
 Check ($luaAnnotations.Contains('"Vehicle.GetWheelState"') -and $luaAnnotations.Contains('inspect Vehicles/Telemetry.lua') -and $luaAnnotations.Contains('TIRE15')) "legacy positional wheel telemetry remains annotated through TIRE15"
 Check ($luaAnnotations.Contains('"Vehicle.GetWheelTelemetry"') -and $luaAnnotations.Contains('"returns": "telemetry: table|nil"')) "preferred named wheel telemetry API is annotated"
-Check ($luaAnnotations.Contains('"Entity.SetMeshNodeTireDeformation"') -and $luaAnnotations.Contains('contactPlaneDistanceM')) "TIRE10/VIS02 tire visual-deformation Entity API is annotated with native contact-plane inputs"
+Check ($luaAnnotations.Contains('"Entity.SetMeshNodeTireFlexibleRingFromWheel"')) "TIRE41 single-authority flexible-ring Entity API is annotated"
 Check ($luaAnnotations.Contains('"UI.InputFloat"')) "ALIGN01 exact floating-point UI input API is annotated"
 
 $wheelFitmentHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Wheels\Fitment\WheelFitment.hpp"
@@ -383,37 +383,23 @@ Check (-not $vehicleTelemetry.Contains("local grounded, length, compression")) "
 Check ($wheelTelemetryCpp.Contains('pushNumberField("length", value.suspensionLength)')) "named wheel telemetry exposes native suspension length through the Lua `length` field"
 Check ($visualWheelsRuntime.Contains("telemetry.length or baseline.suspensionLength")) "embedded GLB wheel presentation consumes the actual Lua suspension-length field"
 Check (-not $visualWheelsRuntime.Contains("telemetry.suspensionLength")) "embedded GLB wheel presentation does not reference the nonexistent suspensionLength telemetry field"
-Check ($luaRuntimeAndBindingsCpp.Contains('registerFunction("Entity", "SetMeshNodeTireDeformation"') -and $luaBindingCpp.Contains("luaEntitySetMeshNodeTireDeformation")) "TIRE09 registers the generic per-node tire visual-deformation bridge"
-Check ($visualWheelsRuntime.Contains("Entity.SetMeshNodeTireDeformation") -and $visualWheelsRuntime.Contains('"WH_" .. corner .. "_Tire"')) "Peugeot embedded tire nodes consume authoritative native deformation state"
-Check ($clean05Shaders.Contains("applyTireVisualDeformation") -and $clean05Shaders.Contains("uTireVisualEnabled") -and $clean05Shaders.Contains("uTireFlatSpotSector") -and $clean05Shaders.Contains("deformTireShadowPosition")) "TIRE09 main and shadow shaders perform physics-driven tire deformation"
-Check ($visualWheelsRuntime.Contains("contactNormalX") -and $visualWheelsRuntime.Contains("centerToPlane") -and $visualWheelsRuntime.Contains("telemetry.contactX")) "TIRE10/VIS02 presentation derives native contact plane from wheel/contact telemetry"
-Check ($clean05Shaders.Contains("uTireContactNormalWorld") -and $clean05Shaders.Contains("uTireContactPlaneDistanceM") -and $clean05Shaders.Contains("? -uTireContactNormalWorld")) "TIRE10/VIS02 main and shadow deformation use authoritative native road contact direction/plane"
-$tire17C2LegacyCarcass = ($visualWheelsRuntime.Contains("wheelForwardX") -and $visualWheelsRuntime.Contains("wheelRightX") -and $clean05Shaders.Contains("uTireWheelForwardWorld") -and $clean05Shaders.Contains("uTireWheelRightWorld") -and $clean05Shaders.Contains("beltAnchorMask") -and $clean05Shaders.Contains("lowerCarcassMask"))
-$tire32PhysicalCarcass = ($visualWheelsRuntime.Contains("wheelForwardX") -and $visualWheelsRuntime.Contains("wheelRightX") -and $visualWheelsRuntime.Contains("telemetry.tireRingLongitudinalOffset") -and $visualWheelsRuntime.Contains("telemetry.tireRingLateralOffset") -and $clean05Shaders.Contains("uTireWheelForwardWorld") -and $clean05Shaders.Contains("uTireWheelRightWorld") -and $clean05Shaders.Contains("beadAnchorMask") -and $clean05Shaders.Contains("carcassShearMask") -and $clean05Shaders.Contains("physicalLongM") -and $clean05Shaders.Contains("physicalLatM") -and $clean05Shaders.Contains("lowerCarcassMask"))
-Check ($tire17C2LegacyCarcass -or $tire32PhysicalCarcass) "TIRE17C2/TIRE32 three-axis carcass/belt deformation uses authoritative wheel basis and bead-anchored physical radial/lateral/longitudinal shaping"
-
-$tire17C3LegacyForceShear = ($visualWheelsRuntime.Contains("telemetry.longitudinalForce") -and $visualWheelsRuntime.Contains("telemetry.lateralForce") -and $clean05Shaders.Contains("uTireNormalForceN") -and $clean05Shaders.Contains("longitudinalLoadRatio") -and $clean05Shaders.Contains("lateralLoadRatio") -and $clean05Shaders.Contains("loadedPlane = min(loadedPlane, measuredPlane)"))
-$tire32PhysicalForceShear = ($visualWheelsRuntime.Contains("telemetry.tireRingLongitudinalOffset") -and $visualWheelsRuntime.Contains("telemetry.tireRingLateralOffset") -and $clean05Shaders.Contains("uTireRingLongitudinalOffsetM") -and $clean05Shaders.Contains("uTireRingLateralOffsetM") -and $clean05Shaders.Contains("physicalLongAvailable") -and $clean05Shaders.Contains("physicalLatAvailable") -and $clean05Shaders.Contains("visualRingLongM") -and $clean05Shaders.Contains("visualRingLatM") -and $clean05Shaders.Contains("loadedPlane = min(loadedPlane, measuredPlane)"))
-Check ($tire17C3LegacyForceShear -or $tire32PhysicalForceShear) "TIRE17C3/TIRE32 physical carcass shear preserves solved radial deflection and uses structural ring displacement for braking/cornering deformation"
-
-# TIRE33A: TIRE33 renamed the bead interpolation variable to beadToCarcass but
-# accidentally left two live GLSL expressions referring to removed beadToBelt.
-# Keep this guard so a shader identifier rename cannot silently ship an invalid
-# embedded mesh/shadow shader again.
-Check (-not $clean05Shaders.Contains("visualRingRadM * beadToBelt") -and $clean05Shaders.Contains("visualRingRadM * beadToCarcass")) "TIRE33A embedded tire shaders use the live bead-to-carcass radial mask with no dangling beadToBelt reference"
-
-# TIRE35: normal pneumatic load is one broad, physics-driven equilibrium
-# deformation. The dense probe lattice adds only its irregular residual; it must
-# never disable or re-apply the native deflection mode. Require both visible and
-# shadow copies of the embedded GLSL implementation.
-$tire35EquilibriumFunctions = ([regex]::Matches(
-    $clean05Shaders, "float tireEquilibriumCompressionM")).Count
-$tire35WholeLowerModes = ([regex]::Matches(
-    $clean05Shaders, "float wholeLowerCarcassEnvelope")).Count
-$tire35UngatedDeflectionModes = ([regex]::Matches(
-    $clean05Shaders, "float deflection = uTireVisualGrounded")).Count
-Check ($luaBindingCpp.Contains("equilibriumCompressionM") -and $luaBindingCpp.Contains("rawIrregularCompressionM") -and $luaBindingCpp.Contains("coupledIrregularCompressionM")) "TIRE35 CPU probe solve separates pneumatic equilibrium from irregular road-contact residual"
-Check ($tire35EquilibriumFunctions -eq 2 -and $tire35WholeLowerModes -eq 2 -and $tire35UngatedDeflectionModes -eq 2 -and -not $clean05Shaders.Contains("float deflection = (uTireVisualGrounded && !uTireVisualProbeGridValid)")) "TIRE35 visible and shadow shaders preserve broad whole-lower-carcass deformation while the detailed probe grid is live"
+Check ($luaRuntimeAndBindingsCpp.Contains('registerFunction("Entity", "SetMeshNodeTireFlexibleRingFromWheel"') -and $luaBindingCpp.Contains("luaEntitySetMeshNodeTireFlexibleRingFromWheel")) "TIRE41 registers one native flexible-ring presentation bridge"
+Check ($visualWheelsRuntime.Contains("Entity.SetMeshNodeTireFlexibleRingFromWheel") -and $visualWheelsRuntime.Contains('"WH_" .. corner .. "_Tire"')) "Peugeot embedded tire nodes consume the unified flexible-ring field"
+Check ($visualWheelsRuntime.Contains("local flexibleRingBridge = Entity.SetMeshNodeTireFlexibleRingFromWheel") -and $visualWheelsRuntime.Contains("if flexibleRingBridge ~= nil then")) "a stale native executable cannot abort Lua reload and erase the vehicle"
+$tire41FieldHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireFlexibleRingField.hpp"
+$tire41FieldCppPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireFlexibleRingField.cpp"
+$tire41BridgePath = Join-Path $Root "Engine\HeritageEngine\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.cpp"
+$tire41FieldHeader = if (Test-Path $tire41FieldHeaderPath) { [IO.File]::ReadAllText($tire41FieldHeaderPath) } else { "" }
+$tire41FieldCpp = if (Test-Path $tire41FieldCppPath) { [IO.File]::ReadAllText($tire41FieldCppPath) } else { "" }
+$tire41Bridge = if (Test-Path $tire41BridgePath) { [IO.File]::ReadAllText($tire41BridgePath) } else { "" }
+Check ($tire41FieldHeader.Contains("TireFlexibleRingFieldStations = 24") -and $tire41FieldCpp.Contains("solveElasticFoundation") -and $tire41FieldCpp.Contains("contactConstraintStiffness")) "TIRE41 owns one bounded cyclic flexible-ring/elastic-foundation solver"
+Check ($tire41Bridge.Contains("evaluateTireFlexibleRingField") -and $tire41Bridge.Contains("wheelState.tireInflationPressurePa") -and $tire41Bridge.Contains("wheelState.tireRingWindupDegrees")) "TIRE41 bridge assembles pressure, deflection, contact, ring and wear state before presentation"
+$tire41FieldUniforms = ([regex]::Matches($clean05Shaders, "uniform bool uTireVisualDeformationFieldValid;")).Count
+$tire41VisibleAdds = ([regex]::Matches($clean05Shaders, "position \+= tireFlexibleRingDisplacementLocal\(position\);")).Count
+$tire41ShadowAdds = ([regex]::Matches($clean05Shaders, "position \+= metersToLocal \* attachment")).Count
+Check ($tire41FieldUniforms -eq 2 -and $tire41VisibleAdds -eq 1 -and $tire41ShadowAdds -eq 1) "TIRE41 visible and shadow shaders each apply the final displacement field exactly once"
+Check (([regex]::Matches($clean05Shaders, "uniform vec3 uTireVisualDisplacementM\[HERITAGE_TIRE_FIELD_COUNT\];")).Count -eq 2 -and -not $clean05Shaders.Contains("uTireVisualForwardDisplacementM")) "TIRE41 final vector field is GPU-register-safe and not split into three oversized scalar arrays"
+Check (-not $clean05Shaders.Contains("uTireVisualProbeCompressionM") -and -not $clean05Shaders.Contains("flattenAmount") -and -not $clean05Shaders.Contains("hardPlanePenetration") -and -not $clean05Shaders.Contains("tireCarcassProfileM")) "TIRE41 deleted probe dents, plane clamps, heuristic bulges and carcass-profile stacking"
 
 $wheelContractPath = Join-Path $Root "Docs\Decisions\ADR-009-Wheel-Coordinate-Contract.md"
 Check (Test-Path $wheelContractPath) "wheel coordinate/presentation ADR exists"

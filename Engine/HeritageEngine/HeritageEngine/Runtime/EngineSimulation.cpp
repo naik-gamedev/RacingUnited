@@ -27,6 +27,7 @@ void updateEngineSimulation(
     heritage::graphics::EnvironmentSystem& environmentSystem,
     heritage::entities::EntityRegistry& entityRegistry,
     heritage::camera::ChaseCamera& chaseCamera,
+    const heritage::camera::ChaseCameraInput& chaseCameraInput,
     heritage::camera::CameraFrame& entityCameraFrame,
     heritage::diagnostics::PerformanceMonitor& performanceMonitor)
 {
@@ -128,10 +129,27 @@ void updateEngineSimulation(
         {
             const heritage::math::DVec3 globalPlayerPosition =
                 physics.localToGlobal(cameraPose.position);
+            heritage::camera::ChaseCameraInput frameCameraInput =
+                chaseCameraInput;
+            Vec3 cameraLinearVelocity{};
+            if (havePhysicsCameraPose
+                && physics.rigidBodies().linearVelocity(
+                    cameraBody,
+                    cameraLinearVelocity))
+            {
+                frameCameraInput.forwardSpeedMetersPerSecond =
+                    static_cast<double>(cameraLinearVelocity.x)
+                        * static_cast<double>(cameraForwardWorld.x)
+                    + static_cast<double>(cameraLinearVelocity.y)
+                        * static_cast<double>(cameraForwardWorld.y)
+                    + static_cast<double>(cameraLinearVelocity.z)
+                        * static_cast<double>(cameraForwardWorld.z);
+            }
             chaseCamera.update(
                 globalPlayerPosition,
                 cameraForwardWorld,
-                dt);
+                dt,
+                frameCameraInput);
 
             // CAM03 collision: ray from a point above the chassis toward
             // the DESIRED full-distance eye. Static scene triangles are

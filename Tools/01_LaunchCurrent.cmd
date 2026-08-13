@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
-set "ENGINE=%ROOT%\Engine\HeritageEngine\HeritageEngine\x64\Release\HeritageEngine.exe"
+set "ENGINE=%ROOT%\Engine\HeritageEngine\x64\Release\HeritageEngine.exe"
 set "MODULE=%ROOT%\Modules\RacingUnited"
 
 if not exist "%ENGINE%" (

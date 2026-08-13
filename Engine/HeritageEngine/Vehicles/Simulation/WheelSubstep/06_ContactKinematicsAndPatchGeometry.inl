@@ -7,66 +7,6 @@
     // the authoritative upright pose before constructing the tire basis.
     updateUprightGeometry();
 
-    // TIRE17C7/VIS10: reference-quality visual collider neighborhood. The
-    // existing immutable static-scene BVH selects exact nearby creator
-    // collision triangles; the GPU later applies them per tire mesh vertex.
-    // This is deliberately independent from the 3x3 force-envelope provider.
-    // It solves visual curb/vertical-face penetration without turning the tire
-    // into hundreds of CPU physics particles.
-    constexpr VehicleScalar kVisualColliderRefreshHz = 500.0;
-    constexpr VehicleScalar kVisualColliderRefreshPeriodS =
-        VehicleScalar{1.0} / kVisualColliderRefreshHz;
-    wheel.visualColliderQueryAccumulatorSeconds +=
-        static_cast<VehicleScalar>(substepDeltaTime);
-    if (wheel.visualColliderQueryAccumulatorSeconds >= kVisualColliderRefreshPeriodS
-        || state.tireVisualColliderTriangleCount == 0)
-    {
-        wheel.visualColliderQueryAccumulatorSeconds = std::fmod(
-            wheel.visualColliderQueryAccumulatorSeconds,
-            kVisualColliderRefreshPeriodS);
-        const heritage::math::Vec3 visualWheelCenterWorld = add(
-            wheelRayOriginWorld,
-            scale(suspensionDirection, state.suspensionLength));
-        const VehicleScalar authoredWidthM = description.fitment.tireWidthMm > 30.0f
-            ? static_cast<VehicleScalar>(description.fitment.tireWidthMm) * 0.001
-            : VehicleScalar{0.20};
-        const float queryHalfExtent = static_cast<float>(
-            std::max(
-                static_cast<VehicleScalar>(description.radius) + authoredWidthM * 0.55
-                    + VehicleScalar{0.10},
-                VehicleScalar{0.40}));
-
-        std::vector<heritage::physics::StaticSceneTriangle> nearbyTriangles;
-        collisions.nearbyStaticSceneTriangles(
-            visualWheelCenterWorld,
-            queryHalfExtent,
-            TireVisualColliderTriangleLimit,
-            nearbyTriangles);
-
-        state.tireVisualColliderTriangleCount = static_cast<std::uint32_t>(
-            (std::min)(nearbyTriangles.size(), TireVisualColliderTriangleLimit));
-        state.tireVisualColliderTrianglesValid =
-            state.tireVisualColliderTriangleCount > 0;
-        for (std::size_t triangleIndex = 0;
-             triangleIndex < state.tireVisualColliderTriangleCount;
-             ++triangleIndex)
-        {
-            const auto& sourceTriangle = nearbyTriangles[triangleIndex];
-            heritage::math::Vec3 normal = normalized(
-                sourceTriangle.normal, { 0.0f, 1.0f, 0.0f });
-            const heritage::math::Vec3 towardWheel = subtract(
-                visualWheelCenterWorld, sourceTriangle.a);
-            if (dot(normal, towardWheel) < 0.0)
-                normal = scale(normal, -1.0);
-
-            auto& destination = state.tireVisualColliderTriangles[triangleIndex];
-            destination.a = sourceTriangle.a;
-            destination.b = sourceTriangle.b;
-            destination.c = sourceTriangle.c;
-            destination.normal = normal;
-        }
-    }
-
     if (state.grounded && state.steeringAxisPointValid)
     {
         const SteeringGroundGeometry steeringGeometry =
@@ -231,4 +171,3 @@
     const VehicleScalar slipAngleRadians = std::atan2(
         structuralLateralSpeed, lateralReferenceSpeed) - beltYawAngle;
     state.slipAngleDegrees = degrees(slipAngleRadians);
-

@@ -88,43 +88,20 @@ bool EntityMeshRenderer::initialize(
     m_uniforms.useSkinning = uniform("uUseSkinning");
     m_uniforms.jointMatrices = uniform("uJointMatrices");
     m_uniforms.tireVisualEnabled = uniform("uTireVisualEnabled");
-    m_uniforms.tireVisualGrounded = uniform("uTireVisualGrounded");
     m_uniforms.tireVisualCenter = uniform("uTireVisualCenter");
     m_uniforms.tireVisualAxleAxis = uniform("uTireVisualAxleAxis");
     m_uniforms.tireVisualHalfWidth = uniform("uTireVisualHalfWidth");
     m_uniforms.tireVisualInnerRadius = uniform("uTireVisualInnerRadius");
     m_uniforms.tireVisualOuterRadius = uniform("uTireVisualOuterRadius");
     m_uniforms.tireReferenceRadiusM = uniform("uTireReferenceRadiusM");
-    m_uniforms.tireRadialDeflectionM = uniform("uTireRadialDeflectionM");
-    m_uniforms.tireContactPatchLengthM = uniform("uTireContactPatchLengthM");
-    m_uniforms.tireContactPatchWidthM = uniform("uTireContactPatchWidthM");
-    m_uniforms.tireRingRadialOffsetM = uniform("uTireRingRadialOffsetM");
-    m_uniforms.tireRingLongitudinalOffsetM = uniform("uTireRingLongitudinalOffsetM");
-    m_uniforms.tireRingLateralOffsetM = uniform("uTireRingLateralOffsetM");
-    m_uniforms.tireRingYawDegrees = uniform("uTireRingYawDegrees");
-    m_uniforms.tireRingWindupDegrees = uniform("uTireRingWindupDegrees");
-    m_uniforms.tireFlatSpotDepthM = uniform("uTireFlatSpotDepthM");
-    m_uniforms.tireFlatSpotSector = uniform("uTireFlatSpotSector");
-    m_uniforms.tireContactNormalWorld = uniform("uTireContactNormalWorld");
     m_uniforms.tireWheelForwardWorld = uniform("uTireWheelForwardWorld");
     m_uniforms.tireWheelRightWorld = uniform("uTireWheelRightWorld");
-    m_uniforms.tireNormalForceN = uniform("uTireNormalForceN");
-    m_uniforms.tireLongitudinalForceN = uniform("uTireLongitudinalForceN");
-    m_uniforms.tireLateralForceN = uniform("uTireLateralForceN");
-    m_uniforms.tireVisualMotionSpeedMps = uniform("uTireVisualMotionSpeedMps");
-    m_uniforms.tireContactPlaneDistanceM = uniform("uTireContactPlaneDistanceM");
-    m_uniforms.tireVisualSupportGridValid = uniform("uTireVisualSupportGridValid");
-    m_uniforms.tireVisualSupportHalfLengthM = uniform("uTireVisualSupportHalfLengthM");
-    m_uniforms.tireVisualSupportHalfWidthM = uniform("uTireVisualSupportHalfWidthM");
-    m_uniforms.tireVisualSupportHeightResidualM = uniform("uTireVisualSupportHeightResidualM");
-    m_uniforms.tireVisualProbeGridValid = uniform("uTireVisualProbeGridValid");
-    m_uniforms.tireVisualProbeCompressionM = uniform("uTireVisualProbeCompressionM[0]");
+    m_uniforms.tireWheelUpWorld = uniform("uTireWheelUpWorld");
+    m_uniforms.tireVisualDeformationFieldValid =
+        uniform("uTireVisualDeformationFieldValid");
+    m_uniforms.tireVisualDisplacementM =
+        uniform("uTireVisualDisplacementM[0]");
     m_uniforms.tireProbeDebugVisible = uniform("uTireProbeDebugVisible");
-    m_uniforms.tireVisualColliderTriangleCount = uniform("uTireVisualColliderTriangleCount");
-    m_uniforms.tireVisualColliderTriangleA = uniform("uTireVisualColliderTriangleA[0]");
-    m_uniforms.tireVisualColliderTriangleB = uniform("uTireVisualColliderTriangleB[0]");
-    m_uniforms.tireVisualColliderTriangleC = uniform("uTireVisualColliderTriangleC[0]");
-    m_uniforms.tireVisualColliderTriangleNormal = uniform("uTireVisualColliderTriangleNormal[0]");
     m_uniforms.materialBaseColor = uniform("uMaterialBaseColor");
     m_uniforms.materialSpecularColor = uniform("uMaterialSpecularColor");
     m_uniforms.materialEmissiveColor = uniform("uMaterialEmissiveColor");
@@ -624,9 +601,6 @@ void EntityMeshRenderer::draw(
                         << " halfWidthLocal=" << tireVisualNode->tireVisualHalfWidth
                         << '\n';
                 }
-                glUniform1i(
-                    m_uniforms.tireVisualGrounded,
-                    tireVisualState->tireGrounded ? 1 : 0);
                 glUniform3f(
                     m_uniforms.tireVisualCenter,
                     tireVisualNode->tireVisualCenter[0],
@@ -647,41 +621,6 @@ void EntityMeshRenderer::draw(
                 glUniform1f(
                     m_uniforms.tireReferenceRadiusM,
                     tireVisualState->tireReferenceRadiusM);
-                glUniform1f(
-                    m_uniforms.tireRadialDeflectionM,
-                    tireVisualState->tireRadialDeflectionM);
-                glUniform1f(
-                    m_uniforms.tireContactPatchLengthM,
-                    tireVisualState->tireContactPatchLengthM);
-                glUniform1f(
-                    m_uniforms.tireContactPatchWidthM,
-                    tireVisualState->tireContactPatchWidthM);
-                glUniform1f(
-                    m_uniforms.tireRingRadialOffsetM,
-                    tireVisualState->tireRingRadialOffsetM);
-                glUniform1f(
-                    m_uniforms.tireRingLongitudinalOffsetM,
-                    tireVisualState->tireRingLongitudinalOffsetM);
-                glUniform1f(
-                    m_uniforms.tireRingLateralOffsetM,
-                    tireVisualState->tireRingLateralOffsetM);
-                glUniform1f(
-                    m_uniforms.tireRingYawDegrees,
-                    tireVisualState->tireRingYawDegrees);
-                glUniform1f(
-                    m_uniforms.tireRingWindupDegrees,
-                    tireVisualState->tireRingWindupDegrees);
-                glUniform1f(
-                    m_uniforms.tireFlatSpotDepthM,
-                    tireVisualState->tireFlatSpotDepthM);
-                glUniform1f(
-                    m_uniforms.tireFlatSpotSector,
-                    tireVisualState->tireFlatSpotSector);
-                glUniform3f(
-                    m_uniforms.tireContactNormalWorld,
-                    tireVisualState->tireContactNormalWorld.x,
-                    tireVisualState->tireContactNormalWorld.y,
-                    tireVisualState->tireContactNormalWorld.z);
                 glUniform3f(
                     m_uniforms.tireWheelForwardWorld,
                     tireVisualState->tireWheelForwardWorld.x,
@@ -692,150 +631,32 @@ void EntityMeshRenderer::draw(
                     tireVisualState->tireWheelRightWorld.x,
                     tireVisualState->tireWheelRightWorld.y,
                     tireVisualState->tireWheelRightWorld.z);
-                glUniform1f(m_uniforms.tireNormalForceN, tireVisualState->tireNormalForceN);
-                glUniform1f(m_uniforms.tireLongitudinalForceN, tireVisualState->tireLongitudinalForceN);
-                glUniform1f(m_uniforms.tireLateralForceN, tireVisualState->tireLateralForceN);
-                glUniform1f(m_uniforms.tireVisualMotionSpeedMps, tireVisualState->tireVisualMotionSpeedMps);
-                glUniform1f(
-                    m_uniforms.tireContactPlaneDistanceM,
-                    tireVisualState->tireContactPlaneDistanceM);
+                glUniform3f(
+                    m_uniforms.tireWheelUpWorld,
+                    tireVisualState->tireWheelUpWorld.x,
+                    tireVisualState->tireWheelUpWorld.y,
+                    tireVisualState->tireWheelUpWorld.z);
                 glUniform1i(
-                    m_uniforms.tireVisualSupportGridValid,
-                    tireVisualState->tireVisualSupportGridValid ? 1 : 0);
-                glUniform1f(
-                    m_uniforms.tireVisualSupportHalfLengthM,
-                    tireVisualState->tireVisualSupportHalfLengthM);
-                glUniform1f(
-                    m_uniforms.tireVisualSupportHalfWidthM,
-                    tireVisualState->tireVisualSupportHalfWidthM);
-                glUniform1fv(
-                    m_uniforms.tireVisualSupportHeightResidualM,
-                    9,
-                    tireVisualState->tireVisualSupportHeightResidualM.data());
-                glUniform1i(
-                    m_uniforms.tireVisualProbeGridValid,
-                    tireVisualState->tireVisualProbeGridValid ? 1 : 0);
-                glUniform1fv(
-                    m_uniforms.tireVisualProbeCompressionM,
-                    static_cast<GLsizei>(heritage::entities::TireVisualProbeCount),
-                    tireVisualState->tireVisualProbeCompressionM.data());
-                const std::uint32_t colliderTriangleCount =
-                    tireVisualState->tireVisualColliderTrianglesValid
-                        ? (std::min)(
-                            tireVisualState->tireVisualColliderTriangleCount,
-                            static_cast<std::uint32_t>(heritage::entities::TireVisualColliderTriangleLimit))
-                        : 0u;
-                glUniform1i(
-                    m_uniforms.tireVisualColliderTriangleCount,
-                    static_cast<GLint>(colliderTriangleCount));
-                if (colliderTriangleCount > 0
-                    && m_reportedTireColliderProofNodes.insert(tireVisualNode->name).second)
+                    m_uniforms.tireVisualDeformationFieldValid,
+                    tireVisualState->tireVisualDeformationFieldValid ? 1 : 0);
+                std::array<float,
+                    heritage::entities::TireVisualDeformationFieldCount * 3>
+                    packedDisplacementM{};
+                for (std::size_t fieldIndex = 0;
+                     fieldIndex < heritage::entities::TireVisualDeformationFieldCount;
+                     ++fieldIndex)
                 {
-                    std::cout
-                        << "TIRE25 VIS17: collider bridge node="
-                        << tireVisualNode->name
-                        << " triangles=" << colliderTriangleCount
-                        << '\n';
+                    packedDisplacementM[fieldIndex * 3] =
+                        tireVisualState->tireVisualForwardDisplacementM[fieldIndex];
+                    packedDisplacementM[fieldIndex * 3 + 1] =
+                        tireVisualState->tireVisualDownDisplacementM[fieldIndex];
+                    packedDisplacementM[fieldIndex * 3 + 2] =
+                        tireVisualState->tireVisualLateralDisplacementM[fieldIndex];
                 }
-                if (colliderTriangleCount > 0)
-                {
-                    // TIRE22/VIS14: convert absolute FP64/physics-world collider
-                    // geometry into this spinning tire draw range's LOCAL space
-                    // before it reaches GLSL. rangeModel is camera-relative, so
-                    // feeding absolute world triangles directly to the shader
-                    // compares unrelated coordinate systems and can make every
-                    // contact appear inert. Local-space triangles also remain
-                    // correct through wheel spin, steering and mirrored GLB nodes.
-                    const heritage::math::Mat4 worldToTireLocal =
-                        inverseMatrix(rangeModel);
-                    const auto worldPointToTireLocal = [&](
-                        const heritage::math::Vec3& point)
-                    {
-                        return transformPoint(
-                            worldToTireLocal,
-                            std::array<float, 3>{
-                                point.x - eye.x,
-                                point.y - eye.y,
-                                point.z - eye.z });
-                    };
-                    const auto localTriangleNormal = [&](
-                        const heritage::math::Vec3& localA,
-                        const heritage::math::Vec3& localB,
-                        const heritage::math::Vec3& localC)
-                    {
-                        const heritage::math::Vec3 ab{
-                            localB.x - localA.x, localB.y - localA.y, localB.z - localA.z };
-                        const heritage::math::Vec3 ac{
-                            localC.x - localA.x, localC.y - localA.y, localC.z - localA.z };
-                        heritage::math::Vec3 normal{
-                            ab.y * ac.z - ab.z * ac.y,
-                            ab.z * ac.x - ab.x * ac.z,
-                            ab.x * ac.y - ab.y * ac.x };
-                        const float lengthSquared = normal.x * normal.x
-                            + normal.y * normal.y + normal.z * normal.z;
-                        if (lengthSquared > 1.0e-12f)
-                        {
-                            const float inverseLength = 1.0f / std::sqrt(lengthSquared);
-                            normal.x *= inverseLength;
-                            normal.y *= inverseLength;
-                            normal.z *= inverseLength;
-                        }
-                        else
-                        {
-                            normal = { 0.0f, 1.0f, 0.0f };
-                        }
-                        // Collision normals always point toward the tire interior.
-                        // This makes road, kerb, wall and mirrored-side triangles
-                        // share one stable "push rubber back toward the tire" rule.
-                        const float towardCenter =
-                            (tireVisualNode->tireVisualCenter[0] - localA.x) * normal.x
-                            + (tireVisualNode->tireVisualCenter[1] - localA.y) * normal.y
-                            + (tireVisualNode->tireVisualCenter[2] - localA.z) * normal.z;
-                        if (towardCenter < 0.0f)
-                        {
-                            normal.x = -normal.x;
-                            normal.y = -normal.y;
-                            normal.z = -normal.z;
-                        }
-                        return normal;
-                    };
-
-                    std::array<float, heritage::entities::TireVisualColliderTriangleLimit * 4> a{};
-                    std::array<float, heritage::entities::TireVisualColliderTriangleLimit * 4> b{};
-                    std::array<float, heritage::entities::TireVisualColliderTriangleLimit * 4> c{};
-                    std::array<float, heritage::entities::TireVisualColliderTriangleLimit * 4> n{};
-                    for (std::uint32_t triangleIndex = 0;
-                         triangleIndex < colliderTriangleCount; ++triangleIndex)
-                    {
-                        const auto& triangle =
-                            tireVisualState->tireVisualColliderTriangles[triangleIndex];
-                        const heritage::math::Vec3 localA =
-                            worldPointToTireLocal(triangle.a);
-                        const heritage::math::Vec3 localB =
-                            worldPointToTireLocal(triangle.b);
-                        const heritage::math::Vec3 localC =
-                            worldPointToTireLocal(triangle.c);
-                        const heritage::math::Vec3 localNormal =
-                            localTriangleNormal(localA, localB, localC);
-                        const std::size_t base = static_cast<std::size_t>(triangleIndex) * 4;
-                        a[base + 0] = localA.x; a[base + 1] = localA.y;
-                        a[base + 2] = localA.z; a[base + 3] = 1.0f;
-                        b[base + 0] = localB.x; b[base + 1] = localB.y;
-                        b[base + 2] = localB.z; b[base + 3] = 1.0f;
-                        c[base + 0] = localC.x; c[base + 1] = localC.y;
-                        c[base + 2] = localC.z; c[base + 3] = 1.0f;
-                        n[base + 0] = localNormal.x; n[base + 1] = localNormal.y;
-                        n[base + 2] = localNormal.z; n[base + 3] = 0.0f;
-                    }
-                    glUniform4fv(m_uniforms.tireVisualColliderTriangleA,
-                        static_cast<GLsizei>(colliderTriangleCount), a.data());
-                    glUniform4fv(m_uniforms.tireVisualColliderTriangleB,
-                        static_cast<GLsizei>(colliderTriangleCount), b.data());
-                    glUniform4fv(m_uniforms.tireVisualColliderTriangleC,
-                        static_cast<GLsizei>(colliderTriangleCount), c.data());
-                    glUniform4fv(m_uniforms.tireVisualColliderTriangleNormal,
-                        static_cast<GLsizei>(colliderTriangleCount), n.data());
-                }
+                glUniform3fv(
+                    m_uniforms.tireVisualDisplacementM,
+                    static_cast<GLsizei>(heritage::entities::TireVisualDeformationFieldCount),
+                    packedDisplacementM.data());
             }
 
             if (range.skinIndex >= 0

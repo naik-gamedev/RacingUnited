@@ -56,11 +56,6 @@
     state.tireFootprintSurfaceSpread =
         wheel.cachedFootprintFrictionSpread;
     state.tireFootprintRefined = wheel.cachedFootprintRefined;
-    state.tireVisualSupportGridValid = wheel.cachedVisualSupportGridValid;
-    state.tireVisualSupportHalfLengthM = wheel.cachedVisualSupportHalfLengthM;
-    state.tireVisualSupportHalfWidthM = wheel.cachedVisualSupportHalfWidthM;
-    state.tireVisualSupportHeightResidualM =
-        wheel.cachedVisualSupportHeightResidualM;
     if (rigidRingOutput.valid)
     {
         state.tireRingRadialOffset = rigidRingOutput.radialOffsetM;
@@ -233,4 +228,3 @@
         ? deformableTerrainSupport.totalSinkageM : VehicleScalar{0.0};
     const VehicleScalar surfaceSupportSinkageM =
         granularSinkageM + deformableTerrainSinkageM;
-

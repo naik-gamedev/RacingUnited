@@ -287,6 +287,7 @@ user32.lib
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityCoreBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityDebugBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityMeshBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTransformBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaAudioBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaEngineBindings.cpp" />
@@ -410,6 +411,7 @@ user32.lib
       <ClInclude Include="..\Vehicles\Tires\TireSlipDynamics.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireContactPatch.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireContactGeometry.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireFlexibleRingField.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireRigidRing.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireRoadEnveloping.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireThermal.hpp" />
@@ -479,6 +481,7 @@ user32.lib
     <ClInclude Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsBindingHandlers.hpp" />
     <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleBindingHandlers.hpp" />
     <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityBindingHandlers.hpp" />
+    <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.hpp" />
     <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionParser.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleRuntimeManager.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleRuntimeAction.hpp" />
@@ -579,6 +582,7 @@ user32.lib
     <None Include="..\Vehicles\Wheels\Fitment\InstalledWheelMassProperties.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireContactPatch.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireContactGeometry.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireFlexibleRingField.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireRoadEnveloping.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireThermal.cpp" />

@@ -17,21 +17,21 @@ namespace heritage::entities {
 using EntityHandle = std::uint64_t;
 inline constexpr EntityHandle InvalidEntity = 0;
 
-inline constexpr std::size_t TireVisualColliderTriangleLimit = 64;
-// TIRE27/VIS20: bottom-biased world-anchored lower-half contact/deformation
-// lattice.  The user's live curb test proved the 9x7 bridge works, but each
-// sample still owned too much rubber.  Keep full lower-half coverage while
-// concentrating substantially more resolution in the loaded region below the
-// tire's lower chord.  21 circumference stations are intentionally non-uniform
-// (13 of them live between 65 and 115 degrees around straight-down) and 13
-// width bands resolve the tread/shoulders independently.
-inline constexpr std::size_t TireVisualProbeCircumferenceStations = 21;
-inline constexpr std::size_t TireVisualProbeWidthBands = 13;
-inline constexpr std::size_t TireVisualProbeCount =
-    TireVisualProbeCircumferenceStations * TireVisualProbeWidthBands;
+// The direct collision lattice is input to one flexible-ring solve.  It never
+// reaches the renderer as a second deformation authority.
+inline constexpr std::size_t TireVisualContactSampleStations = 21;
+inline constexpr std::size_t TireVisualContactSampleBands = 13;
+inline constexpr std::size_t TireVisualContactSampleCount =
+    TireVisualContactSampleStations * TireVisualContactSampleBands;
 
-inline constexpr std::array<float, TireVisualProbeCircumferenceStations>
-    TireVisualProbeStationPhiRadians{
+// The solver's sole final presentation output covers the complete belt.
+inline constexpr std::size_t TireVisualDeformationFieldStations = 24;
+inline constexpr std::size_t TireVisualDeformationFieldBands = 13;
+inline constexpr std::size_t TireVisualDeformationFieldCount =
+    TireVisualDeformationFieldStations * TireVisualDeformationFieldBands;
+
+inline constexpr std::array<float, TireVisualContactSampleStations>
+    TireVisualContactSamplePhiRadians{
         0.0f,
         0.392699082f,  // 22.5 deg
         0.698131701f,  // 40
@@ -55,19 +55,11 @@ inline constexpr std::array<float, TireVisualProbeCircumferenceStations>
         3.141592654f   // 180: rear equator
     };
 
-inline constexpr std::array<float, TireVisualProbeWidthBands>
-    TireVisualProbeWidthCoordinates{
+inline constexpr std::array<float, TireVisualContactSampleBands>
+    TireVisualContactSampleWidthCoordinates{
         -1.00f, -0.82f, -0.65f, -0.49f, -0.34f, -0.18f, 0.00f,
          0.18f,  0.34f,  0.49f,  0.65f,  0.82f, 1.00f
     };
-struct TireVisualColliderTriangle
-{
-    heritage::math::Vec3 a{};
-    heritage::math::Vec3 b{};
-    heritage::math::Vec3 c{};
-    heritage::math::Vec3 normal{ 0.0f, 1.0f, 0.0f };
-};
-
 enum class DebugPrimitiveType
 {
     Box,
@@ -119,62 +111,22 @@ struct MeshNodeOverride
     heritage::math::Vec3 anchoredWorldTranslationDelta{ 0.0f, 0.0f, 0.0f };
     heritage::math::Vec3 anchoredLocalRotationDeltaDegrees{ 0.0f, 0.0f, 0.0f };
 
-    // TIRE09/VIS01 physics-driven GPU tire deformation. This is presentation
-    // state only: tire/contact physics remains authoritative in VehicleSystem.
-    // The renderer auto-infers the authored tire mesh centre/axis/radii and
-    // converts these metre-domain values into the mesh's local scale.
+    // Physics-driven tire presentation. VehicleSystem and the flexible-ring
+    // provider are authoritative; the renderer receives only their final field.
     bool hasTireVisualDeformation = false;
-    bool tireGrounded = false;
     float tireReferenceRadiusM = 0.30f;
-    float tireRadialDeflectionM = 0.0f;
-    float tireContactPatchLengthM = 0.0f;
-    float tireContactPatchWidthM = 0.0f;
-    float tireRingRadialOffsetM = 0.0f;
-    float tireRingLongitudinalOffsetM = 0.0f;
-    float tireRingLateralOffsetM = 0.0f;
-    float tireRingYawDegrees = 0.0f;
-    float tireRingWindupDegrees = 0.0f;
-    float tireFlatSpotDepthM = 0.0f;
-    float tireFlatSpotSector = 0.0f;
-    // TIRE10/VIS02 exact native contact plane. The renderer transforms the
-    // world normal into the spinning tire-node frame and clamps the road-facing
-    // tread to the authoritative center-to-plane distance.
-    heritage::math::Vec3 tireContactNormalWorld{ 0.0f, 1.0f, 0.0f };
-    // TIRE17C2/VIS04: authoritative wheel basis from VehicleSystem. Using
-    // physics directions avoids mirrored-node/sign ambiguity during braking
-    // and cornering shear deformation.
     heritage::math::Vec3 tireWheelForwardWorld{ 0.0f, 0.0f, 1.0f };
     heritage::math::Vec3 tireWheelRightWorld{ 1.0f, 0.0f, 0.0f };
-    // TIRE17C3/VIS05 force-resolved carcass shear. These forces are used only
-    // by presentation to derive a bounded quasi-static tread displacement;
-    // VehicleSystem remains authoritative for dynamics.
-    float tireNormalForceN = 0.0f;
-    float tireLongitudinalForceN = 0.0f;
-    float tireLateralForceN = 0.0f;
-    float tireVisualMotionSpeedMps = 0.0f;
-    float tireContactPlaneDistanceM = 0.30f;
-    // TIRE17C1/VIS03 optional refined 3x3 support residual field. It is
-    // presentation-only data copied from VehicleSystem's already-queried road
-    // envelope; no renderer/chunk reconstruction is allowed to invent it.
-    bool tireVisualSupportGridValid = false;
-    float tireVisualSupportHalfLengthM = 0.0f;
-    float tireVisualSupportHalfWidthM = 0.0f;
-    std::array<float, 9> tireVisualSupportHeightResidualM{};
-    // TIRE17C7/VIS10 exact static collider neighborhood used only by the GPU
-    // deformation pass. These are creator collision triangles in world/local
-    // physics coordinates, not a reconstructed height field.
-    bool tireVisualColliderTrianglesValid = false;
-    std::uint32_t tireVisualColliderTriangleCount = 0;
-    std::array<TireVisualColliderTriangle, TireVisualColliderTriangleLimit>
-        tireVisualColliderTriangles{};
-
-    // TIRE26/VIS18: actual collision-query result used by the visible tire.
-    // Values are physical inward compression in metres at the bottom-biased
-    // 21x13 lower-shell lattice.  Unlike the old triangle shader experiment this contains no
-    // absolute/world contact positions, so render interpolation cannot drift
-    // away from the player's tire because of chassis integration timing.
-    bool tireVisualProbeGridValid = false;
-    std::array<float, TireVisualProbeCount> tireVisualProbeCompressionM{};
+    heritage::math::Vec3 tireWheelUpWorld{ 0.0f, 1.0f, 0.0f };
+    // Sole tire-mesh deformation authority. Each component is a final physical
+    // displacement in metres in the wheel forward/down/right basis.
+    bool tireVisualDeformationFieldValid = false;
+    std::array<float, TireVisualDeformationFieldCount>
+        tireVisualForwardDisplacementM{};
+    std::array<float, TireVisualDeformationFieldCount>
+        tireVisualDownDisplacementM{};
+    std::array<float, TireVisualDeformationFieldCount>
+        tireVisualLateralDisplacementM{};
 };
 
 struct MeshComponent
@@ -382,46 +334,20 @@ public:
         const std::string& anchorNodeName,
         const heritage::math::Vec3& worldTranslationDelta,
         const heritage::math::Vec3& localRotationDeltaDegrees);
-    bool setMeshNodeTireDeformation(
+    bool setMeshNodeTireDeformationField(
         EntityHandle handle,
         const std::string& nodeName,
-        bool grounded,
+        bool valid,
         float referenceRadiusM,
-        float radialDeflectionM,
-        float contactPatchLengthM,
-        float contactPatchWidthM,
-        float ringRadialOffsetM,
-        float ringLongitudinalOffsetM,
-        float ringLateralOffsetM,
-        float ringYawDegrees,
-        float ringWindupDegrees,
-        float flatSpotDepthM,
-        float flatSpotSector,
-        const heritage::math::Vec3& contactNormalWorld,
-        float contactPlaneDistanceM,
-        bool supportGridValid = false,
-        float supportHalfLengthM = 0.0f,
-        float supportHalfWidthM = 0.0f,
-        const std::array<float, 9>& supportHeightResidualM = {},
-        const heritage::math::Vec3& wheelForwardWorld = { 0.0f, 0.0f, 1.0f },
-        const heritage::math::Vec3& wheelRightWorld = { 1.0f, 0.0f, 0.0f },
-        float normalForceN = 0.0f,
-        float longitudinalForceN = 0.0f,
-        float lateralForceN = 0.0f,
-        float visualMotionSpeedMps = 0.0f);
-    bool setMeshNodeTireColliderTriangles(
-        EntityHandle handle,
-        const std::string& nodeName,
-        bool valid,
-        std::uint32_t triangleCount,
-        const std::array<TireVisualColliderTriangle, TireVisualColliderTriangleLimit>& triangles);
-    bool setMeshNodeTireProbeGrid(
-        EntityHandle handle,
-        const std::string& nodeName,
-        bool valid,
-        const std::array<float, TireVisualProbeCount>& compressionM,
+        const std::array<float, TireVisualDeformationFieldCount>&
+            forwardDisplacementM,
+        const std::array<float, TireVisualDeformationFieldCount>&
+            downDisplacementM,
+        const std::array<float, TireVisualDeformationFieldCount>&
+            lateralDisplacementM,
         const heritage::math::Vec3& wheelForwardWorld,
-        const heritage::math::Vec3& wheelRightWorld);
+        const heritage::math::Vec3& wheelRightWorld,
+        const heritage::math::Vec3& wheelUpWorld);
     bool clearMeshNodeOverrides(EntityHandle handle);
 
     bool mesh(EntityHandle handle, MeshComponent& component) const;

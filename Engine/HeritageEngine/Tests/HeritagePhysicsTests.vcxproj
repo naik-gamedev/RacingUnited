@@ -71,6 +71,7 @@
     <ClCompile Include="MassPropertiesRegression.cpp" />
     <ClCompile Include="FitmentRegression.cpp" />
     <ClCompile Include="CollisionTerrainRegression.cpp" />
+    <ClCompile Include="CameraRegression.cpp" />
     <ClCompile Include="SuspensionRegression.cpp" />
     <ClCompile Include="VehicleDefinitionRegression.cpp" />
     <ClCompile Include="TireModelRegression.cpp" />
@@ -82,6 +83,7 @@
     <ClCompile Include="..\Core\Entities\EntityTransforms.cpp" />
     <ClCompile Include="..\Core\Entities\EntityDebugComponents.cpp" />
     <ClCompile Include="..\Core\Entities\EntityMeshComponents.cpp" />
+    <ClCompile Include="..\Camera\ChaseCamera.cpp" />
     <ClCompile Include="..\Physics\CollisionSystem.cpp" />
     <ClCompile Include="..\Physics\Collision\Broadphase\CollisionBroadphase.cpp" />
     <ClCompile Include="..\Physics\Collision\Queries\CollisionQueries.cpp" />
@@ -114,6 +116,7 @@
       <ClCompile Include="..\Vehicles\Tires\TireSlipDynamics.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireContactPatch.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireContactGeometry.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireFlexibleRingField.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireRoadEnveloping.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireThermal.cpp" />
@@ -190,6 +193,7 @@
       <ClInclude Include="..\Vehicles\Tires\TireSlipDynamics.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireContactPatch.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireContactGeometry.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireFlexibleRingField.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireRigidRing.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireRoadEnveloping.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireThermal.hpp" />

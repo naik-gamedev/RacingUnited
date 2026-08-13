@@ -8,6 +8,7 @@
 #include "../Vehicles/Tires/TireSlipDynamics.hpp"
 #include "../Vehicles/Tires/TireContactPatch.hpp"
 #include "../Vehicles/Tires/TireContactGeometry.hpp"
+#include "../Vehicles/Tires/TireFlexibleRingField.hpp"
 #include "../Vehicles/Tires/TireRigidRing.hpp"
 #include "../Vehicles/Tires/TireRoadEnveloping.hpp"
 #include "../Vehicles/Tires/TireThermal.hpp"
@@ -335,6 +336,157 @@ bool tireContactGeometryEffectiveRadiusAndFootprintBehave()
         && std::abs(known.verticalDeflectionM - 0.010) < 1.0e-12
         && std::abs(known.loadedRadiusM
             - (known.freeRollingRadiusM - 0.010)) < 1.0e-12;
+}
+
+bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric()
+{
+    using namespace heritage::vehicles::tires;
+
+    TireFlexibleRingFieldDescription description;
+    description.unloadedRadiusM = 0.316;
+    description.rimRadiusM = 0.2159;
+    description.sectionWidthM = 0.205;
+    description.maximumDeflectionM = 0.080;
+    description.referencePressurePa = 220000.0;
+    description.verticalStiffnessNPerM = 220000.0;
+
+    TireFlexibleRingFieldInput input;
+    input.grounded = true;
+    input.verticalDeflectionM = 0.028;
+    input.contactPatchLengthM = 0.125;
+    input.contactPatchWidthM = 0.165;
+    input.normalLoadN = 3550.0;
+    input.inflationPressurePa = 220000.0;
+
+    const auto symmetric = evaluateTireFlexibleRingField(description, input);
+    if (!symmetric.valid)
+        return false;
+
+    constexpr std::size_t bottomStation = 6;
+    constexpr std::size_t centerBand = 6;
+    const std::size_t bottomCenter = bottomStation
+        * TireFlexibleRingFieldBands + centerBand;
+    if (!(symmetric.downDisplacementM[bottomCenter] < -0.001))
+    {
+        return false;
+    }
+
+    // Contacting the negative-width curb face indents that side directly; the
+    // structural profile must put more displaced volume into the positive/free
+    // sidewall, without exceeding a bounded fraction of the section width.
+    for (std::size_t station = 7; station <= 13; ++station)
+    {
+        for (std::size_t band = 0; band <= 4; ++band)
+        {
+            input.directContactCompressionM[
+                station * TireFlexibleRingContactBands + band] = 0.018;
+        }
+    }
+    const auto asymmetric = evaluateTireFlexibleRingField(description, input);
+    const std::size_t negativeSide = bottomStation
+        * TireFlexibleRingFieldBands;
+    const std::size_t positiveSide = bottomStation
+        * TireFlexibleRingFieldBands + (TireFlexibleRingFieldBands - 1);
+    if (!asymmetric.valid
+        || !(asymmetric.lateralDisplacementM[positiveSide] > 0.0001)
+        || !(asymmetric.lateralDisplacementM[negativeSide] > 0.0001)
+        || asymmetric.lateralDisplacementM[negativeSide]
+            > description.sectionWidthM * 0.18)
+    {
+        return false;
+    }
+
+    TireFlexibleRingFieldInput lowPressure = input;
+    lowPressure.directContactCompressionM = {};
+    lowPressure.inflationPressurePa = 80000.0;
+    TireFlexibleRingFieldInput highPressure = lowPressure;
+    highPressure.inflationPressurePa = 320000.0;
+    const auto low = evaluateTireFlexibleRingField(description, lowPressure);
+    const auto high = evaluateTireFlexibleRingField(description, highPressure);
+    if (!low.valid || !high.valid
+        || !(std::abs(low.lateralDisplacementM[positiveSide])
+            > std::abs(high.lateralDisplacementM[positiveSide])))
+    {
+        return false;
+    }
+
+    // The footprint may shorten the loaded radius, but pressure/carcass hoop
+    // tension must preserve the unloaded crown and bead clearance. This guards
+    // against reintroducing a whole-belt road-height translation, which makes
+    // the top balloon by the same amount that the bottom collapses.
+    TireFlexibleRingFieldInput severeContact = input;
+    for (std::size_t station = 0;
+         station < TireFlexibleRingContactStations; ++station)
+    {
+        for (std::size_t band = 0;
+             band < TireFlexibleRingContactBands; ++band)
+        {
+            severeContact.directContactCompressionM[
+                station * TireFlexibleRingContactBands + band] = 0.080;
+        }
+    }
+    const auto constrained = evaluateTireFlexibleRingField(
+        description, severeContact);
+    constexpr std::size_t topStation = 18;
+    const std::size_t topCenter = topStation
+        * TireFlexibleRingFieldBands + centerBand;
+    const VehicleScalar bottomRadiusM = std::hypot(
+        description.unloadedRadiusM
+            + constrained.downDisplacementM[bottomCenter],
+        constrained.forwardDisplacementM[bottomCenter]);
+    const VehicleScalar topRadiusM = std::hypot(
+        -description.unloadedRadiusM
+            + constrained.downDisplacementM[topCenter],
+        constrained.forwardDisplacementM[topCenter]);
+    const VehicleScalar sidewallHeightM = description.unloadedRadiusM
+        - description.rimRadiusM;
+    if (!constrained.valid
+        || !(bottomRadiusM + 0.010 < topRadiusM)
+        || bottomRadiusM < description.rimRadiusM
+            + sidewallHeightM * 0.45
+        || topRadiusM > description.unloadedRadiusM + 0.0005)
+    {
+        return false;
+    }
+
+    TireFlexibleRingFieldDescription softConstruction = description;
+    softConstruction.verticalStiffnessNPerM = 110000.0;
+    TireFlexibleRingFieldDescription stiffConstruction = description;
+    stiffConstruction.verticalStiffnessNPerM = 440000.0;
+    const auto soft = evaluateTireFlexibleRingField(
+        softConstruction, severeContact);
+    const auto stiff = evaluateTireFlexibleRingField(
+        stiffConstruction, severeContact);
+    const VehicleScalar softBottomRadiusM = std::hypot(
+        description.unloadedRadiusM
+            + soft.downDisplacementM[bottomCenter],
+        soft.forwardDisplacementM[bottomCenter]);
+    const VehicleScalar stiffBottomRadiusM = std::hypot(
+        description.unloadedRadiusM
+            + stiff.downDisplacementM[bottomCenter],
+        stiff.forwardDisplacementM[bottomCenter]);
+    if (!soft.valid || !stiff.valid
+        || !(stiffBottomRadiusM > softBottomRadiusM + 0.002))
+    {
+        return false;
+    }
+
+    // Profile samples may change with non-uniform station spacing, but no single
+    // adjacent section is allowed to become the old one-row silhouette kink.
+    VehicleScalar largestAdjacentJump = 0.0;
+    for (std::size_t station = 0;
+         station < TireFlexibleRingFieldStations; ++station)
+    {
+        const std::size_t next = (station + 1) % TireFlexibleRingFieldStations;
+        largestAdjacentJump = std::max(
+            largestAdjacentJump,
+            std::abs(
+                asymmetric.downDisplacementM[
+                    station * TireFlexibleRingFieldBands + centerBand]
+                - asymmetric.downDisplacementM[
+                    next * TireFlexibleRingFieldBands + centerBand]));
+    }
+    return largestAdjacentJump < 0.018;
 }
 
 bool tireRigidRingStructuralModesAreRateStable()

@@ -114,6 +114,12 @@ int main()
         << " static-triangle rigid-body contacts\n";
     failed += staticTriangleRigidBodyPassed ? 0 : 1;
 
+    const bool chaseCameraOrbitPassed =
+        chaseCameraOrbitPersistsAndReturnsOnForwardTravel();
+    std::cout << (chaseCameraOrbitPassed ? "PASS" : "FAIL")
+        << " chase-camera orbit persistence and forward return\n";
+    failed += chaseCameraOrbitPassed ? 0 : 1;
+
     const bool dynamicsLabPassed = dynamicsLabCapturesHighRateTelemetry();
     std::cout << (dynamicsLabPassed ? "PASS" : "FAIL")
         << " high-rate vehicle dynamics laboratory\n";
@@ -210,6 +216,12 @@ int main()
     std::cout << (tireContactGeometryPassed ? "PASS" : "FAIL")
         << " MF6.2 loaded/effective radius and finite footprint geometry\n";
     failed += tireContactGeometryPassed ? 0 : 1;
+
+    const bool tireFlexibleRingFieldPassed =
+        tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric();
+    std::cout << (tireFlexibleRingFieldPassed ? "PASS" : "FAIL")
+        << " single-authority flexible-ring deformation field\n";
+    failed += tireFlexibleRingFieldPassed ? 0 : 1;
 
     const bool tireRigidRingPassed = tireRigidRingStructuralModesAreRateStable();
     std::cout << (tireRigidRingPassed ? "PASS" : "FAIL")

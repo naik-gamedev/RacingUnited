@@ -64,11 +64,6 @@
     "returns": "boolean",
     "description": "Moves a GLB node subtree as one authored rigid assembly so a named descendant anchor lands at an authoritative world position while a local rotation delta is composed around that anchor. Intended for modular assemblies such as a wheel root anchored by its wheel-spin pivot without destroying authored caliper/wheel/tire placement or left/right facing."
   },
-  "Entity.SetMeshNodeTireDeformation": {
-    "arguments": "(entity: EntityHandle, nodeName: string, grounded: boolean, referenceRadiusM: number, radialDeflectionM: number, contactPatchLengthM: number, contactPatchWidthM: number, ringRadialOffsetM: number, ringLongitudinalOffsetM: number, ringLateralOffsetM: number, ringYawDegrees: number, ringWindupDegrees: number, flatSpotDepthM: number, flatSpotSector: number, contactNormalWorldX: number, contactNormalWorldY: number, contactNormalWorldZ: number, contactPlaneDistanceM: number)",
-    "returns": "boolean",
-    "description": "TIRE09/VIS01 + TIRE10/VIS02 presentation bridge. Supplies authoritative native tire state to one authored GLB tire node; the renderer infers tire geometry and performs GPU-only deformation. VIS02 additionally uses the native road-contact normal and wheel-center-to-contact-plane distance so the footprint follows the physical contact plane on slopes/banking without changing physics or the source mesh."
-  },
   "Environment.GetSunDirection": {
     "arguments": "()",
     "returns": "x: number, y: number, z: number",
@@ -524,9 +519,9 @@
     "returns": "boolean",
     "description": "Stops recording while retaining every captured sample and summary."
   },
-  "Entity.SetMeshNodeTireColliderTrianglesFromWheel": {
+  "Entity.SetMeshNodeTireFlexibleRingFromWheel": {
     "arguments": "(entity: EntityHandle, nodeName: string, vehicle: VehicleHandle, wheelIndex: number)",
     "returns": "boolean",
-    "description": "TIRE17C7/VIS10 native-to-native visual deformation bridge. Copies the bounded nearby static-collider triangle neighborhood selected for one wheel directly from VehicleSystem into an authored tire mesh node without pushing bulk triangle data through Lua."
+    "description": "Native-to-native tire presentation bridge. Samples bounded distributed collision contact, solves one reduced-order flexible-ring field with the authoritative wheel state, and publishes only the final displacement field to the authored tire mesh node."
   }
 }

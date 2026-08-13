@@ -730,3 +730,214 @@ structural scales at once.
 - Sidewalk/kerb: the local residual should remain deepest at the obstacle while
   neighboring rubber bends smoothly into it.
 - Rim and bead must remain rigid; no tongue, fin, inversion or opposite-wheel dent.
+
+## Attempt 38 — TIRE36 / VIS29 Relaxed Lateral Carcass Silhouette
+
+### Live evidence leading to this attempt
+- TIRE35 was visibly better and finally moved a broad lower region.
+- The user's close three-quarter view still showed a concentrated bottom lobe:
+  the lateral carcass looked thumb-pressed instead of forming a long relaxed bend.
+
+### Diagnosis
+1. Sidewall-facing probes cast diagonally and could hit the same flat support plane
+   already represented by native deflection. Their apparent compression survived as
+   irregular detail and added a local bulge on top of the equilibrium bulge.
+2. TIRE34's lateral shear reached full displacement at a lower-hemisphere dot of
+   0.34. Most of the lower tire therefore moved as one chunk, leaving a visible
+   transition shoulder instead of accumulating strain toward the footprint.
+3. `max` joins between broad and local deformation envelopes introduced a derivative
+   change exactly where the silhouette needed to remain relaxed.
+
+### Changes
+1. Classify detailed probe hits as duplicate primary support when their normal is
+   aligned within the accepted support cone and their point is within 6 mm of the
+   native contact plane. Such hits contribute only the analytic equilibrium.
+2. Preserve differently oriented or height-offset contacts, so walls, kerb faces,
+   raised tops, rocks and broken road remain irregular deformation sources.
+3. Spread physical rigid-ring shear gradually across `-0.16..0.94` of the lower
+   hemisphere instead of reaching full displacement at `0.34`.
+4. Smoothly unite bead/sidewall shear support and broad/local radial envelopes;
+   remove the hard `max` shape joins.
+5. Let local sidewall bulge consume only probe compression above equilibrium, and
+   reduce that redistribution gain. Native deflection remains the sole flat-road
+   bulge authority.
+6. Slightly reduce lower-carcass rise and bulge peaks while distributing them over
+   the broader smooth envelope. Mirror every positional change in the shadow path.
+
+### Required live judgement
+- Cornering/lateral load should now produce one continuous equator-to-footprint
+  bend with no isolated bottom lobe.
+- Flat road must retain visible load deformation without a second sidewall dent.
+- A real kerb/sidewalk contact must still create local indentation and smooth
+  neighboring displacement.
+
+## Attempt 39 — TIRE37 / VIS30 Residual-Only Irregular Contact Transport
+
+### Live evidence leading to this attempt
+- TIRE36 produced a much smoother and more realistic loaded silhouette.
+- At almost zero inflation, small dents could still form in the collapsed lower
+  carcass even on the ordinary support surface.
+
+### Diagnosis
+1. The CPU correctly separated smooth pneumatic equilibrium from irregular contact
+   before carcass coupling, but recombined them in the 21x13 GPU payload.
+2. Entity presentation then temporally filtered that combined field.
+3. The shader recovered a supposed residual by subtracting the current equilibrium.
+   At very low pressure, equilibrium deflection changes enough that its filtered
+   previous value and current value differ, manufacturing local residual dents.
+
+### Changes
+1. Send only the bounded coupled irregular residual through the 21x13 payload.
+2. Keep native radial deflection and contact-patch dimensions as the sole smooth
+   equilibrium authority; they remain active whether or not irregular probes exist.
+3. Remove both duplicate shader equilibrium reconstruction functions.
+4. Consume residual probe compression directly for indentation and local rubber
+   redistribution in both visible and shadow deformation paths.
+5. Update repository guards so equilibrium cannot silently return to the filtered
+   payload or be subtracted again in GLSL.
+
+### Required live judgement
+- Reducing pressure to minimum on flat ground should produce one broad, relaxed
+  collapse without isolated probe-shaped dents.
+- The bead/rim interface must remain rigid and the carcass must not invert.
+- Kerbs and genuinely irregular surfaces must still produce bounded local detail.
+
+## Attempt 40 — TIRE38 / VIS31 Outward Cross-Section Redistribution
+
+### Live evidence leading to this attempt
+- At 1.50 bar on the sidewalk, the unsupported lower side of the tire visibly
+  curved inward when vehicle load should have expanded the loaded cross-section.
+- The result looked like an inverted sidewall bulge rather than compressed rubber.
+
+### Diagnosis
+1. The 21x13 residual is scalar and deliberately relaxed between neighboring width
+   bands for mesh-independent smoothness.
+2. GLSL interpreted every inherited value as local inward compression.
+3. A contact concentrated on one shoulder could therefore indent the contact side
+   correctly while also pulling the free side inward; the previous centre-band-only
+   bulge had no knowledge of this lateral asymmetry.
+
+### Changes
+1. Compare each residual sample with the same circumferential point on the mirrored
+   width coordinate.
+2. Apply shared compression radially, and reserve lateral inward displacement for
+   compression genuinely exceeding the mirrored side.
+3. Treat mirrored-side excess as displaced-volume demand and move the unsupported
+   lower sidewall outward.
+4. Build a bounded section-compression proxy from the centre and both outer shoulders
+   so irregular vertical load can redistribute rubber to both sides.
+5. Restrict the outward response to sidewall depth, preserve the bead/rim core and
+   mirror the complete calculation in shadow geometry.
+
+### Required live judgement
+- On the sidewalk, the contact-facing patch may indent but the opposite lower
+  sidewall should round outward rather than being sucked inward.
+- A centred flat-road load should continue to expand both lower sidewalls evenly.
+- The tire must retain its bead attachment and must not balloon at the tread crown.
+
+## Attempt 41 — TIRE39 / VIS32 Relaxed Sidewall Volume Envelope
+
+### Live evidence leading to this attempt
+- TIRE38 removed the obvious inward/inverted free-side response and was judged miles
+  better in the same sidewalk test.
+- The lower sidewall still formed a separate swollen pouch rather than transitioning
+  continuously from the tire equator into the footprint.
+
+### Diagnosis
+1. A hard `max` selected centre or shoulder compression as section authority. When
+   dominance changed between samples, its derivative could move through the shape.
+2. Both ordinary and free-side redistribution shared a late `0.30..0.92` bottom mask.
+   Expansion therefore began too low and accumulated too abruptly.
+3. The free-side response was still suppressed by a blend intended only to protect
+   direct contact-side indentation.
+
+### Changes
+1. Replace the hard section maximum with a weighted RMS of both shoulders and the
+   centre, giving centre load double weight without discontinuous source switching.
+2. Spread redistribution from just above the equator to `0.84` lower-hemisphere
+   participation instead of concentrating it at the footprint.
+3. Separate common-section and free-side masks; retain stronger contact protection
+   for the common response while allowing the unsupported side to relax naturally.
+4. Slightly reduce the final width cap and retain sidewall-depth/bead constraints.
+5. Mirror all deformation math in the shadow shader and guard it in validation.
+
+### Required live judgement
+- The unsupported sidewalk-facing silhouette should be one long, smooth curve with
+  no distinct bottom pouch or hard shoulder.
+- Contact-side rubber must still conform locally to the curb instead of floating.
+- Centred flat-road compression must remain symmetric and free of tread ballooning.
+
+## Attempt 42 — TIRE40 / VIS33 Native Reduced-Order Carcass Profile
+
+### Live evidence leading to this attempt
+- TIRE39 improved the loaded lower sidewall, but the sidewalk-facing silhouette
+  could still show a discrete lateral kink.
+- The remaining cross-section expansion was chosen inside GLSL from fixed gains,
+  so no amount of shader smoothing could make it a physical carcass equilibrium.
+
+### Diagnosis
+1. MF6.2 already owns force and moment; it does not provide render-vertex shape.
+2. TireRigidRing already owns belt translation/yaw/wind-up, but no native provider
+   owned the actual left/right cross-section expansion presented to the mesh.
+3. The shader reconstructed section compression and guessed displaced-volume gains.
+   That duplicated tire-structure policy inside presentation and produced the kink.
+
+### Changes
+1. Add a deterministic native `TireCarcassProfile` provider with 21 bounded
+   circumferential sections rather than hundreds of free soft-body vertices.
+2. Solve negative-side expansion, positive-side expansion and lower-carcass rise in
+   physical metres from tire/rim geometry, radial deflection, footprint, load,
+   pressure and the existing irregular-road residual field.
+3. Use an area-preserving cross-section relation with pressure-scaled participation;
+   one-sided curb compression sends most displaced volume to the free sidewall.
+4. Store and temporally damp the native profile in the entity tire state, then send
+   identical arrays to visible and shadow vertex paths.
+5. Delete shader-owned equilibrium bulge and irregular free-side transfer gains.
+   GLSL now interpolates native state and preserves only mesh/bead/contact constraints.
+6. Add deterministic regression checks for symmetry, pressure response, asymmetric
+   free-side transfer, section bounds and adjacent-section continuity.
+
+### Required live judgement
+- At the same sidewalk pose, the exposed sidewall should form one continuous curve
+  from equator to footprint, with no locally attached lobe or sharp red-line kink.
+- The curb-facing side may indent while the opposite side expands outward.
+- Low pressure may increase the broad response, but neither bead nor tread crown may
+  invert or balloon.
+
+## Attempt 43 — TIRE41 / VIS34 Single-Authority Flexible Ring
+
+### Live evidence leading to this attempt
+- TIRE40 still produced the same rectangular lower flap, slightly worse, during
+  sidewalk contact.
+- A source audit found eleven separate visible-shader position mutations and nine
+  shadow mutations accumulated from earlier attempts. The problem was therefore
+  architectural stacking, not one missing smoothing constant.
+
+### Diagnosis
+1. Contact planes, probe residuals, collider triangles, shader bulges, rigid-ring
+   transforms and a separate carcass profile all attempted to own final geometry.
+2. Their independent masks created derivative breaks and repeatedly moved the same
+   lower vertices.
+3. The replacement shader initially reconstructed the field's down axis with the
+   cross product reversed; this was corrected before runtime validation.
+
+### Changes
+1. Delete all old tire-presentation setters, caches, profile provider, collider
+   arrays, support-grid telemetry, uniforms and shader displacement statements.
+2. Add one cyclic 24x13 flexible-ring field on an elastic foundation, driven by a
+   bounded 21x13 collision lattice plus native deflection, patch, pressure, load,
+   rigid-ring and flat-spot state.
+3. Couple circumferential neighbours, width bands and near-incompressible section
+   expansion in the solver so curb contact redistributes through one carcass.
+4. Publish only one final forward/down/lateral metre-domain field. The visible
+   shader adds it once; the shadow shader adds the same field once.
+5. Reject side-facing collision casts that merely rediscover the ordinary support
+   plane and would otherwise double-apply flat-road load.
+
+### Required live judgement
+- The lower tire must remain one continuous carcass on the sidewalk: no rectangular
+  flap, attached pouch, single-row hinge or mirrored inward free side.
+- Pressure reduction should increase broad sidewall compliance without spawning
+  isolated dents.
+- The unloaded upper belt and bead should remain stable while visible and shadow
+  silhouettes agree.

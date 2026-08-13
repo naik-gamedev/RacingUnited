@@ -401,18 +401,6 @@ int LuaVehicleBindingHandlers::luaVehicleGetWheelTelemetry(lua_State* state)
     pushNumberField("tireFootprintSurfaceFriction", value.tireFootprintSurfaceFriction);
     pushNumberField("tireFootprintSurfaceSpread", value.tireFootprintSurfaceSpread);
     pushBooleanField("tireFootprintRefined", value.tireFootprintRefined ? 1 : 0);
-    pushBooleanField("tireVisualSupportGridValid", value.tireVisualSupportGridValid ? 1 : 0);
-    pushNumberField("tireVisualSupportHalfLengthM", value.tireVisualSupportHalfLengthM);
-    pushNumberField("tireVisualSupportHalfWidthM", value.tireVisualSupportHalfWidthM);
-    pushNumberField("tireVisualSupportH00", value.tireVisualSupportHeightResidualM[0]);
-    pushNumberField("tireVisualSupportH01", value.tireVisualSupportHeightResidualM[1]);
-    pushNumberField("tireVisualSupportH02", value.tireVisualSupportHeightResidualM[2]);
-    pushNumberField("tireVisualSupportH10", value.tireVisualSupportHeightResidualM[3]);
-    pushNumberField("tireVisualSupportH11", value.tireVisualSupportHeightResidualM[4]);
-    pushNumberField("tireVisualSupportH12", value.tireVisualSupportHeightResidualM[5]);
-    pushNumberField("tireVisualSupportH20", value.tireVisualSupportHeightResidualM[6]);
-    pushNumberField("tireVisualSupportH21", value.tireVisualSupportHeightResidualM[7]);
-    pushNumberField("tireVisualSupportH22", value.tireVisualSupportHeightResidualM[8]);
     pushNumberField("tireRingRadialOffset", value.tireRingRadialOffset);
     pushNumberField("tireRingRadialVelocity", value.tireRingRadialVelocity);
     pushNumberField("tireRingLongitudinalOffset", value.tireRingLongitudinalOffset);

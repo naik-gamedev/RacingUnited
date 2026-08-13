@@ -468,6 +468,9 @@
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityMeshBindings.cpp">
       <Filter>Lua Bindings\Entity</Filter>
     </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.cpp">
+      <Filter>Lua Bindings\Entity</Filter>
+    </ClCompile>
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTransformBindings.cpp">
       <Filter>Lua Bindings\Entity</Filter>
     </ClCompile>
@@ -791,6 +794,9 @@
     <ClInclude Include="..\Vehicles\Tires\TireContactGeometry.hpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireFlexibleRingField.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
     <ClInclude Include="..\Vehicles\Tires\TireRigidRing.hpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClInclude>
@@ -969,6 +975,9 @@
       <Filter>Lua Bindings\Vehicle</Filter>
     </ClInclude>
     <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityBindingHandlers.hpp">
+      <Filter>Lua Bindings\Entity</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.hpp">
       <Filter>Lua Bindings\Entity</Filter>
     </ClInclude>
     <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionParser.hpp">
@@ -1270,6 +1279,9 @@
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
     <ClCompile Include="..\Vehicles\Tires\TireContactGeometry.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireFlexibleRingField.cpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
     <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp">

@@ -274,66 +274,6 @@
                     envelopeDescription, contactLength, samplesForComplexity);
             wheel.cachedFootprintRefined = refined;
 
-            // TIRE17C1/VIS03: retain the already-queried refined 3x3 support
-            // residuals for tire-mesh presentation. This does not add any new
-            // collision queries. Smooth road keeps the old single-plane path;
-            // a curb/step that triggered refinement can now locally press the
-            // visual tread instead of being flattened into one infinite plane.
-            wheel.cachedVisualSupportGridValid = false;
-            wheel.cachedVisualSupportHalfLengthM = 0.0;
-            wheel.cachedVisualSupportHalfWidthM = 0.0;
-            wheel.cachedVisualSupportHeightResidualM.fill(VehicleScalar{0.0});
-            if (refined)
-            {
-                const VehicleScalar visualHalfLength =
-                    tires::roadEnvelopeCamCenterOffsetM(
-                        envelopeDescription, contactLength);
-                const VehicleScalar visualHalfWidth =
-                    tires::roadEnvelopeLateralHalfSpanM(
-                        envelopeDescription, contactWidth);
-                bool completeGrid = visualHalfLength > VehicleScalar{0.005}
-                    && visualHalfWidth > VehicleScalar{0.005};
-                for (int lateralIndex = 0; lateralIndex < 3 && completeGrid; ++lateralIndex)
-                {
-                    const VehicleScalar lateralT =
-                        static_cast<VehicleScalar>(lateralIndex - 1);
-                    const VehicleScalar targetY = lateralT * visualHalfWidth;
-                    for (int longitudinalIndex = 0; longitudinalIndex < 3; ++longitudinalIndex)
-                    {
-                        const VehicleScalar longitudinalT =
-                            static_cast<VehicleScalar>(longitudinalIndex - 1);
-                        const VehicleScalar targetX = longitudinalT * visualHalfLength;
-                        const auto foundVisualSample = std::find_if(
-                            queried.begin(), queried.end(),
-                            [&](const QueriedFootprintSample& sample) {
-                                return std::abs(sample.envelope.longitudinalOffsetM - targetX)
-                                        <= VehicleScalar{1.0e-5}
-                                    && std::abs(sample.envelope.lateralOffsetM - targetY)
-                                        <= VehicleScalar{1.0e-5};
-                            });
-                        if (foundVisualSample == queried.end()
-                            || !foundVisualSample->envelope.valid)
-                        {
-                            completeGrid = false;
-                            break;
-                        }
-                        const std::size_t visualIndex = static_cast<std::size_t>(
-                            lateralIndex * 3 + longitudinalIndex);
-                        wheel.cachedVisualSupportHeightResidualM[visualIndex] =
-                            std::clamp(
-                                foundVisualSample->envelope.roadHeightRelativeToCenterM,
-                                -envelopeDescription.maximumRoadStepM,
-                                envelopeDescription.maximumRoadStepM);
-                    }
-                }
-                if (completeGrid)
-                {
-                    wheel.cachedVisualSupportGridValid = true;
-                    wheel.cachedVisualSupportHalfLengthM = visualHalfLength;
-                    wheel.cachedVisualSupportHalfWidthM = visualHalfWidth;
-                }
-            }
-
             wheel.cachedRoadEnvelopeComplex = heightComplex || supportComplex || surfaceComplex;
             if (envelope.valid)
             {
@@ -564,10 +504,6 @@
         wheel.cachedRoadEnvelopeTotalSamples = 0;
         wheel.cachedRoadEnvelopeComplex = false;
         wheel.cachedFootprintRefined = false;
-        wheel.cachedVisualSupportGridValid = false;
-        wheel.cachedVisualSupportHalfLengthM = 0.0;
-        wheel.cachedVisualSupportHalfWidthM = 0.0;
-        wheel.cachedVisualSupportHeightResidualM.fill(VehicleScalar{0.0});
         wheel.cachedFootprintSurfaceValid = false;
         wheel.cachedFootprintFrictionMultiplier = 1.0;
         wheel.cachedFootprintStiffnessMultiplier = 1.0;
@@ -598,4 +534,3 @@
         wheel.cachedFootprintDeformableProperties = {};
         wheel.cachedFootprintDeformablePropertiesValid = false;
     }
-

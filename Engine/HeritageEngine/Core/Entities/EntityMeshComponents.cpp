@@ -482,94 +482,53 @@ bool EntityRegistry::setMeshNodeAnchoredWorldDelta(
     return true;
 }
 
-bool EntityRegistry::setMeshNodeTireDeformation(
+/* Legacy scalar/plane/probe deformation ownership was removed.  The only tire
+   mesh mutation accepted by EntityRegistry is the final flexible-ring field. */
+
+bool EntityRegistry::setMeshNodeTireDeformationField(
     EntityHandle handle,
     const std::string& nodeName,
-    bool grounded,
+    bool valid,
     float referenceRadiusM,
-    float radialDeflectionM,
-    float contactPatchLengthM,
-    float contactPatchWidthM,
-    float ringRadialOffsetM,
-    float ringLongitudinalOffsetM,
-    float ringLateralOffsetM,
-    float ringYawDegrees,
-    float ringWindupDegrees,
-    float flatSpotDepthM,
-    float flatSpotSector,
-    const heritage::math::Vec3& contactNormalWorld,
-    float contactPlaneDistanceM,
-    bool supportGridValid,
-    float supportHalfLengthM,
-    float supportHalfWidthM,
-    const std::array<float, 9>& supportHeightResidualM,
+    const std::array<float, TireVisualDeformationFieldCount>&
+        forwardDisplacementM,
+    const std::array<float, TireVisualDeformationFieldCount>&
+        downDisplacementM,
+    const std::array<float, TireVisualDeformationFieldCount>&
+        lateralDisplacementM,
     const heritage::math::Vec3& wheelForwardWorld,
     const heritage::math::Vec3& wheelRightWorld,
-    float normalForceN,
-    float longitudinalForceN,
-    float lateralForceN,
-    float visualMotionSpeedMps)
+    const heritage::math::Vec3& wheelUpWorld)
 {
     Slot* slot = resolve(handle);
     if (!slot)
     {
-        setError("Entity.SetMeshNodeTireDeformation received an invalid or stale handle.");
+        setError("Entity tire deformation field received an invalid or stale handle.");
         return false;
     }
-    if (!slot->record.mesh)
+    if (!slot->record.mesh || nodeName.empty())
     {
-        setError("Entity.SetMeshNodeTireDeformation requires a Mesh component.");
+        setError("Entity tire deformation field requires a Mesh and tire node name.");
         return false;
     }
-    if (nodeName.empty())
+    const auto finiteArray = [](const auto& values)
     {
-        setError("Entity.SetMeshNodeTireDeformation requires a non-empty GLB tire node name.");
-        return false;
-    }
-
-    const float values[] = {
-        referenceRadiusM, radialDeflectionM, contactPatchLengthM,
-        contactPatchWidthM, ringRadialOffsetM, ringLongitudinalOffsetM,
-        ringLateralOffsetM, ringYawDegrees, ringWindupDegrees,
-        flatSpotDepthM, flatSpotSector, contactNormalWorld.x,
-        contactNormalWorld.y, contactNormalWorld.z, contactPlaneDistanceM,
-        supportHalfLengthM, supportHalfWidthM,
-        wheelForwardWorld.x, wheelForwardWorld.y, wheelForwardWorld.z,
-        wheelRightWorld.x, wheelRightWorld.y, wheelRightWorld.z,
-        normalForceN, longitudinalForceN, lateralForceN, visualMotionSpeedMps
+        return std::all_of(values.begin(), values.end(), [](float value)
+        {
+            return std::isfinite(value);
+        });
     };
-    for (float value : values)
+    if (!std::isfinite(referenceRadiusM) || referenceRadiusM <= 0.02f
+        || !finiteArray(forwardDisplacementM)
+        || !finiteArray(downDisplacementM)
+        || !finiteArray(lateralDisplacementM))
     {
-        if (!std::isfinite(value))
-        {
-            setError("Entity.SetMeshNodeTireDeformation requires finite physics state.");
-            return false;
-        }
-    }
-    for (float value : supportHeightResidualM)
-    {
-        if (!std::isfinite(value))
-        {
-            setError("Entity.SetMeshNodeTireDeformation support-grid heights must be finite.");
-            return false;
-        }
-    }
-    if (referenceRadiusM <= 0.02f
-        || radialDeflectionM < 0.0f
-        || contactPatchLengthM < 0.0f
-        || contactPatchWidthM < 0.0f
-        || flatSpotDepthM < 0.0f
-        || contactPlaneDistanceM < 0.0f
-        || supportHalfLengthM < 0.0f
-        || supportHalfWidthM < 0.0f)
-    {
-        setError("Entity.SetMeshNodeTireDeformation received invalid tire dimensions/state.");
+        setError("Entity tire deformation field requires finite displacements.");
         return false;
     }
 
     auto& overrides = slot->record.mesh->nodeOverrides;
-    auto found = std::find_if(
-        overrides.begin(), overrides.end(),
+    auto found = std::find_if(overrides.begin(), overrides.end(),
         [&](const MeshNodeOverride& value) { return value.nodeName == nodeName; });
     if (found == overrides.end())
     {
@@ -578,33 +537,43 @@ bool EntityRegistry::setMeshNodeTireDeformation(
         found->nodeName = nodeName;
     }
 
+    const bool hadPreviousField = found->tireVisualDeformationFieldValid;
+    const auto filter = [&](float previous, float target)
+    {
+        target = std::clamp(target, -0.15f, 0.15f);
+        if (!hadPreviousField)
+            return target;
+        float delta = target - previous;
+        if (std::abs(delta) < 0.00008f)
+            delta = 0.0f;
+        const float response = std::abs(target) >= std::abs(previous)
+            ? 0.82f : 0.24f;
+        const float result = previous + delta * response;
+        return std::abs(result) < 0.00002f ? 0.0f : result;
+    };
+
+    float maximumM = 0.0f;
+    for (std::size_t index = 0; index < TireVisualDeformationFieldCount; ++index)
+    {
+        const float targetForward = valid ? forwardDisplacementM[index] : 0.0f;
+        const float targetDown = valid ? downDisplacementM[index] : 0.0f;
+        const float targetLateral = valid ? lateralDisplacementM[index] : 0.0f;
+        found->tireVisualForwardDisplacementM[index] = filter(
+            found->tireVisualForwardDisplacementM[index], targetForward);
+        found->tireVisualDownDisplacementM[index] = filter(
+            found->tireVisualDownDisplacementM[index], targetDown);
+        found->tireVisualLateralDisplacementM[index] = filter(
+            found->tireVisualLateralDisplacementM[index], targetLateral);
+        maximumM = std::max(maximumM, std::max(
+            std::abs(found->tireVisualForwardDisplacementM[index]),
+            std::max(std::abs(found->tireVisualDownDisplacementM[index]),
+                std::abs(found->tireVisualLateralDisplacementM[index]))));
+    }
+    found->tireVisualDeformationFieldValid = valid || maximumM > 0.00005f;
     found->hasTireVisualDeformation = true;
-    found->tireGrounded = grounded;
     found->tireReferenceRadiusM = referenceRadiusM;
-    found->tireRadialDeflectionM = std::clamp(radialDeflectionM, 0.0f, referenceRadiusM * 0.35f);
-    found->tireContactPatchLengthM = std::clamp(contactPatchLengthM, 0.0f, referenceRadiusM * 1.5f);
-    found->tireContactPatchWidthM = std::max(contactPatchWidthM, 0.0f);
-    found->tireRingRadialOffsetM = std::clamp(ringRadialOffsetM, -0.05f, 0.05f);
-    found->tireRingLongitudinalOffsetM = std::clamp(ringLongitudinalOffsetM, -0.05f, 0.05f);
-    found->tireRingLateralOffsetM = std::clamp(ringLateralOffsetM, -0.05f, 0.05f);
-    found->tireRingYawDegrees = std::clamp(ringYawDegrees, -20.0f, 20.0f);
-    found->tireRingWindupDegrees = std::clamp(ringWindupDegrees, -20.0f, 20.0f);
-    found->tireFlatSpotDepthM = std::clamp(flatSpotDepthM, 0.0f, referenceRadiusM * 0.08f);
-    found->tireFlatSpotSector = std::fmod(flatSpotSector, 16.0f);
-    if (found->tireFlatSpotSector < 0.0f)
-        found->tireFlatSpotSector += 16.0f;
-    const float normalLength = std::sqrt(
-        contactNormalWorld.x * contactNormalWorld.x
-        + contactNormalWorld.y * contactNormalWorld.y
-        + contactNormalWorld.z * contactNormalWorld.z);
-    found->tireContactNormalWorld = normalLength > 1.0e-5f
-        ? heritage::math::Vec3{
-            contactNormalWorld.x / normalLength,
-            contactNormalWorld.y / normalLength,
-            contactNormalWorld.z / normalLength }
-        : heritage::math::Vec3{ 0.0f, 1.0f, 0.0f };
-    const auto normalizedOr = [](
-        const heritage::math::Vec3& value,
+
+    const auto normalizedOr = [](const heritage::math::Vec3& value,
         const heritage::math::Vec3& fallback)
     {
         const float length = std::sqrt(
@@ -615,201 +584,11 @@ bool EntityRegistry::setMeshNodeTireDeformation(
             value.x / length, value.y / length, value.z / length };
     };
     found->tireWheelForwardWorld = normalizedOr(
-        wheelForwardWorld, heritage::math::Vec3{ 0.0f, 0.0f, 1.0f });
+        wheelForwardWorld, { 0.0f, 0.0f, 1.0f });
     found->tireWheelRightWorld = normalizedOr(
-        wheelRightWorld, heritage::math::Vec3{ 1.0f, 0.0f, 0.0f });
-    found->tireNormalForceN = std::clamp(normalForceN, 0.0f, 250000.0f);
-    found->tireLongitudinalForceN = std::clamp(longitudinalForceN, -250000.0f, 250000.0f);
-    found->tireLateralForceN = std::clamp(lateralForceN, -250000.0f, 250000.0f);
-    found->tireVisualMotionSpeedMps = std::clamp(visualMotionSpeedMps, 0.0f, 400.0f);
-    found->tireContactPlaneDistanceM = std::clamp(
-        contactPlaneDistanceM, 0.0f, referenceRadiusM * 1.5f);
-    found->tireVisualSupportGridValid = supportGridValid
-        && supportHalfLengthM > 0.005f && supportHalfWidthM > 0.005f;
-    found->tireVisualSupportHalfLengthM = std::clamp(
-        supportHalfLengthM, 0.0f, referenceRadiusM * 1.5f);
-    found->tireVisualSupportHalfWidthM = std::clamp(
-        supportHalfWidthM, 0.0f, std::max(contactPatchWidthM, 0.01f));
-    found->tireVisualSupportHeightResidualM = supportHeightResidualM;
-    const float supportLimit = std::min(referenceRadiusM * 0.20f, 0.06f);
-    for (float& value : found->tireVisualSupportHeightResidualM)
-        value = std::clamp(value, -supportLimit, supportLimit);
-    clearError();
-    return true;
-}
-
-bool EntityRegistry::setMeshNodeTireColliderTriangles(
-    EntityHandle handle,
-    const std::string& nodeName,
-    bool valid,
-    std::uint32_t triangleCount,
-    const std::array<TireVisualColliderTriangle, TireVisualColliderTriangleLimit>& triangles)
-{
-    Slot* slot = resolve(handle);
-    if (!slot)
-    {
-        setError("Entity.SetMeshNodeTireColliderTriangles received an invalid or stale handle.");
-        return false;
-    }
-    if (!slot->record.mesh)
-    {
-        setError("Entity.SetMeshNodeTireColliderTriangles requires a Mesh component.");
-        return false;
-    }
-    if (nodeName.empty())
-    {
-        setError("Entity.SetMeshNodeTireColliderTriangles requires a non-empty GLB tire node name.");
-        return false;
-    }
-
-    const std::uint32_t clampedCount = (std::min)(
-        triangleCount, static_cast<std::uint32_t>(TireVisualColliderTriangleLimit));
-    auto finiteVec = [](const heritage::math::Vec3& value)
-    {
-        return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-    };
-    for (std::uint32_t i = 0; i < clampedCount; ++i)
-    {
-        if (!finiteVec(triangles[i].a) || !finiteVec(triangles[i].b)
-            || !finiteVec(triangles[i].c) || !finiteVec(triangles[i].normal))
-        {
-            setError("Entity.SetMeshNodeTireColliderTriangles requires finite triangle geometry.");
-            return false;
-        }
-    }
-
-    MeshNodeOverride* found = nullptr;
-    for (auto& nodeOverride : slot->record.mesh->nodeOverrides)
-    {
-        if (nodeOverride.nodeName == nodeName)
-        {
-            found = &nodeOverride;
-            break;
-        }
-    }
-    if (!found)
-    {
-        slot->record.mesh->nodeOverrides.push_back({});
-        found = &slot->record.mesh->nodeOverrides.back();
-        found->nodeName = nodeName;
-    }
-    found->tireVisualColliderTrianglesValid = valid && clampedCount > 0;
-    found->tireVisualColliderTriangleCount = clampedCount;
-    found->tireVisualColliderTriangles = triangles;
-    clearError();
-    return true;
-}
-
-bool EntityRegistry::setMeshNodeTireProbeGrid(
-    EntityHandle handle,
-    const std::string& nodeName,
-    bool valid,
-    const std::array<float, TireVisualProbeCount>& compressionM,
-    const heritage::math::Vec3& wheelForwardWorld,
-    const heritage::math::Vec3& wheelRightWorld)
-{
-    Slot* slot = resolve(handle);
-    if (!slot)
-    {
-        setError("Entity tire-probe grid received an invalid or stale handle.");
-        return false;
-    }
-    if (!slot->record.mesh)
-    {
-        setError("Entity tire-probe grid requires a Mesh component.");
-        return false;
-    }
-    if (nodeName.empty())
-    {
-        setError("Entity tire-probe grid requires a non-empty GLB tire node name.");
-        return false;
-    }
-
-    for (float value : compressionM)
-    {
-        if (!std::isfinite(value))
-        {
-            setError("Entity tire-probe grid requires finite compression values.");
-            return false;
-        }
-    }
-
-    MeshNodeOverride* found = nullptr;
-    for (auto& nodeOverride : slot->record.mesh->nodeOverrides)
-    {
-        if (nodeOverride.nodeName == nodeName)
-        {
-            found = &nodeOverride;
-            break;
-        }
-    }
-    if (!found)
-    {
-        slot->record.mesh->nodeOverrides.push_back({});
-        found = &slot->record.mesh->nodeOverrides.back();
-        found->nodeName = nodeName;
-    }
-
-    // TIRE33/VIS26 temporal carcass relaxation. The probe solver is sampled
-    // from collision queries and can move by fractions of a millimetre even while
-    // the car is standing still. Feeding those samples straight to the GPU made
-    // the rubber visibly buzz. Keep the physics/contact result untouched, but
-    // present the reduced-order carcass state with fast compression, slower release
-    // and a tiny sub-millimetre deadband. This mirrors the fact that a pneumatic
-    // carcass has inertia/damping and cannot teleport between equilibrium shapes.
-    const bool hadPreviousProbeGrid = found->tireVisualProbeGridValid;
-    const auto previousProbeCompressionM = found->tireVisualProbeCompressionM;
-    float maximumFilteredCompressionM = 0.0f;
-    for (std::size_t index = 0; index < found->tireVisualProbeCompressionM.size(); ++index)
-    {
-        const float target = valid
-            ? std::clamp(compressionM[index], 0.0f, 0.12f)
-            : 0.0f;
-        float filtered = target;
-        if (hadPreviousProbeGrid)
-        {
-            const float previous = previousProbeCompressionM[index];
-            float delta = target - previous;
-            if (valid && std::abs(delta) < 0.00015f)
-                delta = 0.0f;
-            const float response = delta >= 0.0f ? 0.88f : 0.20f;
-            filtered = previous + delta * response;
-            if (!valid && previous < 0.00015f)
-                filtered = 0.0f;
-        }
-        if (filtered < 0.00003f)
-            filtered = 0.0f;
-        found->tireVisualProbeCompressionM[index] = std::clamp(
-            filtered, 0.0f, 0.12f);
-        maximumFilteredCompressionM = (std::max)(
-            maximumFilteredCompressionM,
-            found->tireVisualProbeCompressionM[index]);
-    }
-    found->tireVisualProbeGridValid = valid
-        || maximumFilteredCompressionM > 0.00008f;
-
-    // TIRE30/VIS23: the probe grid and the basis used to interpret its
-    // width/circumference coordinates are one atomic presentation state.
-    // Do not leave tireWheelRightWorld/tireWheelForwardWorld owned by an
-    // earlier Lua telemetry call that may have resolved a different native
-    // wheel. TIRE28C live testing exposed exactly that split ownership on RL:
-    // the correct contact magnitude reached the correct visible tire, but the
-    // width coordinate was mirrored inside that tire.
-    const auto normalizedOr = [](
-        const heritage::math::Vec3& value,
-        const heritage::math::Vec3& fallback)
-    {
-        const float length = std::sqrt(
-            value.x * value.x + value.y * value.y + value.z * value.z);
-        if (!std::isfinite(length) || length <= 1.0e-6f)
-            return fallback;
-        return heritage::math::Vec3{
-            value.x / length, value.y / length, value.z / length };
-    };
-    found->tireWheelForwardWorld = normalizedOr(
-        wheelForwardWorld, heritage::math::Vec3{ 0.0f, 0.0f, 1.0f });
-    found->tireWheelRightWorld = normalizedOr(
-        wheelRightWorld, heritage::math::Vec3{ 1.0f, 0.0f, 0.0f });
+        wheelRightWorld, { 1.0f, 0.0f, 0.0f });
+    found->tireWheelUpWorld = normalizedOr(
+        wheelUpWorld, { 0.0f, 1.0f, 0.0f });
     clearError();
     return true;
 }

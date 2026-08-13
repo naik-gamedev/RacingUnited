@@ -73,6 +73,7 @@ using heritage::math::Mat4;
 using heritage::math::Vec3;
 using heritage::math::perspectiveReversedZ;
 using heritage::camera::ChaseCamera;
+using heritage::camera::ChaseCameraInput;
 using heritage::camera::CameraFrame;
 using heritage::diagnostics::PerformanceMonitor;
 using heritage::diagnostics::PerformanceSection;
@@ -688,6 +689,18 @@ int HeritageEngine::run(int argc, char** argv)
         const float dt = frameData.dt;
         const double now = frameData.now;
 
+        ChaseCameraInput chaseCameraInput{};
+        const bool interfaceOwnsMouse = ImGui::GetCurrentContext()
+            && ImGui::GetIO().WantCaptureMouse;
+        chaseCameraInput.orbitDragActive = !hotkeyState.menuOpen
+            && !interfaceOwnsMouse
+            && state.input.mouseDown("Left");
+        if (chaseCameraInput.orbitDragActive)
+        {
+            chaseCameraInput.pointerDeltaX = state.input.mouseDeltaX();
+            chaseCameraInput.pointerDeltaY = state.input.mouseDeltaY();
+        }
+
         updateEngineSimulation(
             dt,
             now,
@@ -697,6 +710,7 @@ int HeritageEngine::run(int argc, char** argv)
             environmentSystem,
             entityRegistry,
             chaseCamera,
+            chaseCameraInput,
             entityCameraFrame,
             performanceMonitor);
 
