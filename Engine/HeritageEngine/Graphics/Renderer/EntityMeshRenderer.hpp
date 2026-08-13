@@ -165,6 +165,14 @@ private:
         GLint tireWheelUpWorld = -1;
         GLint tireVisualDeformationFieldValid = -1;
         GLint tireVisualDisplacementM = -1;
+        GLint tireFailureStage = -1;
+        GLint tireFailureTreadAttachment = -1;
+        GLint tireFailureStructuralIntegrity = -1;
+        GLint tireFailureEventSeed = -1;
+        GLint tireFailureEventAgeSeconds = -1;
+        GLint tireFailureWheelAngularVelocity = -1;
+        GLint tireFailureWheelRotationRadians = -1;
+        GLint tireFailureRenderPass = -1;
         GLint tireProbeDebugVisible = -1;
         GLint materialBaseColor = -1;
         GLint materialSpecularColor = -1;

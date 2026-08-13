@@ -48,6 +48,8 @@ void LuaModuleRuntime::registerVehicleBindings()
     registerFunction("Vehicle", "GetWheelTireModel", &LuaVehicleBindingHandlers::luaVehicleGetWheelTireModel);
     registerFunction("Vehicle", "GetWheelTireParameterInfo", &LuaVehicleBindingHandlers::luaVehicleGetWheelTireParameterInfo);
     registerFunction("Vehicle", "SetTireColdInflationPressure", &LuaVehicleBindingHandlers::luaVehicleSetTireColdInflationPressure);
+    registerFunction("Vehicle", "TriggerWheelTireFailure", &LuaVehicleBindingHandlers::luaVehicleTriggerWheelTireFailure);
+    registerFunction("Vehicle", "TriggerTireFailure", &LuaVehicleBindingHandlers::luaVehicleTriggerTireFailure);
     registerFunction("Vehicle", "GetTireColdInflationPressureRange", &LuaVehicleBindingHandlers::luaVehicleGetTireColdInflationPressureRange);
     registerFunction("Vehicle", "ResetTirePhysicalState", &LuaVehicleBindingHandlers::luaVehicleResetTirePhysicalState);
     registerFunction("Vehicle", "SetSurfacePreset", &LuaVehicleBindingHandlers::luaVehicleSetSurfacePreset);

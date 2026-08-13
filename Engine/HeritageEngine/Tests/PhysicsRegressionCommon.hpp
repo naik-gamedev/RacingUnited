@@ -130,6 +130,7 @@ bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric();
 bool tireRigidRingStructuralModesAreRateStable();
 bool tireRoadEnvelopeFiltersShortObstacle();
 bool tireThermalPressureAndGripStateAreRateStable();
+bool tireFailurePressureLossAndStructuralStagesBehave();
 bool tireSpatialTreadThermalWearAndFlatSpotBehave();
 bool tireTreadContaminationPickupAndCleaningBehave();
 bool tireWetSurfaceHydroplaningAndDrainageBehave();

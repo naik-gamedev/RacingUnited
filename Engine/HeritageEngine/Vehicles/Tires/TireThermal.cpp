@@ -76,7 +76,8 @@ VehicleScalar stiffnessScale(
 
 VehicleScalar idealGasGaugePressurePa(
     const TireThermalDescription& d,
-    VehicleScalar gasTemperatureC)
+    VehicleScalar gasTemperatureC,
+    VehicleScalar containedGasMassRatio)
 {
     const VehicleScalar referenceKelvin = std::max(
         d.referenceTemperatureC + kKelvinOffset,
@@ -87,8 +88,11 @@ VehicleScalar idealGasGaugePressurePa(
     const VehicleScalar referenceAbsolutePa = std::max(
         d.referenceGaugePressurePa + d.ambientPressurePa,
         VehicleScalar{1000.0});
-    const VehicleScalar absolutePa = referenceAbsolutePa
-        * (gasKelvin / referenceKelvin);
+    const VehicleScalar absolutePa = std::max(
+        d.ambientPressurePa,
+        referenceAbsolutePa
+            * std::max(containedGasMassRatio, VehicleScalar{0.0})
+            * (gasKelvin / referenceKelvin));
     return std::clamp(
         absolutePa - d.ambientPressurePa,
         d.minimumGaugePressurePa,
@@ -99,12 +103,21 @@ void initializeState(
     const TireThermalDescription& d,
     TireThermalState& state)
 {
+    // A failure can be triggered before the first thermal integration tick.
+    // Preserve that pre-seeded gas inventory instead of silently refilling the
+    // tire when temperatures are initialized.
+    const VehicleScalar requestedGasMassRatio = finiteValue(
+        state.containedGasMassRatio)
+        ? std::clamp(state.containedGasMassRatio,
+            VehicleScalar{0.0}, VehicleScalar{1.0})
+        : VehicleScalar{1.0};
     state.initialized = true;
     state.treadTemperatureC = clampTemperature(d, d.initialTreadTemperatureC);
     state.carcassTemperatureC = clampTemperature(d, d.initialCarcassTemperatureC);
     state.gasTemperatureC = clampTemperature(d, d.initialGasTemperatureC);
+    state.containedGasMassRatio = requestedGasMassRatio;
     state.inflationPressurePa = idealGasGaugePressurePa(
-        d, state.gasTemperatureC);
+        d, state.gasTemperatureC, state.containedGasMassRatio);
 }
 
 TireThermalOutput outputFromState(
@@ -124,7 +137,7 @@ TireThermalOutput outputFromState(
     out.carcassTemperatureC = readable.carcassTemperatureC;
     out.gasTemperatureC = readable.gasTemperatureC;
     out.inflationPressurePa = idealGasGaugePressurePa(
-        d, readable.gasTemperatureC);
+        d, readable.gasTemperatureC, readable.containedGasMassRatio);
     out.frictionScale = frictionScale(d, readable.treadTemperatureC);
     out.stiffnessScale = stiffnessScale(d, readable.carcassTemperatureC);
     return out;
@@ -333,7 +346,7 @@ TireThermalOutput advanceTireThermal(
         state.gasTemperatureC
             + gasNet / std::max(d.gasHeatCapacityJPerK, kEpsilon) * dt);
     state.inflationPressurePa = idealGasGaugePressurePa(
-        d, state.gasTemperatureC);
+        d, state.gasTemperatureC, state.containedGasMassRatio);
 
     out = outputFromState(d, state);
     out.slipDissipationWatts = slipPower;

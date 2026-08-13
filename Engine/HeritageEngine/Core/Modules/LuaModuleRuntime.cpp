@@ -321,6 +321,11 @@ void LuaModuleRuntime::onShutdown()
     m_f5WasDown = false;
     m_framebufferWidth = 1;
     m_framebufferHeight = 1;
+    m_panelOpen = false;
+    m_panelVisible = false;
+    m_uiLayoutEditing = false;
+    m_activePanelId.clear();
+    m_uiPanelPlacements.clear();
     m_numericSliderInputLabel.clear();
     m_numericSliderFocusRequested = false;
 }
@@ -1029,10 +1034,11 @@ void LuaModuleRuntime::closeOpenPanel()
         return;
 
     ImGui::End();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
     m_panelOpen = false;
     m_panelVisible = false;
+    m_activePanelId.clear();
 }
 
 void LuaModuleRuntime::queueAction(

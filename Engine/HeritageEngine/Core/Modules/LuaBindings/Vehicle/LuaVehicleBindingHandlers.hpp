@@ -81,6 +81,8 @@ struct LuaVehicleBindingHandlers
     static int luaVehicleGetWheelTireModel(lua_State* state);
     static int luaVehicleGetWheelTireParameterInfo(lua_State* state);
     static int luaVehicleSetTireColdInflationPressure(lua_State* state);
+    static int luaVehicleTriggerWheelTireFailure(lua_State* state);
+    static int luaVehicleTriggerTireFailure(lua_State* state);
     static int luaVehicleGetTireColdInflationPressureRange(lua_State* state);
     static int luaVehicleResetTirePhysicalState(lua_State* state);
     static int luaVehicleSetSurfacePreset(lua_State* state);

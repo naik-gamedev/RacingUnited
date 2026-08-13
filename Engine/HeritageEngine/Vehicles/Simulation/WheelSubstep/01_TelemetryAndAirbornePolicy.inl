@@ -29,6 +29,29 @@
         state.tireRoadHeatFlowWatts = thermal.roadHeatFlowWatts;
         state.tireAirHeatFlowWatts = thermal.airHeatFlowWatts;
     };
+    const auto writeFailureTelemetry = [&](const tires::TireFailureOutput& failure) {
+        const tires::TireFailureState& persistent = wheel.failureState;
+        state.tireFailureStage = failure.valid
+            ? failure.stage : tires::TireFailureStage::Healthy;
+        state.tireFailureEventSerial = persistent.eventSerial;
+        state.tireContainedGasMassRatio = failure.valid
+            ? failure.containedGasMassRatio : VehicleScalar{1.0};
+        state.tirePressurizedGasFraction = failure.valid
+            ? failure.pressurizedGasFraction : VehicleScalar{1.0};
+        state.tirePunctureAreaMm2 = persistent.punctureAreaM2 * VehicleScalar{1.0e6};
+        state.tireEffectiveLeakAreaMm2 = failure.valid
+            ? failure.effectiveLeakAreaM2 * VehicleScalar{1.0e6} : VehicleScalar{0.0};
+        state.tireLeakMassFlowGramsPerSecond = failure.valid
+            ? failure.leakMassFlowKgPerSecond * VehicleScalar{1000.0} : VehicleScalar{0.0};
+        state.tireStructuralIntegrity = failure.valid
+            ? failure.structuralIntegrity : VehicleScalar{1.0};
+        state.tireTreadAttachment = failure.valid
+            ? failure.treadAttachment : VehicleScalar{1.0};
+        state.tireRimContactFraction = failure.valid
+            ? failure.rimContactFraction : VehicleScalar{0.0};
+        state.tireFailureEventElapsedSeconds = failure.valid
+            ? failure.eventElapsedSeconds : VehicleScalar{0.0};
+    };
     const auto writeWearTelemetry = [&](const tires::TireWearOutput& wear) {
         const VehicleScalar initialDepthMm = wheel.tireModel.wear.enabled
             ? wheel.tireModel.wear.initialTreadDepthM * VehicleScalar{1000.0}
@@ -235,6 +258,30 @@
     tires::TireThermalOutput thermalBefore = tires::evaluateTireThermalState(
         wheel.tireModel.thermal, wheel.thermalState);
     writeThermalTelemetry(thermalBefore);
+    tires::TireFailureInput failureReadInput;
+    failureReadInput.grounded = state.grounded;
+    failureReadInput.ambientPressurePa = wheel.tireModel.thermal.ambientPressurePa;
+    failureReadInput.referenceGaugePressurePa =
+        wheel.tireModel.thermal.referenceGaugePressurePa;
+    failureReadInput.referenceTemperatureC =
+        wheel.tireModel.thermal.referenceTemperatureC;
+    failureReadInput.gasTemperatureC = thermalBefore.valid
+        ? thermalBefore.gasTemperatureC : VehicleScalar{20.0};
+    failureReadInput.inflationGaugePressurePa = thermalBefore.valid
+        ? thermalBefore.inflationPressurePa : wheel.tireModel.inflationPressurePa;
+    failureReadInput.identifiedReferencePressurePa =
+        wheel.tireModel.referenceInflationPressurePa;
+    failureReadInput.normalLoadN = state.normalForce;
+    failureReadInput.nominalLoadN = wheel.tireModel.nominalLoad;
+    failureReadInput.forwardSpeedMps = previousLongitudinalSpeed;
+    failureReadInput.longitudinalSlipVelocityMps = 0.0;
+    failureReadInput.lateralSlipVelocityMps = previousLateralSpeed;
+    failureReadInput.radialDissipationWatts = state.tireRadialDissipationWatts;
+    failureReadInput.carcassTemperatureC = thermalBefore.valid
+        ? thermalBefore.carcassTemperatureC : VehicleScalar{20.0};
+    tires::TireFailureOutput failureBefore = tires::evaluateTireFailureState(
+        wheel.tireModel.failure, failureReadInput, wheel.failureState);
+    writeFailureTelemetry(failureBefore);
     tires::TireWearInput wearReadInput;
     wearReadInput.grounded = false;
     wearReadInput.wheelRotationDegrees = state.wheelRotationDegrees;
@@ -275,7 +322,25 @@
             airborneThermal = tires::advanceTireThermal(
                 wheel.tireModel.thermal, thermalInput,
                 static_cast<VehicleScalar>(substepDeltaTime), wheel.thermalState);
+            tires::TireFailureInput failureInput = failureReadInput;
+            failureInput.grounded = false;
+            failureInput.normalLoadN = 0.0;
+            failureInput.forwardSpeedMps = previousLongitudinalSpeed;
+            failureInput.gasTemperatureC = airborneThermal.gasTemperatureC;
+            failureInput.carcassTemperatureC = airborneThermal.carcassTemperatureC;
+            failureInput.inflationGaugePressurePa = airborneThermal.inflationPressurePa;
+            failureBefore = tires::advanceTireFailure(
+                wheel.tireModel.failure, failureInput,
+                static_cast<VehicleScalar>(substepDeltaTime), wheel.failureState);
+            if (failureBefore.valid)
+            {
+                wheel.thermalState.containedGasMassRatio =
+                    failureBefore.containedGasMassRatio;
+                airborneThermal = tires::evaluateTireThermalState(
+                    wheel.tireModel.thermal, wheel.thermalState);
+            }
             writeThermalTelemetry(airborneThermal);
+            writeFailureTelemetry(failureBefore);
         }
         if (wheel.tireModel.wear.enabled)
         {

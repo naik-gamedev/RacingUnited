@@ -415,6 +415,18 @@ int LuaVehicleBindingHandlers::luaVehicleGetWheelTelemetry(lua_State* state)
     pushNumberField("tireCarcassTemperatureC", value.tireCarcassTemperatureC);
     pushNumberField("tireGasTemperatureC", value.tireGasTemperatureC);
     pushNumberField("tireInflationPressurePa", value.tireInflationPressurePa);
+    pushStringField("tireFailureStage", heritage::vehicles::tires::tireFailureStageName(value.tireFailureStage));
+    pushIntegerField("tireFailureStageId", static_cast<LuaInteger>(value.tireFailureStage));
+    pushIntegerField("tireFailureEventSerial", static_cast<LuaInteger>(value.tireFailureEventSerial));
+    pushNumberField("tireContainedGasMassRatio", value.tireContainedGasMassRatio);
+    pushNumberField("tirePressurizedGasFraction", value.tirePressurizedGasFraction);
+    pushNumberField("tirePunctureAreaMm2", value.tirePunctureAreaMm2);
+    pushNumberField("tireEffectiveLeakAreaMm2", value.tireEffectiveLeakAreaMm2);
+    pushNumberField("tireLeakMassFlowGramsPerSecond", value.tireLeakMassFlowGramsPerSecond);
+    pushNumberField("tireStructuralIntegrity", value.tireStructuralIntegrity);
+    pushNumberField("tireTreadAttachment", value.tireTreadAttachment);
+    pushNumberField("tireRimContactFraction", value.tireRimContactFraction);
+    pushNumberField("tireFailureEventElapsedSeconds", value.tireFailureEventElapsedSeconds);
     pushNumberField("tireThermalFrictionScale", value.tireThermalFrictionScale);
     pushNumberField("tireThermalStiffnessScale", value.tireThermalStiffnessScale);
     pushNumberField("tireSlipDissipationWatts", value.tireSlipDissipationWatts);

@@ -107,6 +107,30 @@ void alignNextItem(UiAlignment alignment, float itemWidth)
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
 }
 
+std::string panelPlacementSavePrefix(const std::string& panelId)
+{
+    std::string safeId;
+    safeId.reserve((std::min)(panelId.size(), std::size_t{ 96 }));
+    for (const unsigned char character : panelId)
+    {
+        if (safeId.size() >= 96)
+            break;
+        const bool alphaNumeric =
+            (character >= 'a' && character <= 'z')
+            || (character >= 'A' && character <= 'Z')
+            || (character >= '0' && character <= '9');
+        safeId.push_back(alphaNumeric ? static_cast<char>(character) : '_');
+    }
+    if (safeId.empty())
+        safeId = "panel";
+    return "ui.layout." + safeId;
+}
+
+float clampPanelCoordinate(float value, float minimum, float maximum)
+{
+    return (std::min)((std::max)(value, minimum), (std::max)(minimum, maximum));
+}
+
 } // namespace
 
 int LuaCoreBindingHandlers::luaUiBeginPanel(lua_State* state)
@@ -131,24 +155,115 @@ int LuaCoreBindingHandlers::luaUiBeginPanel(lua_State* state)
     const float panelWidth = (std::min)((std::max)(180.0f, requestedWidth), maximumPanelWidth);
     const float panelHeight = (std::min)((std::max)(140.0f, requestedHeight), maximumPanelHeight);
 
-    ImGui::SetNextWindowPos(
-        ImVec2(availableWidth * 0.5f, availableHeight * 0.5f),
-        ImGuiCond_Always,
-        ImVec2(0.5f, 0.5f));
+    constexpr float safeEdge = 8.0f;
+    const std::string placementPrefix = panelPlacementSavePrefix(panelId);
+    const auto [placementIterator, inserted] = runtime->m_uiPanelPlacements.try_emplace(
+        panelId,
+        LuaModuleRuntime::UiPanelPlacement{
+            static_cast<float>(runtime->m_saveStore.getNumber(
+                placementPrefix + ".x", (availableWidth - panelWidth) * 0.5f)),
+            static_cast<float>(runtime->m_saveStore.getNumber(
+                placementPrefix + ".y", (availableHeight - panelHeight) * 0.5f)) });
+    LuaModuleRuntime::UiPanelPlacement& placement = placementIterator->second;
+    placement.x = clampPanelCoordinate(
+        placement.x, safeEdge, availableWidth - panelWidth - safeEdge);
+    placement.y = clampPanelCoordinate(
+        placement.y, safeEdge, availableHeight - panelHeight - safeEdge);
+    if (inserted)
+        ImGui::SetNextWindowPos(ImVec2(placement.x, placement.y), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(panelWidth, panelHeight), ImGuiCond_Always);
 
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.035f, 0.040f, 0.048f, 0.96f));
+    ImGui::PushStyleColor(
+        ImGuiCol_Border,
+        runtime->m_uiLayoutEditing
+            ? ImVec4(0.15f, 0.80f, 0.95f, 1.0f)
+            : ImVec4(0.20f, 0.23f, 0.28f, 0.85f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22.0f, 20.0f));
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_WindowBorderSize,
+        runtime->m_uiLayoutEditing ? 2.0f : 1.0f);
 
-    const ImGuiWindowFlags flags =
+    ImGuiWindowFlags flags =
         ImGuiWindowFlags_NoTitleBar |
         ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoSavedSettings;
+    if (!runtime->m_uiLayoutEditing)
+        flags |= ImGuiWindowFlags_NoMove;
 
     const std::string windowName = "##lua_panel_" + panelId;
     runtime->m_panelVisible = ImGui::Begin(windowName.c_str(), nullptr, flags);
     runtime->m_panelOpen = true;
+    runtime->m_activePanelId = panelId;
+
+    const ImVec2 actualSize = ImGui::GetWindowSize();
+    const ImVec2 actualPosition = ImGui::GetWindowPos();
+    const ImVec2 clampedPosition(
+        clampPanelCoordinate(
+            actualPosition.x, safeEdge, availableWidth - actualSize.x - safeEdge),
+        clampPanelCoordinate(
+            actualPosition.y, safeEdge, availableHeight - actualSize.y - safeEdge));
+    if (std::abs(actualPosition.x - clampedPosition.x) > 0.01f
+        || std::abs(actualPosition.y - clampedPosition.y) > 0.01f)
+    {
+        ImGui::SetWindowPos(clampedPosition, ImGuiCond_Always);
+    }
+
+    if (std::abs(placement.x - clampedPosition.x) > 0.25f
+        || std::abs(placement.y - clampedPosition.y) > 0.25f)
+    {
+        placement.x = clampedPosition.x;
+        placement.y = clampedPosition.y;
+        runtime->m_saveStore.setNumber(placementPrefix + ".x", placement.x);
+        runtime->m_saveStore.setNumber(placementPrefix + ".y", placement.y);
+    }
+
+    if (runtime->m_uiLayoutEditing)
+    {
+        const ImU32 boundaryColor = ImGui::GetColorU32(
+            ImVec4(0.15f, 0.80f, 0.95f, 0.90f));
+        ImGui::GetForegroundDrawList()->AddRect(
+            ImVec2(safeEdge, safeEdge),
+            ImVec2(availableWidth - safeEdge, availableHeight - safeEdge),
+            boundaryColor,
+            0.0f,
+            0,
+            2.0f);
+
+        const ImVec2 handleStart = ImGui::GetCursorScreenPos();
+        const ImVec2 handleSize(
+            (std::max)(80.0f, ImGui::GetContentRegionAvail().x),
+            24.0f);
+        ImGui::InvisibleButton("##heritage_ui_layout_drag_handle", handleSize);
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddRectFilled(
+            handleStart,
+            ImVec2(handleStart.x + handleSize.x, handleStart.y + handleSize.y),
+            ImGui::GetColorU32(ImVec4(0.08f, 0.34f, 0.43f, 0.92f)),
+            3.0f);
+        drawList->AddText(
+            ImVec2(handleStart.x + 7.0f, handleStart.y + 4.0f),
+            ImGui::GetColorU32(ImVec4(0.78f, 0.95f, 1.0f, 1.0f)),
+            "DRAG WINDOW");
+        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        {
+            const ImVec2 mouseDelta = ImGui::GetIO().MouseDelta;
+            const ImVec2 position = ImGui::GetWindowPos();
+            ImGui::SetWindowPos(
+                ImVec2(
+                    clampPanelCoordinate(
+                        position.x + mouseDelta.x,
+                        safeEdge,
+                        availableWidth - actualSize.x - safeEdge),
+                    clampPanelCoordinate(
+                        position.y + mouseDelta.y,
+                        safeEdge,
+                        availableHeight - actualSize.y - safeEdge)),
+                ImGuiCond_Always);
+        }
+        ImGui::Spacing();
+    }
+
     runtime->m_api.lua_pushboolean(state, runtime->m_panelVisible ? 1 : 0);
     return 1;
 }
@@ -160,6 +275,54 @@ int LuaCoreBindingHandlers::luaUiEndPanel(lua_State* state)
     return 0;
 }
 
+int LuaCoreBindingHandlers::luaUiSetLayoutEditing(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+    runtime->m_uiLayoutEditing = LuaModuleRuntime::booleanArgument(
+        *runtime, state, 1, false);
+    return 0;
+}
+
+int LuaCoreBindingHandlers::luaUiIsLayoutEditing(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+    runtime->m_api.lua_pushboolean(state, runtime->m_uiLayoutEditing ? 1 : 0);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaUiCenterCurrentPanel(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_panelOpen || runtime->m_activePanelId.empty())
+        return 0;
+
+    constexpr float safeEdge = 8.0f;
+    const ImVec2 size = ImGui::GetWindowSize();
+    const ImVec2 centered(
+        clampPanelCoordinate(
+            (static_cast<float>(runtime->m_framebufferWidth) - size.x) * 0.5f,
+            safeEdge,
+            static_cast<float>(runtime->m_framebufferWidth) - size.x - safeEdge),
+        clampPanelCoordinate(
+            (static_cast<float>(runtime->m_framebufferHeight) - size.y) * 0.5f,
+            safeEdge,
+            static_cast<float>(runtime->m_framebufferHeight) - size.y - safeEdge));
+    ImGui::SetWindowPos(centered, ImGuiCond_Always);
+
+    LuaModuleRuntime::UiPanelPlacement& placement =
+        runtime->m_uiPanelPlacements[runtime->m_activePanelId];
+    placement.x = centered.x;
+    placement.y = centered.y;
+    const std::string placementPrefix = panelPlacementSavePrefix(runtime->m_activePanelId);
+    runtime->m_saveStore.setNumber(placementPrefix + ".x", placement.x);
+    runtime->m_saveStore.setNumber(placementPrefix + ".y", placement.y);
+    return 0;
+}
+
 int LuaCoreBindingHandlers::luaUiBeginTabBar(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
@@ -167,7 +330,11 @@ int LuaCoreBindingHandlers::luaUiBeginTabBar(lua_State* state)
         return 0;
 
     const std::string id = LuaModuleRuntime::stringArgument(*runtime, state, 1, "LuaTabs");
-    const bool open = ImGui::BeginTabBar(id.c_str());
+    // Debug/workshop screens deliberately expose many modular subsystems.
+    // Scroll-fitting keeps every tab reachable at narrow panel widths instead
+    // of clipping the rightmost modules behind the fixed-size Lua panel.
+    const bool open = ImGui::BeginTabBar(
+        id.c_str(), ImGuiTabBarFlags_FittingPolicyScroll);
     if (open)
         runtime->m_uiScopes.push_back(LuaModuleRuntime::UiScopeType::TabBar);
     runtime->m_api.lua_pushboolean(state, open ? 1 : 0);
@@ -278,7 +445,9 @@ int LuaCoreBindingHandlers::luaUiTextDisabled(lua_State* state)
     if (runtime)
     {
         const std::string text = LuaModuleRuntime::stringArgument(*runtime, state, 1);
+        ImGui::PushTextWrapPos(0.0f);
         ImGui::TextDisabled("%s", text.c_str());
+        ImGui::PopTextWrapPos();
     }
     return 0;
 }
@@ -800,6 +969,9 @@ void LuaModuleRuntime::registerUiBindings()
 {
     registerFunction("UI", "BeginPanel", &LuaCoreBindingHandlers::luaUiBeginPanel);
     registerFunction("UI", "EndPanel", &LuaCoreBindingHandlers::luaUiEndPanel);
+    registerFunction("UI", "SetLayoutEditing", &LuaCoreBindingHandlers::luaUiSetLayoutEditing);
+    registerFunction("UI", "IsLayoutEditing", &LuaCoreBindingHandlers::luaUiIsLayoutEditing);
+    registerFunction("UI", "CenterCurrentPanel", &LuaCoreBindingHandlers::luaUiCenterCurrentPanel);
     registerFunction("UI", "BeginTabBar", &LuaCoreBindingHandlers::luaUiBeginTabBar);
     registerFunction("UI", "EndTabBar", &LuaCoreBindingHandlers::luaUiEndTabBar);
     registerFunction("UI", "BeginTabItem", &LuaCoreBindingHandlers::luaUiBeginTabItem);

@@ -215,10 +215,19 @@ private:
         TabItem
     };
 
+    struct UiPanelPlacement
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+    };
+
     int m_framebufferWidth = 1;
     int m_framebufferHeight = 1;
     bool m_panelOpen = false;
     bool m_panelVisible = false;
+    bool m_uiLayoutEditing = false;
+    std::string m_activePanelId;
+    std::unordered_map<std::string, UiPanelPlacement> m_uiPanelPlacements;
     std::string m_numericSliderInputLabel;
     bool m_numericSliderFocusRequested = false;
     std::vector<UiScopeType> m_uiScopes;

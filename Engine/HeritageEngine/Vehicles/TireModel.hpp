@@ -9,6 +9,7 @@
 #include "Tires/TireRigidRing.hpp"
 #include "Tires/TireRoadEnveloping.hpp"
 #include "Tires/TireThermal.hpp"
+#include "Tires/TireFailure.hpp"
 #include "Tires/TireWear.hpp"
 #include "Tires/TireSurfaceInteraction.hpp"
 #include "Tires/TireWetSurfaceInteraction.hpp"
@@ -76,6 +77,7 @@ struct TireModelDescription
     tires::TireRigidRingDescription rigidRing;
     tires::TireRoadEnvelopingDescription roadEnveloping;
     tires::TireThermalDescription thermal;
+    tires::TireFailureDescription failure;
     tires::TireWearDescription wear;
     tires::TireContaminationDescription contamination;
     tires::TireWetSurfaceDescription wetSurface;

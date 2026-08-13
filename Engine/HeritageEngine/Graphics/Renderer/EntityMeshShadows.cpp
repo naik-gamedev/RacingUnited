@@ -594,6 +594,8 @@ void EntityMeshRenderer::drawShadowMaps(
 
             const bool useTireVisual =
                 tireVisualNode != nullptr && tireVisualState != nullptr;
+            if (useTireVisual && tireVisualState->tireVisualBareRim)
+                return;
             glUniform1i(
                 m_shadowUniforms.tireVisualEnabled,
                 useTireVisual ? 1 : 0);

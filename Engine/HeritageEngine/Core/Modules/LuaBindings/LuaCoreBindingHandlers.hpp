@@ -110,6 +110,9 @@ struct LuaCoreBindingHandlers
     static int luaScriptInclude(lua_State* state);
     static int luaUiBeginPanel(lua_State* state);
     static int luaUiEndPanel(lua_State* state);
+    static int luaUiSetLayoutEditing(lua_State* state);
+    static int luaUiIsLayoutEditing(lua_State* state);
+    static int luaUiCenterCurrentPanel(lua_State* state);
     static int luaUiBeginTabBar(lua_State* state);
     static int luaUiEndTabBar(lua_State* state);
     static int luaUiBeginTabItem(lua_State* state);

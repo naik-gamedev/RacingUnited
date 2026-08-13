@@ -223,6 +223,44 @@ int LuaVehicleBindingHandlers::luaVehicleGetTireColdInflationPressureRange(lua_S
     return 3;
 }
 
+int LuaVehicleBindingHandlers::luaVehicleTriggerWheelTireFailure(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime) return 0;
+    int wheelConverted = 0;
+    int stageConverted = 0;
+    const LuaInteger wheel = runtime->m_api.lua_tointegerx(state, 2, &wheelConverted);
+    const LuaInteger stage = runtime->m_api.lua_tointegerx(state, 3, &stageConverted);
+    const bool validStage = stageConverted
+        && stage >= static_cast<LuaInteger>(heritage::vehicles::tires::TireFailureStage::Healthy)
+        && stage <= static_cast<LuaInteger>(heritage::vehicles::tires::TireFailureStage::BareRimRunning);
+    const bool result = wheelConverted && wheel >= 1 && validStage
+        && runtime->m_physics
+        && runtime->m_physics->vehicles().triggerWheelTireFailure(
+            LuaModuleRuntime::vehicleHandleArgument(*runtime, state, 1),
+            static_cast<std::size_t>(wheel - 1),
+            static_cast<heritage::vehicles::tires::TireFailureStage>(stage));
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaVehicleBindingHandlers::luaVehicleTriggerTireFailure(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime) return 0;
+    int converted = 0;
+    const LuaInteger stage = runtime->m_api.lua_tointegerx(state, 2, &converted);
+    const bool validStage = converted
+        && stage >= static_cast<LuaInteger>(heritage::vehicles::tires::TireFailureStage::Healthy)
+        && stage <= static_cast<LuaInteger>(heritage::vehicles::tires::TireFailureStage::BareRimRunning);
+    const bool result = validStage && runtime->m_physics
+        && runtime->m_physics->vehicles().triggerTireFailure(
+            LuaModuleRuntime::vehicleHandleArgument(*runtime, state, 1),
+            static_cast<heritage::vehicles::tires::TireFailureStage>(stage));
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
 int LuaVehicleBindingHandlers::luaVehicleResetTirePhysicalState(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);

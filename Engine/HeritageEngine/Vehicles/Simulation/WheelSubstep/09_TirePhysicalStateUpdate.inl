@@ -31,7 +31,30 @@
         thermalAfter = tires::advanceTireThermal(
             wheel.tireModel.thermal, thermalInput,
             static_cast<VehicleScalar>(substepDeltaTime), wheel.thermalState);
+        tires::TireFailureInput failureInput = failureReadInput;
+        failureInput.grounded = true;
+        failureInput.normalLoadN = suspensionForce;
+        failureInput.nominalLoadN = nominalLoadN;
+        failureInput.forwardSpeedMps = structuralLongitudinalSpeed;
+        failureInput.longitudinalSlipVelocityMps =
+            circumferentialSpeed - structuralLongitudinalSpeed;
+        failureInput.lateralSlipVelocityMps = structuralLateralSpeed;
+        failureInput.radialDissipationWatts = state.tireRadialDissipationWatts;
+        failureInput.gasTemperatureC = thermalAfter.gasTemperatureC;
+        failureInput.carcassTemperatureC = thermalAfter.carcassTemperatureC;
+        failureInput.inflationGaugePressurePa = thermalAfter.inflationPressurePa;
+        failureBefore = tires::advanceTireFailure(
+            wheel.tireModel.failure, failureInput,
+            static_cast<VehicleScalar>(substepDeltaTime), wheel.failureState);
+        if (failureBefore.valid)
+        {
+            wheel.thermalState.containedGasMassRatio =
+                failureBefore.containedGasMassRatio;
+            thermalAfter = tires::evaluateTireThermalState(
+                wheel.tireModel.thermal, wheel.thermalState);
+        }
         writeThermalTelemetry(thermalAfter);
+        writeFailureTelemetry(failureBefore);
     }
     if (wheel.tireModel.wear.enabled)
     {
@@ -175,6 +198,8 @@
     presentationContact.wetness = static_cast<float>(hitSurfaceConditions.wetness);
     presentationContact.tireWidthM = static_cast<float>(
         std::max(contactGeometryDescription.nominalWidthM, VehicleScalar{0.08}));
+    presentationContact.tireRadiusM = static_cast<float>(
+        std::max(contactGeometryDescription.unloadedRadiusM, VehicleScalar{0.05}));
     presentationContact.sourceStreamId = wheel.tireMarkStreamId;
     presentationContact.slipDissipationWatts = rubberContact.slipDissipationWatts;
     presentationContact.gripUtilization = static_cast<float>(state.gripUtilization);
@@ -204,6 +229,21 @@
         trackRubberAfter.freshFragmentSeverity;
     presentationContact.tireSurfaceSpeedMps = static_cast<float>(
         std::abs(circumferentialSpeed));
+    presentationContact.tireFailureStage = static_cast<std::uint8_t>(
+        failureBefore.valid ? failureBefore.stage : tires::TireFailureStage::Healthy);
+    presentationContact.tireFailureEventSerial = wheel.failureState.eventSerial;
+    presentationContact.tireFailureLeakMassFlowKgPerSecond = static_cast<float>(
+        failureBefore.valid ? failureBefore.leakMassFlowKgPerSecond
+            : VehicleScalar{0.0});
+    presentationContact.tireFailureStructuralIntegrity = static_cast<float>(
+        failureBefore.valid ? failureBefore.structuralIntegrity
+            : VehicleScalar{1.0});
+    presentationContact.tireFailureTreadAttachment = static_cast<float>(
+        failureBefore.valid ? failureBefore.treadAttachment
+            : VehicleScalar{1.0});
+    presentationContact.tireFailureRimContactFraction = static_cast<float>(
+        failureBefore.valid ? failureBefore.rimContactFraction
+            : VehicleScalar{0.0});
     presentationContact.rutDepthM = deformableTerrainField.valid
         ? deformableTerrainField.rutDepthM : 0.0f;
     presentationContact.rutDepthDeltaM = static_cast<float>(presentationRutDepthDeltaM);
@@ -212,4 +252,3 @@
     presentationContact.looseDepthM = deformableTerrainField.valid
         ? deformableTerrainField.looseDepthM : 0.0f;
     surfaces.recordContactPresentation(hit.point, presentationContact);
-

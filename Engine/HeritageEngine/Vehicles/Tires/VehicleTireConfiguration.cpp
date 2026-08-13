@@ -33,6 +33,42 @@ bool pressureInsideLiveRange(VehicleScalar pressurePa)
     return pressurePa >= minimumPa && pressurePa <= maximumPa;
 }
 
+void applyLegacyForceTuning(
+    TireModelDescription& target,
+    const TireModelDescription& tuning)
+{
+    target.nominalLoad = tuning.nominalLoad;
+    target.peakFriction = tuning.peakFriction;
+    target.longitudinalStiffness = tuning.longitudinalStiffness;
+    target.corneringStiffness = tuning.corneringStiffness;
+    target.loadSensitivity = tuning.loadSensitivity;
+    target.longitudinalRelaxationLength = tuning.longitudinalRelaxationLength;
+    target.lateralRelaxationLength = tuning.lateralRelaxationLength;
+    target.wheelInertia = tuning.wheelInertia;
+    target.pneumaticTrail = tuning.pneumaticTrail;
+    target.stiffnessLoadExponent = tuning.stiffnessLoadExponent;
+    target.longitudinalShapeFactor = tuning.longitudinalShapeFactor;
+    target.lateralShapeFactor = tuning.lateralShapeFactor;
+    target.longitudinalCurvatureFactor = tuning.longitudinalCurvatureFactor;
+    target.lateralCurvatureFactor = tuning.lateralCurvatureFactor;
+    target.combinedSlipExponent = tuning.combinedSlipExponent;
+    target.pneumaticTrailFalloff = tuning.pneumaticTrailFalloff;
+
+    // This API is the compatibility/manual curve editor, so its numbers must
+    // become the active MF seed. Keep fitted geometry and native thermal,
+    // failure, wear and surface providers: changing a force curve must not
+    // silently make punctures, pressure or tread state cease to exist.
+    target.magicFormulaUsesLegacySeed = true;
+    target.importedPropertyFile = false;
+    target.importedFitType = 0;
+    target.parameterSource = "Heritage manual tire tuning";
+    target.parameterProvenance = "manual_legacy_force_override";
+    target.parameterTireSide.clear();
+    target.parameterConfidence = 0.0;
+    target.importedMappedParameterCount = 0;
+    target.importedUnsupportedParameterCount = 0;
+}
+
 } // namespace
 
 bool VehicleSystem::setTireModel(
@@ -84,15 +120,30 @@ bool VehicleSystem::setTireModel(
         return false;
     }
 
-    slot->record.tireModel = value;
+    TireModelDescription defaultValue = slot->record.tireModel;
+    applyLegacyForceTuning(defaultValue, value);
+    if (!validTireModelDescription(defaultValue))
+    {
+        setError("Vehicle.SetTireModel could not preserve the fitted tire providers with this tuning.");
+        return false;
+    }
+    slot->record.tireModel = defaultValue;
     slot->record.description.tireFriction = static_cast<float>(value.peakFriction);
     // Preserve the legacy/global meaning of SetTireModel: it updates the
     // default profile and every wheel already attached to the vehicle.
     for (WheelRecord& wheel : slot->record.wheels)
     {
-        wheel.tireModel = value;
+        TireModelDescription wheelValue = wheel.tireModel;
+        applyLegacyForceTuning(wheelValue, value);
+        if (!validTireModelDescription(wheelValue))
+        {
+            setError("Vehicle.SetTireModel could not preserve one fitted wheel's providers with this tuning.");
+            return false;
+        }
+        wheel.tireModel = wheelValue;
         wheel.tirePartAssignment = {};
         wheel.thermalState = {};
+        wheel.failureState = {};
         wheel.wearState = {};
     }
     clearError();
@@ -149,10 +200,19 @@ bool VehicleSystem::setWheelTireModel(
         return false;
     }
 
-    slot->record.wheels[wheelIndex].tireModel = value;
-    slot->record.wheels[wheelIndex].tirePartAssignment = {};
-    slot->record.wheels[wheelIndex].thermalState = {};
-    slot->record.wheels[wheelIndex].wearState = {};
+    WheelRecord& wheel = slot->record.wheels[wheelIndex];
+    TireModelDescription wheelValue = wheel.tireModel;
+    applyLegacyForceTuning(wheelValue, value);
+    if (!validTireModelDescription(wheelValue))
+    {
+        setError("Vehicle.SetWheelTireModel could not preserve the fitted wheel's providers with this tuning.");
+        return false;
+    }
+    wheel.tireModel = wheelValue;
+    wheel.tirePartAssignment = {};
+    wheel.thermalState = {};
+    wheel.failureState = {};
+    wheel.wearState = {};
     clearError();
     return true;
 }
@@ -202,6 +262,7 @@ bool VehicleSystem::setWheelTireDescription(
     slot->record.wheels[wheelIndex].tireModel = description;
     slot->record.wheels[wheelIndex].tirePartAssignment = {};
     slot->record.wheels[wheelIndex].thermalState = {};
+    slot->record.wheels[wheelIndex].failureState = {};
     slot->record.wheels[wheelIndex].wearState = {};
     clearError();
     return true;
@@ -244,6 +305,7 @@ bool VehicleSystem::loadWheelTirePropertyFile(
     slot->record.wheels[wheelIndex].tireModel = value;
     slot->record.wheels[wheelIndex].tirePartAssignment = {};
     slot->record.wheels[wheelIndex].thermalState = {};
+    slot->record.wheels[wheelIndex].failureState = {};
     slot->record.wheels[wheelIndex].wearState = {};
     clearError();
     return true;
@@ -274,6 +336,7 @@ bool VehicleSystem::assignWheelTirePart(
     WheelRecord& wheel = slot->record.wheels[wheelIndex];
     wheel.tireModel = resolvedPart.model;
     wheel.thermalState = {};
+    wheel.failureState = {};
     wheel.wearState = {};
     wheel.tirePartAssignment.assigned = true;
     wheel.tirePartAssignment.partId = definition.id;
@@ -319,6 +382,10 @@ bool VehicleSystem::setWheelTireColdInflationPressure(
                 pressurePa * VehicleScalar{1.50} + VehicleScalar{10000.0}));
     }
     wheel.thermalState = {};
+    // A pressure command represents refilling the fitted tire, not repairing
+    // its puncture/carcass. Preserve the failure while resetting gas inventory.
+    wheel.failureState.containedGasMassRatio = 1.0;
+    wheel.failureState.pressurizedGasFraction = 1.0;
     if (wheel.tirePartAssignment.assigned)
         wheel.tirePartAssignment.coldInflationPressurePa = pressurePa;
     clearError();
@@ -359,8 +426,72 @@ bool VehicleSystem::setTireColdInflationPressure(
                     pressurePa * VehicleScalar{1.50} + VehicleScalar{10000.0}));
         }
         wheel.thermalState = {};
+        wheel.failureState.containedGasMassRatio = 1.0;
+        wheel.failureState.pressurizedGasFraction = 1.0;
         if (wheel.tirePartAssignment.assigned)
             wheel.tirePartAssignment.coldInflationPressurePa = pressurePa;
+    }
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::triggerWheelTireFailure(
+    VehicleHandle handle,
+    std::size_t wheelIndex,
+    tires::TireFailureStage stage)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle.TriggerWheelTireFailure received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+
+    WheelRecord& wheel = slot->record.wheels[wheelIndex];
+    if (!wheel.tireModel.failure.enabled || !wheel.tireModel.thermal.enabled)
+    {
+        setError("Vehicle.TriggerWheelTireFailure requires the fitted tire's thermal and failure providers.");
+        return false;
+    }
+    const tires::TireThermalOutput thermal = tires::evaluateTireThermalState(
+        wheel.tireModel.thermal, wheel.thermalState);
+    tires::TireFailureInput input;
+    input.ambientPressurePa = wheel.tireModel.thermal.ambientPressurePa;
+    input.referenceGaugePressurePa = wheel.tireModel.thermal.referenceGaugePressurePa;
+    input.referenceTemperatureC = wheel.tireModel.thermal.referenceTemperatureC;
+    input.gasTemperatureC = thermal.valid
+        ? thermal.gasTemperatureC : wheel.tireModel.thermal.initialGasTemperatureC;
+    input.carcassTemperatureC = thermal.valid
+        ? thermal.carcassTemperatureC : wheel.tireModel.thermal.initialCarcassTemperatureC;
+    input.inflationGaugePressurePa = thermal.valid
+        ? thermal.inflationPressurePa : wheel.tireModel.inflationPressurePa;
+    input.identifiedReferencePressurePa = wheel.tireModel.referenceInflationPressurePa;
+    input.nominalLoadN = wheel.tireModel.nominalLoad;
+    input.normalLoadN = wheel.state.normalForce;
+    input.grounded = wheel.state.grounded;
+    tires::triggerTireFailure(
+        wheel.tireModel.failure, input, stage, wheel.failureState);
+    wheel.thermalState.containedGasMassRatio =
+        wheel.failureState.containedGasMassRatio;
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::triggerTireFailure(
+    VehicleHandle handle,
+    tires::TireFailureStage stage)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || slot->record.wheels.empty())
+    {
+        setError("Vehicle.TriggerTireFailure requires a valid vehicle with wheels.");
+        return false;
+    }
+    for (std::size_t wheelIndex = 0;
+        wheelIndex < slot->record.wheels.size(); ++wheelIndex)
+    {
+        if (!triggerWheelTireFailure(handle, wheelIndex, stage))
+            return false;
     }
     clearError();
     return true;
@@ -440,6 +571,7 @@ bool VehicleSystem::resetTirePhysicalState(VehicleHandle handle)
     for (WheelRecord& wheel : slot->record.wheels)
     {
         wheel.thermalState = {};
+        wheel.failureState = {};
         wheel.wearState = {};
     }
     clearError();

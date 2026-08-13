@@ -29,6 +29,7 @@ noseMarkerEntity = 0
 temporaryEntity = 0
 prefabCloneEntity = 0
 showPrototypeControls = true
+uiLayoutEditing = false
 prototypeScenePreset = ""
 visualSteering = 0.0
 destroyedEntityHandle = 0

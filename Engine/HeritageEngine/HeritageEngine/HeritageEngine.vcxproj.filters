@@ -806,6 +806,9 @@
     <ClInclude Include="..\Vehicles\Tires\TireThermal.hpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireFailure.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
     <ClInclude Include="..\Vehicles\VehiclePrecision.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -1291,6 +1294,9 @@
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
     <ClCompile Include="..\Vehicles\Tires\TireThermal.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireFailure.cpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
     <None Include="..\Vehicles\Tires\TireWear.cpp">

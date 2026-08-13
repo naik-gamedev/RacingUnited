@@ -71,7 +71,10 @@ struct TireThermalDescription
 
     VehicleScalar minimumTemperatureC = -50.0;
     VehicleScalar maximumTemperatureC = 220.0;
-    VehicleScalar minimumGaugePressurePa = 30000.0;
+    // Zero must remain representable for punctures/blowouts. Construction-
+    // specific force providers may impose their own identified-data floor,
+    // but the contained-air state itself must be able to reach ambient.
+    VehicleScalar minimumGaugePressurePa = 0.0;
     VehicleScalar maximumGaugePressurePa = 700000.0;
 };
 
@@ -82,6 +85,10 @@ struct TireThermalState
     VehicleScalar carcassTemperatureC = 20.0;
     VehicleScalar gasTemperatureC = 20.0;
     VehicleScalar inflationPressurePa = 220000.0;
+    // Current contained mass divided by mass at the fitted cold reference.
+    // TIRE19 owns leak integration; TIRE07 turns that mass and temperature
+    // into live absolute/gauge pressure.
+    VehicleScalar containedGasMassRatio = 1.0;
 };
 
 struct TireThermalInput

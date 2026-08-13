@@ -19,7 +19,9 @@ enum class SurfaceParticleKind : std::uint8_t
     LooseDebris,
     Mud,
     Snow,
-    RubberShred
+    RubberShred,
+    TireFailureSmoke,
+    TireFailureDebris
 };
 
 struct SurfacePresentationContact
@@ -35,6 +37,7 @@ struct SurfacePresentationContact
     float normalLoadN = 0.0f;
     float wetness = 0.0f;
     float tireWidthM = 0.20f;
+    float tireRadiusM = 0.30f;
 
     // TIRE16 pressure-resolved tire-mark inputs. sourceStreamId identifies one
     // physical wheel/contact stream so successive high-rate samples can be
@@ -56,6 +59,16 @@ struct SurfacePresentationContact
     float freshRubberShed = 0.0f;
     float rubberFragmentSeverity = 0.0f;
     float tireSurfaceSpeedMps = 0.0f;
+
+    // TIRE19 presentation consumes persistent failure state without owning it.
+    // The serial makes one-shot blowout/tread-loss bursts independent from the
+    // 1000 Hz contact rate; the continuous values drive sparse smoke/debris.
+    std::uint8_t tireFailureStage = 0;
+    std::uint64_t tireFailureEventSerial = 0;
+    float tireFailureLeakMassFlowKgPerSecond = 0.0f;
+    float tireFailureStructuralIntegrity = 1.0f;
+    float tireFailureTreadAttachment = 1.0f;
+    float tireFailureRimContactFraction = 0.0f;
 
     // Authoritative deformable-surface state/delta when available. These are
     // presentation inputs only; this system never feeds forces back to tires.
@@ -248,6 +261,15 @@ private:
         double lastContactTimeSeconds = -1.0;
     };
 
+    struct TireFailureEmitter
+    {
+        std::uint64_t lastEventSerial = 0;
+        std::uint8_t lastStage = 0;
+        float smokeBudget = 0.0f;
+        float debrisBudget = 0.0f;
+        double lastContactTimeSeconds = -1.0;
+    };
+
     TrackKey trackKey(
         const heritage::math::DVec3& globalPosition,
         SurfaceMaterial material) const;
@@ -282,6 +304,7 @@ private:
 
     std::deque<SurfaceTireMarkSegment> m_tireMarkSegments;
     std::unordered_map<std::uint64_t, TireMarkTrail> m_tireMarkTrails;
+    std::unordered_map<std::uint64_t, TireFailureEmitter> m_tireFailureEmitters;
     std::size_t m_nextTireMarkReplacement = 0;
     std::uint64_t m_nextTireMarkSerial = 1;
 

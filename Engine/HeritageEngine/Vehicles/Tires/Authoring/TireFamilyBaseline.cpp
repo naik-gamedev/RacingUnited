@@ -14,6 +14,7 @@ bool finite(VehicleScalar value)
 void enableSharedSurfaceState(heritage::vehicles::TireModelDescription& model)
 {
     model.thermal.enabled = true;
+    model.failure.enabled = true;
     model.wear.enabled = true;
     model.contamination.enabled = true;
     model.wetSurface.enabled = true;
@@ -33,6 +34,8 @@ void configureCommonGeometry(
     model.referenceInflationPressurePa = input.inflationPressurePa;
     model.inflationPressurePa = input.inflationPressurePa;
     model.thermal.referenceGaugePressurePa = input.inflationPressurePa;
+    model.failure.containedAirVolumeM3 = estimatedTireContainedAirVolumeM3(
+        unloadedRadiusM, input.sectionWidthM, input.rimRadiusM);
     model.contactGeometry.unloadedRadiusM = unloadedRadiusM;
     model.contactGeometry.nominalLoadN = input.nominalLoadN;
     model.contactGeometry.nominalWidthM = input.sectionWidthM;

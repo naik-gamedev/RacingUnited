@@ -5,8 +5,26 @@ function OnDrawUI(framebufferWidth, framebufferHeight)
         return
     end
 
+    UI.SetLayoutEditing(uiLayoutEditing)
     if UI.BeginPanel("RacingUnitedLuaMain", 720, 700) then
         UI.ModuleLabel()
+        UI.Spacing()
+
+        local layoutChanged = false
+        uiLayoutEditing, layoutChanged = UI.Checkbox(
+            "EDIT GUI / HUD LAYOUT", uiLayoutEditing)
+        if layoutChanged then
+            UI.SetLayoutEditing(uiLayoutEditing)
+        end
+        if uiLayoutEditing then
+            UI.TextColored(
+                "LAYOUT UNLOCKED - drag this window; the cyan frame is the safe screen area.",
+                0.25, 0.82, 0.96, 1.0)
+            if UI.Button("CENTER THIS WINDOW", 190.0, 28.0, false) then
+                UI.CenterCurrentPanel()
+            end
+        end
+        UI.Separator()
         UI.Spacing()
 
         if currentScene == "prototype" then

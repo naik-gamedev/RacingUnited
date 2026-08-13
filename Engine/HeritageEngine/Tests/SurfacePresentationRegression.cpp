@@ -158,6 +158,66 @@ bool surfacePresentationIsBoundedAndWorldAddressed()
     if (world.presentation().stats().activeParticles != 0u)
         return false;
 
+    // TIRE19 failure presentation is keyed to the wheel stream and event
+    // serial. Repeating a 1000 Hz contact must not replay the blowout burst,
+    // while the initial blowout and later detached-tread stage are visible.
+    world.presentation().clear();
+    SurfacePresentationContact slowPuncture = wetRoad;
+    slowPuncture.sourceStreamId = 0xF018u;
+    slowPuncture.deltaTimeSeconds = 0.001f;
+    slowPuncture.forwardSpeedMps = 0.0f;
+    slowPuncture.wetness = 0.0f;
+    slowPuncture.tireFailureStage = 1;
+    slowPuncture.tireFailureEventSerial = 1;
+    slowPuncture.tireFailureLeakMassFlowKgPerSecond = 0.00001f;
+    world.recordContactPresentation(
+        { secondLocal.x + 1.4f, secondLocal.y, secondLocal.z }, slowPuncture);
+    const std::uint64_t slowPunctureParticles =
+        world.presentation().stats().emittedParticles;
+    if (slowPunctureParticles < 1u || slowPunctureParticles > 3u)
+        return false;
+    world.recordContactPresentation(
+        { secondLocal.x + 1.4f, secondLocal.y, secondLocal.z }, slowPuncture);
+    if (world.presentation().stats().emittedParticles != slowPunctureParticles)
+        return false;
+
+    world.presentation().clear();
+    SurfacePresentationContact failedTire = wetRoad;
+    failedTire.sourceStreamId = 0xF019u;
+    failedTire.deltaTimeSeconds = 0.001f;
+    failedTire.forwardSpeedMps = 22.0f;
+    failedTire.wetness = 0.0f;
+    failedTire.tireFailureStage = 3;
+    failedTire.tireFailureEventSerial = 1;
+    failedTire.tireFailureLeakMassFlowKgPerSecond = 0.080f;
+    failedTire.tireFailureStructuralIntegrity = 0.70f;
+    for (int sample = 0; sample < 5; ++sample)
+    {
+        world.recordContactPresentation(
+            { secondLocal.x + 1.5f, secondLocal.y, secondLocal.z }, failedTire);
+    }
+    const std::uint64_t blowoutParticles =
+        world.presentation().stats().emittedParticles;
+    if (blowoutParticles < 9u || blowoutParticles > 18u)
+        return false;
+    for (int sample = 0; sample < 5; ++sample)
+    {
+        world.recordContactPresentation(
+            { secondLocal.x + 1.5f, secondLocal.y, secondLocal.z }, failedTire);
+    }
+    if (world.presentation().stats().emittedParticles != blowoutParticles)
+        return false;
+
+    failedTire.tireFailureStage = 4;
+    failedTire.tireFailureEventSerial = 2;
+    failedTire.tireFailureTreadAttachment = 0.50f;
+    world.recordContactPresentation(
+        { secondLocal.x + 1.5f, secondLocal.y, secondLocal.z }, failedTire);
+    if (world.presentation().stats().emittedParticles <= blowoutParticles)
+        return false;
+
+    world.presentation().clear();
+
     // Gravel/dirt are loose presentation surfaces but do not allocate
     // deformable terrain track cells. They still need deterministic sparse
     // dust/debris emission rather than silently losing a transient budget.

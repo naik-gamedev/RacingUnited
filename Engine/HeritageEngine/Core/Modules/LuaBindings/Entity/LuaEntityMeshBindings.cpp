@@ -755,6 +755,17 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_
                 flexibleRingField.forwardDisplacementM,
                 flexibleRingField.downDisplacementM,
                 flexibleRingField.lateralDisplacementM,
+                wheelState.tireFailureStage
+                    == heritage::vehicles::tires::TireFailureStage::BareRimRunning,
+                static_cast<std::uint8_t>(wheelState.tireFailureStage),
+                static_cast<float>(wheelState.tireTreadAttachment),
+                static_cast<float>(wheelState.tireStructuralIntegrity),
+                static_cast<float>(wheelIndex * 17u
+                    + (wheelState.tireFailureEventSerial % 997u)),
+                static_cast<float>(wheelState.tireFailureEventElapsedSeconds),
+                static_cast<float>(wheelState.wheelAngularVelocity),
+                static_cast<float>(wheelState.wheelRotationDegrees
+                    * 0.01745329251994329577),
                 wheelForward,
                 wheelRight,
                 wheelUp);

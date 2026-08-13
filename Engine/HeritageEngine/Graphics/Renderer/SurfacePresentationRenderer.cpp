@@ -1075,6 +1075,8 @@ heritage::math::Vec3 particleColor(
     case SurfaceParticleKind::Mud: return { 0.13f, 0.075f, 0.035f };
     case SurfaceParticleKind::Snow: return { 0.90f, 0.94f, 0.98f };
     case SurfaceParticleKind::RubberShred: return { 0.002f, 0.002f, 0.002f };
+    case SurfaceParticleKind::TireFailureSmoke: return { 0.48f, 0.49f, 0.50f };
+    case SurfaceParticleKind::TireFailureDebris: return { 0.018f, 0.020f, 0.022f };
     case SurfaceParticleKind::LooseDebris:
     default:
         return material == SurfaceMaterial::Gravel
@@ -2252,11 +2254,16 @@ void SurfacePresentationRenderer::draw(
             particle.globalPosition, cameraGlobal);
         const heritage::math::Vec3 color = particleColor(
             particle.kind, particle.material);
+        const bool failureSmoke = particle.kind
+            == heritage::physics::SurfaceParticleKind::TireFailureSmoke;
+        const bool failureDebris = particle.kind
+            == heritage::physics::SurfaceParticleKind::TireFailureDebris;
         const float pointSize = std::clamp(
             particle.sizeM * 600.0f / std::max(distance, 1.0f),
             2.0f,
             particle.kind == heritage::physics::SurfaceParticleKind::Dust
-                ? 22.0f : 15.0f);
+                ? 22.0f
+                : (failureSmoke ? 42.0f : (failureDebris ? 30.0f : 15.0f)));
         particleVertices.push_back({
             relative.x, relative.y, relative.z,
             color.x, color.y, color.z,

@@ -496,6 +496,14 @@ bool EntityRegistry::setMeshNodeTireDeformationField(
         downDisplacementM,
     const std::array<float, TireVisualDeformationFieldCount>&
         lateralDisplacementM,
+    bool bareRim,
+    std::uint8_t failureStage,
+    float failureTreadAttachment,
+    float failureStructuralIntegrity,
+    float failureEventSeed,
+    float failureEventAgeSeconds,
+    float wheelAngularVelocity,
+    float wheelRotationRadians,
     const heritage::math::Vec3& wheelForwardWorld,
     const heritage::math::Vec3& wheelRightWorld,
     const heritage::math::Vec3& wheelUpWorld)
@@ -519,6 +527,12 @@ bool EntityRegistry::setMeshNodeTireDeformationField(
         });
     };
     if (!std::isfinite(referenceRadiusM) || referenceRadiusM <= 0.02f
+        || !std::isfinite(failureTreadAttachment)
+        || !std::isfinite(failureStructuralIntegrity)
+        || !std::isfinite(failureEventSeed)
+        || !std::isfinite(failureEventAgeSeconds)
+        || !std::isfinite(wheelAngularVelocity)
+        || !std::isfinite(wheelRotationRadians)
         || !finiteArray(forwardDisplacementM)
         || !finiteArray(downDisplacementM)
         || !finiteArray(lateralDisplacementM))
@@ -571,6 +585,19 @@ bool EntityRegistry::setMeshNodeTireDeformationField(
     }
     found->tireVisualDeformationFieldValid = valid || maximumM > 0.00005f;
     found->hasTireVisualDeformation = true;
+    found->tireVisualBareRim = bareRim;
+    found->tireFailureVisualStage = failureStage;
+    found->tireFailureVisualTreadAttachment = std::clamp(
+        failureTreadAttachment, 0.0f, 1.0f);
+    found->tireFailureVisualStructuralIntegrity = std::clamp(
+        failureStructuralIntegrity, 0.0f, 1.0f);
+    found->tireFailureVisualEventSeed = failureEventSeed;
+    found->tireFailureVisualEventAgeSeconds = std::clamp(
+        failureEventAgeSeconds, 0.0f, 3600.0f);
+    found->tireFailureVisualWheelAngularVelocity = std::clamp(
+        wheelAngularVelocity, -2000.0f, 2000.0f);
+    found->tireFailureVisualWheelRotationRadians = std::fmod(
+        wheelRotationRadians, 6.28318530718f);
     found->tireReferenceRadiusM = referenceRadiusM;
 
     const auto normalizedOr = [](const heritage::math::Vec3& value,

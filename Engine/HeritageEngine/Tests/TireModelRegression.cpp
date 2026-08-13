@@ -1068,6 +1068,139 @@ bool tireThermalPressureAndGripStateAreRateStable()
         && warm.stiffnessScale < 1.0;
 }
 
+bool tireFailurePressureLossAndStructuralStagesBehave()
+{
+    using namespace heritage::vehicles::tires;
+
+    TireThermalDescription thermal;
+    thermal.enabled = true;
+    thermal.minimumGaugePressurePa = 0.0;
+    thermal.referenceGaugePressurePa = 220000.0;
+    TireFailureDescription failure;
+    failure.enabled = true;
+    failure.containedAirVolumeM3 = 0.025;
+
+    TireFailureInput input;
+    input.grounded = true;
+    input.ambientPressurePa = thermal.ambientPressurePa;
+    input.referenceGaugePressurePa = thermal.referenceGaugePressurePa;
+    input.referenceTemperatureC = thermal.referenceTemperatureC;
+    input.identifiedReferencePressurePa = 220000.0;
+    input.normalLoadN = 3500.0;
+    input.nominalLoadN = 3500.0;
+    input.forwardSpeedMps = 22.0;
+    input.gasTemperatureC = 20.0;
+    input.carcassTemperatureC = 60.0;
+
+    struct CoupledResult
+    {
+        TireFailureOutput failure;
+        TireThermalOutput thermal;
+    };
+    const auto integrateSlow = [&](VehicleScalar dt) {
+        TireThermalState thermalState;
+        TireFailureState failureState;
+        TireThermalOutput thermalOut = evaluateTireThermalState(
+            thermal, thermalState);
+        input.inflationGaugePressurePa = thermalOut.inflationPressurePa;
+        triggerTireFailure(
+            failure, input, TireFailureStage::SlowPuncture, failureState);
+        TireFailureOutput failureOut;
+        const int steps = static_cast<int>(20.0 / dt);
+        for (int step = 0; step < steps; ++step)
+        {
+            thermalOut = evaluateTireThermalState(thermal, thermalState);
+            TireFailureInput live = input;
+            live.inflationGaugePressurePa = thermalOut.inflationPressurePa;
+            live.gasTemperatureC = thermalOut.gasTemperatureC;
+            failureOut = advanceTireFailure(
+                failure, live, dt, failureState);
+            thermalState.containedGasMassRatio =
+                failureOut.containedGasMassRatio;
+        }
+        thermalOut = evaluateTireThermalState(thermal, thermalState);
+        return CoupledResult{ failureOut, thermalOut };
+    };
+
+    const CoupledResult slowHighRate = integrateSlow(0.001);
+    const CoupledResult slowLowRate = integrateSlow(0.01);
+
+    TireFailureState calmState;
+    triggerTireFailure(failure, input, TireFailureStage::SlowPuncture, calmState);
+    TireFailureInput calmInput = input;
+    calmInput.inflationGaugePressurePa = 220000.0;
+    const auto calm = advanceTireFailure(failure, calmInput, 0.001, calmState);
+    TireFailureState flexedState;
+    triggerTireFailure(failure, input, TireFailureStage::SlowPuncture, flexedState);
+    TireFailureInput flexedInput = calmInput;
+    flexedInput.normalLoadN = 7000.0;
+    flexedInput.lateralSlipVelocityMps = 5.0;
+    flexedInput.radialDissipationWatts = 9000.0;
+    const auto flexed = advanceTireFailure(failure, flexedInput, 0.001, flexedState);
+
+    TireThermalState depletedCold;
+    depletedCold.initialized = true;
+    depletedCold.treadTemperatureC = 20.0;
+    depletedCold.carcassTemperatureC = 20.0;
+    depletedCold.gasTemperatureC = 20.0;
+    depletedCold.containedGasMassRatio = 0.75;
+    const auto coldPressure = evaluateTireThermalState(thermal, depletedCold);
+    TireThermalState depletedWarm = depletedCold;
+    depletedWarm.gasTemperatureC = 70.0;
+    const auto warmPressure = evaluateTireThermalState(thermal, depletedWarm);
+
+    TireThermalState blowoutThermalState;
+    TireFailureState blowoutState;
+    TireThermalOutput blowoutThermal = evaluateTireThermalState(
+        thermal, blowoutThermalState);
+    input.inflationGaugePressurePa = blowoutThermal.inflationPressurePa;
+    triggerTireFailure(
+        failure, input, TireFailureStage::Blowout, blowoutState);
+    TireFailureOutput blowout;
+    for (int step = 0; step < 12000; ++step)
+    {
+        blowoutThermal = evaluateTireThermalState(thermal, blowoutThermalState);
+        TireFailureInput live = input;
+        live.inflationGaugePressurePa = blowoutThermal.inflationPressurePa;
+        live.gasTemperatureC = blowoutThermal.gasTemperatureC;
+        live.normalLoadN = 4200.0;
+        live.forwardSpeedMps = 32.0;
+        blowout = advanceTireFailure(failure, live, 0.001, blowoutState);
+        blowoutThermalState.containedGasMassRatio =
+            blowout.containedGasMassRatio;
+    }
+    blowoutThermal = evaluateTireThermalState(thermal, blowoutThermalState);
+
+    // A collapse requested before the first thermal tick must not be refilled
+    // by thermal-state initialization.
+    TireThermalState preTickThermal;
+    TireFailureState preTickFailure;
+    TireFailureInput preTickInput = input;
+    preTickInput.inflationGaugePressurePa = 220000.0;
+    triggerTireFailure(
+        failure, preTickInput, TireFailureStage::CollapsedCarcass,
+        preTickFailure);
+    preTickThermal.containedGasMassRatio =
+        preTickFailure.containedGasMassRatio;
+    const auto preTickPressure = advanceTireThermal(
+        thermal, {}, 0.001, preTickThermal);
+
+    return slowHighRate.failure.valid && slowLowRate.failure.valid
+        && slowHighRate.failure.stage == TireFailureStage::SlowPuncture
+        && slowHighRate.failure.eventElapsedSeconds > 19.9
+        && slowHighRate.thermal.inflationPressurePa < 220000.0
+        && slowHighRate.thermal.inflationPressurePa > 180000.0
+        && std::abs(slowHighRate.thermal.inflationPressurePa
+            - slowLowRate.thermal.inflationPressurePa) < 250.0
+        && flexed.effectiveLeakAreaM2 > calm.effectiveLeakAreaM2 * 2.0
+        && warmPressure.inflationPressurePa > coldPressure.inflationPressurePa
+        && blowout.valid
+        && blowout.stage == TireFailureStage::BareRimRunning
+        && blowoutThermal.inflationPressurePa < 100.0
+        && blowout.treadAttachment < failure.bareRimTreadAttachmentThreshold
+        && preTickPressure.inflationPressurePa < 100.0;
+}
+
 
 bool tireSpatialTreadThermalWearAndFlatSpotBehave()
 {
@@ -2125,6 +2258,9 @@ PKY2 = 1.9
         && model.thermal.enabled
         && std::abs(model.thermal.optimumTreadTemperatureC - 70.0) < 1.0e-12
         && std::abs(model.thermal.referenceGaugePressurePa - 230000.0) < 1.0
+        && model.failure.enabled
+        && model.failure.containedAirVolumeM3 > 0.005
+        && model.failure.containedAirVolumeM3 < 0.100
         && loaded.data.hasHeritageTreadState
         && model.wear.enabled
         && std::abs(model.wear.initialTreadDepthM - 0.007) < 1.0e-12

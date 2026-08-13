@@ -267,7 +267,9 @@
             VehicleScalar{0.40} + VehicleScalar{0.60} * std::sqrt(pressureRatio),
             VehicleScalar{0.40}, VehicleScalar{1.75});
         unsprungDescription.tireRadialStiffnessNPerM =
-            authoredTireStiffness * pressureStiffnessScale;
+            authoredTireStiffness * pressureStiffnessScale
+            * (failureBefore.valid
+                ? failureBefore.carcassSupportScale : VehicleScalar{1.0});
         unsprungDescription.tireRadialDampingNsPerM =
             description.tireRadialDamping;
         unsprungDescription.maximumTireDeflectionM =

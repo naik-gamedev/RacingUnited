@@ -95,6 +95,21 @@ function DrawVehicleTiresLivePanel()
         wheel.tireThermalFrictionScale or 1.0,
         wheel.tireThermalStiffnessScale or 1.0))
     UI.Text(string.format(
+        "Failure: %s | pressurized gas %.1f%% | mass ratio %.4f",
+        wheel.tireFailureStage or "Healthy",
+        (wheel.tirePressurizedGasFraction or 1.0) * 100.0,
+        wheel.tireContainedGasMassRatio or 1.0))
+    UI.Text(string.format(
+        "Hole / active opening: %.4f / %.4f mm^2 | leak %.3f g/s",
+        wheel.tirePunctureAreaMm2 or 0.0,
+        wheel.tireEffectiveLeakAreaMm2 or 0.0,
+        wheel.tireLeakMassFlowGramsPerSecond or 0.0))
+    UI.Text(string.format(
+        "Carcass / tread integrity: %.1f / %.1f%% | rim contact %.1f%%",
+        (wheel.tireStructuralIntegrity or 1.0) * 100.0,
+        (wheel.tireTreadAttachment or 1.0) * 100.0,
+        (wheel.tireRimContactFraction or 0.0) * 100.0))
+    UI.Text(string.format(
         "Heat slip / carcass-loss: %.0f / %.0f W | road / air flow: %+.0f / %+.0f W",
         wheel.tireSlipDissipationWatts or 0.0,
         wheel.tireThermalLossDissipationWatts or 0.0,

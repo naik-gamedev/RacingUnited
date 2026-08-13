@@ -95,7 +95,9 @@
         * (contaminationBefore.valid
             ? contaminationBefore.contactFrictionScale : VehicleScalar{1.0})
         * dedicatedFrictionScale
-        * static_cast<VehicleScalar>(trackRubberBefore.contactFrictionScale);
+        * static_cast<VehicleScalar>(trackRubberBefore.contactFrictionScale)
+        * (failureBefore.valid
+            ? failureBefore.forceCapacityScale : VehicleScalar{1.0});
     tireInput.stiffnessMultiplier = surface.stiffnessMultiplier
         * (thermalBefore.valid ? thermalBefore.stiffnessScale : VehicleScalar{1.0})
         * dedicatedStiffnessScale;
@@ -127,6 +129,8 @@
             + VehicleScalar{4.0}
                 * (VehicleScalar{1.0} - pressureServiceability)
                 * (VehicleScalar{1.0} - pressureServiceability);
+    const VehicleScalar tireFailureRollingResistanceScale = failureBefore.valid
+        ? failureBefore.rollingResistanceScale : VehicleScalar{1.0};
     const VehicleScalar rollingResistanceForce =
         -vehicle.description.rollingResistance
         * surface.rollingResistanceMultiplier
@@ -135,6 +139,7 @@
         * dedicatedRollingResistanceScale
         * static_cast<VehicleScalar>(trackRubberBefore.rollingResistanceScale)
         * flatTireRollingResistanceScale
+        * tireFailureRollingResistanceScale
         * longitudinalSpeed;
     longitudinalForce += rollingResistanceForce;
 

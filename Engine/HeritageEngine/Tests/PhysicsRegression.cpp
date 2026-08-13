@@ -239,6 +239,12 @@ int main()
         << " tire thermal/pressure energy-state rate stability\n";
     failed += tireThermalPassed ? 0 : 1;
 
+    const bool tireFailurePassed =
+        tireFailurePressureLossAndStructuralStagesBehave();
+    std::cout << (tireFailurePassed ? "PASS" : "FAIL")
+        << " persistent puncture/blowout gas and structural progression\n";
+    failed += tireFailurePassed ? 0 : 1;
+
     const bool tireSpatialTreadPassed =
         tireSpatialTreadThermalWearAndFlatSpotBehave();
     std::cout << (tireSpatialTreadPassed ? "PASS" : "FAIL")

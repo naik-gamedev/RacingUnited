@@ -45,6 +45,16 @@ const int HERITAGE_TIRE_FIELD_BANDS = 13;
 const int HERITAGE_TIRE_FIELD_COUNT = 312;
 uniform bool uTireVisualDeformationFieldValid;
 uniform vec3 uTireVisualDisplacementM[HERITAGE_TIRE_FIELD_COUNT];
+// Persistent TIRE19 state. Pass 0 draws the surviving carcass; pass 1 draws
+// only the same authored vertices belonging to the tethered/departing belt.
+uniform int uTireFailureStage;
+uniform float uTireFailureTreadAttachment;
+uniform float uTireFailureStructuralIntegrity;
+uniform float uTireFailureEventSeed;
+uniform float uTireFailureEventAgeSeconds;
+uniform float uTireFailureWheelAngularVelocity;
+uniform float uTireFailureWheelRotationRadians;
+uniform int uTireFailureRenderPass;
 uniform bool uTireProbeDebugVisible;
 
 out vec3 vNormal;
@@ -56,6 +66,7 @@ out vec4 vColor;
 out float vViewDepth;
 out vec3 vTireProbeDebugColor;
 out float vTireProbeDebugMask;
+out vec3 vTireFailureCoordinates;
 
 const float HERITAGE_PI = 3.14159265358979323846;
 
@@ -212,6 +223,106 @@ void applyTireVisualDeformation(inout vec3 position, inout vec3 normal)
     position += tireFlexibleRingDisplacementLocal(position);
 }
 
+float tireWrappedAngle(float value)
+{
+    return mod(value + HERITAGE_PI, 2.0 * HERITAGE_PI) - HERITAGE_PI;
+}
+
+vec3 tireFailureCoordinates(vec3 position)
+{
+    if (!uTireVisualEnabled)
+        return vec3(0.0);
+    vec3 axle = tireAxisVector(uTireVisualAxleAxis);
+    vec3 relative = position - uTireVisualCenter;
+    float axial = dot(relative, axle);
+    vec3 radial = relative - axle * axial;
+    float radius = length(radial);
+    if (radius <= 0.000001)
+        return vec3(0.0);
+
+    mat3 worldToLocal = inverse(mat3(uModel));
+    vec3 forward = worldToLocal * uTireWheelForwardWorld;
+    forward -= axle * dot(forward, axle);
+    forward = dot(forward, forward) > 0.000001
+        ? normalize(forward)
+        : normalize(cross(tireRestDown(uTireVisualAxleAxis), axle));
+    vec3 lateral = worldToLocal * uTireWheelRightWorld;
+    lateral -= forward * dot(lateral, forward);
+    lateral = dot(lateral, lateral) > 0.000001
+        ? normalize(lateral) : axle;
+    vec3 up = worldToLocal * uTireWheelUpWorld;
+    up -= forward * dot(up, forward);
+    up -= lateral * dot(up, lateral);
+    vec3 down = dot(up, up) > 0.000001
+        ? -normalize(up) : normalize(cross(forward, lateral));
+    vec3 radialDirection = radial / radius;
+    float theta = atan(dot(radialDirection, down), dot(radialDirection, forward));
+    float width = clamp(dot(relative, lateral)
+        / max(uTireVisualHalfWidth, 0.0001), -1.0, 1.0);
+    float radialFraction = clamp((radius - uTireVisualInnerRadius)
+        / max(uTireVisualOuterRadius - uTireVisualInnerRadius, 0.0001),
+        0.0, 1.0);
+    return vec3(theta, width, radialFraction);
+}
+
+void applyTireFailureStrip(inout vec3 position, vec3 coordinates)
+{
+    if (!uTireVisualEnabled || uTireFailureRenderPass != 1
+        || (uTireFailureTreadAttachment >= 0.90
+            && uTireFailureStage < 6))
+        return;
+
+    vec3 axle = tireAxisVector(uTireVisualAxleAxis);
+    vec3 relative = position - uTireVisualCenter;
+    float axial = dot(relative, axle);
+    vec3 radial = relative - axle * axial;
+    float radius = max(length(radial), 0.0001);
+    vec3 radialDirection = radial / radius;
+    vec3 tangentDirection = normalize(cross(axle, radialDirection));
+
+    // The event seed chooses one material sector and never changes afterward.
+    // Wheel spin is already contained by the authored node transform, while
+    // angular velocity controls the amount of centrifugal/tangential slap.
+    float sectorCenter = tireWrappedAngle(
+        uTireFailureEventSeed * 1.61803398875);
+    float attachmentLoss = clamp(1.0 - uTireFailureTreadAttachment, 0.0, 1.0);
+    float halfSpan = mix(0.32, 1.22, attachmentLoss);
+    float sectorDelta = tireWrappedAngle(coordinates.x - sectorCenter);
+    float along = clamp(sectorDelta / max(halfSpan, 0.01) * 0.5 + 0.5,
+        0.0, 1.0);
+    float tether = smoothstep(0.03, 0.42, along);
+    float speed = clamp(abs(uTireFailureWheelAngularVelocity) / 65.0, 0.0, 1.0);
+    float flutter = sin(uTireFailureEventAgeSeconds
+        * mix(7.0, 24.0, speed) + uTireFailureEventSeed * 0.71);
+    float structuralLoss = clamp(1.0 - uTireFailureStructuralIntegrity, 0.0, 1.0);
+    float stripLengthLocal = uTireVisualOuterRadius
+        * (0.18 + 0.38 * attachmentLoss + 0.22 * speed);
+    float departure = uTireFailureStage >= 6
+        ? smoothstep(0.10, 1.75, uTireFailureEventAgeSeconds) : 0.0;
+    float hang = tether * stripLengthLocal
+        * (0.48 + 0.40 * structuralLoss + 0.16 * flutter);
+    position += radialDirection * hang * (0.38 + 0.32 * speed);
+    position += tangentDirection * hang * (0.65 + 0.30 * speed);
+
+    // When the last belt section leaves a bare rim it follows one deterministic
+    // ballistic-looking presentation arc; authoritative vehicle forces remain
+    // with the reduced-order failure state, never with these vertices.
+    if (departure > 0.0)
+    {
+        float flightM = departure * departure
+            * uTireVisualOuterRadius * (1.4 + speed);
+        float metersToLocal = uTireVisualOuterRadius
+            / max(uTireReferenceRadiusM, 0.02);
+        mat3 worldToLocal = inverse(mat3(uModel));
+        vec3 worldUpLocal = normalize(worldToLocal * vec3(0.0, 1.0, 0.0));
+        position += tangentDirection * flightM;
+        position += worldUpLocal * metersToLocal
+            * (0.75 * uTireFailureEventAgeSeconds
+                - 1.15 * uTireFailureEventAgeSeconds
+                    * uTireFailureEventAgeSeconds);
+    }
+}
+
 void main()
 {
     mat4 skin = mat4(1.0);
@@ -228,8 +339,10 @@ void main()
     vec3 localNormal = mat3(skin) * aNormal;
     vec3 localTangent = mat3(skin) * aTangent.xyz;
     vec4 tireProbeDebug = tireProbeDebugOverlay(localPosition.xyz);
+    vTireFailureCoordinates = tireFailureCoordinates(localPosition.xyz);
     vec3 deformedPosition = localPosition.xyz;
     applyTireVisualDeformation(deformedPosition, localNormal);
+    applyTireFailureStrip(deformedPosition, vTireFailureCoordinates);
     localPosition = vec4(deformedPosition, 1.0);
 
     vec4 world = uModel * localPosition;
@@ -262,6 +375,14 @@ in vec4 vColor;
 in float vViewDepth;
 in vec3 vTireProbeDebugColor;
 in float vTireProbeDebugMask;
+in vec3 vTireFailureCoordinates;
+
+uniform bool uTireVisualEnabled;
+uniform int uTireFailureStage;
+uniform float uTireFailureTreadAttachment;
+uniform float uTireFailureEventSeed;
+uniform float uTireFailureEventAgeSeconds;
+uniform int uTireFailureRenderPass;
 
 uniform vec3 uTint;
 uniform vec3 uMaterialBaseColor;
@@ -540,6 +661,34 @@ float sampleSunShadow(vec3 normal, vec3 lightDirection)
 
 void main()
 {
+    if (uTireVisualEnabled
+        && (uTireFailureTreadAttachment < 0.90 || uTireFailureStage >= 6))
+    {
+        float attachmentLoss = clamp(
+            1.0 - uTireFailureTreadAttachment, 0.0, 1.0);
+        float halfSpan = mix(0.32, 1.22, attachmentLoss);
+        float sectorCenter = mod(
+            uTireFailureEventSeed * 1.61803398875 + PI,
+            2.0 * PI) - PI;
+        float delta = abs(mod(
+            vTireFailureCoordinates.x - sectorCenter + PI,
+            2.0 * PI) - PI);
+        bool tornBeltSector = delta <= halfSpan
+            && abs(vTireFailureCoordinates.y) <= 0.88
+            && vTireFailureCoordinates.z >= 0.56;
+        if (uTireFailureRenderPass == 0)
+        {
+            if (uTireFailureStage >= 6 || tornBeltSector)
+                discard;
+        }
+        else if (!tornBeltSector
+            || (uTireFailureStage >= 6
+                && uTireFailureEventAgeSeconds >= 2.2))
+        {
+            discard;
+        }
+    }
+
     vec4 baseSample = uHasBaseColorMap
         ? texture(uBaseColorMap, vTexCoord)
         : vec4(1.0);

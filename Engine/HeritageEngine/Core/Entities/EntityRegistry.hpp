@@ -114,6 +114,16 @@ struct MeshNodeOverride
     // Physics-driven tire presentation. VehicleSystem and the flexible-ring
     // provider are authoritative; the renderer receives only their final field.
     bool hasTireVisualDeformation = false;
+    // At the terminal bare-rim stage the semantic tire node is omitted while
+    // the separately authored rim/brake nodes remain visible and physical.
+    bool tireVisualBareRim = false;
+    std::uint8_t tireFailureVisualStage = 0;
+    float tireFailureVisualTreadAttachment = 1.0f;
+    float tireFailureVisualStructuralIntegrity = 1.0f;
+    float tireFailureVisualEventSeed = 0.0f;
+    float tireFailureVisualEventAgeSeconds = 0.0f;
+    float tireFailureVisualWheelAngularVelocity = 0.0f;
+    float tireFailureVisualWheelRotationRadians = 0.0f;
     float tireReferenceRadiusM = 0.30f;
     heritage::math::Vec3 tireWheelForwardWorld{ 0.0f, 0.0f, 1.0f };
     heritage::math::Vec3 tireWheelRightWorld{ 1.0f, 0.0f, 0.0f };
@@ -345,6 +355,14 @@ public:
             downDisplacementM,
         const std::array<float, TireVisualDeformationFieldCount>&
             lateralDisplacementM,
+        bool bareRim,
+        std::uint8_t failureStage,
+        float failureTreadAttachment,
+        float failureStructuralIntegrity,
+        float failureEventSeed,
+        float failureEventAgeSeconds,
+        float wheelAngularVelocity,
+        float wheelRotationRadians,
         const heritage::math::Vec3& wheelForwardWorld,
         const heritage::math::Vec3& wheelRightWorld,
         const heritage::math::Vec3& wheelUpWorld);

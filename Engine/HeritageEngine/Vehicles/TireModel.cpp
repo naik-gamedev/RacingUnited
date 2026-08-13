@@ -188,6 +188,10 @@ bool validTireModelDescription(const TireModelDescription& value)
     if (value.thermal.enabled
         && !tires::validTireThermalDescription(value.thermal))
         return false;
+    if (value.failure.enabled
+        && (!value.thermal.enabled
+            || !tires::validTireFailureDescription(value.failure)))
+        return false;
     if (value.wear.enabled
         && !tires::validTireWearDescription(value.wear))
         return false;
@@ -392,6 +396,18 @@ TireModelDescription tireModelDescriptionFromPropertyFile(
     value.thermal = propertyFile.thermal;
     value.thermal.enabled = propertyFile.hasHeritageThermalModel;
     value.thermal.referenceGaugePressurePa = value.inflationPressurePa;
+    // TIRE19 is a native construction layer rather than proprietary .tir
+    // data. Any imported tire with a live gas/thermal state receives it, with
+    // cavity volume derived from that file's actual fitted dimensions.
+    value.failure.enabled = value.thermal.enabled;
+    if (value.failure.enabled)
+    {
+        value.failure.containedAirVolumeM3 =
+            tires::estimatedTireContainedAirVolumeM3(
+                propertyFile.magicFormula.unloadedRadiusM,
+                propertyFile.widthM,
+                propertyFile.rimRadiusM);
+    }
     value.wear = propertyFile.wear;
     value.wear.enabled = propertyFile.hasHeritageTreadState;
     value.contamination = propertyFile.contamination;

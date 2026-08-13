@@ -305,6 +305,17 @@ struct WheelState
     VehicleScalar tireCarcassTemperatureC = 20.0f;
     VehicleScalar tireGasTemperatureC = 20.0f;
     VehicleScalar tireInflationPressurePa = 220000.0f;
+    tires::TireFailureStage tireFailureStage = tires::TireFailureStage::Healthy;
+    std::uint64_t tireFailureEventSerial = 0;
+    VehicleScalar tireContainedGasMassRatio = 1.0f;
+    VehicleScalar tirePressurizedGasFraction = 1.0f;
+    VehicleScalar tirePunctureAreaMm2 = 0.0f;
+    VehicleScalar tireEffectiveLeakAreaMm2 = 0.0f;
+    VehicleScalar tireLeakMassFlowGramsPerSecond = 0.0f;
+    VehicleScalar tireStructuralIntegrity = 1.0f;
+    VehicleScalar tireTreadAttachment = 1.0f;
+    VehicleScalar tireRimContactFraction = 0.0f;
+    VehicleScalar tireFailureEventElapsedSeconds = 0.0f;
     VehicleScalar tireThermalFrictionScale = 1.0f;
     VehicleScalar tireThermalStiffnessScale = 1.0f;
     VehicleScalar tireSlipDissipationWatts = 0.0f;
@@ -705,6 +716,11 @@ public:
         VehicleHandle handle, std::size_t wheelIndex, VehicleScalar pressurePa);
     bool setTireColdInflationPressure(
         VehicleHandle handle, VehicleScalar pressurePa);
+    bool triggerWheelTireFailure(
+        VehicleHandle handle, std::size_t wheelIndex,
+        tires::TireFailureStage stage);
+    bool triggerTireFailure(
+        VehicleHandle handle, tires::TireFailureStage stage);
     bool tireColdInflationPressureRange(
         VehicleHandle handle, VehicleScalar& minimumPa,
         VehicleScalar& maximumPa, VehicleScalar& representativePressurePa) const;
@@ -773,6 +789,7 @@ private:
         tires::TireContactPatchState contactPatchState;
         tires::TireRigidRingState rigidRingState;
         tires::TireThermalState thermalState;
+        tires::TireFailureState failureState;
         tires::TireWearState wearState;
         VehicleScalar roadEnvelopeQueryAccumulatorSeconds = 0.0;
         bool roadEnvelopeInitialized = false;

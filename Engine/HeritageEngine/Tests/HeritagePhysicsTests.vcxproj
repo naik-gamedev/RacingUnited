@@ -120,6 +120,7 @@
       <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireRoadEnveloping.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireThermal.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireFailure.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireWear.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireSurfaceInteraction.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireWetSurfaceInteraction.cpp" />
@@ -197,6 +198,7 @@
       <ClInclude Include="..\Vehicles\Tires\TireRigidRing.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireRoadEnveloping.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireThermal.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireFailure.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireWear.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireSurfaceInteraction.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireWetSurfaceInteraction.hpp" />

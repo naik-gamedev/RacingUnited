@@ -101,6 +101,19 @@ bool EntityMeshRenderer::initialize(
         uniform("uTireVisualDeformationFieldValid");
     m_uniforms.tireVisualDisplacementM =
         uniform("uTireVisualDisplacementM[0]");
+    m_uniforms.tireFailureStage = uniform("uTireFailureStage");
+    m_uniforms.tireFailureTreadAttachment =
+        uniform("uTireFailureTreadAttachment");
+    m_uniforms.tireFailureStructuralIntegrity =
+        uniform("uTireFailureStructuralIntegrity");
+    m_uniforms.tireFailureEventSeed = uniform("uTireFailureEventSeed");
+    m_uniforms.tireFailureEventAgeSeconds =
+        uniform("uTireFailureEventAgeSeconds");
+    m_uniforms.tireFailureWheelAngularVelocity =
+        uniform("uTireFailureWheelAngularVelocity");
+    m_uniforms.tireFailureWheelRotationRadians =
+        uniform("uTireFailureWheelRotationRadians");
+    m_uniforms.tireFailureRenderPass = uniform("uTireFailureRenderPass");
     m_uniforms.tireProbeDebugVisible = uniform("uTireProbeDebugVisible");
     m_uniforms.materialBaseColor = uniform("uMaterialBaseColor");
     m_uniforms.materialSpecularColor = uniform("uMaterialSpecularColor");
@@ -586,9 +599,15 @@ void EntityMeshRenderer::draw(
 
             const bool useTireVisual =
                 tireVisualNode != nullptr && tireVisualState != nullptr;
+            // Wheel assets expose the rubber tire and metal rim as separate
+            // semantic nodes. Failure presentation is now handled by the same
+            // tire shader: terminal loss masks the rubber while a short-lived
+            // final strip/debris pass remains possible. Rim, hub and brakes are
+            // independent ranges and continue through their ordinary draws.
             glUniform1i(
                 m_uniforms.tireVisualEnabled,
                 useTireVisual ? 1 : 0);
+            glUniform1i(m_uniforms.tireFailureRenderPass, 0);
             if (useTireVisual)
             {
                 if (m_reportedTireVisualProofNodes.insert(tireVisualNode->name).second)
@@ -657,6 +676,27 @@ void EntityMeshRenderer::draw(
                     m_uniforms.tireVisualDisplacementM,
                     static_cast<GLsizei>(heritage::entities::TireVisualDeformationFieldCount),
                     packedDisplacementM.data());
+                glUniform1i(
+                    m_uniforms.tireFailureStage,
+                    static_cast<GLint>(tireVisualState->tireFailureVisualStage));
+                glUniform1f(
+                    m_uniforms.tireFailureTreadAttachment,
+                    tireVisualState->tireFailureVisualTreadAttachment);
+                glUniform1f(
+                    m_uniforms.tireFailureStructuralIntegrity,
+                    tireVisualState->tireFailureVisualStructuralIntegrity);
+                glUniform1f(
+                    m_uniforms.tireFailureEventSeed,
+                    tireVisualState->tireFailureVisualEventSeed);
+                glUniform1f(
+                    m_uniforms.tireFailureEventAgeSeconds,
+                    tireVisualState->tireFailureVisualEventAgeSeconds);
+                glUniform1f(
+                    m_uniforms.tireFailureWheelAngularVelocity,
+                    tireVisualState->tireFailureVisualWheelAngularVelocity);
+                glUniform1f(
+                    m_uniforms.tireFailureWheelRotationRadians,
+                    tireVisualState->tireFailureVisualWheelRotationRadians);
             }
 
             if (range.skinIndex >= 0
@@ -836,6 +876,31 @@ void EntityMeshRenderer::draw(
             ++m_frameStats.drawCalls;
             m_frameStats.triangles +=
                 static_cast<std::uint64_t>(range.indexCount / 3);
+
+            // A partially detached belt is a second rendering of only the
+            // shader-selected torn sector. The original pass leaves the same
+            // sector absent, so arbitrary authored tire topology can produce a
+            // bounded tethered strip without runtime mesh surgery or new rigid
+            // bodies. Bare-rim incidents retain the departing strip briefly.
+            const bool drawFailureStrip = useTireVisual
+                && (tireVisualState->tireFailureVisualTreadAttachment < 0.90f
+                    || tireVisualState->tireFailureVisualStage >= 6)
+                && (!tireVisualState->tireVisualBareRim
+                    || tireVisualState->tireFailureVisualEventAgeSeconds < 2.2f);
+            if (drawFailureStrip)
+            {
+                glUniform1i(m_uniforms.tireFailureRenderPass, 1);
+                glDrawElements(
+                    GL_TRIANGLES,
+                    static_cast<GLsizei>(range.indexCount),
+                    GL_UNSIGNED_INT,
+                    reinterpret_cast<const void*>(
+                        range.firstIndex * sizeof(unsigned int)));
+                glUniform1i(m_uniforms.tireFailureRenderPass, 0);
+                ++m_frameStats.drawCalls;
+                m_frameStats.triangles +=
+                    static_cast<std::uint64_t>(range.indexCount / 3);
+            }
         };
 
         if (mesh->drawRanges.empty())

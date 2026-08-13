@@ -161,6 +161,7 @@ void SurfacePresentation::clear()
     m_trackMarks.clear();
     m_tireMarkSegments.clear();
     m_tireMarkTrails.clear();
+    m_tireFailureEmitters.clear();
     m_particles.clear();
     m_nextTrackReplacement = 0;
     m_nextTireMarkReplacement = 0;
@@ -549,6 +550,7 @@ void SurfacePresentation::emitParticle(
     const float lateralJitter = signedRandom(randomState);
     const float forwardJitter = signedRandom(randomState);
     const float upwardJitter = random01(randomState);
+    float tireFailureSideSign = 0.0f;
 
     float rearwardSpeed = 0.8f + speed * 0.16f;
     float upwardSpeed = 0.8f + speed * 0.06f;
@@ -608,6 +610,35 @@ void SurfacePresentation::emitParticle(
         particle.settlesOnSupportPlane = true;
         break;
     }
+    case SurfaceParticleKind::TireFailureSmoke:
+        // A blowout initially expels a cool aerosol of air, rubber dust and
+        // road dirt. This is intentionally a short translucent puff, not fire.
+        rearwardSpeed = 0.35f + speed * 0.065f;
+        upwardSpeed = 0.35f + speed * 0.018f;
+        lateralSpeed = 1.35f + 2.65f * clamp01(intensity)
+            + speed * 0.018f;
+        particle.lifetimeSeconds = 0.80f + 1.10f * random01(randomState);
+        particle.sizeM = (0.075f + 0.120f * random01(randomState))
+            * (0.85f + 0.65f * clamp01(intensity));
+        particle.opacity = 0.28f + 0.32f * clamp01(intensity);
+        break;
+    case SurfaceParticleKind::TireFailureDebris:
+    {
+        // Presentation fragments represent bounded pieces from the authored
+        // tire. They never become vehicle-physics bodies or affect contact.
+        const float severity = clamp01(intensity);
+        rearwardSpeed = 0.35f + speed * (0.06f + 0.045f * severity);
+        upwardSpeed = 0.18f + severity * 0.95f + speed * 0.008f;
+        lateralSpeed = 0.24f + speed * 0.025f;
+        particle.lifetimeSeconds = 1.15f + 1.75f * random01(randomState);
+        particle.sizeM = (0.028f + 0.070f * random01(randomState))
+            * (0.75f + 1.20f * severity);
+        particle.opacity = 0.98f;
+        particle.supportPlanePoint = globalPosition;
+        particle.supportPlaneNormal = normal;
+        particle.settlesOnSupportPlane = true;
+        break;
+    }
     case SurfaceParticleKind::LooseDebris:
     default:
         particle.lifetimeSeconds = 0.55f + 0.65f * random01(randomState);
@@ -616,10 +647,46 @@ void SurfacePresentation::emitParticle(
         break;
     }
 
+    // Contact presentation is recorded at the support point. Tire-failure
+    // particles instead originate around the loaded tire ring so a blowout
+    // visibly vents at the bead/sidewall and then across the cavity rather
+    // than looking like road dust emitted from one point beneath the wheel.
+    if (kind == SurfaceParticleKind::TireFailureSmoke
+        || kind == SurfaceParticleKind::TireFailureDebris)
+    {
+        const float radiusM = std::clamp(contact.tireRadiusM, 0.05f, 1.20f);
+        const float theta = random01(randomState) * 6.28318530718f;
+        const float radialScale = kind == SurfaceParticleKind::TireFailureSmoke
+            ? (0.62f + 0.25f * random01(randomState))
+            : (0.88f + 0.10f * random01(randomState));
+        tireFailureSideSign = signedRandom(randomState) >= 0.0f ? 1.0f : -1.0f;
+        const float axialOffset = tireFailureSideSign
+            * std::max(contact.tireWidthM, 0.04f)
+            * (kind == SurfaceParticleKind::TireFailureSmoke ? 0.52f : 0.44f);
+        particle.globalPosition.x += static_cast<double>(
+            normal.x * radiusM
+            + (forward.x * std::cos(theta) + normal.x * std::sin(theta))
+                * radiusM * radialScale
+            + right.x * axialOffset);
+        particle.globalPosition.y += static_cast<double>(
+            normal.y * radiusM
+            + (forward.y * std::cos(theta) + normal.y * std::sin(theta))
+                * radiusM * radialScale
+            + right.y * axialOffset);
+        particle.globalPosition.z += static_cast<double>(
+            normal.z * radiusM
+            + (forward.z * std::cos(theta) + normal.z * std::sin(theta))
+                * radiusM * radialScale
+            + right.z * axialOffset);
+    }
+
     particle.velocityMps = add(
         scale(forward, rearwardSign * (rearwardSpeed + forwardJitter * 0.25f)),
         add(
-            scale(right, lateralJitter * lateralSpeed),
+            scale(right,
+                tireFailureSideSign != 0.0f
+                    ? tireFailureSideSign * lateralSpeed
+                    : lateralJitter * lateralSpeed),
             scale(normal, upwardSpeed * (0.55f + upwardJitter * 0.8f))));
 
     // Spawn a few millimetres above the support plane to avoid immediate
@@ -824,6 +891,104 @@ void SurfacePresentation::recordContact(
                 emissionSequence++);
     }
 
+    // TIRE19: one wheel owns one bounded emitter keyed by the same persistent
+    // stream used for its tire mark. Direct trigger serials produce a one-shot
+    // burst; sustained venting/carcass or tread destruction accrue a small dt-
+    // scaled budget. Thus 1000 Hz player tires and lower-rate AI presentation
+    // produce comparable output without spawning thousands of particles.
+    if (contact.sourceStreamId != 0)
+    {
+        TireFailureEmitter& failureEmitter =
+            m_tireFailureEmitters[contact.sourceStreamId];
+        failureEmitter.lastContactTimeSeconds = m_elapsedSeconds;
+        if (contact.tireFailureStage == 0)
+        {
+            failureEmitter.lastEventSerial = contact.tireFailureEventSerial;
+            failureEmitter.lastStage = 0;
+            failureEmitter.smokeBudget = 0.0f;
+            failureEmitter.debrisBudget = 0.0f;
+        }
+        else
+        {
+        const bool newEvent = contact.tireFailureEventSerial != 0
+            && contact.tireFailureEventSerial != failureEmitter.lastEventSerial;
+        const bool newStage = contact.tireFailureStage > failureEmitter.lastStage;
+        if (newEvent)
+            failureEmitter.lastEventSerial = contact.tireFailureEventSerial;
+        if (newStage)
+            failureEmitter.lastStage = contact.tireFailureStage;
+
+        const float leakIntensity = clamp01(
+            contact.tireFailureLeakMassFlowKgPerSecond / 0.020f);
+        const float carcassDamage = clamp01(
+            1.0f - contact.tireFailureStructuralIntegrity);
+        const float treadLoss = clamp01(
+            1.0f - contact.tireFailureTreadAttachment);
+        const float rimContact = clamp01(contact.tireFailureRimContactFraction);
+        const float speedActivation = smoothStep(1.5f, 18.0f, speed);
+        const float dt = std::clamp(contact.deltaTimeSeconds, 0.0f, 0.05f);
+
+        failureEmitter.smokeBudget += dt
+            * (2.0f * leakIntensity
+                + speedActivation * (1.8f * carcassDamage + 2.6f * rimContact));
+        failureEmitter.debrisBudget += dt * speedActivation
+            * (0.7f * carcassDamage + 4.0f * treadLoss + 1.5f * rimContact);
+        if (newEvent || newStage)
+        {
+            // A new incident must be legible even at rest. Air is transparent,
+            // so the stage-1/2 wisps are explicitly sparse diagnostic aerosol;
+            // stages 3+ add the much larger dust/condensation burst and rubber.
+            if (contact.tireFailureStage == 1)
+                failureEmitter.smokeBudget += 2.0f;
+            else if (contact.tireFailureStage == 2)
+                failureEmitter.smokeBudget += 4.0f;
+            else if (contact.tireFailureStage == 3)
+            {
+                failureEmitter.smokeBudget += 12.0f;
+                failureEmitter.debrisBudget += 4.0f;
+            }
+            else if (contact.tireFailureStage == 4)
+            {
+                failureEmitter.smokeBudget += 5.0f;
+                failureEmitter.debrisBudget += 11.0f;
+            }
+            else if (contact.tireFailureStage == 5)
+            {
+                failureEmitter.smokeBudget += 8.0f;
+                failureEmitter.debrisBudget += 12.0f;
+            }
+            else if (contact.tireFailureStage >= 6)
+            {
+                failureEmitter.smokeBudget += 8.0f;
+                failureEmitter.debrisBudget += 22.0f;
+            }
+        }
+
+        int failureEmissions = 0;
+        while (failureEmitter.smokeBudget >= 1.0f && failureEmissions < 3)
+        {
+            emitParticle(globalPosition, contact,
+                SurfaceParticleKind::TireFailureSmoke,
+                std::max(leakIntensity, std::max(carcassDamage, rimContact)),
+                0x1900u + emissionSequence++);
+            failureEmitter.smokeBudget -= 1.0f;
+            ++failureEmissions;
+        }
+        failureEmissions = 0;
+        while (failureEmitter.debrisBudget >= 1.0f && failureEmissions < 3)
+        {
+            emitParticle(globalPosition, contact,
+                SurfaceParticleKind::TireFailureDebris,
+                std::max(treadLoss, std::max(carcassDamage, rimContact)),
+                0x1940u + emissionSequence++);
+            failureEmitter.debrisBudget -= 1.0f;
+            ++failureEmissions;
+        }
+        failureEmitter.smokeBudget = std::min(failureEmitter.smokeBudget, 24.0f);
+        failureEmitter.debrisBudget = std::min(failureEmitter.debrisBudget, 32.0f);
+        }
+    }
+
     // TIRE15C5: rubber flight is no longer a lossy generic presentation
     // particle. TrackRubberState owns authoritative AIRBORNE/MOBILE_GROUND
     // packets and the renderer draws those packets as deformable two-triangle
@@ -883,16 +1048,21 @@ void SurfacePresentation::advance(float deltaTimeSeconds)
         if (particle.settled)
             continue;
 
+        const bool failureSmoke =
+            particle.kind == SurfaceParticleKind::TireFailureSmoke;
+        const bool heavyRubber = particle.kind == SurfaceParticleKind::RubberShred
+            || particle.kind == SurfaceParticleKind::TireFailureDebris;
         const float gravityScale = particle.kind == SurfaceParticleKind::Dust
             || particle.kind == SurfaceParticleKind::WaterSpray
+            || failureSmoke
             ? 0.28f
-            : (particle.kind == SurfaceParticleKind::RubberShred ? 1.0f : 0.85f);
+            : (heavyRubber ? 1.0f : 0.85f);
         particle.velocityMps.y -= 9.80665f * gravityScale * dt;
         const float dragRate = particle.kind == SurfaceParticleKind::Dust
             ? 1.6f
             : (particle.kind == SurfaceParticleKind::WaterSpray
                 ? 2.8f
-                : (particle.kind == SurfaceParticleKind::RubberShred ? 0.55f : 0.9f));
+                : (failureSmoke ? 1.9f : (heavyRubber ? 0.55f : 0.9f)));
         const float drag = std::exp(-dragRate * dt);
         particle.velocityMps.x *= drag;
         particle.velocityMps.y *= drag;
@@ -948,6 +1118,21 @@ void SurfacePresentation::advance(float deltaTimeSeconds)
     m_audioTarget.dust *= targetDecay;
     m_audioTarget.debris *= targetDecay;
     m_rutIntensity *= std::exp(-0.35f * dt);
+
+    // Reclaim emitter state for wheels no longer producing contact samples.
+    // This cache is presentation-only and must remain bounded in long sessions.
+    for (auto it = m_tireFailureEmitters.begin(); it != m_tireFailureEmitters.end();)
+    {
+        if (it->second.lastContactTimeSeconds >= 0.0
+            && m_elapsedSeconds - it->second.lastContactTimeSeconds > 30.0)
+        {
+            it = m_tireFailureEmitters.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
 }
 
 SurfacePresentationStats SurfacePresentation::stats() const

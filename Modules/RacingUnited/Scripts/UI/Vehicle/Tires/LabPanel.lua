@@ -13,6 +13,19 @@ local function ApplyTireDevelopmentControls(wearSpeed, rubberGeneration, marbleM
     return false
 end
 
+local function TireLabTwoColumnWidth()
+    return math.max(120.0, (UI.GetAvailableWidth() - 8.0) * 0.5)
+end
+
+local function TriggerFrontLeftFailure(stage, successMessage)
+    if Vehicle.TriggerWheelTireFailure(nativeVehicle, 1, stage) then
+        vehicleMessage = successMessage
+        return true
+    end
+    vehicleMessage = "Tire failure rejected: " .. Vehicle.GetLastError()
+    return false
+end
+
 function DrawVehicleTiresLabPanel()
     local controls = Physics.GetTireDevelopmentControls()
     if controls == nil then
@@ -77,28 +90,72 @@ function DrawVehicleTiresLabPanel()
     end
 
     UI.Spacing()
-    if UI.Button("NORMAL 1X") then
+    UI.Separator()
+    UI.TextDisabled("PERSISTENT FAILURE TEST | FRONT-LEFT")
+    UI.TextDisabled("Leak rate follows absolute pressure, gas temperature and an effective physical opening. Load/slip can flex a nail-sealed puncture open.")
+    if nativeVehicle ~= nil then
+        local failureButtonWidth = TireLabTwoColumnWidth()
+        if UI.Button("SLOW PUNCTURE", failureButtonWidth, 32.0, false) then
+            TriggerFrontLeftFailure(
+                1, "Front-left: embedded-object slow puncture started.")
+        end
+        UI.SameLine()
+        if UI.Button("RAPID LOSS", failureButtonWidth, 32.0, false) then
+            TriggerFrontLeftFailure(
+                2, "Front-left: rapid pressure loss started.")
+        end
+
+        if UI.Button("BLOWOUT", failureButtonWidth, 32.0, false) then
+            TriggerFrontLeftFailure(3, "Front-left: blowout triggered.")
+        end
+        UI.SameLine()
+        if UI.Button("COLLAPSE CARCASS", failureButtonWidth, 32.0, false) then
+            TriggerFrontLeftFailure(5, "Front-left: carcass collapsed.")
+        end
+        local failedWheel = vehicleWheelTelemetry ~= nil
+            and vehicleWheelTelemetry[1] or nil
+        if failedWheel ~= nil then
+            UI.Text(string.format(
+                "ACTIVE: %s | %.1f PSI | leak %.4f g/s",
+                failedWheel.tireFailureStage or "Healthy",
+                (failedWheel.tireInflationPressurePa or 0.0) / 6894.757293168,
+                failedWheel.tireLeakMassFlowGramsPerSecond or 0.0))
+            UI.Text(string.format(
+                "Pressurized gas %.2f%% | tread attached %.1f%% | carcass %.1f%%",
+                (failedWheel.tirePressurizedGasFraction or 1.0) * 100.0,
+                (failedWheel.tireTreadAttachment or 1.0) * 100.0,
+                (failedWheel.tireStructuralIntegrity or 1.0) * 100.0))
+        end
+        UI.TextDisabled(
+            "Slow puncture is physically timed: the live PSI and leak readout proves it before deflation becomes obvious.")
+    else
+        UI.TextDisabled("Spawn a vehicle to trigger a fitted-tire failure.")
+    end
+
+    UI.Spacing()
+    local developmentButtonWidth = TireLabTwoColumnWidth()
+    if UI.Button("NORMAL 1X", developmentButtonWidth, 32.0, false) then
         ApplyTireDevelopmentControls(1.0, 1.0, 1.0)
     end
     UI.SameLine()
-    if UI.Button("100X TEST") then
+    if UI.Button("100X TEST", developmentButtonWidth, 32.0, false) then
         ApplyTireDevelopmentControls(100.0, 100.0, 100.0)
     end
-    UI.SameLine()
-    if UI.Button("1000X MARBLE TIMELAPSE") then
+    if UI.Button("1000X MARBLE TIMELAPSE", developmentButtonWidth, 32.0, false) then
         ApplyTireDevelopmentControls(1000.0, 1000.0, 1000.0)
     end
 
     UI.Spacing()
-    if UI.Button("RESET TIRE PHYSICAL STATE") then
+    local resetButtonWidth = TireLabTwoColumnWidth()
+    if UI.Button("RESET TIRE PHYSICAL STATE", resetButtonWidth, 32.0, false) then
         if nativeVehicle ~= nil and Vehicle.ResetTirePhysicalState(nativeVehicle) then
-            vehicleMessage = "Tire thermal / wear / contamination state reset."
+            vehicleMessage = "Tire thermal / failure / wear / contamination state repaired and reset."
         else
             vehicleMessage = "Could not reset tire physical state."
         end
     end
     UI.SameLine()
-    if UI.Button("RESET TRACK RUBBER + MARBLES") then
+    if UI.Button("RESET TRACK RUBBER + MARBLES", resetButtonWidth, 32.0, false) then
         if Physics.ResetTrackRubber() then
             vehicleMessage = "Track rubber and marble state reset."
         else
