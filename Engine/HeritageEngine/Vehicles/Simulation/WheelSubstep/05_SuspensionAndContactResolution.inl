@@ -262,10 +262,10 @@
             : wheel.tireModel.inflationPressurePa;
         const VehicleScalar pressureRatio = std::clamp(
             currentPressurePa / std::max(nominalPressurePa, VehicleScalar{50000.0}),
-            VehicleScalar{0.25}, VehicleScalar{4.0});
+            VehicleScalar{0.0}, VehicleScalar{5.0});
         const VehicleScalar pressureStiffnessScale = std::clamp(
             VehicleScalar{0.40} + VehicleScalar{0.60} * std::sqrt(pressureRatio),
-            VehicleScalar{0.65}, VehicleScalar{1.50});
+            VehicleScalar{0.40}, VehicleScalar{1.75});
         unsprungDescription.tireRadialStiffnessNPerM =
             authoredTireStiffness * pressureStiffnessScale;
         unsprungDescription.tireRadialDampingNsPerM =

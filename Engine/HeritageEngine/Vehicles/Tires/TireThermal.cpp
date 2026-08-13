@@ -206,7 +206,7 @@ bool validTireThermalDescription(const TireThermalDescription& d)
     }
 
     return d.ambientPressurePa > 10000.0
-        && d.referenceGaugePressurePa > 10000.0
+        && d.referenceGaugePressurePa >= 0.0
         && d.treadHeatCapacityJPerK > 10.0
         && d.carcassHeatCapacityJPerK > 10.0
         && d.gasHeatCapacityJPerK > 1.0

@@ -15,7 +15,7 @@
             ? previousLongitudinalTireForce : VehicleScalar{0.0};
         ringInput.lateralForceN = hitGround
             ? previousLateralTireForce : VehicleScalar{0.0};
-        ringInput.inflationPressurePa = state.tireInflationPressurePa > 20000.0
+        ringInput.inflationPressurePa = state.tireInflationPressurePa >= 0.0
             ? state.tireInflationPressurePa
             : wheel.tireModel.inflationPressurePa;
         ringInput.referencePressurePa =

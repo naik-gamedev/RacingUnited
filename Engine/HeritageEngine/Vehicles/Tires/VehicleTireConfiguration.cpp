@@ -13,32 +13,23 @@ using namespace vehicle_system_detail;
 
 namespace {
 
-std::pair<VehicleScalar, VehicleScalar> operationalPressureRange(
-    const TireModelDescription& model)
+constexpr VehicleScalar kPascalsPerPsi = VehicleScalar{6894.757293168};
+constexpr VehicleScalar kMaximumLivePressurePa = VehicleScalar{150.0}
+    * kPascalsPerPsi;
+
+std::pair<VehicleScalar, VehicleScalar> livePressureRange()
 {
-    VehicleScalar minimumPa = VehicleScalar{20000.0};
-    VehicleScalar maximumPa = VehicleScalar{2000000.0};
-    if (model.magicFormula.minimumPressurePa > VehicleScalar{0.0}
-        && model.magicFormula.maximumPressurePa >= model.magicFormula.minimumPressurePa)
-    {
-        minimumPa = std::max(minimumPa, model.magicFormula.minimumPressurePa);
-        maximumPa = std::min(maximumPa, model.magicFormula.maximumPressurePa);
-    }
-    if (model.thermal.enabled)
-    {
-        minimumPa = std::max(minimumPa, model.thermal.minimumGaugePressurePa);
-        maximumPa = std::min(maximumPa, model.thermal.maximumGaugePressurePa);
-    }
-    if (maximumPa < minimumPa)
-        maximumPa = minimumPa;
-    return { minimumPa, maximumPa };
+    // The live laboratory range intentionally exceeds a fitted MF dataset.
+    // Each fitted provider clamps only its coefficients internally; structural,
+    // thermal and visual systems continue to consume the actual gauge pressure.
+    return { VehicleScalar{0.0}, kMaximumLivePressurePa };
 }
 
-bool pressureInsideRange(const TireModelDescription& model, VehicleScalar pressurePa)
+bool pressureInsideLiveRange(VehicleScalar pressurePa)
 {
     if (!std::isfinite(static_cast<double>(pressurePa)))
         return false;
-    const auto [minimumPa, maximumPa] = operationalPressureRange(model);
+    const auto [minimumPa, maximumPa] = livePressureRange();
     return pressurePa >= minimumPa && pressurePa <= maximumPa;
 }
 
@@ -307,10 +298,10 @@ bool VehicleSystem::setWheelTireColdInflationPressure(
     }
 
     WheelRecord& wheel = slot->record.wheels[wheelIndex];
-    if (!pressureInsideRange(wheel.tireModel, pressurePa))
+    if (!pressureInsideLiveRange(pressurePa))
     {
-        const auto [minimumPa, maximumPa] = operationalPressureRange(wheel.tireModel);
-        setError("Vehicle.SetWheelTireColdInflationPressure pressure is outside this tire's supported range ("
+        const auto [minimumPa, maximumPa] = livePressureRange();
+        setError("Vehicle.SetWheelTireColdInflationPressure pressure is outside the live test range ("
             + std::to_string(static_cast<double>(minimumPa)) + ".."
             + std::to_string(static_cast<double>(maximumPa)) + " Pa).");
         return false;
@@ -318,7 +309,16 @@ bool VehicleSystem::setWheelTireColdInflationPressure(
 
     wheel.tireModel.inflationPressurePa = pressurePa;
     if (wheel.tireModel.thermal.enabled)
+    {
         wheel.tireModel.thermal.referenceGaugePressurePa = pressurePa;
+        wheel.tireModel.thermal.minimumGaugePressurePa = std::min(
+            wheel.tireModel.thermal.minimumGaugePressurePa, pressurePa);
+        wheel.tireModel.thermal.maximumGaugePressurePa = std::max(
+            wheel.tireModel.thermal.maximumGaugePressurePa,
+            std::min(VehicleScalar{2000000.0},
+                pressurePa * VehicleScalar{1.50} + VehicleScalar{10000.0}));
+    }
+    wheel.thermalState = {};
     if (wheel.tirePartAssignment.assigned)
         wheel.tirePartAssignment.coldInflationPressurePa = pressurePa;
     clearError();
@@ -340,19 +340,25 @@ bool VehicleSystem::setTireColdInflationPressure(
         setError("Vehicle.SetTireColdInflationPressure requires at least one wheel.");
         return false;
     }
-    for (const WheelRecord& wheel : slot->record.wheels)
+    if (!pressureInsideLiveRange(pressurePa))
     {
-        if (!pressureInsideRange(wheel.tireModel, pressurePa))
-        {
-            setError("Vehicle.SetTireColdInflationPressure is outside at least one fitted tire's supported range.");
-            return false;
-        }
+        setError("Vehicle.SetTireColdInflationPressure is outside the 0..150 PSI live test range.");
+        return false;
     }
     for (WheelRecord& wheel : slot->record.wheels)
     {
         wheel.tireModel.inflationPressurePa = pressurePa;
         if (wheel.tireModel.thermal.enabled)
+        {
             wheel.tireModel.thermal.referenceGaugePressurePa = pressurePa;
+            wheel.tireModel.thermal.minimumGaugePressurePa = std::min(
+                wheel.tireModel.thermal.minimumGaugePressurePa, pressurePa);
+            wheel.tireModel.thermal.maximumGaugePressurePa = std::max(
+                wheel.tireModel.thermal.maximumGaugePressurePa,
+                std::min(VehicleScalar{2000000.0},
+                    pressurePa * VehicleScalar{1.50} + VehicleScalar{10000.0}));
+        }
+        wheel.thermalState = {};
         if (wheel.tirePartAssignment.assigned)
             wheel.tirePartAssignment.coldInflationPressurePa = pressurePa;
     }
@@ -373,14 +379,12 @@ bool VehicleSystem::tireColdInflationPressureRange(
         return false;
     }
 
-    minimumPa = VehicleScalar{0.0};
-    maximumPa = VehicleScalar{2000000.0};
+    const auto [liveMinimumPa, liveMaximumPa] = livePressureRange();
+    minimumPa = liveMinimumPa;
+    maximumPa = liveMaximumPa;
     representativePressurePa = VehicleScalar{0.0};
     for (const WheelRecord& wheel : slot->record.wheels)
     {
-        const auto [wheelMinimumPa, wheelMaximumPa] = operationalPressureRange(wheel.tireModel);
-        minimumPa = std::max(minimumPa, wheelMinimumPa);
-        maximumPa = std::min(maximumPa, wheelMaximumPa);
         representativePressurePa += wheel.tireModel.inflationPressurePa;
     }
     representativePressurePa /= static_cast<VehicleScalar>(slot->record.wheels.size());

@@ -117,6 +117,16 @@
     VehicleScalar lateralForce = lowSpeedLateralForce
         + (tireResult.lateralForce - lowSpeedLateralForce)
             * lowSpeedBlend;
+    const VehicleScalar pressureServiceability = std::clamp(
+        dynamicInflationPressurePa
+            / std::max(wheel.tireModel.referenceInflationPressurePa,
+                VehicleScalar{1.0}),
+        VehicleScalar{0.0}, VehicleScalar{1.0});
+    const VehicleScalar flatTireRollingResistanceScale =
+        VehicleScalar{1.0}
+            + VehicleScalar{4.0}
+                * (VehicleScalar{1.0} - pressureServiceability)
+                * (VehicleScalar{1.0} - pressureServiceability);
     const VehicleScalar rollingResistanceForce =
         -vehicle.description.rollingResistance
         * surface.rollingResistanceMultiplier
@@ -124,6 +134,7 @@
             ? contaminationBefore.rollingResistanceScale : VehicleScalar{1.0})
         * dedicatedRollingResistanceScale
         * static_cast<VehicleScalar>(trackRubberBefore.rollingResistanceScale)
+        * flatTireRollingResistanceScale
         * longitudinalSpeed;
     longitudinalForce += rollingResistanceForce;
 

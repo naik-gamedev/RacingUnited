@@ -243,7 +243,7 @@ TireRigidRingOutput advanceTireRigidRing(
         ? input.referencePressurePa : input.inflationPressurePa;
     const VehicleScalar pressureRatio = referencePressurePa > 20000.0
         ? std::clamp(input.inflationPressurePa / referencePressurePa,
-            VehicleScalar{0.20}, VehicleScalar{3.0})
+            VehicleScalar{0.0}, VehicleScalar{5.0})
         : VehicleScalar{1.0};
     const VehicleScalar pressureStiffnessScale = std::sqrt(pressureRatio);
     const VehicleScalar thermalStiffnessScale = std::clamp(
@@ -252,7 +252,7 @@ TireRigidRingOutput advanceTireRigidRing(
         VehicleScalar{0.50}, VehicleScalar{1.50});
     const VehicleScalar structuralStiffnessScale = std::clamp(
         pressureStiffnessScale * thermalStiffnessScale,
-        VehicleScalar{0.30}, VehicleScalar{2.00});
+        VehicleScalar{0.18}, VehicleScalar{2.25});
 
     const VehicleScalar longStiffness = d.longitudinalStiffnessNPerM
         * structuralStiffnessScale;

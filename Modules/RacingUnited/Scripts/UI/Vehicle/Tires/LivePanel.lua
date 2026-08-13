@@ -90,8 +90,8 @@ function DrawVehicleTiresLivePanel()
         wheel.tireCarcassTemperatureC or 20.0,
         wheel.tireGasTemperatureC or 20.0))
     UI.Text(string.format(
-        "Pressure: %.1f kPa | thermal grip / stiffness: %.3f / %.3f",
-        (wheel.tireInflationPressurePa or 220000.0) / 1000.0,
+        "Pressure: %.1f PSI | thermal grip / stiffness: %.3f / %.3f",
+        (wheel.tireInflationPressurePa or 220000.0) / 6894.757293168,
         wheel.tireThermalFrictionScale or 1.0,
         wheel.tireThermalStiffnessScale or 1.0))
     UI.Text(string.format(

@@ -67,6 +67,12 @@ bool magicFormula62RoadCoreBehaves()
         tire,
         combined);
 
+    TireContactInput flatTireInput = pureLateral;
+    flatTireInput.inflationPressurePa = VehicleScalar{0.0};
+    const TireForceResult flatTire = heritage::vehicles::evaluateAdvancedRoadTire(
+        tire,
+        flatTireInput);
+
     if (!finite(fx.longitudinalForce)
         || !finite(fy.lateralForce)
         || !finite(both.aligningTorque)
@@ -84,7 +90,12 @@ bool magicFormula62RoadCoreBehaves()
         && std::abs(both.longitudinalForce)
             <= std::abs(both.pureLongitudinalForce) + 1.0
         && both.effectiveFriction > 0.5
-        && both.rollingResistanceMoment < 0.0;
+        && both.rollingResistanceMoment < 0.0
+        // Gauge pressure is authoritative physics input, not merely a mesh
+        // control: a fully deflated casing cannot retain normal cornering
+        // force or response stiffness under the same load and slip.
+        && std::abs(flatTire.lateralForce) < std::abs(fy.lateralForce) * 0.60
+        && flatTire.corneringStiffness < fy.corneringStiffness * 0.20;
 }
 
 bool magicFormula62TurnSlipReducesGripAndTrail()
@@ -635,6 +646,87 @@ bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric()
         + std::clamp(sidewallHeightM * 0.12, 0.005, 0.014);
     if (!lowPressureConstrained.valid
         || !(lowPressureBottomRadiusM > protectedFlangeRadiusM - 0.0001))
+    {
+        return false;
+    }
+
+    // A fully deflated tire still has a tensile tread belt. Collision samples
+    // across a crowned unloaded tread therefore settle onto one road plane;
+    // pressure compliance must not multiply the penetration correction and
+    // pull the centre above the shoulders into a concave arch.
+    TireFlexibleRingFieldInput deflatedFlatRoad = input;
+    deflatedFlatRoad.inflationPressurePa = 0.0;
+    deflatedFlatRoad.verticalDeflectionM = 0.055;
+    deflatedFlatRoad.directContactCompressionM = {};
+    deflatedFlatRoad.directContactForwardDisplacementM = {};
+    deflatedFlatRoad.directContactDownDisplacementM = {};
+    deflatedFlatRoad.directContactLateralDisplacementM = {};
+    constexpr VehicleScalar crownedTreadDepthRatio = 0.055;
+    for (std::size_t station = 7; station <= 13; ++station)
+    {
+        const VehicleScalar phi =
+            TireFlexibleRingContactPhiRadians[station];
+        for (std::size_t band = 2; band + 2 < TireFlexibleRingContactBands;
+             ++band)
+        {
+            const VehicleScalar width =
+                TireFlexibleRingWidthCoordinates[band];
+            const VehicleScalar compression = std::max(
+                VehicleScalar{0.045}
+                    - description.unloadedRadiusM * crownedTreadDepthRatio
+                        * width * width,
+                VehicleScalar{0.004});
+            const std::size_t index =
+                station * TireFlexibleRingContactBands + band;
+            deflatedFlatRoad.directContactCompressionM[index] = compression;
+            deflatedFlatRoad.directContactForwardDisplacementM[index] =
+                -std::cos(phi) * compression;
+            deflatedFlatRoad.directContactDownDisplacementM[index] =
+                -std::sin(phi) * compression;
+        }
+    }
+    const auto deflated = evaluateTireFlexibleRingField(
+        description, deflatedFlatRoad);
+    const auto finalBottomDownM = [&](std::size_t band)
+    {
+        const VehicleScalar width = TireFlexibleRingWidthCoordinates[band];
+        const VehicleScalar nominalCrownedRadiusM =
+            description.unloadedRadiusM
+                * (VehicleScalar{1.0} - crownedTreadDepthRatio * width * width);
+        return nominalCrownedRadiusM
+            + deflated.downDisplacementM[
+                bottomStation * TireFlexibleRingFieldBands + band];
+    };
+    const VehicleScalar deflatedCenterDownM = finalBottomDownM(centerBand);
+    const VehicleScalar deflatedNegativeTreadDownM = finalBottomDownM(2);
+    const VehicleScalar deflatedPositiveTreadDownM = finalBottomDownM(
+        TireFlexibleRingFieldBands - 3);
+    if (!deflated.valid
+        || deflatedCenterDownM + 0.0005 < deflatedNegativeTreadDownM
+        || deflatedCenterDownM + 0.0005 < deflatedPositiveTreadDownM
+        || !(deflated.lateralDisplacementM[bottomNegativeSide] < -0.025)
+        || !(deflated.lateralDisplacementM[bottomPositiveSide] > 0.025))
+    {
+        return false;
+    }
+
+    // Tire visual assets are authored at the shared 150 PSI shape endpoint.
+    // At that pressure the authoritative deformation field must return the
+    // untouched mesh; halfway down the pressure scale must remain continuous
+    // and visibly between the endpoint and the ordinary road-pressure shape.
+    TireFlexibleRingFieldInput authoredShape = flatRoadContact;
+    authoredShape.inflationPressurePa = 150.0 * 6894.757293168;
+    const auto authored = evaluateTireFlexibleRingField(
+        description, authoredShape);
+    TireFlexibleRingFieldInput midPressureShape = flatRoadContact;
+    midPressureShape.inflationPressurePa = 75.0 * 6894.757293168;
+    const auto middle = evaluateTireFlexibleRingField(
+        description, midPressureShape);
+    if (authored.valid
+        || !middle.valid
+        || !(std::abs(middle.downDisplacementM[bottomCenter]) > 0.0001)
+        || !(std::abs(middle.downDisplacementM[bottomCenter])
+            < std::abs(flatRoad.downDisplacementM[bottomCenter])))
     {
         return false;
     }
@@ -2306,6 +2398,25 @@ bool tirePartsResolveAndAssignReusableFitments()
         && std::abs(pressureAdjustedModel.thermal.referenceGaugePressurePa - testPressurePa) < 1.0e-12
         && std::abs(pressureAdjustedAssignment.coldInflationPressurePa - testPressurePa) < 1.0e-12;
 
+    constexpr VehicleScalar oneHundredFiftyPsiPa =
+        VehicleScalar{150.0 * 6894.757293168};
+    TireModelDescription zeroPressureModel;
+    TireModelDescription maximumPressureModel;
+    const bool livePressureEndpointsWork = pressureRangeAvailable
+        && std::abs(minimumPressurePa) < 1.0e-12
+        && std::abs(maximumPressurePa - oneHundredFiftyPsiPa) < 1.0e-6
+        && world.vehicles.setTireColdInflationPressure(world.vehicle, 0.0)
+        && world.vehicles.wheelTireModel(world.vehicle, 0, zeroPressureModel)
+        && std::abs(zeroPressureModel.inflationPressurePa) < 1.0e-12
+        && std::abs(zeroPressureModel.thermal.referenceGaugePressurePa) < 1.0e-12
+        && world.vehicles.setTireColdInflationPressure(
+            world.vehicle, oneHundredFiftyPsiPa)
+        && world.vehicles.wheelTireModel(world.vehicle, 0, maximumPressureModel)
+        && std::abs(maximumPressureModel.inflationPressurePa
+            - oneHundredFiftyPsiPa) < 1.0e-6
+        && std::abs(maximumPressureModel.referenceInflationPressurePa
+            - part.engineering.referenceInflationPressurePa) < 1.0e-12;
+
     TirePartAssignmentInfo clearedAssignment;
     const bool manualOverrideClearsAssignment =
         world.vehicles.setWheelTireProvider(world.vehicle, 0, pressureAdjustedModel.provider)
@@ -2341,11 +2452,12 @@ bool tirePartsResolveAndAssignReusableFitments()
         && std::abs(frontModel.referenceInflationPressurePa - 230000.0) < 1.0e-12
         && std::abs(rearModel.referenceInflationPressurePa - 230000.0) < 1.0e-12
         && pressureRangeAvailable
-        && minimumPressurePa <= 80000.0 + 1.0e-9
-        && maximumPressurePa >= 500000.0 - 1.0e-9
+        && minimumPressurePa == 0.0
+        && maximumPressurePa > 1000000.0
         && representativePressurePa > minimumPressurePa
         && representativePressurePa < maximumPressurePa
         && pressureAdjustmentWorks
+        && livePressureEndpointsWork
         && manualOverrideClearsAssignment;
 }
 

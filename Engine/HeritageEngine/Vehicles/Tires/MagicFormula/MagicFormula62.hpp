@@ -237,7 +237,9 @@ struct MagicFormula62Input
     VehicleScalar longitudinalSlip = 0.0;
     VehicleScalar slipAngleRadians = 0.0;
     VehicleScalar camberAngleRadians = 0.0;
-    VehicleScalar inflationPressurePa = 0.0;
+    // Negative means unspecified/use nominal. Zero is an explicit flat tire;
+    // the MF evaluator then clamps to its fitted lower pressure boundary.
+    VehicleScalar inflationPressurePa = -1.0;
     VehicleScalar forwardSpeedMps = 0.0;
 
     // Wheel spin about the contact normal divided by forward speed [1/m].

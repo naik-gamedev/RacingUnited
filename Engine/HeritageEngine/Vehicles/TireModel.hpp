@@ -106,7 +106,9 @@ struct TireContactInput
     VehicleScalar turnSlipPerM = 0.0;
     VehicleScalar contactPatchTurnMomentNm = 0.0;
     VehicleScalar wheelRadiusM = 0.0;
-    VehicleScalar inflationPressurePa = 0.0;
+    // Negative means unspecified/use the tire description. Zero is a valid
+    // explicitly commanded gauge pressure for flat-tire simulation.
+    VehicleScalar inflationPressurePa = -1.0;
     VehicleScalar frictionMultiplier = 1.0;
     VehicleScalar stiffnessMultiplier = 1.0;
 };

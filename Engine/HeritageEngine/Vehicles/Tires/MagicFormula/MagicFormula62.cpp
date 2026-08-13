@@ -91,7 +91,7 @@ CommonState makeCommonState(
         : 1.0;
     state.nominalLoadN = std::max(p.nominalLoadN * p.lFz0, kEpsilon);
     state.pressurePa = std::clamp(
-        input.inflationPressurePa > 0.0
+        input.inflationPressurePa >= 0.0
             ? input.inflationPressurePa
             : p.nominalPressurePa,
         p.minimumPressurePa,

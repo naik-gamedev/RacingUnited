@@ -179,7 +179,7 @@ bool validTireModelDescription(const TireModelDescription& value)
         && value.referenceInflationPressurePa >= 20000.0
         && value.referenceInflationPressurePa <= 2000000.0
         && finiteFloat(value.inflationPressurePa)
-        && value.inflationPressurePa >= 20000.0
+        && value.inflationPressurePa >= 0.0
         && value.inflationPressurePa <= 2000000.0;
 
     if (!legacyValid)
@@ -467,9 +467,14 @@ TireForceResult evaluateAdvancedRoadTire(
     mfInput.longitudinalSlip = input.longitudinalSlip;
     mfInput.slipAngleRadians = input.slipAngleRadians;
     mfInput.camberAngleRadians = input.camberAngleRadians;
-    mfInput.inflationPressurePa = input.inflationPressurePa > 0.0
+    const VehicleScalar actualInflationPressurePa =
+        input.inflationPressurePa >= 0.0
         ? input.inflationPressurePa
         : description.inflationPressurePa;
+    mfInput.inflationPressurePa = std::clamp(
+        actualInflationPressurePa,
+        p.minimumPressurePa,
+        p.maximumPressurePa);
     mfInput.forwardSpeedMps = input.forwardSpeedMps;
     mfInput.turnSlipPerM = input.turnSlipPerM;
     mfInput.frictionScale = std::max(input.frictionMultiplier, 0.0);
@@ -502,6 +507,36 @@ TireForceResult evaluateAdvancedRoadTire(
     result.turnSlipLateralReduction = mf.turnSlipLateralReduction;
     result.turnSlipCorneringReduction = mf.turnSlipCorneringReduction;
     result.turnSlipTrailReduction = mf.turnSlipTrailReduction;
+
+    // MF coefficients are evaluated only inside their identified pressure
+    // range. Below that range, a separate carcass-serviceability envelope
+    // represents the loss of belt control in a flat tire without extrapolating
+    // the fitted polynomial to zero pressure. A flat casing retains some raw
+    // rubber friction, but only a small part of its intended force/moment
+    // capability and directional stiffness.
+    const VehicleScalar lowPressureT = std::clamp(
+        actualInflationPressurePa
+            / std::max(p.minimumPressurePa, VehicleScalar{1.0}),
+        VehicleScalar{0.0}, VehicleScalar{1.0});
+    const VehicleScalar lowPressureSmooth = lowPressureT * lowPressureT
+        * (VehicleScalar{3.0} - VehicleScalar{2.0} * lowPressureT);
+    const VehicleScalar forceServiceability = VehicleScalar{0.35}
+        + VehicleScalar{0.65} * lowPressureSmooth;
+    const VehicleScalar stiffnessServiceability = VehicleScalar{0.08}
+        + VehicleScalar{0.92} * lowPressureSmooth;
+    result.longitudinalForce *= forceServiceability;
+    result.lateralForce *= forceServiceability;
+    result.pureLongitudinalForce *= forceServiceability;
+    result.pureLateralForce *= forceServiceability;
+    result.effectiveFriction *= forceServiceability;
+    result.pneumaticTrail *= stiffnessServiceability;
+    result.turnSlipMoment *= stiffnessServiceability;
+    result.aligningTorque *= stiffnessServiceability;
+    result.overturningMoment *= stiffnessServiceability;
+    result.residualAligningTorque *= stiffnessServiceability;
+    result.longitudinalSlipStiffness *= stiffnessServiceability;
+    result.corneringStiffness *= stiffnessServiceability;
+    result.camberStiffness *= stiffnessServiceability;
 
     const VehicleScalar forceLimit = std::max(
         result.effectiveFriction * input.normalLoad,

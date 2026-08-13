@@ -48,23 +48,27 @@ function DrawVehicleTiresLabPanel()
         local minimumPressurePa, maximumPressurePa, coldPressurePa =
             Vehicle.GetTireColdInflationPressureRange(nativeVehicle)
         if minimumPressurePa ~= nil and maximumPressurePa ~= nil and coldPressurePa ~= nil then
-            local pressureBar = coldPressurePa / 100000.0
-            local minimumBar = minimumPressurePa / 100000.0
-            local maximumBar = maximumPressurePa / 100000.0
-            pressureBar, changed = UI.SliderFloat(
-                "Cold tire pressure", pressureBar, minimumBar, maximumBar, "%.2f bar")
+            local pascalsPerPsi = 6894.757293168
+            local pressurePsi = coldPressurePa / pascalsPerPsi
+            local minimumPsi = minimumPressurePa / pascalsPerPsi
+            local maximumPsi = maximumPressurePa / pascalsPerPsi
+            pressurePsi, changed = UI.SliderFloat(
+                "Cold tire pressure", pressurePsi, minimumPsi, maximumPsi, "%.1f PSI")
             if changed then
-                if Vehicle.SetTireColdInflationPressure(nativeVehicle, pressureBar * 100000.0) then
+                if Vehicle.SetTireColdInflationPressure(
+                    nativeVehicle, pressurePsi * pascalsPerPsi) then
                     vehicleMessage = string.format(
-                        "Cold tire pressure %.2f bar (%.1f kPa / %.1f psi)",
-                        pressureBar, pressureBar * 100.0, pressureBar * 14.5037738)
+                        "Cold tire pressure %.1f PSI (%.1f kPa)",
+                        pressurePsi, pressurePsi * pascalsPerPsi / 1000.0)
                 else
-                    vehicleMessage = "Cold tire pressure change rejected by fitted tire range."
+                    vehicleMessage = "Cold tire pressure change rejected by the live test range."
                 end
             end
             UI.TextDisabled(string.format(
-                "Fitted range %.2f-%.2f bar. Live pressure changes with gas temperature.",
-                minimumBar, maximumBar))
+                "Visual/physics range %.0f-%.0f PSI. 150 PSI is the authored mesh shape endpoint.",
+                minimumPsi, maximumPsi))
+            UI.TextDisabled(
+                "The vehicle still spawns at its authored road pressure; live pressure also changes with gas temperature.")
         else
             UI.TextDisabled("No common inflation-pressure range is available for the fitted tires.")
         end

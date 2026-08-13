@@ -47,6 +47,10 @@ struct TireFlexibleRingFieldDescription
     VehicleScalar sectionWidthM = 0.205;
     VehicleScalar maximumDeflectionM = 0.08;
     VehicleScalar referencePressurePa = 220000.0;
+    // Asset convention: the imported tire mesh is the fully supported shape
+    // at 150 PSI. The solved displacement field fades continuously to zero at
+    // this endpoint and grows as the common physics pressure is reduced.
+    VehicleScalar authoredShapePressurePa = 150.0 * 6894.757293168;
     VehicleScalar verticalStiffnessNPerM = 220000.0;
 
     // Reduced-order structural parameters.  These describe coupling of the
