@@ -334,6 +334,8 @@
     tires::TireContactPatchInput contactPatchInput;
     contactPatchInput.wheelYawRateRadiansPerSecond =
         wheelYawRateRadiansPerSecond;
+    contactPatchInput.wheelSteerAngleRadians = radians(
+        state.steerAngleDegrees);
     contactPatchInput.forwardSpeedMps = structuralLongitudinalSpeed;
     contactPatchInput.normalLoadN = suspensionForce;
     contactPatchInput.effectiveFriction = std::max(

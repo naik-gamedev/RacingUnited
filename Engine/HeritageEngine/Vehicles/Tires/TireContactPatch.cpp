@@ -20,6 +20,14 @@ VehicleScalar signNonZero(VehicleScalar value)
     return 0.0;
 }
 
+VehicleScalar smoothStep(VehicleScalar edge0, VehicleScalar edge1, VehicleScalar value)
+{
+    const VehicleScalar t = std::clamp(
+        (value - edge0) / std::max(edge1 - edge0, kEpsilon),
+        VehicleScalar{0.0}, VehicleScalar{1.0});
+    return t * t * (VehicleScalar{3.0} - VehicleScalar{2.0} * t);
+}
+
 } // namespace
 
 bool validTireContactPatchDescription(
@@ -31,6 +39,12 @@ bool validTireContactPatchDescription(
         && finiteValue(d.maximumElasticTwistRadians)
         && d.maximumElasticTwistRadians >= 0.005
         && d.maximumElasticTwistRadians <= 1.0
+        && finiteValue(d.stationaryNeutralRecoveryTimeSeconds)
+        && d.stationaryNeutralRecoveryTimeSeconds >= 0.01
+        && d.stationaryNeutralRecoveryTimeSeconds <= 10.0
+        && finiteValue(d.neutralSteerThresholdRadians)
+        && d.neutralSteerThresholdRadians >= 0.001
+        && d.neutralSteerThresholdRadians <= 0.35
         && finiteValue(d.turnSlipRegularizationSpeedMps)
         && d.turnSlipRegularizationSpeedMps >= 0.05
         && d.turnSlipRegularizationSpeedMps <= 10.0
@@ -48,6 +62,7 @@ TireContactPatchOutput integrateTireContactPatch(
     TireContactPatchOutput out;
     if (!validTireContactPatchDescription(d)
         || !finiteValue(input.wheelYawRateRadiansPerSecond)
+        || !finiteValue(input.wheelSteerAngleRadians)
         || !finiteValue(input.forwardSpeedMps)
         || !finiteValue(input.normalLoadN)
         || !finiteValue(input.effectiveFriction)
@@ -62,8 +77,19 @@ TireContactPatchOutput integrateTireContactPatch(
     }
 
     const VehicleScalar speed = std::abs(input.forwardSpeedMps);
-    const VehicleScalar releaseRate = speed
+    const VehicleScalar rollingReleaseRate = speed
         / std::max(d.torsionalRelaxationLengthM, kEpsilon);
+    const VehicleScalar absoluteSteerAngle = std::abs(
+        input.wheelSteerAngleRadians);
+    const VehicleScalar neutralRecoveryBlend = VehicleScalar{1.0}
+        - smoothStep(
+            d.neutralSteerThresholdRadians,
+            d.neutralSteerThresholdRadians * VehicleScalar{2.0},
+            absoluteSteerAngle);
+    const VehicleScalar stationaryNeutralReleaseRate = neutralRecoveryBlend
+        / std::max(d.stationaryNeutralRecoveryTimeSeconds, kEpsilon);
+    const VehicleScalar releaseRate = rollingReleaseRate
+        + stationaryNeutralReleaseRate;
 
     // Exact integration of d(theta)/dt = yawRate - releaseRate*theta for a
     // constant input over the substep. This keeps the parking state nearly
@@ -82,9 +108,13 @@ TireContactPatchOutput integrateTireContactPatch(
             input.wheelYawRateRadiansPerSecond * deltaTimeSeconds;
     }
 
-    // Keep numerical state bounded even during pathological steering input.
-    // The actual elastic response is smoothly saturated below this hard cap.
-    const VehicleScalar stateLimit = 4.0 * d.maximumElasticTwistRadians;
+    // The observable elastic response is smoothly saturated, while the
+    // internal accumulator must cover an ordinary lock-to-lock steering sweep.
+    // A too-small hidden cap clips the outward sweep and leaves a false residual
+    // twist when the same steering motion returns to centre.
+    const VehicleScalar stateLimit = std::max(
+        VehicleScalar{3.14159265358979323846},
+        VehicleScalar{8.0} * d.maximumElasticTwistRadians);
     state.torsionalTwistRadians = std::clamp(
         state.torsionalTwistRadians, -stateLimit, stateLimit);
 

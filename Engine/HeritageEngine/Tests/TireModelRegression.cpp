@@ -242,6 +242,7 @@ bool tireContactPatchParkingTwistIsRateStable()
         heritage::vehicles::tires::TireContactPatchOutput output;
         heritage::vehicles::tires::TireContactPatchInput input;
         input.wheelYawRateRadiansPerSecond = 0.50;
+        input.wheelSteerAngleRadians = 0.20;
         input.forwardSpeedMps = 0.0;
         input.normalLoadN = 3500.0;
         input.effectiveFriction = 1.10;
@@ -262,6 +263,7 @@ bool tireContactPatchParkingTwistIsRateStable()
     heritage::vehicles::tires::TireContactPatchState releaseState;
     heritage::vehicles::tires::TireContactPatchInput windup;
     windup.wheelYawRateRadiansPerSecond = 0.50;
+    windup.wheelSteerAngleRadians = 0.20;
     windup.forwardSpeedMps = 0.0;
     windup.normalLoadN = 3500.0;
     windup.effectiveFriction = 1.10;
@@ -273,11 +275,35 @@ bool tireContactPatchParkingTwistIsRateStable()
 
     auto release = windup;
     release.wheelYawRateRadiansPerSecond = 0.0;
+    release.wheelSteerAngleRadians = 0.0;
     release.forwardSpeedMps = 5.0;
     heritage::vehicles::tires::TireContactPatchOutput released;
     for (int i = 0; i < 300; ++i)
         released = heritage::vehicles::tires::integrateTireContactPatch(
             description, release, 0.001, releaseState);
+
+    heritage::vehicles::tires::TireContactPatchState stationaryReleaseState;
+    for (int i = 0; i < 400; ++i)
+        heritage::vehicles::tires::integrateTireContactPatch(
+            description, windup, 0.001, stationaryReleaseState);
+    auto stationaryRelease = windup;
+    stationaryRelease.wheelYawRateRadiansPerSecond = 0.0;
+    stationaryRelease.wheelSteerAngleRadians = 0.0;
+    heritage::vehicles::tires::TireContactPatchOutput stationaryReleased;
+    for (int i = 0; i < 600; ++i)
+        stationaryReleased = heritage::vehicles::tires::integrateTireContactPatch(
+            description, stationaryRelease, 0.001, stationaryReleaseState);
+
+    heritage::vehicles::tires::TireContactPatchState heldTurnState;
+    for (int i = 0; i < 400; ++i)
+        heritage::vehicles::tires::integrateTireContactPatch(
+            description, windup, 0.001, heldTurnState);
+    auto heldTurn = windup;
+    heldTurn.wheelYawRateRadiansPerSecond = 0.0;
+    heritage::vehicles::tires::TireContactPatchOutput held;
+    for (int i = 0; i < 600; ++i)
+        held = heritage::vehicles::tires::integrateTireContactPatch(
+            description, heldTurn, 0.001, heldTurnState);
 
     return finite(highRate.torsionalTwistRadians)
         && finite(highRate.parkingTurnMomentNm)
@@ -287,7 +313,10 @@ bool tireContactPatchParkingTwistIsRateStable()
         && std::abs(highRate.torsionalTwistRadians - lowRate.torsionalTwistRadians) < 0.005
         && std::abs(highRate.parkingTurnMomentNm - lowRate.parkingTurnMomentNm) < 10.0
         && std::abs(released.torsionalTwistRadians) < 1.0e-3
-        && released.parkingMomentBlend < 0.10;
+        && released.parkingMomentBlend < 0.10
+        && std::abs(stationaryReleased.torsionalTwistRadians) < 1.0e-3
+        && std::abs(held.torsionalTwistRadians - highRate.torsionalTwistRadians)
+            < 1.0e-4;
 }
 
 bool tireContactGeometryEffectiveRadiusAndFootprintBehave()

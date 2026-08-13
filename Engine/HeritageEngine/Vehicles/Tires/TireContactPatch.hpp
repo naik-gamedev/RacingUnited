@@ -14,6 +14,11 @@ struct TireContactPatchDescription
 {
     VehicleScalar torsionalRelaxationLengthM = 0.12;
     VehicleScalar maximumElasticTwistRadians = 0.14; // ~8 degrees
+    // Rolling replaces the tread in the footprint, but a stationary tire also
+    // relaxes stored shear through carcass elasticity and microscopic tread
+    // creep once the road wheel is returned to neutral.
+    VehicleScalar stationaryNeutralRecoveryTimeSeconds = 0.10;
+    VehicleScalar neutralSteerThresholdRadians = 0.035; // ~2 degrees
     VehicleScalar turnSlipRegularizationSpeedMps = 0.50;
     VehicleScalar parkingMomentTransitionSpeedMps = 1.50;
 };
@@ -26,6 +31,7 @@ struct TireContactPatchState
 struct TireContactPatchInput
 {
     VehicleScalar wheelYawRateRadiansPerSecond = 0.0;
+    VehicleScalar wheelSteerAngleRadians = 0.0;
     VehicleScalar forwardSpeedMps = 0.0;
     VehicleScalar normalLoadN = 0.0;
     VehicleScalar effectiveFriction = 1.0;
