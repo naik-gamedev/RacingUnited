@@ -194,6 +194,7 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
         || !finiteValue(input.ringLateralOffsetM)
         || !finiteValue(input.ringYawRadians)
         || !finiteValue(input.ringWindupRadians)
+        || !finiteValue(input.contactPatchTwistRadians)
         || !finiteValue(input.flatSpotDepthM)
         || !finiteValue(input.flatSpotSector)
         || !finiteValue(input.wheelRotationRadians))
@@ -234,8 +235,8 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
             / d.referencePressurePa,
         VehicleScalar{0.12}, VehicleScalar{3.0});
     const VehicleScalar pressureCompliance = std::clamp(
-        VehicleScalar{1.0} / std::sqrt(pressureRatio),
-        VehicleScalar{0.58}, VehicleScalar{2.25});
+        std::pow(pressureRatio, VehicleScalar{-0.68}),
+        VehicleScalar{0.52}, VehicleScalar{2.75});
 
     // Pressure generates hoop tension while the belt plies and carcass carry
     // tensile load.  Their reduced-order result is a radial structural
@@ -247,14 +248,41 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
     const VehicleScalar stiffnessRatio = std::clamp(
         d.verticalStiffnessNPerM / VehicleScalar{220000.0},
         VehicleScalar{0.20}, VehicleScalar{5.0});
-    const VehicleScalar collapseFraction = std::clamp(
-        VehicleScalar{0.52}
-            * std::pow(pressureRatio, VehicleScalar{-0.38})
+    const VehicleScalar structuralCompliance = std::clamp(
+        pressureCompliance
             * std::pow(stiffnessRatio, VehicleScalar{-0.24}),
-        VehicleScalar{0.34}, VehicleScalar{0.82});
+        VehicleScalar{0.50}, VehicleScalar{2.80});
+
+    // The rim radius is the bead-seat datum. A passenger-car J flange extends
+    // beyond that seat, and the inflated bead/sidewall must retain clearance
+    // outside it. This reduced-order envelope is proportional for kart,
+    // low-profile, road and tall off-road tires instead of assuming that every
+    // tire has the prototype's 80 mm of usable radial travel.
+    const VehicleScalar flangeHeightM = std::clamp(
+        sidewallHeightM * VehicleScalar{0.15},
+        VehicleScalar{0.006}, VehicleScalar{0.018});
+    const VehicleScalar flangeClearanceM = std::clamp(
+        sidewallHeightM * VehicleScalar{0.12},
+        VehicleScalar{0.005}, VehicleScalar{0.014});
+    const VehicleScalar minimumCarcassRadiusM = std::min(
+        radiusM - VehicleScalar{0.004},
+        d.rimRadiusM + flangeHeightM + flangeClearanceM);
+    const VehicleScalar profileRatio = sidewallHeightM
+        / std::max(d.sectionWidthM, VehicleScalar{0.03});
+    const VehicleScalar profileCompliance = std::clamp(
+        profileRatio / VehicleScalar{0.40},
+        VehicleScalar{0.42}, VehicleScalar{2.10});
+    const VehicleScalar collapseFraction = std::clamp(
+        (VehicleScalar{0.34}
+            + VehicleScalar{0.12}
+                * std::max(structuralCompliance - VehicleScalar{1.0},
+                    VehicleScalar{0.0}))
+            * std::pow(profileCompliance, VehicleScalar{0.18})
+            * std::pow(stiffnessRatio, VehicleScalar{-0.24}),
+        VehicleScalar{0.24}, VehicleScalar{0.72});
     const VehicleScalar maximumRadialCompressionM = std::min(
-        d.maximumDeflectionM,
-        sidewallHeightM * collapseFraction);
+        std::min(d.maximumDeflectionM, sidewallHeightM * collapseFraction),
+        radiusM - minimumCarcassRadiusM);
     const VehicleScalar maximumCrownExpansionM = std::min(
         sidewallHeightM * VehicleScalar{0.05},
         radiusM * VehicleScalar{0.005}
@@ -304,6 +332,20 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
                 input.directContactDownDisplacementM, theta, band);
             const VehicleScalar directLateralM = sampleDirectContact(
                 input.directContactLateralDisplacementM, theta, band);
+            // Collision supplies direction and location. Pressure-preloaded
+            // carcass compliance supplies magnitude around the identified
+            // reference condition. The stable reference-pressure result is
+            // unchanged, while an under-inflated carcass yields more and an
+            // over-inflated carcass yields less for the same geometric demand.
+            const VehicleScalar directCompliance = std::clamp(
+                structuralCompliance,
+                VehicleScalar{0.58}, VehicleScalar{2.35});
+            const VehicleScalar compliantDirectForwardM =
+                directForwardM * directCompliance;
+            const VehicleScalar compliantDirectDownM =
+                directDownM * directCompliance;
+            const VehicleScalar compliantDirectLateralM =
+                directLateralM * directCompliance;
             const VehicleScalar directSupport = haveDistributedContact
                 ? smoothStep(
                     maximumDirectM * VehicleScalar{0.025},
@@ -332,12 +374,12 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
             const VehicleScalar tangentForward = -radialDown;
             const VehicleScalar tangentDown = radialForward;
             const VehicleScalar directRadialCompressionM = std::max(
-                -(directForwardM * radialForward
-                    + directDownM * radialDown),
+                -(compliantDirectForwardM * radialForward
+                    + compliantDirectDownM * radialDown),
                 VehicleScalar{0.0});
             const VehicleScalar directTangentialM =
-                directForwardM * tangentForward
-                + directDownM * tangentDown;
+                compliantDirectForwardM * tangentForward
+                + compliantDirectDownM * tangentDown;
             const VehicleScalar radialCompressionM = std::clamp(
                 std::max(analyticCompressionM, directRadialCompressionM),
                 VehicleScalar{0.0}, d.maximumDeflectionM);
@@ -346,7 +388,7 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
                 + tangentForward * directTangentialM;
             targetDown[index] = -radialDown * radialCompressionM
                 + tangentDown * directTangentialM;
-            targetLateral[index] = directLateralM;
+            targetLateral[index] = compliantDirectLateralM;
             const VehicleScalar analyticWeight = analyticCompressionM > 1.0e-6
                 ? VehicleScalar{0.82} : VehicleScalar{0.0};
             constraint[index] = std::max(directSupport, analyticWeight);
@@ -363,9 +405,9 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
             // therefore cannot be mistaken for a thumb pressing the sidewall
             // inward merely because the probe originated near the shoulder.
             if (widthCoordinate < -0.05)
-                negativeContact[station] += std::abs(directLateralM);
+                negativeContact[station] += std::abs(compliantDirectLateralM);
             else if (widthCoordinate > 0.05)
-                positiveContact[station] += std::abs(directLateralM);
+                positiveContact[station] += std::abs(compliantDirectLateralM);
         }
         sectionCompression[station] = compressionAccumulator
             / std::max(compressionWeight, VehicleScalar{1.0});
@@ -398,8 +440,8 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
          station < TireFlexibleRingFieldStations; ++station)
     {
         const VehicleScalar displacedSectionM = smoothedCompression[station]
-            * d.effectivePoissonRatio * VehicleScalar{0.46}
-            * pressureCompliance;
+            * d.effectivePoissonRatio * VehicleScalar{0.68}
+            * structuralCompliance * profileCompliance;
         const VehicleScalar contactTotal = negativeContact[station]
             + positiveContact[station];
         const VehicleScalar negativeFreeBias = contactTotal > 1.0e-8
@@ -422,11 +464,11 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
                 ? negativeFreeBias : positiveFreeBias;
             targetLateral[fieldIndex(station, band)] += std::copysign(
                 std::min(displacedSectionM * sidewallShape * freeBias,
-                    halfWidthM * VehicleScalar{0.20}),
+                    halfWidthM * VehicleScalar{0.30}),
                 width);
             if (displacedSectionM > 1.0e-7)
                 constraint[fieldIndex(station, band)] = std::max(
-                    constraint[fieldIndex(station, band)], VehicleScalar{0.38});
+                    constraint[fieldIndex(station, band)], VehicleScalar{1.10});
         }
     }
 
@@ -478,6 +520,9 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
         input.ringYawRadians, VehicleScalar{-0.35}, VehicleScalar{0.35});
     const VehicleScalar windup = std::clamp(
         input.ringWindupRadians, VehicleScalar{-0.35}, VehicleScalar{0.35});
+    const VehicleScalar contactTwist = std::clamp(
+        input.contactPatchTwistRadians,
+        VehicleScalar{-0.35}, VehicleScalar{0.35});
     VehicleScalar maximumDisplacementM = 0.0;
     for (std::size_t station = 0;
          station < TireFlexibleRingFieldStations; ++station)
@@ -496,6 +541,27 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
                 * TireFlexibleRingWidthCoordinates[band];
             const VehicleScalar forwardPositionM = radiusM * radialForward;
 
+            // The rigid-ring translation is the physical belt mode. On a
+            // grounded tire the footprint restrains the lower belt while the
+            // rim carries the vehicle laterally, creating the familiar curved
+            // carcass rather than translating every section equally. Preserve
+            // a modest crown response and concentrate displacement smoothly in
+            // the loaded lower half. Tall sidewalls have more bending travel;
+            // a low-profile sports tire remains visibly and physically stiffer.
+            const VehicleScalar lowerHemisphere = input.grounded
+                ? smoothStep(VehicleScalar{-0.15}, VehicleScalar{0.98}, radialDown)
+                : VehicleScalar{0.0};
+            const VehicleScalar lateralBendingScale = input.grounded
+                ? VehicleScalar{0.55}
+                    + lowerHemisphere * VehicleScalar{1.25}
+                        * std::clamp(
+                            profileCompliance * structuralCompliance,
+                            VehicleScalar{0.45}, VehicleScalar{1.80})
+                : VehicleScalar{1.0};
+            const VehicleScalar footprintTwist = contactTwist
+                * lowerHemisphere * lowerHemisphere;
+            const VehicleScalar localYaw = yaw + footprintTwist;
+
             // Non-radial rigid-ring modes are assembled here, before
             // presentation. The radial road-envelope state is intentionally
             // absent: direct contact already owns radial shape, and applying
@@ -504,11 +570,12 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
             output.forwardDisplacementM[index] +=
                 input.ringLongitudinalOffsetM
                 + tangentForward * radiusM * windup
-                + lateralPositionM * yaw;
+                + lateralPositionM * localYaw;
             output.downDisplacementM[index] +=
                 tangentDown * radiusM * windup;
             output.lateralDisplacementM[index] +=
-                input.ringLateralOffsetM - forwardPositionM * yaw;
+                input.ringLateralOffsetM * lateralBendingScale
+                - forwardPositionM * localYaw;
 
             const VehicleScalar radialLimit = std::min(
                 d.maximumDeflectionM * VehicleScalar{1.15},
@@ -526,10 +593,21 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
             VehicleScalar tangentialDisplacementM =
                 output.forwardDisplacementM[index] * tangentForward
                 + output.downDisplacementM[index] * tangentDown;
-            radialDisplacementM = std::clamp(
-                radialDisplacementM,
-                -maximumRadialCompressionM,
-                maximumCrownExpansionM);
+            if (radialDisplacementM < 0.0)
+            {
+                // Progressive bead/flange bottoming. The asymptote avoids a
+                // hard flat clamp while guaranteeing that the carcass cannot
+                // be visually crushed through the protected rim envelope.
+                const VehicleScalar compression = -radialDisplacementM;
+                radialDisplacementM = -maximumRadialCompressionM
+                    * std::tanh(compression
+                        / std::max(maximumRadialCompressionM, kEpsilon));
+            }
+            else
+            {
+                radialDisplacementM = std::min(
+                    radialDisplacementM, maximumCrownExpansionM);
+            }
             tangentialDisplacementM = std::clamp(
                 tangentialDisplacementM, -radialLimit, radialLimit);
             output.forwardDisplacementM[index] =

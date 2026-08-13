@@ -61,9 +61,8 @@
     preContactWearInput.inflationPressurePa = preContactThermal.valid
         ? preContactThermal.inflationPressurePa
         : wheel.tireModel.inflationPressurePa;
-    preContactWearInput.referencePressurePa = wheel.tireModel.thermal.enabled
-        ? wheel.tireModel.thermal.referenceGaugePressurePa
-        : wheel.tireModel.inflationPressurePa;
+    preContactWearInput.referencePressurePa =
+        wheel.tireModel.referenceInflationPressurePa;
     preContactWearInput.bulkTreadTemperatureC = preContactThermal.valid
         ? preContactThermal.treadTemperatureC : VehicleScalar{20.0};
     const tires::TireWearOutput preContactWear = tires::evaluateTireWearState(
@@ -228,4 +227,3 @@
     state.signedScrubRadiusM = 0.0;
     state.scrubRadiusMagnitudeM = 0.0;
     state.mechanicalTrailM = 0.0;
-

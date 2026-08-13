@@ -11,9 +11,8 @@
         wearReadInput.nominalLoadN = nominalLoadN;
         wearReadInput.camberAngleRadians = radians(state.camberAngleDegrees);
         wearReadInput.inflationPressurePa = dynamicInflationPressurePa;
-        wearReadInput.referencePressurePa = wheel.tireModel.thermal.enabled
-            ? wheel.tireModel.thermal.referenceGaugePressurePa
-            : wheel.tireModel.inflationPressurePa;
+        wearReadInput.referencePressurePa =
+            wheel.tireModel.referenceInflationPressurePa;
         wearReadInput.bulkTreadTemperatureC = thermalBefore.valid
             ? thermalBefore.treadTemperatureC : VehicleScalar{20.0};
         wearBefore = tires::evaluateTireWearState(
@@ -66,9 +65,8 @@
         contaminationInput.nominalLoadN = nominalLoadN;
         contaminationInput.camberAngleRadians = radians(state.camberAngleDegrees);
         contaminationInput.inflationPressurePa = dynamicInflationPressurePa;
-        contaminationInput.referencePressurePa = wheel.tireModel.thermal.enabled
-            ? wheel.tireModel.thermal.referenceGaugePressurePa
-            : wheel.tireModel.inflationPressurePa;
+        contaminationInput.referencePressurePa =
+            wheel.tireModel.referenceInflationPressurePa;
         contaminationInput.forwardSpeedMps = structuralLongitudinalSpeed;
         contaminationInput.longitudinalSlipVelocityMps =
             circumferentialSpeed - structuralLongitudinalSpeed;
@@ -257,4 +255,3 @@
     state.motorcycleCenterToRoad = tireResult.motorcycleCenterToRoad;
     state.longitudinalForce = longitudinalForce;
     state.lateralForce = lateralForce;
-

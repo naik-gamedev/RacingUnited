@@ -76,6 +76,10 @@ struct TireFlexibleRingFieldInput
     VehicleScalar ringLateralOffsetM = 0.0;
     VehicleScalar ringYawRadians = 0.0;
     VehicleScalar ringWindupRadians = 0.0;
+    // Tread-road torsion accumulated by the low-speed/turn-slip contact patch.
+    // Unlike rigid-ring yaw this mode is anchored at the footprint and fades
+    // around the carcass toward the unloaded crown.
+    VehicleScalar contactPatchTwistRadians = 0.0;
     VehicleScalar flatSpotDepthM = 0.0;
     VehicleScalar flatSpotSector = 0.0;
     VehicleScalar wheelRotationRadians = 0.0;

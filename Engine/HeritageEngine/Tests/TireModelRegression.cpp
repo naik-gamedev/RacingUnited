@@ -487,6 +487,91 @@ bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric()
         return false;
     }
 
+    // Live cold-pressure changes must be measured against an immutable
+    // construction/identification datum. With the same load and contact
+    // geometry, lower pressure produces both greater loaded-radius loss and a
+    // visibly broader lower-sidewall belly; high pressure restrains both.
+    TireFlexibleRingFieldInput lowPressureContact = flatRoadContact;
+    lowPressureContact.inflationPressurePa = 150000.0;
+    TireFlexibleRingFieldInput highPressureContact = flatRoadContact;
+    highPressureContact.inflationPressurePa = 300000.0;
+    const auto lowContact = evaluateTireFlexibleRingField(
+        description, lowPressureContact);
+    const auto highContact = evaluateTireFlexibleRingField(
+        description, highPressureContact);
+    if (!lowContact.valid || !highContact.valid
+        || !(std::abs(lowContact.downDisplacementM[bottomCenter])
+            > std::abs(highContact.downDisplacementM[bottomCenter]) + 0.0005)
+        || !(std::abs(lowContact.lateralDisplacementM[bottomPositiveSide])
+            > std::abs(highContact.lateralDisplacementM[bottomPositiveSide])
+                + 0.0005))
+    {
+        return false;
+    }
+
+    // Sidewall height is actual deformation capacity, not merely mesh scale.
+    // A tall profile may build the broad low-pressure belly shown by a soft
+    // road/off-road tire; a short performance sidewall must resist the same
+    // normalized contact and approach its bead/flange limit much sooner.
+    TireFlexibleRingFieldDescription lowProfile = description;
+    lowProfile.unloadedRadiusM = lowProfile.rimRadiusM + 0.050;
+    lowProfile.maximumDeflectionM = 0.045;
+    TireFlexibleRingFieldDescription tallProfile = description;
+    tallProfile.unloadedRadiusM = tallProfile.rimRadiusM + 0.125;
+    tallProfile.maximumDeflectionM = 0.105;
+    TireFlexibleRingFieldInput profileContact = lowPressureContact;
+    profileContact.verticalDeflectionM = 0.030;
+    const auto shortSidewall = evaluateTireFlexibleRingField(
+        lowProfile, profileContact);
+    const auto tallSidewall = evaluateTireFlexibleRingField(
+        tallProfile, profileContact);
+    if (!shortSidewall.valid || !tallSidewall.valid
+        || !(std::abs(tallSidewall.lateralDisplacementM[bottomPositiveSide])
+            > std::abs(shortSidewall.lateralDisplacementM[bottomPositiveSide])
+                + 0.0005))
+    {
+        return false;
+    }
+
+    // The 1000 Hz rigid-ring state is presented as a bent carcass while
+    // grounded: the road restrains the footprint and the displacement fades
+    // toward the crown. It must not look like a rigid sideways translation.
+    TireFlexibleRingFieldInput lateralBending = input;
+    lateralBending.directContactCompressionM = {};
+    lateralBending.directContactForwardDisplacementM = {};
+    lateralBending.directContactDownDisplacementM = {};
+    lateralBending.directContactLateralDisplacementM = {};
+    lateralBending.ringLateralOffsetM = 0.006;
+    const auto bent = evaluateTireFlexibleRingField(
+        description, lateralBending);
+    const std::size_t topSide = 18 * TireFlexibleRingFieldBands
+        + (TireFlexibleRingFieldBands - 1);
+    if (!bent.valid
+        || !(std::abs(bent.lateralDisplacementM[bottomPositiveSide])
+            > std::abs(bent.lateralDisplacementM[topSide]) * 1.35))
+    {
+        return false;
+    }
+
+    // Steering at/near standstill already has a physical contact-patch twist
+    // state. Ensure that twist becomes a distributed lower-carcass torsion
+    // rather than remaining telemetry-only or rotating the entire wheel mesh.
+    TireFlexibleRingFieldInput torsion = lateralBending;
+    torsion.ringLateralOffsetM = 0.0;
+    torsion.contactPatchTwistRadians = 0.10;
+    const auto twisted = evaluateTireFlexibleRingField(description, torsion);
+    const std::size_t lowerShoulder = 5 * TireFlexibleRingFieldBands
+        + (TireFlexibleRingFieldBands - 1);
+    const std::size_t upperShoulder = 17 * TireFlexibleRingFieldBands
+        + (TireFlexibleRingFieldBands - 1);
+    if (!twisted.valid
+        || !(std::abs(twisted.forwardDisplacementM[lowerShoulder]) > 0.001)
+        || !(std::abs(twisted.forwardDisplacementM[lowerShoulder])
+            > std::abs(twisted.forwardDisplacementM[upperShoulder]) * 2.0))
+    {
+        return false;
+    }
+
     // The footprint may shorten the loaded radius, but pressure/carcass hoop
     // tension must preserve the unloaded crown and bead clearance. This guards
     // against reintroducing a whole-belt road-height translation, which makes
@@ -533,6 +618,23 @@ bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric()
         || bottomRadiusM < description.rimRadiusM
             + sidewallHeightM * 0.45
         || topRadiusM > description.unloadedRadiusM + 0.0005)
+    {
+        return false;
+    }
+
+    TireFlexibleRingFieldInput severeLowPressure = severeContact;
+    severeLowPressure.inflationPressurePa = 50000.0;
+    const auto lowPressureConstrained = evaluateTireFlexibleRingField(
+        description, severeLowPressure);
+    const VehicleScalar lowPressureBottomRadiusM = std::hypot(
+        description.unloadedRadiusM
+            + lowPressureConstrained.downDisplacementM[bottomCenter],
+        lowPressureConstrained.forwardDisplacementM[bottomCenter]);
+    const VehicleScalar protectedFlangeRadiusM = description.rimRadiusM
+        + std::clamp(sidewallHeightM * 0.15, 0.006, 0.018)
+        + std::clamp(sidewallHeightM * 0.12, 0.005, 0.014);
+    if (!lowPressureConstrained.valid
+        || !(lowPressureBottomRadiusM > protectedFlangeRadiusM - 0.0001))
     {
         return false;
     }
@@ -2199,6 +2301,8 @@ bool tirePartsResolveAndAssignReusableFitments()
         && world.vehicles.wheelTirePartAssignment(
             world.vehicle, 0, pressureAdjustedAssignment)
         && std::abs(pressureAdjustedModel.inflationPressurePa - testPressurePa) < 1.0e-12
+        && std::abs(pressureAdjustedModel.referenceInflationPressurePa
+            - part.engineering.referenceInflationPressurePa) < 1.0e-12
         && std::abs(pressureAdjustedModel.thermal.referenceGaugePressurePa - testPressurePa) < 1.0e-12
         && std::abs(pressureAdjustedAssignment.coldInflationPressurePa - testPressurePa) < 1.0e-12;
 
@@ -2216,6 +2320,8 @@ bool tirePartsResolveAndAssignReusableFitments()
         && std::abs(frontResolved.model.contactGeometry.unloadedRadiusM - expectedRadius) < 1.0e-12
         && std::abs(frontResolved.model.inflationPressurePa - 245000.0) < 1.0e-12
         && std::abs(rearResolved.model.inflationPressurePa - 215000.0) < 1.0e-12
+        && std::abs(frontResolved.model.referenceInflationPressurePa - 230000.0) < 1.0e-12
+        && std::abs(rearResolved.model.referenceInflationPressurePa - 230000.0) < 1.0e-12
         && std::abs(part.engineering.referenceInflationPressurePa - 230000.0) < 1.0e-12
         && frontResolved.model.parameterProvenance == "heritage_estimated_tire_part"
         && !missingResolved.valid
@@ -2232,6 +2338,8 @@ bool tirePartsResolveAndAssignReusableFitments()
         && std::abs(rearModel.contactGeometry.nominalWidthM - 0.225) < 1.0e-12
         && std::abs(frontModel.inflationPressurePa - 245000.0) < 1.0e-12
         && std::abs(rearModel.inflationPressurePa - 215000.0) < 1.0e-12
+        && std::abs(frontModel.referenceInflationPressurePa - 230000.0) < 1.0e-12
+        && std::abs(rearModel.referenceInflationPressurePa - 230000.0) < 1.0e-12
         && pressureRangeAvailable
         && minimumPressurePa <= 80000.0 + 1.0e-9
         && maximumPressurePa >= 500000.0 - 1.0e-9

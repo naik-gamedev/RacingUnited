@@ -30,6 +30,7 @@ void configureCommonGeometry(
     const VehicleScalar unloadedRadiusM = input.rimRadiusM + sidewallHeightM;
 
     model.nominalLoad = input.nominalLoadN;
+    model.referenceInflationPressurePa = input.inflationPressurePa;
     model.inflationPressurePa = input.inflationPressurePa;
     model.thermal.referenceGaugePressurePa = input.inflationPressurePa;
     model.contactGeometry.unloadedRadiusM = unloadedRadiusM;

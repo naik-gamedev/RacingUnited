@@ -175,6 +175,9 @@ bool validTireModelDescription(const TireModelDescription& value)
         && finiteFloat(value.pneumaticTrailFalloff)
         && value.pneumaticTrailFalloff >= 0.0
         && value.pneumaticTrailFalloff <= 10.0
+        && finiteFloat(value.referenceInflationPressurePa)
+        && value.referenceInflationPressurePa >= 20000.0
+        && value.referenceInflationPressurePa <= 2000000.0
         && finiteFloat(value.inflationPressurePa)
         && value.inflationPressurePa >= 20000.0
         && value.inflationPressurePa <= 2000000.0;
@@ -242,7 +245,7 @@ tires::MagicFormula62Parameters seededMagicFormula62Parameters(
     tires::MagicFormula62Parameters p = d.magicFormula;
     const VehicleScalar fz0 = std::max(d.nominalLoad, VehicleScalar{100.0});
     p.nominalLoadN = fz0;
-    p.nominalPressurePa = d.inflationPressurePa;
+    p.nominalPressurePa = d.referenceInflationPressurePa;
     p.unloadedRadiusM = wheelRadiusM > 0.05
         ? wheelRadiusM
         : std::max(p.unloadedRadiusM, VehicleScalar{0.05});
@@ -290,6 +293,10 @@ TireModelDescription tireModelDescriptionFromPropertyFile(
 
     value.magicFormulaUsesLegacySeed = false;
     value.magicFormula = propertyFile.magicFormula;
+    value.referenceInflationPressurePa =
+        propertyFile.magicFormula.nominalPressurePa > 0.0
+            ? propertyFile.magicFormula.nominalPressurePa
+            : fallback.referenceInflationPressurePa;
     value.inflationPressurePa = propertyFile.inflationPressurePa > 0.0
         ? propertyFile.inflationPressurePa
         : propertyFile.magicFormula.nominalPressurePa;

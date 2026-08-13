@@ -64,6 +64,11 @@ struct TireModelDescription
     TireProviderKind provider = TireProviderKind::MagicFormula62;
     bool magicFormulaUsesLegacySeed = true;
     tires::MagicFormula62Parameters magicFormula;
+    // Identified/construction datum. Runtime setup pressure may be changed by
+    // the driver or tire lab without moving this reference: every pressure-
+    // sensitive structural/force law compares the live gauge pressure against
+    // the pressure at which its parameters were identified.
+    VehicleScalar referenceInflationPressurePa = 220000.0;
     VehicleScalar inflationPressurePa = 220000.0;
     tires::MotorcycleTireProfileDescription motorcycleProfile;
     tires::TireSlipDynamicsCoefficients slipDynamicsCoefficients;

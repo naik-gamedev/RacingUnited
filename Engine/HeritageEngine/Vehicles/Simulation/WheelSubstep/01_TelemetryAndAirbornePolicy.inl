@@ -242,9 +242,8 @@
     wearReadInput.camberAngleRadians = radians(state.camberAngleDegrees);
     wearReadInput.inflationPressurePa = thermalBefore.valid
         ? thermalBefore.inflationPressurePa : wheel.tireModel.inflationPressurePa;
-    wearReadInput.referencePressurePa = wheel.tireModel.thermal.enabled
-        ? wheel.tireModel.thermal.referenceGaugePressurePa
-        : wheel.tireModel.inflationPressurePa;
+    wearReadInput.referencePressurePa =
+        wheel.tireModel.referenceInflationPressurePa;
     wearReadInput.bulkTreadTemperatureC = thermalBefore.valid
         ? thermalBefore.treadTemperatureC : VehicleScalar{20.0};
     tires::TireWearOutput wearBefore = tires::evaluateTireWearState(
@@ -301,9 +300,8 @@
             wetInput.inflationPressurePa = airborneThermal.valid
                 ? airborneThermal.inflationPressurePa
                 : wheel.tireModel.inflationPressurePa;
-            wetInput.referencePressurePa = wheel.tireModel.thermal.enabled
-                ? wheel.tireModel.thermal.referenceGaugePressurePa
-                : wheel.tireModel.inflationPressurePa;
+            wetInput.referencePressurePa =
+                wheel.tireModel.referenceInflationPressurePa;
             wetInput.currentAverageTreadDepthM = wearBefore.valid
                 ? wearBefore.averageTreadDepthM
                 : wheel.tireModel.wear.initialTreadDepthM;
@@ -322,9 +320,8 @@
             winterInput.inflationPressurePa = airborneThermal.valid
                 ? airborneThermal.inflationPressurePa
                 : wheel.tireModel.inflationPressurePa;
-            winterInput.referencePressurePa = wheel.tireModel.thermal.enabled
-                ? wheel.tireModel.thermal.referenceGaugePressurePa
-                : wheel.tireModel.inflationPressurePa;
+            winterInput.referencePressurePa =
+                wheel.tireModel.referenceInflationPressurePa;
             winterInput.currentAverageTreadDepthM = wearBefore.valid
                 ? wearBefore.averageTreadDepthM
                 : wheel.tireModel.wear.initialTreadDepthM;

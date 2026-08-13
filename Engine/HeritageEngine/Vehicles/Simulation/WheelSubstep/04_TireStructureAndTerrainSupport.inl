@@ -18,9 +18,8 @@
         ringInput.inflationPressurePa = state.tireInflationPressurePa > 20000.0
             ? state.tireInflationPressurePa
             : wheel.tireModel.inflationPressurePa;
-        ringInput.referencePressurePa = wheel.tireModel.thermal.enabled
-            ? wheel.tireModel.thermal.referenceGaugePressurePa
-            : wheel.tireModel.inflationPressurePa;
+        ringInput.referencePressurePa =
+            wheel.tireModel.referenceInflationPressurePa;
         ringInput.thermalStiffnessScale = state.tireThermalStiffnessScale > 0.0
             ? state.tireThermalStiffnessScale : VehicleScalar{1.0};
         ringInput.aligningMomentNm = hitGround

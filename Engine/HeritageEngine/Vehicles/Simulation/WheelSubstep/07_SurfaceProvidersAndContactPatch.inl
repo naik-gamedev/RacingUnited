@@ -70,9 +70,8 @@
         wetInput.wheelRotationDegrees = state.wheelRotationDegrees;
         wetInput.normalLoadN = suspensionForce;
         wetInput.inflationPressurePa = dynamicInflationPressurePa;
-        wetInput.referencePressurePa = wheel.tireModel.thermal.enabled
-            ? wheel.tireModel.thermal.referenceGaugePressurePa
-            : wheel.tireModel.inflationPressurePa;
+        wetInput.referencePressurePa =
+            wheel.tireModel.referenceInflationPressurePa;
         wetInput.forwardSpeedMps = structuralLongitudinalSpeed;
         wetInput.longitudinalSlipVelocityMps =
             circumferentialSpeed - structuralLongitudinalSpeed;
@@ -108,9 +107,8 @@
         winterInput.normalLoadN = suspensionForce;
         winterInput.nominalLoadN = wheel.tireModel.nominalLoad;
         winterInput.inflationPressurePa = dynamicInflationPressurePa;
-        winterInput.referencePressurePa = wheel.tireModel.thermal.enabled
-            ? wheel.tireModel.thermal.referenceGaugePressurePa
-            : wheel.tireModel.inflationPressurePa;
+        winterInput.referencePressurePa =
+            wheel.tireModel.referenceInflationPressurePa;
         winterInput.forwardSpeedMps = structuralLongitudinalSpeed;
         winterInput.longitudinalSlipVelocityMps =
             circumferentialSpeed - structuralLongitudinalSpeed;
@@ -359,4 +357,3 @@
     state.contactPatchTwistDegrees = degrees(
         contactPatch.torsionalTwistRadians);
     state.parkingTurnMoment = contactPatch.parkingTurnMomentNm;
-

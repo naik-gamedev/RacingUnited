@@ -39,9 +39,7 @@ TireFlexibleRingPresentationField solveTireFlexibleRingPresentationField(
     description.sectionWidthM = tireHalfWidthM * 2.0;
     description.maximumDeflectionM = maximumCompressionM;
     description.referencePressurePa = tireModel
-        ? (tireModel->thermal.referenceGaugePressurePa > 20000.0
-            ? tireModel->thermal.referenceGaugePressurePa
-            : tireModel->inflationPressurePa)
+        ? tireModel->referenceInflationPressurePa
         : 220000.0;
     description.verticalStiffnessNPerM = tireModel
         && tireModel->contactGeometry.verticalStiffnessNPerM > 1000.0
@@ -60,6 +58,8 @@ TireFlexibleRingPresentationField solveTireFlexibleRingPresentationField(
     input.ringYawRadians = wheelState.tireRingYawDegrees
         * 3.14159265358979323846 / 180.0;
     input.ringWindupRadians = wheelState.tireRingWindupDegrees
+        * 3.14159265358979323846 / 180.0;
+    input.contactPatchTwistRadians = wheelState.contactPatchTwistDegrees
         * 3.14159265358979323846 / 180.0;
     input.flatSpotDepthM = wheelState.tireFlatSpotDepthMm * 0.001;
     input.flatSpotSector = wheelState.tireFlatSpotSector;

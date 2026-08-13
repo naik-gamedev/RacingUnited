@@ -254,10 +254,9 @@
             wheel.tireModel.contactGeometry.verticalStiffnessNPerM >= VehicleScalar{1000.0}
                 ? wheel.tireModel.contactGeometry.verticalStiffnessNPerM
                 : static_cast<VehicleScalar>(description.tireRadialStiffness);
-        const VehicleScalar nominalPressurePa =
-            wheel.tireModel.magicFormula.nominalPressurePa >= VehicleScalar{50000.0}
-                ? wheel.tireModel.magicFormula.nominalPressurePa
-                : std::max(wheel.tireModel.inflationPressurePa, VehicleScalar{50000.0});
+        const VehicleScalar nominalPressurePa = std::max(
+            wheel.tireModel.referenceInflationPressurePa,
+            VehicleScalar{50000.0});
         const VehicleScalar currentPressurePa = thermalBefore.valid
             ? thermalBefore.inflationPressurePa
             : wheel.tireModel.inflationPressurePa;
@@ -377,4 +376,3 @@
     }
 
     finalizeContactState();
-
