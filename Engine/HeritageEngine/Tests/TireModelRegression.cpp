@@ -371,6 +371,78 @@ bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric()
         return false;
     }
 
+    // A flat road supplies a radial resolving normal even under shoulder
+    // probes. It must bulge the negative sidewall in the negative direction
+    // and the positive sidewall in the positive direction; interpreting probe
+    // launch direction as contact normal produces the inverted thumbed-in
+    // cross-section seen in the live wheel test.
+    TireFlexibleRingFieldInput flatRoadContact = input;
+    for (std::size_t station = 7; station <= 13; ++station)
+    {
+        const VehicleScalar phi =
+            TireFlexibleRingContactPhiRadians[station];
+        for (std::size_t band = 0;
+             band < TireFlexibleRingContactBands; ++band)
+        {
+            const std::size_t index =
+                station * TireFlexibleRingContactBands + band;
+            flatRoadContact.directContactCompressionM[index] = 0.018;
+            flatRoadContact.directContactForwardDisplacementM[index] =
+                -std::cos(phi) * 0.018;
+            flatRoadContact.directContactDownDisplacementM[index] =
+                -std::sin(phi) * 0.018;
+        }
+    }
+    const auto flatRoad = evaluateTireFlexibleRingField(
+        description, flatRoadContact);
+    const std::size_t bottomNegativeSide = bottomStation
+        * TireFlexibleRingFieldBands;
+    const std::size_t bottomPositiveSide = bottomStation
+        * TireFlexibleRingFieldBands + (TireFlexibleRingFieldBands - 1);
+    if (!flatRoad.valid
+        || !(flatRoad.lateralDisplacementM[bottomNegativeSide] < -0.0001)
+        || !(flatRoad.lateralDisplacementM[bottomPositiveSide] > 0.0001))
+    {
+        return false;
+    }
+
+    // A narrow raised kerb beneath the tyre returns two outward-facing side
+    // normals. Preserve their signs: the lower carcass wraps into a bowl around
+    // the kerb instead of both walls being inverted into inward thumb dents.
+    TireFlexibleRingFieldInput narrowKerb = flatRoadContact;
+    for (std::size_t station = 8; station <= 12; ++station)
+    {
+        for (std::size_t band = 0; band <= 2; ++band)
+        {
+            const std::size_t index =
+                station * TireFlexibleRingContactBands + band;
+            narrowKerb.directContactCompressionM[index] = 0.020;
+            narrowKerb.directContactForwardDisplacementM[index] = 0.0;
+            narrowKerb.directContactDownDisplacementM[index] = 0.0;
+            narrowKerb.directContactLateralDisplacementM[index] = -0.020;
+        }
+        for (std::size_t band = TireFlexibleRingContactBands - 3;
+             band < TireFlexibleRingContactBands; ++band)
+        {
+            const std::size_t index =
+                station * TireFlexibleRingContactBands + band;
+            narrowKerb.directContactCompressionM[index] = 0.020;
+            narrowKerb.directContactForwardDisplacementM[index] = 0.0;
+            narrowKerb.directContactDownDisplacementM[index] = 0.0;
+            narrowKerb.directContactLateralDisplacementM[index] = 0.020;
+        }
+    }
+    const auto wrappedKerb = evaluateTireFlexibleRingField(
+        description, narrowKerb);
+    if (!wrappedKerb.valid
+        || !(wrappedKerb.lateralDisplacementM[bottomNegativeSide]
+            < flatRoad.lateralDisplacementM[bottomNegativeSide])
+        || !(wrappedKerb.lateralDisplacementM[bottomPositiveSide]
+            > flatRoad.lateralDisplacementM[bottomPositiveSide]))
+    {
+        return false;
+    }
+
     // Contacting the negative-width curb face indents that side directly; the
     // structural profile must put more displaced volume into the positive/free
     // sidewall, without exceeding a bounded fraction of the section width.
@@ -379,6 +451,8 @@ bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric()
         for (std::size_t band = 0; band <= 4; ++band)
         {
             input.directContactCompressionM[
+                station * TireFlexibleRingContactBands + band] = 0.018;
+            input.directContactLateralDisplacementM[
                 station * TireFlexibleRingContactBands + band] = 0.018;
         }
     }
@@ -398,6 +472,9 @@ bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric()
 
     TireFlexibleRingFieldInput lowPressure = input;
     lowPressure.directContactCompressionM = {};
+    lowPressure.directContactForwardDisplacementM = {};
+    lowPressure.directContactDownDisplacementM = {};
+    lowPressure.directContactLateralDisplacementM = {};
     lowPressure.inflationPressurePa = 80000.0;
     TireFlexibleRingFieldInput highPressure = lowPressure;
     highPressure.inflationPressurePa = 320000.0;
@@ -415,14 +492,25 @@ bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric()
     // against reintroducing a whole-belt road-height translation, which makes
     // the top balloon by the same amount that the bottom collapses.
     TireFlexibleRingFieldInput severeContact = input;
+    severeContact.directContactCompressionM = {};
+    severeContact.directContactForwardDisplacementM = {};
+    severeContact.directContactDownDisplacementM = {};
+    severeContact.directContactLateralDisplacementM = {};
     for (std::size_t station = 0;
          station < TireFlexibleRingContactStations; ++station)
     {
+        const VehicleScalar phi =
+            TireFlexibleRingContactPhiRadians[station];
         for (std::size_t band = 0;
              band < TireFlexibleRingContactBands; ++band)
         {
-            severeContact.directContactCompressionM[
-                station * TireFlexibleRingContactBands + band] = 0.080;
+            const std::size_t index =
+                station * TireFlexibleRingContactBands + band;
+            severeContact.directContactCompressionM[index] = 0.080;
+            severeContact.directContactForwardDisplacementM[index] =
+                -std::cos(phi) * 0.080;
+            severeContact.directContactDownDisplacementM[index] =
+                -std::sin(phi) * 0.080;
         }
     }
     const auto constrained = evaluateTireFlexibleRingField(

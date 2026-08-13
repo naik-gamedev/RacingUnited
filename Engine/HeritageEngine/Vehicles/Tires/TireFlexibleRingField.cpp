@@ -38,7 +38,7 @@ std::size_t fieldIndex(std::size_t station, std::size_t band)
 }
 
 VehicleScalar sampleDirectContact(
-    const TireFlexibleRingFieldInput& input,
+    const std::array<VehicleScalar, TireFlexibleRingContactCount>& values,
     VehicleScalar phi,
     std::size_t band)
 {
@@ -58,9 +58,9 @@ VehicleScalar sampleDirectContact(
         (phi - a) / std::max(b - a, kEpsilon),
         VehicleScalar{0.0}, VehicleScalar{1.0});
     t = t * t * (VehicleScalar{3.0} - VehicleScalar{2.0} * t);
-    const VehicleScalar x = input.directContactCompressionM[
+    const VehicleScalar x = values[
         lower * TireFlexibleRingContactBands + band];
-    const VehicleScalar y = input.directContactCompressionM[
+    const VehicleScalar y = values[
         upper * TireFlexibleRingContactBands + band];
     return x + (y - x) * t;
 }
@@ -200,10 +200,26 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
     {
         return output;
     }
-    for (VehicleScalar contact : input.directContactCompressionM)
+    for (std::size_t index = 0;
+         index < TireFlexibleRingContactCount; ++index)
     {
-        if (!finiteValue(contact) || contact < 0.0)
+        const VehicleScalar contact = input.directContactCompressionM[index];
+        const VehicleScalar forward =
+            input.directContactForwardDisplacementM[index];
+        const VehicleScalar down =
+            input.directContactDownDisplacementM[index];
+        const VehicleScalar lateral =
+            input.directContactLateralDisplacementM[index];
+        const VehicleScalar vectorMagnitude = std::sqrt(
+            forward * forward + down * down + lateral * lateral);
+        if (!finiteValue(contact) || contact < 0.0
+            || !finiteValue(forward) || !finiteValue(down)
+            || !finiteValue(lateral)
+            || vectorMagnitude > contact * VehicleScalar{1.01}
+                + VehicleScalar{1.0e-7})
+        {
             return output;
+        }
     }
 
     const VehicleScalar radiusM = d.unloadedRadiusM;
@@ -280,7 +296,14 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
             const VehicleScalar widthCoordinate =
                 TireFlexibleRingWidthCoordinates[band];
             const VehicleScalar absoluteWidth = std::abs(widthCoordinate);
-            const VehicleScalar directM = sampleDirectContact(input, theta, band);
+            const VehicleScalar directM = sampleDirectContact(
+                input.directContactCompressionM, theta, band);
+            const VehicleScalar directForwardM = sampleDirectContact(
+                input.directContactForwardDisplacementM, theta, band);
+            const VehicleScalar directDownM = sampleDirectContact(
+                input.directContactDownDisplacementM, theta, band);
+            const VehicleScalar directLateralM = sampleDirectContact(
+                input.directContactLateralDisplacementM, theta, band);
             const VehicleScalar directSupport = haveDistributedContact
                 ? smoothStep(
                     maximumDirectM * VehicleScalar{0.025},
@@ -306,26 +329,24 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
                     ? directSupport : fallbackWidthSupport;
             }
 
-            const VehicleScalar sideBlendBase = std::clamp(
-                (absoluteWidth - VehicleScalar{0.42}) / VehicleScalar{0.58},
-                VehicleScalar{0.0}, VehicleScalar{1.0});
-            const VehicleScalar sideBlend = sideBlendBase * sideBlendBase
-                * VehicleScalar{0.82};
+            const VehicleScalar tangentForward = -radialDown;
+            const VehicleScalar tangentDown = radialForward;
+            const VehicleScalar directRadialCompressionM = std::max(
+                -(directForwardM * radialForward
+                    + directDownM * radialDown),
+                VehicleScalar{0.0});
+            const VehicleScalar directTangentialM =
+                directForwardM * tangentForward
+                + directDownM * tangentDown;
             const VehicleScalar radialCompressionM = std::clamp(
-                std::max(analyticCompressionM,
-                    directM * (VehicleScalar{1.0} - sideBlend)),
+                std::max(analyticCompressionM, directRadialCompressionM),
                 VehicleScalar{0.0}, d.maximumDeflectionM);
-            const VehicleScalar lateralCompressionM = std::clamp(
-                directM * sideBlend,
-                VehicleScalar{0.0}, halfWidthM * VehicleScalar{0.42});
 
-            targetForward[index] = -radialForward * radialCompressionM;
-            targetDown[index] = -radialDown * radialCompressionM;
-            if (absoluteWidth > 1.0e-6)
-            {
-                targetLateral[index] = -std::copysign(
-                    lateralCompressionM, widthCoordinate);
-            }
+            targetForward[index] = -radialForward * radialCompressionM
+                + tangentForward * directTangentialM;
+            targetDown[index] = -radialDown * radialCompressionM
+                + tangentDown * directTangentialM;
+            targetLateral[index] = directLateralM;
             const VehicleScalar analyticWeight = analyticCompressionM > 1.0e-6
                 ? VehicleScalar{0.82} : VehicleScalar{0.0};
             constraint[index] = std::max(directSupport, analyticWeight);
@@ -337,10 +358,14 @@ TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
                 compressionAccumulator += radialCompressionM * centerWeight;
                 compressionWeight += centerWeight;
             }
+            // Only an actual lateral collider-normal component biases the
+            // section toward the free side. Shoulder probes hitting a road top
+            // therefore cannot be mistaken for a thumb pressing the sidewall
+            // inward merely because the probe originated near the shoulder.
             if (widthCoordinate < -0.05)
-                negativeContact[station] += directM;
+                negativeContact[station] += std::abs(directLateralM);
             else if (widthCoordinate > 0.05)
-                positiveContact[station] += directM;
+                positiveContact[station] += std::abs(directLateralM);
         }
         sectionCompression[station] = compressionAccumulator
             / std::max(compressionWeight, VehicleScalar{1.0});

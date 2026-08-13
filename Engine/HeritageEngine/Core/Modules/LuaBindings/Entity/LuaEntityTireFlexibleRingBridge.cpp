@@ -15,7 +15,13 @@ TireFlexibleRingPresentationField solveTireFlexibleRingPresentationField(
     float tireHalfWidthM,
     float maximumCompressionM,
     const std::array<float, heritage::entities::TireVisualContactSampleCount>&
-        directContactCompressionM)
+        directContactCompressionM,
+    const std::array<float, heritage::entities::TireVisualContactSampleCount>&
+        directContactForwardDisplacementM,
+    const std::array<float, heritage::entities::TireVisualContactSampleCount>&
+        directContactDownDisplacementM,
+    const std::array<float, heritage::entities::TireVisualContactSampleCount>&
+        directContactLateralDisplacementM)
 {
     static_assert(
         heritage::vehicles::tires::TireFlexibleRingContactCount
@@ -60,7 +66,15 @@ TireFlexibleRingPresentationField solveTireFlexibleRingPresentationField(
     input.wheelRotationRadians = wheelState.wheelRotationDegrees
         * 3.14159265358979323846 / 180.0;
     for (std::size_t index = 0; index < directContactCompressionM.size(); ++index)
+    {
         input.directContactCompressionM[index] = directContactCompressionM[index];
+        input.directContactForwardDisplacementM[index] =
+            directContactForwardDisplacementM[index];
+        input.directContactDownDisplacementM[index] =
+            directContactDownDisplacementM[index];
+        input.directContactLateralDisplacementM[index] =
+            directContactLateralDisplacementM[index];
+    }
 
     const auto native = heritage::vehicles::tires::evaluateTireFlexibleRingField(
         description, input);

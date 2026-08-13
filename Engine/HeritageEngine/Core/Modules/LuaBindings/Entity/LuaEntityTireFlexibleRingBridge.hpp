@@ -26,6 +26,12 @@ TireFlexibleRingPresentationField solveTireFlexibleRingPresentationField(
     float tireHalfWidthM,
     float maximumCompressionM,
     const std::array<float, heritage::entities::TireVisualContactSampleCount>&
-        directContactCompressionM);
+        directContactCompressionM,
+    const std::array<float, heritage::entities::TireVisualContactSampleCount>&
+        directContactForwardDisplacementM,
+    const std::array<float, heritage::entities::TireVisualContactSampleCount>&
+        directContactDownDisplacementM,
+    const std::array<float, heritage::entities::TireVisualContactSampleCount>&
+        directContactLateralDisplacementM);
 
 } // namespace heritage::modules::lua_binding_detail

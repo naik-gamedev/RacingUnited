@@ -81,9 +81,19 @@ struct TireFlexibleRingFieldInput
     VehicleScalar wheelRotationRadians = 0.0;
 
     // Direct contact demand sampled against the real collision scene.  The
-    // field solver distributes this demand through the elastic ring once.
+    // compression is a non-negative magnitude; the three signed components
+    // are the resolving displacement along the actual collider normal in the
+    // wheel forward/down/right basis.  Keeping the normal matters: a road top
+    // must compress radially, while only a genuine kerb face may press a
+    // sidewall laterally inward.
     std::array<VehicleScalar, TireFlexibleRingContactCount>
         directContactCompressionM{};
+    std::array<VehicleScalar, TireFlexibleRingContactCount>
+        directContactForwardDisplacementM{};
+    std::array<VehicleScalar, TireFlexibleRingContactCount>
+        directContactDownDisplacementM{};
+    std::array<VehicleScalar, TireFlexibleRingContactCount>
+        directContactLateralDisplacementM{};
 };
 
 struct TireFlexibleRingFieldOutput

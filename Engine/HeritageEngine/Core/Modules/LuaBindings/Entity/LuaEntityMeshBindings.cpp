@@ -445,6 +445,12 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_
             // coordinate disagreements cannot make the visual contact disappear.
             std::array<float, heritage::entities::TireVisualContactSampleCount>
                 compressionM{};
+            std::array<float, heritage::entities::TireVisualContactSampleCount>
+                contactForwardDisplacementM{};
+            std::array<float, heritage::entities::TireVisualContactSampleCount>
+                contactDownDisplacementM{};
+            std::array<float, heritage::entities::TireVisualContactSampleCount>
+                contactLateralDisplacementM{};
 
             heritage::math::Vec3 chassisWorldPosition{};
             heritage::math::Vec3 chassisWorldRotationDegrees{};
@@ -693,6 +699,38 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_
                     if (duplicatePrimarySupport && sideNormalBlend > 0.08f)
                         compression = 0.0f;
                     compressionM[index] = compression;
+                    if (compression > 0.0f)
+                    {
+                        // Resolve penetration along the collider's real normal,
+                        // not along the probe's rounded-tire launch direction.
+                        // A horizontal road top then moves every tread/shoulder
+                        // sample radially inward; only a genuine vertical face
+                        // can create a lateral inward contact component.
+                        // Contact location disambiguates support beneath the
+                        // tread from an obstacle outside the sidewall. A narrow
+                        // kerb beneath the tyre is crossed from inside by the
+                        // outward shoulder probes, so its sweep normal can face
+                        // the tyre centre even though the carcass must wrap and
+                        // bulge outward. Any hit inside the lateral footprint is
+                        // therefore radial support. Only contact beyond the
+                        // shoulder is permitted to indent laterally.
+                        const heritage::math::Vec3 hitFromWheelCenter = add3(
+                            hit.point, scale3(probeCenter, -1.0f));
+                        const float hitLateralM = dot3(
+                            hitFromWheelCenter, wheelRight);
+                        const float supportHalfWidthM = tireHalfWidthM * 0.82f;
+                        const bool beneathTread =
+                            std::abs(hitLateralM) <= supportHalfWidthM;
+                        const heritage::math::Vec3 resolvingNormal = beneathTread
+                            ? scale3(radialDirection, -1.0f)
+                            : normalize3(hit.normal, scale3(surfaceNormal, -1.0f));
+                        contactForwardDisplacementM[index] = compression
+                            * dot3(resolvingNormal, wheelForward);
+                        contactDownDisplacementM[index] = compression
+                            * dot3(resolvingNormal, scale3(wheelUp, -1.0f));
+                        contactLateralDisplacementM[index] = compression
+                            * dot3(resolvingNormal, wheelRight);
+                    }
                 }
             }
 
@@ -705,7 +743,10 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_
             const auto flexibleRingField = solveTireFlexibleRingPresentationField(
                 wheelState, haveTireModel ? &tireModel : nullptr,
                 tireRadiusM, rimRadiusM, tireHalfWidthM,
-                maximumCompressionM, compressionM);
+                maximumCompressionM, compressionM,
+                contactForwardDisplacementM,
+                contactDownDisplacementM,
+                contactLateralDisplacementM);
             result = runtime->m_entities->setMeshNodeTireDeformationField(
                 entityHandle,
                 nodeName,
