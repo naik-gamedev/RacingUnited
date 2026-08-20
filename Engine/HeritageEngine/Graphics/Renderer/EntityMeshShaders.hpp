@@ -1253,10 +1253,17 @@ vec3 applyDynamicSurfaceWater(
     vec3 deepWaterTint = vec3(0.012, 0.027, 0.031);
     transmitted = mix(transmitted, deepWaterTint, deepPool * 0.22);
 
-    // Physical dielectric Fresnel owns reflection. Keep the environment-only
-    // path bounded until SSR/planar local reflections exist, so a grey sky does
-    // not turn every puddle into opaque silver plastic.
-    float reflectionWeight = clamp(fresnel, 0.0, 0.28);
+    // Physical dielectric Fresnel owns the inexpensive puddle reflection. At a
+    // near-normal view the roughly two-percent water F0 leaves the asphalt
+    // visible through the complete supported 0..32mm depth range. At grazing
+    // angles the environment becomes dominant, as real shallow water does. The
+    // small sub-millimetre depth response prevents a newly wet road from turning
+    // into a mirror before a coherent free surface has formed.
+    float opticalSurfaceFormation = mix(
+        0.72,
+        1.0,
+        smoothstep(0.00010, 0.0030, freeSurfaceDepthM));
+    float reflectionWeight = min(fresnel * opticalSurfaceFormation, 0.92);
     vec3 standingColor = mix(transmitted, reflected, reflectionWeight);
 
     // The free-surface layer grows only from depth above the retained film.
@@ -1438,26 +1445,31 @@ void main()
             1.0);
 
     // Thin-film roughness is driven by the smooth weather film, not
-    // adaptive hydrology depth. Keep the response restrained so wet grass/rough
-    // concrete do not become white mirrors. Local puddles may still become
-    // substantially smoother once excess standing water is real.
+    // adaptive hydrology depth. This is also the deliberately cheap far-field
+    // fallback outside the 100m Hydro simulation: rain gradually darkens and
+    // smooths authored receivers, so the environment and sun produce wet-road
+    // highlights without pretending that distant puddles were simulated.
     if (uSurfaceWetnessReceiver && dynamicSurfaceFilm > 0.0001)
     {
-        // Thin wet film should darken the authored material without turning it
-        // into a broad plastic mirror. Preserve most authored roughness/normal
-        // detail; free-surface puddles below own the strong optical smoothing.
-        float wetRoughness = max(0.36, roughness * 0.92);
+        // Preserve authored normal detail and a material-dependent roughness
+        // floor. A wet rough surface becomes glossy, but remains much rougher
+        // than the locally simulated free-water surface below.
+        float wetRoughness = max(0.20, roughness * 0.62);
+        float filmOpticalResponse = smoothstep(
+            0.02,
+            0.95,
+            dynamicSurfaceFilm);
         roughness = mix(
             roughness,
             wetRoughness,
-            dynamicSurfaceFilm * 0.35);
+            filmOpticalResponse * 0.72);
     }
     if (dynamicSurfaceStanding > 0.0001)
     {
         roughness = mix(
             roughness,
             0.085,
-            dynamicSurfaceStanding * 0.62);
+            dynamicSurfaceStanding * 0.88);
     }
 
     float metallic = clamp(uMaterialMetallic, 0.0, 1.0);

@@ -807,9 +807,13 @@ Check (
 ) "LIVETRACK04B restores visible weather wetness while local Hydro adds puddles and dry-line state"
 Check (
     $liveTrack04GpuCpp.Contains('q.x < 7 ? -float(7 - q.x) / 7.0') -and
-    $liveTrack04GpuCpp.Contains('float fraction = clamp(abs(signedFlow) * dt * 0.75, 0.0, 0.18);') -and
-    -not $liveTrack04GpuCpp.Contains('groundDropLeftToRightM')
-) "LIVETRACK04 uses the proven downhill donor transport and a true quantized zero-flow band"
+    $liveTrack04GpuCpp.Contains('unresolvedRoadReliefM(globalXZ)') -and
+    $liveTrack04GpuCpp.Contains('vec2(1.0 / 3.0)') -and
+    $liveTrack04GpuCpp.Contains('float hydraulicHeadDifferenceM = leftDepth - rightDepth + groundDropLeftToRightM;') -and
+    $liveTrack04GpuCpp.Contains('const float kHeadDeadBandM = 0.000035;') -and
+    $liveTrack04GpuCpp.Contains('float maximumLeftToRightM = leftDepth * 0.20;') -and
+    -not $liveTrack04GpuCpp.Contains('float fraction = clamp(abs(signedFlow) * dt * 0.75, 0.0, 0.18);')
+) "LIVETRACK08 uses conservative hydraulic-head puddle flow, shallow-slope companding and deterministic sub-grid road relief"
 Check (
     $liveTrack04SurfaceWorld.Contains('if (!m_gpuDynamicSurfaceAuthorityEnabled)') -and
     $liveTrack04SurfaceWorld.Contains('m_dynamicSurface.advanceHydro(') -and

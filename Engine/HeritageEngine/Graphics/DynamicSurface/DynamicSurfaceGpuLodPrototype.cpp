@@ -256,6 +256,33 @@ float random01(ivec2 worldCell, uint salt)
     return float(h & 0x00ffffffu) * (1.0 / 16777216.0);
 }
 
+float smoothValueNoise(vec2 globalXZ, float wavelengthM, uint salt)
+{
+    vec2 lattice = globalXZ / max(wavelengthM, 0.01);
+    ivec2 cell = ivec2(floor(lattice));
+    vec2 blend = fract(lattice);
+    blend = blend * blend * (3.0 - 2.0 * blend);
+
+    float n00 = random01(cell, salt);
+    float n10 = random01(cell + ivec2(1, 0), salt);
+    float n01 = random01(cell + ivec2(0, 1), salt);
+    float n11 = random01(cell + ivec2(1, 1), salt);
+    return mix(mix(n00, n10, blend.x), mix(n01, n11, blend.x), blend.y);
+}
+
+float unresolvedRoadReliefM(vec2 globalXZ)
+{
+    // Collision meshes describe kerbs, crowns, cambers and authored drainage,
+    // but even laser-derived road meshes are normally retopologized more
+    // coarsely than the aggregate/asphalt texture that breaks a thin water
+    // sheet into patches. Add a deterministic, world-locked sub-grid relief:
+    // roughly +/-0.8 mm in total, below collision scale and shared by every
+    // overlapping tile. It affects Hydro only, never vehicle support height.
+    float broad = (smoothValueNoise(globalXZ, 1.80, 0x6a09e667u) - 0.5) * 0.00120;
+    float fine = (smoothValueNoise(globalXZ, 0.55, 0xbb67ae85u) - 0.5) * 0.00040;
+    return broad + fine;
+}
+
 int q4(float n)
 {
     return clamp(int(round(clamp(n, 0.0, 1.0) * 15.0)), 0, 15);
@@ -365,25 +392,65 @@ vec2 initializeStaticFlow(vec2 globalXZ, out bool valid)
     if (!vn) hn = hc;
     if (!vs) hs = hc;
 
+    // Preserve authored macro geometry while supplying the unresolved shallow
+    // depressions needed for patchy wetting on otherwise planar road faces.
+    hc += unresolvedRoadReliefM(globalXZ);
+    he += unresolvedRoadReliefM(globalXZ + vec2(probe, 0.0));
+    hw += unresolvedRoadReliefM(globalXZ - vec2(probe, 0.0));
+    hn += unresolvedRoadReliefM(globalXZ + vec2(0.0, probe));
+    hs += unresolvedRoadReliefM(globalXZ - vec2(0.0, probe));
+
     vec2 gradient = vec2(he - hw, hn - hs) / (2.0 * probe);
     vec2 downhill = -gradient;
     float slope = length(downhill);
     valid = true;
-    if (slope < 0.00025)
+    if (slope < 0.00001)
         return vec2(0.0);
-    return normalize(downhill) * clamp(slope * 8.0, 0.0, 1.0);
+
+    // B/A only have four effective bits. A linear encoding discarded shallow
+    // road gradients below roughly 1.7%. Signed cube-root companding resolves
+    // gradients around 0.04% near level ground while retaining a bounded
+    // 12.5% representable slope per axis.
+    return sign(downhill) * pow(
+        clamp(abs(downhill) * 8.0, vec2(0.0), vec2(1.0)),
+        vec2(1.0 / 3.0));
 }
 
-float faceTransfer(float leftDepth, float rightDepth, float signedFlow, float dt)
+float downhillGradientFromSignal(float encodedSignal)
 {
-    // Preserve the proven LIVETRACK04 transport rule. The stored B/A field is
-    // a bounded downhill guide, so transport removes a stable fraction from
-    // the donor without trying to reconstruct terrain height from a quantized
-    // direction vector.
-    float fraction = clamp(abs(signedFlow) * dt * 0.75, 0.0, 0.18);
-    return signedFlow >= 0.0
-        ? leftDepth * fraction
-        : -rightDepth * fraction;
+    return encodedSignal * encodedSignal * encodedSignal * (1.0 / 8.0);
+}
+
+float hydraulicFaceTransfer(
+    float leftDepth,
+    float rightDepth,
+    float leftSlopeSignal,
+    float rightSlopeSignal,
+    float dt)
+{
+    // Positive terrain drop and positive flux both point left-to-right. The
+    // driving quantity is hydraulic head (terrain elevation + water depth),
+    // so a basin fills and then spills instead of blindly donating a fixed
+    // fraction downhill forever.
+    float downhillGradient = 0.5 * (
+        downhillGradientFromSignal(leftSlopeSignal)
+        + downhillGradientFromSignal(rightSlopeSignal));
+    float groundDropLeftToRightM = downhillGradient * uCellSizeM;
+    float hydraulicHeadDifferenceM = leftDepth - rightDepth + groundDropLeftToRightM;
+
+    // The dead-band is smaller than the first 0.1 mm water level but prevents
+    // quantization chatter once adjacent hydraulic heads have levelled.
+    const float kHeadDeadBandM = 0.000035;
+    float drivenHeadM = sign(hydraulicHeadDifferenceM)
+        * max(abs(hydraulicHeadDifferenceM) - kHeadDeadBandM, 0.0);
+    float requestedTransferM = drivenHeadM * clamp(dt * 1.40, 0.0, 0.45);
+
+    // Each cell owns four faces. Limiting every face to 20% of its donor keeps
+    // this explicit step conservative and positive even when all four faces
+    // drain outward during the same synchronized batch dispatch.
+    float maximumLeftToRightM = leftDepth * 0.20;
+    float maximumRightToLeftM = rightDepth * 0.20;
+    return clamp(requestedTransferM, -maximumRightToLeftM, maximumLeftToRightM);
 }
 
 void main()
@@ -458,10 +525,10 @@ void main()
     vec2 nFlow = vn ? decodeFlow(nState.ba) : flow;
     vec2 sFlow = vs ? decodeFlow(sState.ba) : flow;
 
-    float eastFlux = faceTransfer(depth, eDepth, 0.5 * (flow.x + eFlow.x), dt);
-    float westFlux = faceTransfer(wDepth, depth, 0.5 * (wFlow.x + flow.x), dt);
-    float northFlux = faceTransfer(depth, nDepth, 0.5 * (flow.y + nFlow.y), dt);
-    float southFlux = faceTransfer(sDepth, depth, 0.5 * (sFlow.y + flow.y), dt);
+    float eastFlux = hydraulicFaceTransfer(depth, eDepth, flow.x, eFlow.x, dt);
+    float westFlux = hydraulicFaceTransfer(wDepth, depth, wFlow.x, flow.x, dt);
+    float northFlux = hydraulicFaceTransfer(depth, nDepth, flow.y, nFlow.y, dt);
+    float southFlux = hydraulicFaceTransfer(sDepth, depth, sFlow.y, flow.y, dt);
     depth = clamp(depth - eastFlux + westFlux - northFlux + southFlux, 0.0, 0.032);
 
     // Rain progressively washes a tire-cleared dry line. Natural decay is very

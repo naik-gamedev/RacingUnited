@@ -732,9 +732,13 @@ Check (
 ) "LIVETRACK04B restores the proven visible rain film while local Hydro adds puddles and dry-line state"
 Check (
     $dsurfGpuWaterAuthority.Contains('q.x < 7 ? -float(7 - q.x) / 7.0') -and
-    $dsurfGpuWaterAuthority.Contains('float fraction = clamp(abs(signedFlow) * dt * 0.75, 0.0, 0.18);') -and
-    -not $dsurfGpuWaterAuthority.Contains('groundDropLeftToRightM')
-) "LIVETRACK04 transport uses the proven downhill donor rule with a true quantized zero-flow band"
+    $dsurfGpuWaterAuthority.Contains('unresolvedRoadReliefM(globalXZ)') -and
+    $dsurfGpuWaterAuthority.Contains('vec2(1.0 / 3.0)') -and
+    $dsurfGpuWaterAuthority.Contains('float hydraulicHeadDifferenceM = leftDepth - rightDepth + groundDropLeftToRightM;') -and
+    $dsurfGpuWaterAuthority.Contains('const float kHeadDeadBandM = 0.000035;') -and
+    $dsurfGpuWaterAuthority.Contains('float maximumLeftToRightM = leftDepth * 0.20;') -and
+    -not $dsurfGpuWaterAuthority.Contains('float fraction = clamp(abs(signedFlow) * dt * 0.75, 0.0, 0.18);')
+) "LIVETRACK08 uses conservative hydraulic-head puddle flow, shallow-slope companding and deterministic sub-grid road relief"
 Check (
     $dsurfGpuWaterAuthority.Contains('single Hydro field uses the highest authored receiver') -and
     $dsurfGpuWaterAuthority.Contains('surfaceSheetId = 0u;') -and
