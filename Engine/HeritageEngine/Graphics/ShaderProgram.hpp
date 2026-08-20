@@ -10,5 +10,6 @@ GLuint buildShaderProgram(
     const char* vertexSource,
     const char* geometrySource,
     const char* fragmentSource);
+GLuint buildComputeShaderProgram(const char* computeSource);
 
 } // namespace heritage::graphics

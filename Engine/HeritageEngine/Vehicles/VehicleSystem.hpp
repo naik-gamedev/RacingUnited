@@ -12,6 +12,9 @@
 #include "../Physics/RigidBodySystem.hpp"
 #include "TireModel.hpp"
 #include "Tires/TireContactPatch.hpp"
+#include "Tires/TireCalibrationLab.hpp"
+#include "Tires/TireScenarioLab.hpp"
+#include "Tires/TireDistributedContact.hpp"
 #include "Tires/Authoring/TirePartResolver.hpp"
 #include "SuspensionGeometry.hpp"
 #include "SuspensionModel.hpp"
@@ -48,6 +51,15 @@ enum class TireSurface
     Dirt = 3,
     Snow = 4,
     Ice = 5
+};
+
+// TIRE18E/F: physical definitions remain identical between tiers. This switch
+// changes only the bounded spatial integration work performed around the same
+// calibrated whole-tire target.
+enum class TireContactFidelity
+{
+    Aggregate = 0,
+    Distributed3x3 = 1
 };
 
 struct VehicleDescription
@@ -304,6 +316,7 @@ struct WheelState
     VehicleScalar tireTreadTemperatureC = 20.0f;
     VehicleScalar tireCarcassTemperatureC = 20.0f;
     VehicleScalar tireGasTemperatureC = 20.0f;
+    VehicleScalar tireRimTemperatureC = 20.0f;
     VehicleScalar tireInflationPressurePa = 220000.0f;
     tires::TireFailureStage tireFailureStage = tires::TireFailureStage::Healthy;
     std::uint64_t tireFailureEventSerial = 0;
@@ -322,6 +335,8 @@ struct WheelState
     VehicleScalar tireThermalLossDissipationWatts = 0.0f;
     VehicleScalar tireRoadHeatFlowWatts = 0.0f;
     VehicleScalar tireAirHeatFlowWatts = 0.0f;
+    VehicleScalar tireBrakeHeatInputWatts = 0.0f;
+    VehicleScalar tireRimToCarcassHeatFlowWatts = 0.0f;
     // TIRE08 spatial tread telemetry. The 48-cell field stays inside the tire
     // provider; WheelState exposes cheap aggregates for diagnostics/UI.
     VehicleScalar tireTreadInsideSurfaceTemperatureC = 20.0f;
@@ -732,7 +747,24 @@ public:
         VehicleHandle handle,
         std::size_t wheelIndex,
         TireModelDescription& value) const;
+    // TIRE18B: run the canonical steady-state evidence sweep against the
+    // tire actually fitted to this wheel. This deliberately reads the
+    // installed wheel radius and fitted parameter/provenance state instead
+    // of constructing a second laboratory-only tire.
+    bool wheelTireCalibrationSweep(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const std::string& sweepName,
+        TireCalibrationSweepResult& value) const;
+    bool wheelTireScenario(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        const std::string& scenarioName,
+        TireScenarioResult& value) const;
     bool resetTirePhysicalState(VehicleHandle handle);
+    bool setTireContactFidelity(
+        VehicleHandle handle, TireContactFidelity fidelity);
+    TireContactFidelity tireContactFidelity(VehicleHandle handle) const;
     bool setSurfacePreset(VehicleHandle handle, TireSurface surface);
     TireSurface surfacePreset(VehicleHandle handle) const;
 
@@ -822,6 +854,19 @@ private:
         VehicleScalar cachedFootprintProviderBaseRollingResistanceMultiplier = 1.0;
         VehicleScalar cachedFootprintProviderBaseRelaxationMultiplier = 1.0;
         VehicleScalar cachedFootprintFrictionSpread = 0.0;
+        // TIRE18E bounded spatial force tier. Values are absolute local raw
+        // surface multipliers; the force phase converts them to ratios around
+        // the aggregate sampled profile, preserving the homogeneous MF curve.
+        bool cachedDistributedContactValid = false;
+        std::array<VehicleScalar, tires::kDistributedContactCellCount>
+            cachedDistributedFrictionMultiplier{
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
+        std::array<VehicleScalar, tires::kDistributedContactCellCount>
+            cachedDistributedStiffnessMultiplier{
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
+        std::array<bool, tires::kDistributedContactCellCount>
+            cachedDistributedSupported{
+                true, true, true, true, true, true, true, true, true };
         bool cachedFootprintMaterialBlendValid = false;
         VehicleScalar cachedFootprintGrassFraction = 0.0;
         VehicleScalar cachedFootprintDirtFraction = 0.0;
@@ -834,6 +879,9 @@ private:
         VehicleScalar cachedFootprintDeepSnowFraction = 0.0;
         VehicleScalar cachedFootprintCleanHardFraction = 0.0;
         VehicleScalar cachedFootprintAverageWetness = 0.0;
+        VehicleScalar cachedFootprintAverageWeatherWetness = 0.0;
+        VehicleScalar cachedFootprintAverageWaterDepthM = 0.0;
+        bool cachedFootprintAverageWaterDepthValid = false;
         VehicleScalar cachedFootprintAverageSurfaceTemperatureC = 20.0;
         bool cachedFootprintDeformablePropertiesValid = false;
         heritage::physics::SurfaceDeformableProperties
@@ -868,6 +916,8 @@ private:
         TireModelDescription tireModel;
         DriverAidDescription driverAids;
         TireSurface surface = TireSurface::DryAsphalt;
+        TireContactFidelity tireContactFidelity =
+            TireContactFidelity::Aggregate;
         int currentGear = 1;
         int requestedGear = 1;
         bool shifting = false;

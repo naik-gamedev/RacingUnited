@@ -61,6 +61,9 @@ $directInputCpp = if (Test-Path $directInputPath) { [IO.File]::ReadAllText($dire
 Check (-not $directInputCpp.Contains("kDeviceRefreshSeconds")) "DirectInput has no periodic device-enumeration timer"
 Check (-not $directInputCpp.Contains("refreshDevices(false)")) "DirectInput per-frame update does not enumerate hardware"
 Check ($directInputCpp.Contains("void WindowsDirectInputBackend::refreshDevices()")) "DirectInput exposes explicit manual device refresh"
+Check ($directInputCpp.Contains("void WindowsDirectInputBackend::beginCapture()") -and $directInputCpp.Contains("captureAxes") -and $directInputCpp.Contains("strongestMovement") -and $directInputCpp.Contains("device.axes[axisSlot] - baseline")) "INPUT G29 axis capture measures deliberate movement from a per-binding baseline and chooses the strongest moved axis"
+Check ($directInputCpp.Contains("GetObjectInfo(") -and $directInputCpp.Contains("DIPH_BYOFFSET") -and $directInputCpp.Contains("kAxisStateOffsets") -and -not $directInputCpp.Contains("axisIndexFromOffset(object->dwOfs)")) "INPUT04 DirectInput maps wheel axes through the current c_dfDIJoystick2 data format instead of treating native EnumObjects offsets as DIJOYSTATE2 offsets"
+Check ($directInputCpp.Contains("directInputButtonPressed") -and $directInputCpp.Contains("value & 0x80u") -and $directInputCpp.Contains("kNeutralSettleStableFrames") -and $directInputCpp.Contains("neutralCandidateAxes") -and $directInputCpp.Contains("neutralCalibrated") -and $directInputCpp.Contains("kEndpointNeutralThreshold") -and $directInputCpp.Contains("device.neutralAxes[axisSlot] = baseline") -and -not $directInputCpp.Contains("kNeutralNoiseDeadzone") -and -not $directInputCpp.Contains("device.neutralAxes[axis] = 0.0f")) "INPUT09 DirectInput keeps stable pedal rest calibration but never inserts a hidden live-axis deadzone"
 
 $physicsWorldPath = Join-Path $Root "Engine\HeritageEngine\Physics\PhysicsWorld.cpp"
 $physicsWorld = if (Test-Path $physicsWorldPath) { [IO.File]::ReadAllText($physicsWorldPath) } else { "" }
@@ -350,6 +353,18 @@ $clean06InputPersistence = [IO.File]::ReadAllText((Join-Path $Root "$clean06Inpu
 Check ($clean06InputSystem.Contains("InputSystem::initialize(") -and $clean06InputSystem.Contains("InputSystem::updateActions(") -and -not $clean06InputSystem.Contains("InputSystem::createProfile(")) "CLEAN06 root InputSystem owns lifecycle/action orchestration rather than profile persistence"
 Check ($clean06InputSystem.Split("`n").Count -lt 500) "CLEAN06 root InputSystem.cpp stays below coordinator size guard"
 Check ($clean06InputBindings.Contains("InputSystem::registerAction(") -and $clean13InputCapture.Contains("InputSystem::beginBindingCapture(") -and $clean13InputParser.Contains("InputSystem::parseBinding(")) "CLEAN06/CLEAN13 input ownership covers action editing, capture and parsing"
+$input03DefinitionsPath = Join-Path $Root "Modules\RacingUnited\Data\InputActions.ini"
+$input03VehicleInputPath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Input.lua"
+$input03VehicleLifecyclePath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Lifecycle.lua"
+$input03SettingsCommonPath = Join-Path $Root "Engine\HeritageEngine\UI\Settings\InputSettingsCommon.cpp"
+$input03Definitions = ReadText $input03DefinitionsPath
+$input03VehicleInput = ReadText $input03VehicleInputPath
+$input03VehicleLifecycle = ReadText $input03VehicleLifecyclePath
+$input03SettingsCommon = ReadText $input03SettingsCommonPath
+Check ($clean06InputBindings.Contains("!trim(defaultBinding).empty()") -and $clean06InputSystem.Contains("empty right-hand side is a valid deliberately-unbound")) "INPUT03 module actions may be declared bindable without stealing a factory-default control"
+Check ($input03Definitions.Contains("[Gears]") -and $input03Definitions.Contains("Clutch =") -and $input03Definitions.Contains("Gear 1 =") -and $input03Definitions.Contains("Gear 24 =") -and $input03VehicleInput.Contains('Input.RegisterAction("Clutch", "", "Gears")') -and $input03VehicleInput.Contains('for gear = 1, 24 do')) "INPUT03 Racing United exposes Clutch, Neutral, Reverse and direct Gear 1-24 actions in a dedicated Gears category"
+Check ($input03VehicleLifecycle.Contains("ReadVehicleDirectGearSelection()") -and $input03VehicleLifecycle.Contains("Vehicle.SetGear(nativeVehicle, directGear)")) "INPUT03 direct gear bindings drive the authoritative vehicle gearbox"
+Check ($input03SettingsCommon.Contains('if (group == "Gears")') -and $input03SettingsCommon.Contains('if (name == "Shift Up") return 0;') -and $input03SettingsCommon.Contains('if (name == "Shift Down") return 1;') -and $input03SettingsCommon.Contains('if (name == "Clutch") return 2;') -and $input03SettingsCommon.Contains('if (name == "Select Neutral") return 3;') -and $input03SettingsCommon.Contains('if (name == "Select Reverse") return 4;') -and $input03SettingsCommon.Contains('return 4 + gear;')) "INPUT03B Gears settings preserve Shift Up, Shift Down, Clutch, Neutral, Reverse, then natural Gear 1-24 order"
 Check ($clean06InputDevices.Contains("InputSystem::updateHardwareState(") -and $clean06InputDevices.Contains("InputSystem::gamepads(") -and $clean06InputDevices.Contains("InputSystem::readGamepadState(")) "CLEAN06 device unit owns hardware polling and device discovery"
 Check ($clean06InputProfiles.Contains("InputSystem::createProfile(") -and $clean06InputProfiles.Contains("InputSystem::applyProfile(") -and $clean06InputProfiles.Contains("InputSystem::deleteProfile(")) "CLEAN06 profile unit owns named profile snapshots and CRUD"
 Check ($clean06InputPersistence.Contains("InputSystem::save(") -and $clean06InputPersistence.Contains("InputSystem::load(")) "CLEAN06 persistence unit owns live input settings save/load"
@@ -427,6 +442,29 @@ foreach ($runtimeSourceName in @("EngineFrame.cpp", "EngineSimulation.cpp", "Eng
 Check ($clean09Rendering.Contains("prepareEngineRendering") -and $clean09Rendering.Contains("renderEngineScene") -and $clean09Rendering.Contains("glBeginQuery")) "CLEAN09 render targets/GPU timing/render orchestration are phase-owned"
 Check ($clean09Simulation.Contains("updateEngineSimulation") -and $clean09Simulation.Contains("synchronizeEntityTransforms") -and $clean09Simulation.Contains("chaseCamera.update")) "CLEAN09 simulation/camera frame update is phase-owned"
 Check ($clean09BuildHelper.Contains('set "MSBUILD_TARGET=Build"') -and $clean09BuildHelper.Contains('if /I "%~1"=="full"') -and $clean09BuildHelper.Contains('/t:%MSBUILD_TARGET%')) "CLEAN09 normal helper is incremental with an explicit FULL rebuild mode"
+
+
+# PERF10: remove avoidable render-thread heap/driver metadata work and expose
+# enough sub-buckets to distinguish real engine work from OpenGL pacing waits.
+$perf10MonitorHeaderPath = Join-Path $Root "Engine\HeritageEngine\Core\Diagnostics\PerformanceMonitor.hpp"
+$perf10RenderingPath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\Runtime\EngineRendering.cpp"
+$perf10SurfaceHeaderPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\SurfacePresentationRenderer.hpp"
+$perf10SurfacePath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\SurfacePresentationRenderer.cpp"
+$perf10OverlayPath = Join-Path $Root "Engine\HeritageEngine\Core\Diagnostics\PerformanceOverlay.cpp"
+$perf10MonitorHeader = ReadText $perf10MonitorHeaderPath
+$perf10Rendering = ReadText $perf10RenderingPath
+$perf10SurfaceHeader = ReadText $perf10SurfaceHeaderPath
+$perf10Surface = ReadText $perf10SurfacePath
+$perf10Overlay = ReadText $perf10OverlayPath
+$perf10DrawIndex = $perf10Surface.IndexOf("void SurfacePresentationRenderer::draw(")
+$perf10DrawText = if ($perf10DrawIndex -ge 0) { $perf10Surface.Substring($perf10DrawIndex) } else { $perf10Surface }
+Check ($perf10MonitorHeader.Contains("SurfacePresentation,") -and $perf10MonitorHeader.Contains("WeatherPresentation,") -and $perf10MonitorHeader.Contains("FramebufferSetup,") -and $perf10MonitorHeader.Contains("kCpuHitchThresholdMs = 20.0")) "PERF10 render forensics owns surface/weather/FBO buckets and captures >=20ms CPU-active hitches"
+Check ($perf10Rendering.Contains("RenderPerformanceSection::SurfacePresentation") -and $perf10Rendering.Contains("RenderPerformanceSection::WeatherPresentation") -and $perf10Rendering.Contains("RenderPerformanceSection::FramebufferSetup") -and $perf10Rendering.Contains("renderSurfaceMs +=") -and $perf10Rendering.Contains("renderWeatherMs +=")) "PERF10 render orchestration times surface, weather and framebuffer setup without GPU synchronization"
+Check ($perf10SurfaceHeader.Contains("m_trackVertexScratch") -and $perf10SurfaceHeader.Contains("m_particleVertexScratch") -and $perf10SurfaceHeader.Contains("m_marbleCellScratch") -and $perf10SurfaceHeader.Contains("m_movingRubberPacketScratch") -and $perf10Surface.Contains("m_trackVertexScratch.reserve(240000)") -and -not $perf10Surface.Contains("std::vector<TrackVertex> trackVertices;")) "PERF10 surface presentation reuses transient CPU staging instead of reserving a multi-megabyte track vector every render frame"
+Check ($perf10SurfaceHeader.Contains("m_tireMarkUniformView") -and $perf10SurfaceHeader.Contains("m_marbleUniformView") -and $perf10SurfaceHeader.Contains("m_particleUniformView") -and $perf10Surface.Contains('m_tireMarkUniformView = glGetUniformLocation') -and -not $perf10DrawText.Contains("glGetUniformLocation")) "PERF10 surface presentation resolves OpenGL uniform locations at initialization rather than in draw()"
+Check ($perf10Overlay.Contains("Pacing: VSync") -and $perf10Overlay.Contains("surface %.2f  weather %.2f") -and $perf10Overlay.Contains("Mesh submit residual/driver") -and $perf10Overlay.Contains("LAST CPU HITCH (>= 20 ms active)")) "PERF10 F8 overlay exposes pacing state, expanded render buckets and mesh driver/residual time"
+Check (Test-Path (Join-Path $Root "Docs\PERF10_FRAME_PACING_AND_SURFACE_SUBMIT.md")) "PERF10 frame-pacing/surface-submit optimization is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\PERF10_FramePacingSurfaceSubmit.txt")) "PERF10 milestone report is present"
 foreach ($registration in @(
     "..\Core\Modules\LuaBindings\Entity\LuaEntityBindingRegistration.cpp",
     "..\Core\Modules\LuaBindings\Physics\LuaPhysicsBindingRegistration.cpp",
@@ -560,3 +598,320 @@ Check ($collisionSource.Contains("collectBroadphaseContacts(bodies)") -and -not 
 # checks above still enforce ownership boundaries.
 Check ($collisionSource.Split("`n").Count -lt 1250) "CLEAN13/TIRE22R root CollisionSystem.cpp stays under coordinator guard"
 Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-060-Final-Ownership-Pass-And-Cleanup-Stop-Rule.md")) "CLEAN13 final cleanup decision and stop rule are documented"
+
+# JOB01: Heritage owns one reusable process-wide CPU worker pool. Hydrology is
+# the first deterministic production migration; protect ownership and race-free
+# phase structure without pinning implementation to incidental line counts.
+$job01HeaderPath = Join-Path $Root "Engine\HeritageEngine\Core\Jobs\JobSystem.hpp"
+$job01SourcePath = Join-Path $Root "Engine\HeritageEngine\Core\Jobs\JobSystem.cpp"
+$job01RuntimeStatePath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\Runtime\EngineRuntimeState.hpp"
+$job01HydrologyPath = Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Water\SurfaceHydrology.cpp"
+$job01HydrologyHeaderPath = Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Water\SurfaceHydrology.hpp"
+$job01OverlayPath = Join-Path $Root "Engine\HeritageEngine\Core\Diagnostics\PerformanceOverlay.cpp"
+$job01EngineProjectPath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj"
+$job01TestProjectPath = Join-Path $Root "Engine\HeritageEngine\Tests\HeritagePhysicsTests.vcxproj"
+$job01Header = ReadText $job01HeaderPath
+$job01Source = ReadText $job01SourcePath
+$job01RuntimeState = ReadText $job01RuntimeStatePath
+$job01Hydrology = ReadText $job01HydrologyPath
+$job01HydrologyHeader = ReadText $job01HydrologyHeaderPath
+$job01Overlay = ReadText $job01OverlayPath
+$job01EngineProject = ReadText $job01EngineProjectPath
+$job01TestProject = ReadText $job01TestProjectPath
+Check ((Test-Path $job01HeaderPath) -and (Test-Path $job01SourcePath) -and $job01Header.Contains("class JobSystem final") -and $job01Header.Contains("parallelFor(")) "JOB01 shared Core/Jobs worker-pool contract exists"
+Check ($job01Source.Contains("std::thread::hardware_concurrency()") -and $job01Source.Contains("m_workers.emplace_back") -and $job01Source.Contains("executeRanges(batch, true)") -and $job01Source.Contains("executingOnThisSystem()")) "JOB01 scheduler uses persistent hardware-aware workers, caller participation and nested-call safety"
+Check ($job01RuntimeState.Contains("heritage::jobs::JobSystem jobs;") -and $job01RuntimeState.Contains("physics.setJobSystem(&jobs)")) "JOB01 EngineRuntimeState owns the process-wide scheduler and wires physics to it"
+Check ($job01Hydrology.Contains("m_jobSystem->parallelFor") -and $job01HydrologyHeader.Contains("m_dueDeltaTimeByCell") -and -not $job01HydrologyHeader.Contains("m_flowColorBuckets")) "WATER14 hydrology keeps shared JobSystem parallel work without the retired fixed-grid 27-colour neighbour scheduler"
+$water14VirtualPipePath = Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Water\VirtualPipeFlow.hpp"
+$water14VirtualPipe = ReadText $water14VirtualPipePath
+Check ((Test-Path $water14VirtualPipePath) -and $water14VirtualPipe.Contains("AdaptiveVirtualPipeFluxInput") -and $water14VirtualPipe.Contains("integrateAdaptiveVirtualPipeFlux") -and $water14VirtualPipe.Contains("edgeLengthM") -and $water14VirtualPipe.Contains("centerDistanceM") -and -not $water14VirtualPipe.Contains("integrateVirtualPipeFlux") -and -not $water14VirtualPipe.Contains("kVirtualPipeNeighbourSlots")) "WATER14 variable-face signed virtual-pipe kernel replaces the retired fixed N/E/S/W 0.5m pipe helper"
+Check ($job01HydrologyHeader.Contains("adaptiveMinimumCellSizeM = 0.10") -and $job01HydrologyHeader.Contains("adaptiveMaximumCellSizeM = 20.0") -and $job01HydrologyHeader.Contains("struct AdaptiveCell") -and $job01HydrologyHeader.Contains("double waterVolumeM3") -and $job01HydrologyHeader.Contains("struct AdaptivePipe") -and $job01HydrologyHeader.Contains("edgeLengthM") -and $job01HydrologyHeader.Contains("centerDistanceM")) "WATER14 authoritative hydrology owns conserved water volume in adaptive 0.10m-to-20m control volumes connected by variable-size faces"
+Check ($job01Hydrology.Contains("rebuildAdaptiveSimulationTopology()") -and $job01Hydrology.Contains("kSupportSpanCandidates") -and $job01Hydrology.Contains("40, 32, 16, 8, 4, 2") -and $job01Hydrology.Contains("aggressiveSlopeNormalY") -and $job01Hydrology.Contains("aggressiveNormalBreakCosine") -and $job01HydrologyHeader.Contains("adaptiveMinimumCellSlopeDegrees = 55.0") -and $job01HydrologyHeader.Contains("adaptiveMinimumCellNormalBreakDegrees = 30.0") -and $job01Hydrology.Contains("Surface-fit error is still part of coarse-cell merge")) "WATER14A/J 0.10m authoritative cells remain reserved for aggressive angles while coarse packing uses restricted hierarchy spans"
+Check ($job01Hydrology.Contains("struct SupportPlaneFit") -and $job01Hydrology.Contains("fitSupportPlane") -and $job01Hydrology.Contains("maximumResidualM") -and $job01Hydrology.Contains("do not require a global span-aligned origin") -and $job01HydrologyHeader.Contains("adaptiveNormalErrorDegrees = 10.0")) "WATER14F coarse adaptive hydrology uses best-fit-plane residuals and unaligned greedy packing so broad planar roads/parking lots stay coarse beside local curbs"
+Check ($job01Hydrology.Contains("angularFineSupport") -and $job01Hydrology.Contains("fineBoundaryMaskBySupport") -and $job01Hydrology.Contains("fineDetailDistance") -and $job01Hydrology.Contains("kMaximumGradingDistanceSupports = 32u") -and $job01Hydrology.Contains("kCardinalDirections") -and $job01Hydrology.Contains("maximumSpanNearFineDetail") -and $job01Hydrology.Contains("supportSpan > maximumSpanNearFineDetail") -and $job01Hydrology.Contains("explicit 2:1 balancing pass") -and $job01Hydrology.Contains("cell.cellSizeM > neighbour.cellSizeM * 2.0")) "WATER14J adaptive hydrology uses widening feature-distance bands and explicit shared-face 2:1 balancing"
+Check ($job01Hydrology.Contains("fineEdgeSurfaceBreakM") -and $job01Hydrology.Contains("expectedContinuousDeltaY") -and $job01Hydrology.Contains("unexplainedStepM") -and $job01Hydrology.Contains("positiveDirections") -and $job01Hydrology.Contains("FineBoundaryRight") -and $job01Hydrology.Contains("FineBoundaryTop") -and $job01Hydrology.Contains("a detected curb/step is a hard topology boundary")) "WATER14I traces continuous curb/sidewalk height discontinuities into directional edge masks without refining ordinary continuous slopes or allowing coarse cells to cross the step"
+Check ($job01Hydrology.Contains("rebuildAdaptivePipes()") -and $job01Hydrology.Contains("overlapM") -and $job01Hydrology.Contains("pipe.sillElevationM") -and $job01Hydrology.Contains("detail::integrateAdaptiveVirtualPipeFlux") -and -not $job01HydrologyHeader.Contains("virtualPipeOutflowM3ps") -and -not $job01HydrologyHeader.Contains("virtualPipeSillOffsetM") -and -not $job01HydrologyHeader.Contains("std::array<std::int32_t, 8> neighbours")) "WATER14 adaptive cells use one signed persistent pipe per shared face and fixed-grid per-support-cell pipe/neighbour state is gone"
+Check ($job01Hydrology.Contains("rainVolume") -and $job01Hydrology.Contains("cell.areaM2") -and $job01Hydrology.Contains("cell.waterVolumeM3 += rainVolume") -and $job01Hydrology.Contains("m_outflowScaleByCell") -and $job01Hydrology.Contains("transferredVolumeM3")) "WATER14 rain, loss and transport operate on physical cell area/volume with conservative adaptive-cell outflow limiting"
+Check ($job01HydrologyHeader.Contains("supportCellCount") -and $job01Hydrology.Contains("m_stats.supportCellCount = m_cells.size()") -and $job01Hydrology.Contains("m_stats.cellCount = m_adaptiveCells.size()") -and $job01HydrologyHeader.Contains("Immutable support raster")) "WATER14 clearly separates immutable 0.5m terrain support samples from authoritative adaptive simulation cells"
+Check ((Test-Path (Join-Path $Root "Docs\WATER14_ADAPTIVE_CONTROL_VOLUME_HYDROLOGY.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-113-Adaptive-Control-Volume-Water-Authority.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14_AdaptiveControlVolumeHydrology.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14A_AGGRESSIVE_ANGLE_MINIMUM_CELL_GATE.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-114-Aggressive-Angle-Minimum-Hydrology-Cell-Gate.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14A_AggressiveAngleMinimumCellGate.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14B_SHARED_BOUNDARY_WATER_STITCHING.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-115-Shared-Boundary-Adaptive-Water-Stitching.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14B_SharedBoundaryWaterStitching.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14C_3CM_COLLIDER_NORMAL_WATER_OFFSET.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14C_3cmColliderNormalWaterOffset.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14D_DISTANCE_ADAPTIVE_COLLIDER_NORMAL_OFFSET.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14D_DistanceAdaptiveColliderNormalOffset.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14E_WIDER_WELD_TRIANGLE_COVERAGE.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14E_WiderWeldTriangleCoverage.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14F_PLANAR_COARSENING.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-116-Planarity-Driven-Adaptive-Hydrology-Coarsening.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14F_PlanarCoarsening.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14G_GRADED_FINE_TRANSITIONS.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-117-Graded-Fine-Water-Transitions.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14G_GradedFineTransitions.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14H_CONTINUOUS_CURB_EDGE_REFINEMENT.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-118-Continuous-Curb-Edge-Water-Refinement.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14H_ContinuousCurbEdgeRefinement.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14I_EDGE_ONLY_ADAPTIVE_SUBDIVISION.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-119-Edge-Only-Adaptive-Water-Subdivision.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14I_EdgeOnlyAdaptiveSubdivision.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER14J_BALANCED_FEATURE_QUADTREE.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-120-Balanced-Feature-Quadtree-Water-Topology.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER14J_BalancedFeatureQuadtree.txt"))) "WATER14 through WATER14J adaptive hydrology, stitching, offsets, coverage and balanced feature topology are documented"
+Check ($job01Overlay.Contains('ImGui::Text("JOB SYSTEM")') -and $job01Overlay.Contains("workerRangeCount") -and $job01Overlay.Contains("callerRangeCount")) "JOB01 F8 performance overlay exposes scheduler activity"
+Check ($job01EngineProject.Contains('Core\Jobs\JobSystem.cpp') -and $job01EngineProject.Contains('Core\Jobs\JobSystem.hpp') -and $job01TestProject.Contains('JobSystemRegression.cpp')) "JOB01 engine/test projects compile scheduler and its native regression"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-076-Engine-Job-System-And-Deterministic-Parallel-Phases.md")) "JOB01 deterministic multicore ownership decision is documented"
+Check ((Test-Path (Join-Path $Root "Docs\PERFORMANCE_MULTICORE_ROADMAP.md")) -and (Test-Path (Join-Path $Root "Docs\WEATHER_ROADMAP.md"))) "JOB01 multicore roadmap and future weather handoff use the normal Docs safety-net structure"
+
+# WATER15: iRacing publicly documents Dynamic Track as persistent water/moisture
+# surface state with puddles, drying, tire/aero movement, drainage and wetness
+# shaders. The proprietary implementation is not public; Heritage therefore
+# protects behavior/architecture parity without claiming source-code identity.
+# Settled water no longer owns a duplicate tessellated mesh.
+$job02SurfaceRendererPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\SurfacePresentationRenderer.cpp"
+$job02SurfaceRendererHeaderPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\SurfacePresentationRenderer.hpp"
+$job02SurfaceRenderer = ReadText $job02SurfaceRendererPath
+$job02SurfaceRendererHeader = ReadText $job02SurfaceRendererHeaderPath
+$waterLegacyContourPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\WaterContourMesher.hpp"
+$waterLegacyParcelSourcePath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.cpp"
+$waterLegacyParcelHeaderPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.hpp"
+$waterLegacyStitcherPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\WaterSurfaceStitcher.hpp"
+Check (-not (Test-Path $waterLegacyContourPath) -and -not (Test-Path $waterLegacyParcelSourcePath) -and -not (Test-Path $waterLegacyParcelHeaderPath) -and -not (Test-Path $waterLegacyStitcherPath)) "WATER15 removes legacy contour, settled parcel and adaptive water-stitch presentation sources"
+Check (-not $job02SurfaceRendererHeader.Contains("WaterRingGpuCache") -and -not $job02SurfaceRendererHeader.Contains("WaterMeshVertex") -and -not $job02SurfaceRendererHeader.Contains("m_waterRings") -and -not $job02SurfaceRenderer.Contains("buildStitchedAdaptiveWaterSurface") -and -not $job02SurfaceRenderer.Contains("glPolygonOffset(0.0f, 1.0f)") -and $job02SurfaceRenderer.Contains("WATER15: no second settled-water geometry pass exists here")) "WATER15 settled water has no renderer-owned ring mesh, seam stitcher, polygon bias or duplicate depth owner"
+Check (-not $job01EngineProject.Contains("WaterSurfaceStitcher") -and -not $job01EngineProject.Contains("WaterParcelRenderer") -and -not $job01EngineProject.Contains("WaterContourMesher")) "WATER15 retired settled-water presentation code is absent from the engine project"
+Check ((Test-Path (Join-Path $Root "Docs\WATER15_DYNAMIC_TRACK_SURFACE_STATE.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-121-Dynamic-Track-Surface-State-Water-Presentation.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER15A_DynamicTrackSurfaceState.txt")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER15B_ExactSceneSurfaceWater.txt")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER15C_IntegratedMaterialWater.txt")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER15E_HighResolutionClipmaps.txt")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER15F_HydraulicHeadReconstruction.txt")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-122-Hydraulic-Head-Water-Reconstruction.md")) -and (Test-Path (Join-Path $Root "Docs\WATER15G_COMPACT_DYNAMIC_TRACK_REOPTIMIZATION.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-123-Compact-Hydrology-Presentation-Clipmaps.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER15G_CompactDynamicTrackReoptimization.txt")) -and (Test-Path (Join-Path $Root "Docs\WATER15I_FILM_PUDDLE_DECOUPLING.md")) -and (Test-Path (Join-Path $Root "Docs\Decisions\ADR-124-Decouple-Thin-Film-From-Puddle-Hydrology-Presentation.md")) -and (Test-Path (Join-Path $Root "Build\Reports\WATER15I_FilmPuddleDecoupling.txt"))) "WATER15 Dynamic Track surface-state architecture through WATER15I film/puddle decoupling is documented"
+
+# JOB03 / DSURF04C: authoritative hydrology uses fixed-2Hz 100m tiles around
+# the UNION of actual simulation-interest sources. Never average split-screen /
+# multiplayer positions into a midpoint. Stable tile phases prevent the shared
+# 2Hz cadence from synchronizing into periodic spikes; >1000m is dormant.
+$job03EngineSimulationPath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\Runtime\EngineSimulation.cpp"
+$job03SurfaceWorldHeaderPath = Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\SurfaceWorld.hpp"
+$job03SurfaceWorldTestPath = Join-Path $Root "Engine\HeritageEngine\Tests\SurfaceWorldRegression.cpp"
+$job03EngineSimulation = ReadText $job03EngineSimulationPath
+$job03SurfaceWorldHeader = ReadText $job03SurfaceWorldHeaderPath
+$job03SurfaceWorldTest = ReadText $job03SurfaceWorldTestPath
+$dynamicSurfaceRegression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\DynamicSurfaceRegression.cpp")
+Check ($job03SurfaceWorldTest.Contains("adaptiveFlatStats.supportCellCount <= adaptiveFlatStats.cellCount") -and $job03SurfaceWorldTest.Contains("adaptiveMaximumCellSizeM < 8.0") -and $job03SurfaceWorldTest.Contains("largestAdaptiveSimulationCellM") -and $job03SurfaceWorldTest.Contains("materialBoundaryStats.adaptiveSubDecimetreCellCount != 0u") -and $job03SurfaceWorldTest.Contains("aggressiveSlopeStats.adaptiveSubDecimetreCellCount == 0u")) "WATER14A native regression proves flat terrain coarsens, material boundaries do not trigger 0.10m cells, and aggressive ~60deg support does"
+Check ($job03SurfaceWorldTest.Contains("planarSlopeStats.adaptiveMaximumCellSizeM < 7.9") -and $job03SurfaceWorldTest.Contains("curbLocalStats.adaptiveMaximumCellSizeM < 1.9") -and $job03SurfaceWorldTest.Contains("adaptiveMinimumCellSizeM < 0.4999") -and $job03SurfaceWorldTest.Contains("curbBoundaryCellCount") -and $job03SurfaceWorldTest.Contains("curbUnexpectedTinyCellCount != 0u") -and $job03SurfaceWorldTest.Contains("WATER14J restricted-quadtree regression") -and $job03SurfaceWorldTest.Contains("larger > smaller * 2.0")) "WATER14J native regression keeps curb detail edge-only and proves actual 0.50m+ shared faces obey the 2:1 hierarchy"
+Check ($job03SurfaceWorldTest.Contains("WATER15 presentation regression boundary") -and -not $job03SurfaceWorldTest.Contains("buildStitchedAdaptiveWaterSurface(") -and -not $job03SurfaceWorldTest.Contains("water_stitch")) "WATER15 native regression no longer couples authoritative hydrology tests to retired renderer tessellation"
+Check ($job03SurfaceWorldTest.Contains("0.0080") -and $job03SurfaceWorldTest.Contains("adaptiveWaterVolumes.empty()") -and $job01Hydrology.Contains("if (!includeDryCells && depth <= visibleThreshold)")) "WATER15 preserves hydrology query thresholds only as collection behavior; presentation ownership no longer hands off to a 3D water mesh"
+$perf19EntityMeshPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshRenderer.cpp"
+$perf19EntityMeshHeaderPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshRenderer.hpp"
+$perf19EntityMeshShadersPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshShaders.hpp"
+$perf19WetnessAtlasPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshSurfaceWetness.cpp"
+$perf19EntityMesh = ReadText $perf19EntityMeshPath
+$perf19EntityMeshHeader = ReadText $perf19EntityMeshHeaderPath
+$perf19EntityMeshShaders = ReadText $perf19EntityMeshShadersPath
+$perf19WetnessAtlas = ReadText $perf19WetnessAtlasPath
+$dsurfHydrologyAuthority = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.cpp")
+$dsurfThermalAuthority = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfaceThermal.cpp")
+$dsurfTypes = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfaceTypes.hpp")
+$dsurfPagePoolHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfacePagePool.hpp")
+$dsurfSurfaceWorld = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\SurfaceWorld.cpp")
+$dsurfSystem = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfaceSystem.cpp")
+$dsurfChunkAuthority = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfaceChunk.cpp")
+$dsurfGpuWaterAuthority = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.cpp")
+$dsurfGpuWaterAuthorityHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.hpp")
+# LIVETRACK07: detailed Hydro is presented inside 100m. The bounded atlas keeps
+# a small exact recent-tile history without allocating duplicate all-scene state.
+Check (
+    $dsurfGpuWaterAuthorityHeader.Contains('kTileWorldSizeM = 10.0f') -and
+    $dsurfGpuWaterAuthorityHeader.Contains('kTileResolution = 256u') -and
+    $dsurfGpuWaterAuthorityHeader.Contains('kSimulationRadiusM = 100.0f') -and
+    $dsurfGpuWaterAuthority.Contains('if (distanceM <= kSimulationRadiusM) return 2.0f;') -and
+    $dsurfGpuWaterAuthority.Contains('return 0.0f;')
+) "LIVETRACK07 keeps 256x256/10m detailed Hydro inside one synchronized 100m/2Hz cohort"
+Check (
+    -not $dsurfGpuWaterAuthority.Contains('    dispatchWorldTileSimulation(elapsedSeconds, precipitationRateMmPerHour,') -and
+    -not $dsurfGpuWaterAuthority.Contains('    applyWorldTireEvents(tireEvents);') -and
+    $dsurfGpuWaterAuthority.Contains('if (prewarm)') -and
+    $dsurfGpuWaterAuthority.Contains('return 1.0f / 60.0f;') -and
+    $dsurfGpuWaterAuthority.Contains('up to 43 history')
+) "LIVETRACK07 retains bounded exact recent-tile Hydro history without duplicate all-scene state"
+Check (
+    $dsurfGpuWaterAuthorityHeader.Contains('kAtlasColumns = 20u') -and
+    $dsurfGpuWaterAuthority.Contains('const int kDsurfAtlasColumns = 20;') -and
+    $dsurfGpuWaterAuthorityHeader.Contains('kMaximumBatchTiles = 384u') -and
+    $dsurfGpuWaterAuthorityHeader.Contains('kMaximumResidentTiles = 357u') -and
+    $dsurfGpuWaterAuthorityHeader.Contains('kMaximumTileUpdatesPerFrame = kMaximumResidentTiles') -and
+    $dsurfGpuWaterAuthorityHeader.Contains('kMaximumNewTileInitializationsPerFrame =') -and
+    $dsurfGpuWaterAuthorityHeader.Contains('kMaximumResidentTiles;') -and
+    $dsurfGpuWaterAuthority.Contains('if (distanceM <= kSimulationRadiusM) return 2.0f;') -and
+    $dsurfGpuWaterAuthority.Contains('return distanceM <= kSimulationRadiusM ? 0u : 3u;') -and
+    $dsurfGpuWaterAuthority.Contains('static_cast<GLuint>(tileCount)') -and
+    $dsurfGpuWaterAuthority.Contains('m_stats.dispatchesThisFrame += 2u') -and
+    $dsurfGpuWaterAuthority.Contains('due.size() - cohort.size()')
+) "LIVETRACK07 advances the complete 100m field as one synchronized 2Hz cohort and submits it in two batched dispatches"
+Check (
+    $dsurfGpuWaterAuthority.Contains('layout(rgba8, binding = 1) writeonly uniform image2DArray uDestinationBatchScratch;') -and
+    $dsurfGpuWaterAuthority.Contains('dispatchWaterBatch(cohort, elapsedSeconds') -and
+    $dsurfGpuWaterAuthority.Contains('allocateState(m_water, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE')
+) "LIVETRACK06 keeps detailed water evolution and authoritative storage on GPU"
+Check (
+    $dsurfGpuWaterAuthority.Contains('depth = max(depth, 0.0001);') -and
+    $dsurfGpuWaterAuthority.Contains('encodeWaterStochastic(depth, worldCell, uTickIndex)') -and
+    $perf19EntityMeshShaders.Contains('dynamicSurfaceFilm = clamp(uSurfaceWeatherFilmWetness, 0.0, 1.0)') -and
+    $perf19EntityMeshShaders.Contains('smoothstep(0.00002, 0.00050, dynamicSurfaceDepthM)')
+) "LIVETRACK04B restores the proven visible rain film while local Hydro adds puddles and dry-line state"
+Check (
+    $dsurfGpuWaterAuthority.Contains('q.x < 7 ? -float(7 - q.x) / 7.0') -and
+    $dsurfGpuWaterAuthority.Contains('float fraction = clamp(abs(signedFlow) * dt * 0.75, 0.0, 0.18);') -and
+    -not $dsurfGpuWaterAuthority.Contains('groundDropLeftToRightM')
+) "LIVETRACK04 transport uses the proven downhill donor rule with a true quantized zero-flow band"
+Check (
+    $dsurfGpuWaterAuthority.Contains('single Hydro field uses the highest authored receiver') -and
+    $dsurfGpuWaterAuthority.Contains('surfaceSheetId = 0u;') -and
+    -not $dsurfGpuWaterAuthority.Contains('triangleSheet < bestSheet')
+) "LIVETRACK06 keeps one X/Z water field per 10m tile with vertical Hydro sheets disabled"
+Check (
+    $dsurfSurfaceWorld.Contains('if (!m_gpuDynamicSurfaceAuthorityEnabled)') -and
+    $dsurfSurfaceWorld.Contains('m_dynamicSurface.advanceHydro(') -and
+    $dsurfSurfaceWorld.Contains('if (m_gpuDynamicSurfaceAuthorityEnabled)') -and
+    $dsurfSurfaceWorld.Contains('m_gpuDynamicSurfaceTireEvents')
+) "LIVETRACK06 disables CPU per-texel Hydro advancement and routes nearby tire-water interaction to GPU events"
+Check (
+    $perf19EntityMeshShaders.Contains('vec4 gpuWaterFilteredSingleSample(vec3 positionRelative, out bool valid)') -and
+    $perf19EntityMeshShaders.Contains('vec2 blurHalfOffsetM = vec2(0.5 * texelSizeM);') -and
+    $perf19EntityMeshShaders.Contains('vec4 filtered = 0.25 * (s00 + s10 + s01 + s11);') -and
+    -not $perf19EntityMeshShaders.Contains('if (distanceM <= 50.0)') -and
+    $perf19EntityMeshShaders.Contains('GpuWaterDecoded decoded = decodeGpuWater(filtered);') -and
+    $perf19EntityMeshShaders.Contains('lodDetail = 1.0 - smoothstep(0.0, 100.0, distanceM);') -and
+    -not $perf19EntityMeshShaders.Contains('valid = distanceM <= 100.0')
+) "LIVETRACK04B reconstructs rain/puddles with four coherent taps throughout the continuous 100m optical fade"
+Check (
+    -not $perf19EntityMesh.Contains('drawWetFilmPass(') -and
+    -not $perf19WetnessAtlas.Contains('glDrawArrays(GL_TRIANGLES, 0, 3)')
+) "LIVETRACK06 keeps water optics in the ordinary authored material draw with no duplicate puddle mesh"
+Check (
+    $job01Overlay.Contains('LIVETRACK07 GPU Hydro 10m/256x256 <=100m + BOUNDED HISTORY') -and
+    $job01Overlay.Contains('bounded 20x20 atlas + 384-layer scratch') -and
+    $job01Overlay.Contains('up to 43 recent tiles retain exact state at 1/min') -and
+    $job01Overlay.Contains('per-tile dispatch/copy/barrier OFF')
+) "LIVETRACK07 F8 exposes the bounded 100m simulation and recent-history storage contract"
+Check (
+    -not $job01Overlay.Contains('Virtual pipes: active') -and
+    -not $job01Overlay.Contains('waterMaximumVirtualPipeFluxLps')
+) "LIVETRACK04 keeps retired virtual-pipe water presentation dead"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-078-Distance-Adaptive-Multi-Source-Hydrology-Cadence.md")) "JOB03 distance-adaptive multi-source hydrology decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\JOB03_DistanceAdaptiveHydrology.txt")) "JOB03 milestone report is present"
+Check (Test-Path (Join-Path $Root "Docs\PERF11_ADAPTIVE_WATER_PRESENTATION.md")) "PERF11 adaptive water-presentation architecture is documented"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-096-Adaptive-Cadence-Aligned-Water-Presentation.md")) "PERF11 adaptive water-presentation ADR is present"
+Check (Test-Path (Join-Path $Root "Build\Reports\PERF11_AdaptiveWaterPresentation.txt")) "PERF11 milestone report is present"
+Check (Test-Path (Join-Path $Root "Docs\PERF12_ADAPTIVE_WATER_MESH_V2.md")) "PERF12 adaptive water mesh v2 architecture is documented"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-097-Adaptive-Water-Mesh-Across-All-Visual-Rings.md")) "PERF12 adaptive water mesh v2 ADR is present"
+Check (Test-Path (Join-Path $Root "Build\Reports\PERF12_AdaptiveWaterMeshV2.txt")) "PERF12 milestone report is present"
+Check (Test-Path (Join-Path $Root "Docs\PERF13_SEAMLESS_WATER_MATERIAL.md")) "PERF13 seamless water material architecture is documented"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-098-Seamless-World-Space-Water-Material.md")) "PERF13 seamless water material ADR is present"
+Check (Test-Path (Join-Path $Root "Build\Reports\PERF13_SeamlessWaterMaterial.txt")) "PERF13 milestone report is present"
+Check (Test-Path (Join-Path $Root "Docs\PERF14_ADAPTIVE_CONTOUR_WATER_TESSELLATION.md")) "PERF14 adaptive contour water tessellation architecture is documented"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-099-Adaptive-Contour-Water-Tessellation.md")) "PERF14 adaptive contour water tessellation ADR is present"
+Check (Test-Path (Join-Path $Root "Build\Reports\PERF14_AdaptiveContourWaterTessellation.txt")) "PERF14 milestone report is present"
+Check (Test-Path (Join-Path $Root "Docs\PERF16_CONNECTED_WATER_SURFACE.md")) "PERF16 connected-water surface architecture is documented"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-100-Connected-Hydrology-Water-Surface.md")) "PERF16 connected-water surface ADR is present"
+Check (Test-Path (Join-Path $Root "Build\Reports\PERF16_ConnectedWaterSurface.txt")) "PERF16 milestone report is present"
+Check (Test-Path (Join-Path $Root "Docs\PERF16A_DRIVABLE_CONNECTED_WATER.md")) "PERF16A drivable connected-water hotfix is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\PERF16A_DrivableConnectedWater.txt")) "PERF16A milestone report is present"
+
+# WEATHER06A: integrated storm presentation stays modular and bounded. Weather
+# authority/hydrology remain separate from view-specific OpenGL representation.
+$weather06RendererPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\WeatherPresentationRenderer.cpp"
+$weather06RendererHeaderPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\WeatherPresentationRenderer.hpp"
+$weather06SkyPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\SkyRenderer.cpp"
+$weather06EntityPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshRenderer.cpp"
+$weather06EnvironmentPath = Join-Path $Root "Engine\HeritageEngine\Graphics\EnvironmentMap.cpp"
+$weather06ProjectPath = Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj"
+$weather06Renderer = ReadText $weather06RendererPath
+$weather06RendererHeader = ReadText $weather06RendererHeaderPath
+$weather06Sky = ReadText $weather06SkyPath
+$weather06Entity = ReadText $weather06EntityPath
+$weather06Environment = ReadText $weather06EnvironmentPath
+$weather06Project = ReadText $weather06ProjectPath
+Check ((Test-Path $weather06RendererPath) -and (Test-Path $weather06RendererHeaderPath) -and $weather06Project.Contains('Graphics\Renderer\WeatherPresentationRenderer.cpp') -and $weather06Project.Contains('Graphics\Renderer\WeatherPresentationRenderer.hpp')) "WEATHER06A modular weather presentation renderer is compiled by the engine"
+Check (($weather06Renderer.Contains("kRainGridX = 32") -and $weather06Renderer.Contains("glDrawArraysInstanced")) -or ($weather06Renderer.Contains("kRainComputeShader") -and $weather06Renderer.Contains("glDrawArraysIndirect") -and $weather06Renderer.Contains("absoluteCell = uBaseCell + localCell"))) "WEATHER06A+ falling rain remains a bounded world-space GPU population rather than CPU particles"
+Check ($weather06Sky.Contains("viewportWidth / 3") -and $weather06Sky.Contains("kSteps = 10") -and $weather06Sky.Contains("cloudDensity") -and $weather06Sky.Contains("windOffset")) "WEATHER06A volumetric clouds use bounded one-third-resolution world-space integration"
+Check ($weather06Entity.Contains("applyWeatherLighting") -and $weather06Entity.Contains("weatherFogDensity") -and -not $weather06Entity.Contains("kRainVertexShader")) "WEATHER06A entity renderer only consumes storm lighting/fog and does not own rain particles"
+Check ($weather06Environment.Contains("environmentLightingDifference") -and $weather06Environment.Contains("lightingChanged")) "WEATHER06A environment cubemap refresh responds to weather lighting changes"
+$weather06ALegacyWetFilm = $job02SurfaceRenderer.Contains("wetSpotLayer")
+$perf13WorldSpaceWetFilm = (
+    $job02SurfaceRenderer.Contains("rippleCellSize") -and
+    $job02SurfaceRenderer.Contains("rippleBand") -and
+    $job02SurfaceRenderer.Contains("gSurfaceCoord")
+)
+$weather06LegacyHydrologyWetFilm = (
+    ($weather06ALegacyWetFilm -or $perf13WorldSpaceWetFilm) -and
+    $job02SurfaceRenderer.Contains("uPrecipitationRateMmPerHour") -and
+    -not $job02SurfaceRenderer.Contains("for (int neighbor")
+)
+# DSURF03 supersedes the WATER15-18 presentation collectors. The smooth
+# weather film remains available as a fallback while authoritative hydrology
+# depth/moisture is migrated into persistent Heritage Dynamic Surface pages.
+$dsurf03SurfaceStateWetFilm = (
+    $perf19WetnessAtlas.Contains("updateDynamicSurfaceStatePages(") -and
+    $perf19WetnessAtlas.Contains("dynamicSurface.rasterHydroPage(") -and
+    $perf19WetnessAtlas.Contains("weather.waterFilmDepthM") -and
+    $perf19WetnessAtlas.Contains("weather.effectiveWetness") -and
+    $perf19EntityMeshShaders.Contains("uSurfaceWeatherFilmWetness") -and
+    $perf19EntityMeshShaders.Contains("uSurfaceWeatherFilmDepthM") -and
+    $perf19EntityMeshShaders.Contains("uDynamicSurfaceHydroPages") -and
+    $perf19EntityMeshShaders.Contains("applyDynamicSurfaceWater") -and
+    -not $perf19EntityMesh.Contains("drawWetFilmPass(") -and
+    -not $perf19WetnessAtlas.Contains("for (int neighbor") -and
+    -not $perf19EntityMeshShaders.Contains("for (int neighbor")
+)
+Check ($weather06LegacyHydrologyWetFilm -or $dsurf03SurfaceStateWetFilm) "WEATHER06A+ wet-surface presentation uses smooth weather film plus persistent Dynamic Surface hydrology without expensive rain-neighbor fragment loops"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-079-Integrated-OpenGL-Weather-Presentation.md")) "WEATHER06A OpenGL weather presentation decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\WEATHER06A_IntegratedRainClouds.txt")) "WEATHER06A milestone report is present"
+
+# WEATHER06D: the live WEATHER06C fullscreen streak veil visibly travelled with
+# the camera. Keep rain existence/trajectory in world cells and derive direct-
+# precipitation cover from the already-baked layered hydrology surface field.
+Check (-not $weather06Renderer.Contains("kRainOverlayVertexShader") -and -not $weather06Renderer.Contains("kRainOverlayFragmentShader")) "WEATHER06D removes camera-attached fullscreen streak rain from the live renderer"
+Check ($weather06Renderer.Contains("hasPrecipitationCoverAbove(") -and $job01Hydrology.Contains("bool SurfaceHydrology::hasPrecipitationCoverAbove(") -and -not $weather06Renderer.Contains("raycast")) "WEATHER06H precipitation-cover diagnostics use an exact hydrology-column query instead of per-drop CPU raycasts"
+$weather07b7SupersedesCpuFallback = $weather06Renderer.Contains("kRainComputeShader") -and $weather06Renderer.Contains("glDispatchCompute") -and $weather06Renderer.Contains("intentionally has no per-drop CPU rain fallback")
+Check (($weather06Renderer.Contains("kRainFallbackVertexShader") -and $weather06Renderer.Contains("RainFallbackVertex")) -or $weather07b7SupersedesCpuFallback) "WEATHER06I fallback history remains documented, or the modern GPU rain path explicitly supersedes executable per-drop CPU fallback"
+Check ($weather07b7SupersedesCpuFallback -and -not $weather06Renderer.Contains("kRainFallbackVertexShader") -and -not $weather06Renderer.Contains("m_rainFallbackVbo")) "WEATHER07C1 removes dead legacy CPU fallback shader/VBO ownership from the modern-only rain renderer"
+Check ($weather06Renderer.Contains("never let shelter classification erase the entire rain pass") -and -not $weather06Renderer.Contains("if (cameraUnderPrecipitationCover)
+        return;")) "WEATHER06I shelter classification cannot early-return the complete rain renderer"
+Check (($weather06Renderer.Contains("worldCell = uBaseCell + localCell") -or $weather06Renderer.Contains("absoluteCell = uBaseCell + localCell")) -and $weather06Renderer.Contains("terminalVelocityMps") -and -not $weather06Renderer.Contains("fallSpeed = mix(22.0, 38.0")) "WEATHER07A visible rain keeps world-cell identity and physical terminal velocity rather than inventing 22-38 m/s fall speeds"
+Check ($job01Hydrology.Contains("precipitationExposed") -and $job01Hydrology.Contains("highestSurfaceByColumn") -and $job01Hydrology.Contains("cell.precipitationExposed")) "WEATHER06D authoritative hydrology suppresses direct rainfall beneath higher layered cover"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-081-World-Anchored-Rain-And-Precipitation-Coverage.md")) "WEATHER06D rain anchoring and precipitation-cover decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\WEATHER06D_WorldAnchoredRainCover.txt")) "WEATHER06D milestone report is present"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-082-World-Space-Visible-Rain-And-Natural-Gear-Ordering.md")) "WEATHER06F world-space visible rain and natural gear-order decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\WEATHER06F_WorldVolumeRainNaturalGears.txt")) "WEATHER06F milestone report is present"
+
+
+# WEATHER07A: replace presentation-authored rain motion with a reusable physical
+# precipitation authority. Rainfall mass stays in mm/h for hydrology while the
+# statistical drop population supplies size, mass and terminal-speed structure.
+$weather07MicrophysicsPath = Join-Path $Root "Engine\HeritageEngine\Physics\Weather\RainMicrophysics.cpp"
+$weather07MicrophysicsHeaderPath = Join-Path $Root "Engine\HeritageEngine\Physics\Weather\RainMicrophysics.hpp"
+$weather07FieldPath = Join-Path $Root "Engine\HeritageEngine\Physics\Weather\PrecipitationField.cpp"
+$weather07FieldHeaderPath = Join-Path $Root "Engine\HeritageEngine\Physics\Weather\PrecipitationField.hpp"
+$weather07SurfaceWorldHeaderPath = Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\SurfaceWorld.hpp"
+$weather07SurfaceWeatherHeaderPath = Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\SurfaceWeather.hpp"
+$weather07LuaWeatherPath = Join-Path $Root "Engine\HeritageEngine\Core\Modules\LuaBindings\Physics\LuaPhysicsWorldBindings.cpp"
+$weather07SurfacePanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\SurfacesPanel.lua"
+$weather07RegressionPath = Join-Path $Root "Engine\HeritageEngine\Tests\WeatherRegression.cpp"
+$weather07Microphysics = ReadText $weather07MicrophysicsPath
+$weather07Field = ReadText $weather07FieldPath
+$weather07FieldHeader = ReadText $weather07FieldHeaderPath
+$weather07SurfaceWorldHeader = ReadText $weather07SurfaceWorldHeaderPath
+$weather07SurfaceWeatherHeader = ReadText $weather07SurfaceWeatherHeaderPath
+$weather07LuaWeather = ReadText $weather07LuaWeatherPath
+$weather07SurfacePanel = ReadText $weather07SurfacePanelPath
+$weather07Regression = ReadText $weather07RegressionPath
+Check ((Test-Path $weather07MicrophysicsHeaderPath) -and (Test-Path $weather07FieldHeaderPath) -and $weather06Project.Contains('Physics\Weather\RainMicrophysics.cpp') -and $weather06Project.Contains('Physics\Weather\PrecipitationField.cpp')) "WEATHER07A physical rain microphysics and precipitation field are compiled as reusable engine subsystems"
+Check ($weather07Microphysics.Contains("kMarshallPalmerLambdaCoefficient = 4.1") -and $weather07Microphysics.Contains("kMarshallPalmerLambdaRainExponent = -0.21") -and $weather07Microphysics.Contains("9.65 - 10.3 * std::exp(-0.6 * dMm)")) "WEATHER07A rain population uses Marshall-Palmer size structure and bounded Atlas terminal velocity"
+Check ($weather07Microphysics.Contains("requestedVolumeFluxMps") -and $weather07Microphysics.Contains("populationScale = requestedVolumeFluxMps / baseVolumeFlux") -and $weather07Microphysics.Contains("massFluxKgPerM2PerSecond")) "WEATHER07A statistical drop population is mass-normalized to authoritative mm/h rainfall"
+Check ($weather07FieldHeader.Contains("class PrecipitationField") -and $weather07Field.Contains("hashCell(") -and $weather07Field.Contains("sampleRainRepresentative") -and $weather07Field.Contains("m_elapsedSeconds * drop.terminalVelocityMps")) "WEATHER07A precipitation representatives are deterministic world-cell trajectories rather than camera-owned particles"
+Check ($weather07SurfaceWorldHeader.Contains("weather::PrecipitationField m_precipitation") -and $weather07SurfaceWorldHeader.Contains("const weather::PrecipitationField& precipitation() const")) "WEATHER07A SurfaceWorld exposes one shared physical precipitation field to all views"
+Check ($weather07SurfaceWeatherHeader.Contains("windDirectionDegrees") -and $weather07LuaWeather.Contains('"wind_direction_deg"') -and $weather07SurfacePanel.Contains('"Wind direction"') -and $weather06Sky.Contains("uWindVelocityXZ") -and -not $weather06Sky.Contains("vec2(0.72, 0.69)")) "WEATHER07A weather has explicit world wind heading shared by precipitation and cloud advection rather than a hard-coded renderer direction"
+Check ($weather06Renderer.Contains("surfaces.precipitation()") -and $weather06Renderer.Contains("fluxWeightedMeanTerminalVelocityMps") -and $weather06Renderer.Contains("uDropLambdaPerMm") -and $weather06Renderer.Contains("terminalVelocityMps")) "WEATHER07A current OpenGL rain presentation consumes the physical precipitation population, terminal-speed law and shared wind/time authority"
+Check ($weather07Regression.Contains("massFluxMatches") -and $weather07Regression.Contains("deterministicIdentity") -and $weather07Regression.Contains("terminalVelocityCurve")) "WEATHER07A native regression covers rainfall mass, realistic terminal speed and deterministic world identity"
+Check ($job01Overlay.Contains("physical mean %.2f mm") -and $job01Overlay.Contains("flux fall %.2f m/s")) "WEATHER07A F8 diagnostics expose physical rain size and fall-speed authority"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-091-Physical-Rain-Microphysics-And-World-Precipitation-Field.md")) "WEATHER07A physical precipitation decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\WEATHER07A_PhysicalPrecipitationFoundation.txt")) "WEATHER07A milestone report is present"
+
+# WEATHER07C1: the settled rain material intentionally uses one tiny base-colour
+# + alpha texture plus live environment reflection. Normal/thickness maps are no
+# longer required for fast-moving airborne rain.
+$weather07bOpacityPath = Join-Path $Root "Modules\RacingUnited\Assets\Weather\Rain\RainDrop_BC.png"
+Check (Test-Path $weather07bOpacityPath) "WEATHER07C1 Racing United ships the base-colour/alpha rain optical map"
+Check ($weather06RendererHeader.Contains("initialize(const std::filesystem::path& moduleAssetRoot)") -and $weather06Renderer.Contains('moduleAssetRoot / "Weather" / "Rain"') -and $weather06Renderer.Contains('RainDrop_BC.png') -and -not $weather06Renderer.Contains('rain normal texture unavailable') -and -not $weather06Renderer.Contains('rain thickness texture unavailable')) "WEATHER07C1 rain optics use only the engine-generic Weather/Rain base-colour/alpha contract"
+$weather07bUsesPhysicalOpticalSizing = $weather06Renderer.Contains("sampleDiameterMm") -and $weather06Renderer.Contains("terminalVelocityMps") -and $weather06Renderer.Contains("exposureSeconds") -and $weather06Renderer.Contains("uDropLambdaPerMm")
+$weather07b2ScaleDiagnostic = $weather06Renderer.Contains("WEATHER07B2 DIAGNOSTIC") -and $weather06Renderer.Contains("float streakLength = 2.0") -and $weather06Renderer.Contains("float opticalWidth = 1.0") -and (Test-Path (Join-Path $Root "Build\Reports\WEATHER07B2_2mRainDiagnostic.txt"))
+Check ($weather07bUsesPhysicalOpticalSizing -or $weather07b2ScaleDiagnostic) "WEATHER07B textured streak geometry uses physical optical sizing, except the explicit bounded WEATHER07B2 2 m visibility diagnostic"
+Check ($weather06Renderer.Contains("uRainOpacityTexture") -and $weather06Renderer.Contains("uEnvironmentMap") -and $weather06Renderer.Contains("fresnel") -and $weather06Renderer.Contains("procedural bulge") -and -not $weather06Renderer.Contains("texture(uRainNormalTexture") -and -not $weather06Renderer.Contains("texture(uRainThicknessTexture")) "WEATHER07C1 rain shader uses base/alpha plus environment reflection without normal/thickness texture sampling"
+$weather07b5ScientificSizing = $weather06Renderer.Contains("0.00020") -and $weather06Renderer.Contains("0.00600") -and ($weather06Renderer.Contains("presentationExposureSeconds") -or $weather06Renderer.Contains("exposureSeconds")) -and $weather06Renderer.Contains("opticalAreaCompensation") -and $weather06Renderer.Contains("pixelWorldWidth") -and $weather06Renderer.Contains("terminalVelocityMps")
+Check $weather07b5ScientificSizing "WEATHER07B5 uses millimetre physical drop diameters, exposure-derived streak length and sub-pixel area compensation"
+Check (-not $weather06Renderer.Contains("WEATHER07B2 DIAGNOSTIC")) "WEATHER07B5 removes the 2 metre rain visibility diagnostic from executable rain geometry"
+$weather07bModernGpuRain = $weather06Renderer.Contains("kRainComputeShader") -and $weather06Renderer.Contains("glDispatchCompute") -and $weather06Renderer.Contains("GL_SHADER_STORAGE_BUFFER") -and $weather06Renderer.Contains("GL_COMMAND_BARRIER_BIT") -and $weather06Renderer.Contains("atomicAdd(drawCommand.instanceCount") -and $weather06Renderer.Contains("glDrawArraysIndirect")
+Check $weather07bModernGpuRain "WEATHER07C1 high-density rain uses OpenGL compute, GPU compaction and indirect drawing without per-drop CPU loops or visible-count readback"
+Check ($weather06Renderer.Contains("kRainGpuNearCandidates = 10000u") -and $weather06Renderer.Contains("kRainGpuMidCandidates = 100000u") -and $weather06Renderer.Contains("kRainGpuFarCandidates = 10000u") -and $weather06Renderer.Contains("10, 8, 10") -and $weather06Renderer.Contains("0.50, 1.25") -and $weather06Renderer.Contains("0.0f, 2.0f") -and $weather06Renderer.Contains("2.0f, 10.0f") -and $weather06Renderer.Contains("10.0f, 100.0f") -and $weather06Renderer.Contains("uTierSalt") -and -not $weather06Renderer.Contains("diagnosticDisableRainCulling = true")) "WEATHER07C6 authored rain LOD uses 10k at 0-2m, 100k at 2-10m and 10k at 10-100m"
+Check ($weather06Renderer.Contains("constexpr float corners[]") -and $weather06Renderer.Contains("0.0f, 0.0f") -and $weather06Renderer.Contains("glDrawArraysIndirect(GL_TRIANGLES")) "WEATHER07C1 textured rain uses one UV-unwrapped triangle per compacted representative"
+Check (-not $weather06Renderer.Contains("sampleRainRepresentative(gx, gy, gz")) "WEATHER07B7 removes executable per-drop CPU precipitation sampling from normal rain presentation"
+Check (-not $weather06Renderer.Contains("m_rainVolumeProgram") -and $weather06Renderer.Contains("The module-authored rain texture owns the complete 0-100 m presentation")) "WEATHER07C6 authored textured rain is the sole airborne presentation path without a procedural fullscreen curtain layered over it"
+Check ($job01Overlay.Contains("optical rain %s  material %dx%d")) "WEATHER07B F8 exposes rain optical-material readiness and dimensions"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-092-Textured-Optical-Rain-Material.md")) "WEATHER07B textured optical rain decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\WEATHER07B_TexturedOpticalRain.txt")) "WEATHER07B milestone report is present"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-094-GPU-Compute-Precipitation-Presentation.md")) "WEATHER07B7 GPU-compute precipitation decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\WEATHER07B7_GpuComputeRain.txt")) "WEATHER07B7 GPU-compute rain report is present"
+Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-095-Compacted-Rain-LOD-And-Indirect-Draw.md")) "WEATHER07C1 compacted rain LOD decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\WEATHER07C1_CompactedRainLOD.txt")) "WEATHER07C1 compacted rain LOD report is present"

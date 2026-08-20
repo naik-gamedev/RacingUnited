@@ -68,10 +68,37 @@ VehicleScalar mappedWaterDepth(
     const TireWetSurfaceDescription& description,
     const TireWetSurfaceInput& input)
 {
-    const VehicleScalar wetness = input.footprintSurfaceBlendValid
+    const VehicleScalar effectiveWetness = input.footprintSurfaceBlendValid
         ? clamp01(input.footprintAverageWetness)
         : clamp01(input.surfaceWetness);
-    return wetness * description.wetnessOneWaterDepthM;
+    const VehicleScalar weatherWetness = input.footprintSurfaceBlendValid
+        ? clamp01(input.footprintAverageWeatherWetness)
+        : clamp01(input.surfaceWeatherWetness);
+    // Recover the authored/manual legacy coverage from the union
+    // effective = 1 - (1 - legacy) * (1 - dynamicWeather). This preserves
+    // scene-authored wet patches while the dynamic weather film remains an
+    // exact physical depth rather than being remapped through [0,1].
+    const VehicleScalar legacyWetness = weatherWetness < VehicleScalar{0.999999}
+        ? clamp01((effectiveWetness - weatherWetness)
+            / (VehicleScalar{1.0} - weatherWetness))
+        : VehicleScalar{0.0};
+    VehicleScalar explicitDepth = -1.0;
+    if (input.footprintSurfaceBlendValid
+        && input.footprintAverageWaterDepthValid)
+    {
+        explicitDepth = std::max(
+            input.footprintAverageWaterDepthM, VehicleScalar{0.0});
+    }
+    else if (input.surfaceWaterDepthValid)
+    {
+        explicitDepth = std::max(input.surfaceWaterDepthM, VehicleScalar{0.0});
+    }
+    if (explicitDepth >= 0.0)
+    {
+        return std::max(explicitDepth,
+            legacyWetness * description.wetnessOneWaterDepthM);
+    }
+    return effectiveWetness * description.wetnessOneWaterDepthM;
 }
 
 VehicleScalar averageRetainedWater(const TireWearState& state)

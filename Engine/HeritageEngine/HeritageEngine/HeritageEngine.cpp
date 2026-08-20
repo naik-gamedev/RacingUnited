@@ -40,6 +40,7 @@
 #include "../Platform/Windows/BackbufferClipboard.hpp"
 #include "../Core/Math/Math.hpp"
 #include "../Camera/ChaseCamera.hpp"
+#include "../Camera/VehicleCameraController.hpp"
 #include "../Core/Diagnostics/BuildIdentity.hpp"
 #include "../Core/Diagnostics/PerformanceMonitor.hpp"
 #include "../Core/Settings/VideoSettings.hpp"
@@ -63,6 +64,7 @@
 #include "../Graphics/Renderer/EntityDebugRenderer.hpp"
 #include "../Graphics/Renderer/EntityMeshRenderer.hpp"
 #include "../Graphics/Renderer/SurfacePresentationRenderer.hpp"
+#include "../Graphics/Renderer/WeatherPresentationRenderer.hpp"
 #include "../Graphics/RenderScaler.hpp"
 #include "../Core/Modules/ModuleRuntimeManager.hpp"
 #include "../Core/Modules/ModuleRuntimeServices.hpp"
@@ -74,6 +76,8 @@ using heritage::math::Vec3;
 using heritage::math::perspectiveReversedZ;
 using heritage::camera::ChaseCamera;
 using heritage::camera::ChaseCameraInput;
+using heritage::camera::VehicleCameraController;
+using heritage::camera::VehicleCameraFlyInput;
 using heritage::camera::CameraFrame;
 using heritage::diagnostics::PerformanceMonitor;
 using heritage::diagnostics::PerformanceSection;
@@ -92,6 +96,7 @@ using heritage::graphics::PostProcessor;
 using heritage::graphics::EntityDebugRenderer;
 using heritage::graphics::EntityMeshRenderer;
 using heritage::graphics::SurfacePresentationRenderer;
+using heritage::graphics::WeatherPresentationRenderer;
 using heritage::graphics::RenderScaler;
 using heritage::graphics::RenderSize;
 using heritage::settings::VideoSettings;
@@ -479,10 +484,15 @@ int HeritageEngine::run(int argc, char** argv)
     VegetationSystem vegetationSystem;
     vegetationSystem.reset();
 
+    // CAMLAB01 is an engine-owned camera service so module Lua can edit the
+    // live vehicle-mounted authoring pose without owning render internals.
+    VehicleCameraController vehicleCamera;
+
     ModuleRuntimeManager moduleRuntime;
     ModuleRuntimeServices runtimeServices;
     runtimeServices.audio = &state.audio;
     runtimeServices.input = &state.input;
+    runtimeServices.vehicleCamera = &vehicleCamera;
     runtimeServices.entities = &entityRegistry;
     runtimeServices.physics = &state.physics;
     runtimeServices.environment = &environmentSystem;
@@ -603,11 +613,47 @@ int HeritageEngine::run(int argc, char** argv)
         return -1;
     }
 
+    WeatherPresentationRenderer weatherPresentationRenderer;
+    if (!weatherPresentationRenderer.initialize(moduleContext.assetRoot()))
+    {
+        const std::string message =
+            "WeatherPresentationRenderer could not initialize its rain shader.";
+        std::cerr << message << '\n';
+#ifdef _WIN32
+        MessageBoxA(
+            nullptr,
+            message.c_str(),
+            "Heritage Engine - Weather Presentation Error",
+            MB_OK | MB_ICONERROR);
+#endif
+        moduleRuntime.shutdown();
+        surfacePresentationRenderer.shutdown();
+        entityDebugRenderer.shutdown();
+        entityMeshRenderer.shutdown();
+        entityRegistry.clear();
+        state.input.shutdown();
+        state.audio.shutdown();
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+        state.display.shutdown();
+        state.window.shutdown();
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return -1;
+    }
+
     ChaseCamera chaseCamera;
     CameraFrame entityCameraFrame;
+    bool vehicleCameraCursorCaptured = false;
 
     std::cout << "Active runtime: " << moduleRuntime.runtimeId() << "\n";
     std::cout << "Active content: " << moduleRuntime.activeContentId() << "\n";
+    const auto jobStartupStats = state.jobs.stats();
+    std::cout << "Job system: " << jobStartupStats.workerThreadCount
+              << " workers + caller across "
+              << jobStartupStats.hardwareThreadCount
+              << " logical processors\n";
     std::cout << "Registered input actions: "
               << state.input.actionCount() << "\n";
     heritage::engine::startup::writeLaunchDiagnostics(
@@ -692,13 +738,56 @@ int HeritageEngine::run(int argc, char** argv)
         ChaseCameraInput chaseCameraInput{};
         const bool interfaceOwnsMouse = ImGui::GetCurrentContext()
             && ImGui::GetIO().WantCaptureMouse;
-        chaseCameraInput.orbitDragActive = !hotkeyState.menuOpen
-            && !interfaceOwnsMouse
+        // CAM06 paused inspection: ESC freezes gameplay/weather, but the
+        // chase camera remains an interactive presentation tool. Holding the
+        // primary mouse button over the world (not over an ImGui control) may
+        // orbit around the frozen vehicle exactly as it can during gameplay.
+        chaseCameraInput.orbitDragActive = !interfaceOwnsMouse
             && state.input.mouseDown("Left");
         if (chaseCameraInput.orbitDragActive)
         {
             chaseCameraInput.pointerDeltaX = state.input.mouseDeltaX();
             chaseCameraInput.pointerDeltaY = state.input.mouseDeltaY();
+        }
+
+        // CAMLAB01 Blender-like fly navigation. Shift+Grave toggles capture
+        // only while a named vehicle view is active. Once captured, mouse look
+        // plus WASD/QE edits the camera in vehicle-local space; Shift accelerates
+        // and Ctrl slows movement. The normal vehicle input layer suppresses
+        // driving actions while Camera.IsFlyEnabled() is true.
+        const bool cameraFlyHotkey = state.input.keyPressed("Grave")
+            && (state.input.keyDown("LeftShift")
+                || state.input.keyDown("RightShift"));
+        if (cameraFlyHotkey && vehicleCamera.active())
+            vehicleCamera.setFlyEnabled(!vehicleCamera.flyEnabled());
+
+        if (vehicleCamera.flyEnabled() != vehicleCameraCursorCaptured)
+        {
+            vehicleCameraCursorCaptured = vehicleCamera.flyEnabled();
+            glfwSetInputMode(
+                window,
+                GLFW_CURSOR,
+                vehicleCameraCursorCaptured
+                    ? GLFW_CURSOR_DISABLED
+                    : GLFW_CURSOR_NORMAL);
+        }
+
+        VehicleCameraFlyInput vehicleCameraFlyInput{};
+        if (vehicleCamera.flyEnabled())
+        {
+            vehicleCameraFlyInput.moveForward = state.input.keyDown("W");
+            vehicleCameraFlyInput.moveBackward = state.input.keyDown("S");
+            vehicleCameraFlyInput.moveLeft = state.input.keyDown("A");
+            vehicleCameraFlyInput.moveRight = state.input.keyDown("D");
+            vehicleCameraFlyInput.moveDown = state.input.keyDown("Q");
+            vehicleCameraFlyInput.moveUp = state.input.keyDown("E");
+            vehicleCameraFlyInput.fast = state.input.keyDown("LeftShift")
+                || state.input.keyDown("RightShift");
+            vehicleCameraFlyInput.slow = state.input.keyDown("LeftCtrl")
+                || state.input.keyDown("RightCtrl");
+            vehicleCameraFlyInput.pointerDeltaX = state.input.mouseDeltaX();
+            vehicleCameraFlyInput.pointerDeltaY = state.input.mouseDeltaY();
+            chaseCameraInput.orbitDragActive = false;
         }
 
         updateEngineSimulation(
@@ -710,7 +799,9 @@ int HeritageEngine::run(int argc, char** argv)
             environmentSystem,
             entityRegistry,
             chaseCamera,
+            vehicleCamera,
             chaseCameraInput,
+            vehicleCameraFlyInput,
             entityCameraFrame,
             performanceMonitor);
 
@@ -723,6 +814,7 @@ int HeritageEngine::run(int argc, char** argv)
             entityMeshRenderer,
             entityDebugRenderer,
             surfacePresentationRenderer,
+            weatherPresentationRenderer,
             state.physics.surfaces(),
             entityRegistry,
             entityCameraFrame,
@@ -798,11 +890,16 @@ int HeritageEngine::run(int argc, char** argv)
                 performanceMonitor.snapshot(),
                 entityMeshRenderer.frameStats(),
                 entityDebugRenderer.frameStats(),
+                surfacePresentationRenderer.frameStats(),
+                weatherPresentationRenderer.frameStats(),
                 vegetationSystem.stats(),
                 entityRegistry.count(),
                 entityMeshRenderer.loadedAssetCount(),
+                state.jobs.stats(),
                 state.physics.lastWorldStepCount(),
-                state.physics.overloadedLastFrame());
+                state.physics.overloadedLastFrame(),
+                state.videoSettings.vsyncEnabled,
+                heritage::settings::selectedFpsCap(state.videoSettings));
         }
 
         ImGui::Render();
@@ -838,6 +935,7 @@ int HeritageEngine::run(int argc, char** argv)
     saveAllSettings(state, window, displayModeController);
 
     moduleRuntime.shutdown();
+    weatherPresentationRenderer.shutdown();
     surfacePresentationRenderer.shutdown();
     entityDebugRenderer.shutdown();
     entityMeshRenderer.shutdown();

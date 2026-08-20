@@ -22,7 +22,7 @@ void drawInputSettingsPage(heritage::input::InputSystem& input)
         "Named profiles preserve complete restorable snapshots.");
 
     ImGui::Spacing();
-    if (ImGui::BeginTabBar("InputConfigurationTabs"))
+    if (ImGui::BeginTabBar("InputConfigurationTabs", ImGuiTabBarFlags_FittingPolicyResizeDown))
     {
         if (ImGui::BeginTabItem("Bindings"))
         {

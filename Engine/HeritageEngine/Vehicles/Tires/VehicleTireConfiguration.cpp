@@ -578,6 +578,42 @@ bool VehicleSystem::resetTirePhysicalState(VehicleHandle handle)
     return true;
 }
 
+bool VehicleSystem::setTireContactFidelity(
+    VehicleHandle handle,
+    TireContactFidelity fidelity)
+{
+    Slot* slot = resolve(handle);
+    if (!slot)
+    {
+        setError("Vehicle.SetTireContactFidelity received an invalid or stale vehicle handle.");
+        return false;
+    }
+    if (fidelity != TireContactFidelity::Aggregate
+        && fidelity != TireContactFidelity::Distributed3x3)
+    {
+        setError("Vehicle.SetTireContactFidelity received an unknown fidelity tier.");
+        return false;
+    }
+    slot->record.tireContactFidelity = fidelity;
+    // Force the next road-envelope refresh to populate the complete spatial
+    // cache when the distributed tier is selected.
+    for (WheelRecord& wheel : slot->record.wheels)
+    {
+        wheel.roadEnvelopeInitialized = false;
+        wheel.cachedDistributedContactValid = false;
+    }
+    clearError();
+    return true;
+}
+
+TireContactFidelity VehicleSystem::tireContactFidelity(
+    VehicleHandle handle) const
+{
+    const Slot* slot = resolve(handle);
+    return slot ? slot->record.tireContactFidelity
+        : TireContactFidelity::Aggregate;
+}
+
 bool VehicleSystem::setSurfacePreset(
     VehicleHandle handle,
     TireSurface surface)

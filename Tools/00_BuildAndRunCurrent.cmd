@@ -13,7 +13,7 @@ set "REPORTS=%ROOT%\Build\Reports"
 set "DIAGNOSTICS=%ROOT%\UserData\Diagnostics"
 set "BUILD_LOG=%REPORTS%\CurrentBuild.log"
 set "TEST_LOG=%DIAGNOSTICS%\physics_regression_current.txt"
-set "MILESTONE=TIRE41-SINGLE-AUTHORITY-FLEXIBLE-RING-FIELD"
+set "MILESTONE=LIVETRACK06-100M-ONLY-GPU-HYDRO"
 set "MSBUILD_TARGET=Build"
 set "BUILD_MODE=incremental"
 if /I "%~1"=="full" (
@@ -27,7 +27,19 @@ if not exist "%DIAGNOSTICS%" mkdir "%DIAGNOSTICS%"
 cls
 echo ============================================================
 echo Heritage Engine - CURRENT build + run [%MILESTONE%]
-echo TIRE41 one pressure/load/contact-driven flexible-ring displacement field
+echo LIVETRACK06: 10m / 256x256 GPU Hydro inside 100m plus bounded recent-tile history
+echo Hydro texel: 0.0390625m = 3.90625cm ^| no CPU per-texel water solver when GPU authority is ready
+echo Near cadence: 0-20m 6Hz ^| 20-40m 4Hz ^| 40-60m 2Hz ^| 60-80m 1Hz ^| 80-100m 0.5Hz
+echo Far cadence: 100-150m 0.25Hz ^| 150-250m 0.125Hz ^| 250-400m 0.0625Hz ^| 400-600m 0.03125Hz
+echo Far cadence 2: 600-800m 0.015625Hz ^| 800-1000m 0.0078125Hz ^| beyond 1000m initial state only
+echo Submission: every due high-resolution tile shares one Z-batched compute dispatch + one publish dispatch
+echo Rain deposition: stochastic sub-0.1mm accumulation restored ^| no forced global 0.1mm sheet
+echo Logical channels: 4-bit water ^| 4-bit dry-line ^| 4-bit flow-X ^| 4-bit flow-Z
+echo GPU storage: GL_RGBA8 compute-writable atlas restricted to 16 exact levels/channel ^| GL_LINEAR + 3x3/4-tap presentation
+echo Rendering: camera/frustum only affects presentation ^| puddle optics fade continuously to wet material by 100m
+echo Ownership: one X/Z Hydro field per 10m tile ^| vertical Hydro sheets OFF
+echo Tires: aggregated tire events modify the same GPU water/dry-line field
+echo F8: adaptive Hydro cadence/workload ^| CPU Hydro disabled while GPU authority is live
 echo ============================================================
 echo Root: %ROOT%
 echo Build mode: %BUILD_MODE%  ^(pass FULL for an explicit full rebuild^)
@@ -56,6 +68,12 @@ for %%F in (
     "%ROOT%\Engine\HeritageEngine\Vehicles\AerodynamicsSystem.cpp"
     "%ROOT%\Engine\HeritageEngine\Vehicles\AeroSurface.cpp"
     "%ROOT%\Engine\HeritageEngine\Vehicles\GroundEffect.cpp"
+    "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.cpp"
+    "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.hpp"
+    "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterContourMesher.hpp"
+    "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterSurfaceStitcher.hpp"
+    "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\EntityMeshShaders.hpp.bak_livetrack01"
+    "%ROOT%\Tools\WEATHER08A_BuildAndRun.cmd"
 ) do if exist "%%~F" del /f /q "%%~F" >nul 2>nul
 
 if exist "%ROOT%\Engine\HeritageEngine\Scenes\RacingUnitedBootScene.cpp" goto :legacy_cleanup_failed
@@ -63,6 +81,10 @@ if exist "%ROOT%\Engine\HeritageEngine\Scenes\RacingUnitedBootScene.hpp" goto :l
 if exist "%ROOT%\Engine\HeritageEngine\Vehicles\AerodynamicsSystem.cpp" goto :legacy_cleanup_failed
 if exist "%ROOT%\Engine\HeritageEngine\Vehicles\AeroSurface.cpp" goto :legacy_cleanup_failed
 if exist "%ROOT%\Engine\HeritageEngine\Vehicles\GroundEffect.cpp" goto :legacy_cleanup_failed
+if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.cpp" goto :legacy_cleanup_failed
+if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.hpp" goto :legacy_cleanup_failed
+if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterContourMesher.hpp" goto :legacy_cleanup_failed
+if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterSurfaceStitcher.hpp" goto :legacy_cleanup_failed
 
 echo [0/4] Incremental-build freshness guard...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Tools\EnsureIncrementalBuildFreshness.ps1" -Root "%ROOT%"

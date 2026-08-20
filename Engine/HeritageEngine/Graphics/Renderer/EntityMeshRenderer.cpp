@@ -3,6 +3,7 @@
 #include "EntityMeshShadowConfig.hpp"
 #include "EntityMeshShaders.hpp"
 #include "../ShaderProgram.hpp"
+#include "../../Physics/Surfaces/SurfaceWorld.hpp"
 
 #include <algorithm>
 #include <array>
@@ -19,6 +20,67 @@ using namespace entity_mesh_shaders;
 namespace {
 constexpr const char* kTextureMapFoundationMarker =
     "HERITAGE_GFX2_STATIC_MESH_IMPORT HERITAGE_GFX3_GLB_SKINNING_ANIMATION HERITAGE_GFX4_ANIMATION_CONTROL HERITAGE_GFX5_GLB_SPECULAR_VERTEX_COLOR HERITAGE_GFX6_ENVIRONMENT_IBL HERITAGE_GFX7_SKY_DAY_NIGHT HERITAGE_GFX9_CASCADED_SUN_SHADOWS HERITAGE_VA02_GLB_NODE_BINDING HERITAGE_SC01_GLB_SCENE_COLLISION";
+
+heritage::math::Vec3 weatherMix(
+    const heritage::math::Vec3& a,
+    const heritage::math::Vec3& b,
+    float t)
+{
+    t = std::clamp(t, 0.0f, 1.0f);
+    return {
+        a.x + (b.x - a.x) * t,
+        a.y + (b.y - a.y) * t,
+        a.z + (b.z - a.z) * t
+    };
+}
+
+EnvironmentLighting applyWeatherLighting(
+    EnvironmentLighting lighting,
+    const heritage::physics::SurfaceWorld* surfaces)
+{
+    if (!surfaces)
+        return lighting;
+    const auto& weather = surfaces->weather();
+    if (!weather.enabled)
+        return lighting;
+
+    const float cloud = std::clamp(
+        static_cast<float>(weather.cloudCover), 0.0f, 1.0f);
+    const float rain = std::clamp(
+        static_cast<float>(weather.precipitationRateMmPerHour / 80.0),
+        0.0f, 1.0f);
+    const float storm = std::clamp(
+        cloud * 0.72f + rain * 0.52f, 0.0f, 1.0f);
+
+    // WEATHER06A: weather authority now changes the real environment lighting,
+    // not just a translucent visual overlay. Dense cloud attenuates direct sun,
+    // desaturates/darkens the sky and ground hemispheres, and the same adjusted
+    // lighting is fed into the staged environment cubemap for wet reflections.
+    lighting.sunIntensity *= std::max(
+        0.12f, 1.0f - cloud * 0.76f - rain * 0.18f);
+    lighting.sunColor = weatherMix(
+        lighting.sunColor,
+        { 0.72f, 0.76f, 0.80f },
+        storm * 0.52f);
+    lighting.skyZenith = weatherMix(
+        lighting.skyZenith,
+        { 0.075f, 0.095f, 0.125f },
+        storm * 0.88f);
+    lighting.skyHorizon = weatherMix(
+        lighting.skyHorizon,
+        { 0.16f, 0.18f, 0.20f },
+        storm * 0.82f);
+    lighting.groundHorizon = weatherMix(
+        lighting.groundHorizon,
+        { 0.10f, 0.11f, 0.115f },
+        storm * 0.72f);
+    lighting.groundNadir = weatherMix(
+        lighting.groundNadir,
+        { 0.025f, 0.028f, 0.032f },
+        storm * 0.68f);
+    lighting.starIntensity *= (1.0f - cloud);
+    return lighting;
+}
 }
 
 bool EntityMeshRenderer::initialize(
@@ -43,6 +105,20 @@ bool EntityMeshRenderer::initialize(
     {
         m_lastError =
             "EntityMeshRenderer could not compile its material shader.";
+        return false;
+    }
+    GLint materialLinked = GL_FALSE;
+    glGetProgramiv(m_program, GL_LINK_STATUS, &materialLinked);
+    if (materialLinked == GL_FALSE)
+    {
+        GLint logLength = 0;
+        glGetProgramiv(m_program, GL_INFO_LOG_LENGTH, &logLength);
+        std::string log(static_cast<std::size_t>(std::max(logLength, 1)), '\0');
+        glGetProgramInfoLog(m_program, logLength, nullptr, log.data());
+        m_lastError = "EntityMeshRenderer material shader link failed: " + log;
+        std::cerr << m_lastError << '\n';
+        glDeleteProgram(m_program);
+        m_program = 0;
         return false;
     }
 
@@ -82,6 +158,8 @@ bool EntityMeshRenderer::initialize(
     m_uniforms.brightness = uniform("uBrightness");
     m_uniforms.contrast = uniform("uContrast");
     m_uniforms.saturation = uniform("uSaturation");
+    m_uniforms.weatherFogDensity = uniform("uWeatherFogDensity");
+    m_uniforms.weatherFogColor = uniform("uWeatherFogColor");
     m_uniforms.hasEnvironmentMap = uniform("uHasEnvironmentMap");
     m_uniforms.environmentMaxLod = uniform("uEnvironmentMaxLod");
     m_uniforms.model = uniform("uModel");
@@ -151,6 +229,9 @@ bool EntityMeshRenderer::initialize(
     glUniform1i(m_uniforms.environmentMap, 9);
     glUniform1i(m_uniforms.shadowMap, 10);
     glUniform1i(m_uniforms.shadowDepthMap, 11);
+    // WATER15C1: surface-state shader plumbing lives with the wetness module,
+    // keeping this file as lifecycle/draw orchestration only.
+    initializeSurfaceWetnessMaterialBindings();
 
     m_hotReloadEpoch = 1;
     m_textureCache.setHotReloadEpoch(m_hotReloadEpoch);
@@ -179,6 +260,9 @@ bool EntityMeshRenderer::initialize(
             << "rendering continues without shadows.\n";
     }
 
+    initializeDynamicSurfacePageResources();
+    initializeDynamicSurfaceGpuLodPrototype();
+
     std::cout
         << "Heritage renderer: OBJ/MTL + GLB static mesh import enabled ["
         << kTextureMapFoundationMarker << "]\n";
@@ -192,12 +276,15 @@ void EntityMeshRenderer::shutdown()
     m_skyRenderer.shutdown();
     m_environmentMap.shutdown();
     shutdownShadowResources();
+    shutdownDynamicSurfaceGpuLodPrototype();
+    shutdownDynamicSurfacePageResources();
     m_environmentSystem = nullptr;
     if (m_program)
     {
         glDeleteProgram(m_program);
         m_program = 0;
     }
+    shutdownSurfaceWetnessResources();
     m_assetRoot.clear();
     m_resolvedTexturePaths.clear();
     m_reportedTireVisualProofNodes.clear();
@@ -212,8 +299,11 @@ void EntityMeshRenderer::draw(
     const heritage::settings::VideoSettings& videoSettings,
     float elapsedSeconds,
     const heritage::camera::CameraFrame& cameraFrame,
-    bool wireframeVisible)
+    bool wireframeVisible,
+    const heritage::physics::SurfaceWorld* surfaceWorld)
 {
+    // WATER15 preserves universal-PBR isolation. Hydrology is consumed only
+    // by the isolated exact-geometry surface-state pass after normal material rendering.
     if (!m_program)
         return;
 
@@ -256,9 +346,29 @@ void EntityMeshRenderer::draw(
         lookAt(cameraRelativeEye, cameraRelativeTarget, cameraUp);
     const ViewFrustum viewFrustum = extractViewFrustum(projection, view);
 
-    const EnvironmentLighting lighting = m_environmentSystem
-        ? m_environmentSystem->lighting()
-        : EnvironmentLighting{};
+    const heritage::math::DVec3 cameraGlobalForSurface = surfaceWorld
+        ? surfaceWorld->localToGlobal(eye)
+        : heritage::math::toDouble(eye);
+
+    // LIVETRACK04: Hydro authority is the GPU-resident 10m / 256x256 texture
+    // field. Update it first so SurfaceWorld can disable its legacy per-texel CPU
+    // Hydro path immediately. The persistent CPU Dynamic Surface page mirror is
+    // still synchronized every frame for Track/rubber/temperature state only;
+    // updateDynamicSurfaceStatePages() explicitly skips Hydro uploads while GPU
+    // authority is ready. This avoids running two water solvers.
+    updateDynamicSurfaceGpuLodPrototype(
+        surfaceWorld, cameraGlobalForSurface, elapsedSeconds);
+
+    synchronizeDynamicSurfacePageResources(surfaceWorld);
+    if (surfaceWorld && m_dynamicSurfaceGpuPagePool.ready())
+    {
+        updateDynamicSurfaceStatePages(
+            surfaceWorld, cameraGlobalForSurface, elapsedSeconds);
+    }
+
+    const EnvironmentLighting lighting = applyWeatherLighting(
+        m_environmentSystem ? m_environmentSystem->lighting() : EnvironmentLighting{},
+        surfaceWorld);
 
     const auto shadowStart = PerfClock::now();
     const bool shadowSettingsReady = synchronizeShadowSettings(videoSettings);
@@ -287,10 +397,34 @@ void EntityMeshRenderer::draw(
         ++m_frameStats.environmentRefreshes;
 
     const auto skyDrawStart = PerfClock::now();
+    SkyWeatherParameters skyWeather{};
+    skyWeather.elapsedSeconds = elapsedSeconds;
+    if (surfaceWorld)
+    {
+        const auto& weather = surfaceWorld->weather();
+        skyWeather.enabled = weather.enabled;
+        skyWeather.cloudCover = static_cast<float>(weather.cloudCover);
+        skyWeather.relativeHumidity = static_cast<float>(weather.relativeHumidity);
+        skyWeather.precipitationRateMmPerHour = static_cast<float>(
+            weather.precipitationRateMmPerHour);
+        const auto weatherOutput = surfaceWorld->weatherOutput();
+        skyWeather.windVelocityXMps = static_cast<float>(
+            weatherOutput.windVelocityXMps);
+        skyWeather.windVelocityZMps = static_cast<float>(
+            weatherOutput.windVelocityZMps);
+        skyWeather.cameraGlobal = surfaceWorld->localToGlobal(eye);
+    }
+    else
+    {
+        skyWeather.cameraGlobal = heritage::math::toDouble(eye);
+    }
+
     m_skyRenderer.draw(
         view,
         projection,
         m_environmentMap,
+        lighting,
+        skyWeather,
         videoSettings.gamma,
         videoSettings.brightness,
         videoSettings.contrast,
@@ -337,6 +471,28 @@ void EntityMeshRenderer::draw(
     glUniform1f(
         m_uniforms.saturation,
         videoSettings.saturation);
+    float weatherFogDensity = 0.0f;
+    heritage::math::Vec3 weatherFogColor = lighting.skyHorizon;
+    if (surfaceWorld && surfaceWorld->weather().enabled)
+    {
+        const auto& weather = surfaceWorld->weather();
+        const float rain = std::clamp(
+            static_cast<float>(weather.precipitationRateMmPerHour / 80.0),
+            0.0f, 1.0f);
+        const float cloud = std::clamp(
+            static_cast<float>(weather.cloudCover), 0.0f, 1.0f);
+        weatherFogDensity = rain * (0.00115f + cloud * 0.00115f);
+        weatherFogColor = weatherMix(
+            lighting.skyHorizon,
+            { 0.17f, 0.19f, 0.21f },
+            rain * 0.62f);
+    }
+    glUniform1f(m_uniforms.weatherFogDensity, weatherFogDensity);
+    glUniform3f(
+        m_uniforms.weatherFogColor,
+        weatherFogColor.x,
+        weatherFogColor.y,
+        weatherFogColor.z);
     glUniform1i(
         m_uniforms.tireProbeDebugVisible,
         m_tireProbeDebugVisible ? 1 : 0);
@@ -352,6 +508,10 @@ void EntityMeshRenderer::draw(
         glActiveTexture(GL_TEXTURE0 + 9);
         glBindTexture(GL_TEXTURE_CUBE_MAP, m_environmentMap.textureId());
     }
+
+    // WATER15C1: bind the Dynamic Track surface-state clipmaps through the
+    // dedicated wetness module; this draw function only orchestrates the pass.
+    bindSurfaceWetnessMaterialState(cameraGlobalForSurface, elapsedSeconds);
 
     glUniform1i(m_uniforms.hasShadowMap, m_shadowsActive ? 1 : 0);
     glUniform4f(
@@ -384,6 +544,11 @@ void EntityMeshRenderer::draw(
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
+
+    // WATER15B: receiver ownership no longer needs stencil. The water pass
+    // resubmits only tagged authored geometry after the opaque pass and uses
+    // GL_GEQUAL against the exact scene depth, so nearer cars/props occlude it
+    // naturally.
 
     std::array<GLuint, 9> boundTexture2D{};
     boundTexture2D.fill(static_cast<GLuint>(~0u));
@@ -487,6 +652,12 @@ void EntityMeshRenderer::draw(
             }
             continue;
         }
+
+        const bool surfaceWetnessReceiver =
+            registry.hasTag(instance.entity, "SurfaceWetnessReceiver");
+        glUniform1i(
+            m_uniforms.surfaceWetnessReceiver,
+            surfaceWetnessReceiver ? 1 : 0);
 
         if (instance.doubleSided)
             glDisable(GL_CULL_FACE);
@@ -599,6 +770,18 @@ void EntityMeshRenderer::draw(
 
             const bool useTireVisual =
                 tireVisualNode != nullptr && tireVisualState != nullptr;
+            const bool tireWithinDeformationLod =
+                useTireVisual
+                && tireVisualDeformationWithinDistance(
+                    rangeModel, *tireVisualNode);
+            const bool useTireDeformation =
+                tireWithinDeformationLod
+                && tireVisualState->tireVisualDeformationFieldValid;
+            if (useTireDeformation)
+                ++m_frameStats.tireDeformationActiveRanges;
+            else if (useTireVisual
+                && tireVisualState->tireVisualDeformationFieldValid)
+                ++m_frameStats.tireDeformationDistanceCulledRanges;
             // Wheel assets expose the rubber tire and metal rim as separate
             // semantic nodes. Failure presentation is now handled by the same
             // tire shader: terminal loss masks the rubber while a short-lived
@@ -657,25 +840,29 @@ void EntityMeshRenderer::draw(
                     tireVisualState->tireWheelUpWorld.z);
                 glUniform1i(
                     m_uniforms.tireVisualDeformationFieldValid,
-                    tireVisualState->tireVisualDeformationFieldValid ? 1 : 0);
-                std::array<float,
-                    heritage::entities::TireVisualDeformationFieldCount * 3>
-                    packedDisplacementM{};
-                for (std::size_t fieldIndex = 0;
-                     fieldIndex < heritage::entities::TireVisualDeformationFieldCount;
-                     ++fieldIndex)
+                    useTireDeformation ? 1 : 0);
+                if (useTireDeformation)
                 {
-                    packedDisplacementM[fieldIndex * 3] =
-                        tireVisualState->tireVisualForwardDisplacementM[fieldIndex];
-                    packedDisplacementM[fieldIndex * 3 + 1] =
-                        tireVisualState->tireVisualDownDisplacementM[fieldIndex];
-                    packedDisplacementM[fieldIndex * 3 + 2] =
-                        tireVisualState->tireVisualLateralDisplacementM[fieldIndex];
+                    std::array<float,
+                        heritage::entities::TireVisualDeformationFieldCount * 3>
+                        packedDisplacementM{};
+                    for (std::size_t fieldIndex = 0;
+                         fieldIndex < heritage::entities::TireVisualDeformationFieldCount;
+                         ++fieldIndex)
+                    {
+                        packedDisplacementM[fieldIndex * 3] =
+                            tireVisualState->tireVisualForwardDisplacementM[fieldIndex];
+                        packedDisplacementM[fieldIndex * 3 + 1] =
+                            tireVisualState->tireVisualDownDisplacementM[fieldIndex];
+                        packedDisplacementM[fieldIndex * 3 + 2] =
+                            tireVisualState->tireVisualLateralDisplacementM[fieldIndex];
+                    }
+                    glUniform3fv(
+                        m_uniforms.tireVisualDisplacementM,
+                        static_cast<GLsizei>(
+                            heritage::entities::TireVisualDeformationFieldCount),
+                        packedDisplacementM.data());
                 }
-                glUniform3fv(
-                    m_uniforms.tireVisualDisplacementM,
-                    static_cast<GLsizei>(heritage::entities::TireVisualDeformationFieldCount),
-                    packedDisplacementM.data());
                 glUniform1i(
                     m_uniforms.tireFailureStage,
                     static_cast<GLint>(tireVisualState->tireFailureVisualStage));
@@ -927,6 +1114,9 @@ void EntityMeshRenderer::draw(
         }
     }
 
+    // WATER15C: no second water draw. SurfaceWetnessReceiver fragments were
+    // shaded with Dynamic Track state during their normal material draw above.
+
     glBindVertexArray(0);
     glActiveTexture(GL_TEXTURE0);
     for (int unit = 0; unit < 9; ++unit)
@@ -942,6 +1132,19 @@ void EntityMeshRenderer::draw(
     glActiveTexture(GL_TEXTURE0 + 11);
     glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     glBindSampler(11, 0);
+    glActiveTexture(GL_TEXTURE0 + 12);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0 + 13);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0 + 14);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0 + 15);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    for (int unit = 16; unit <= 24; ++unit)
+    {
+        glActiveTexture(GL_TEXTURE0 + unit);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+    }
     glActiveTexture(GL_TEXTURE0);
 
     glFrontFace(GL_CCW);

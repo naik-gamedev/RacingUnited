@@ -51,9 +51,14 @@ void VehicleSystem::simulate(
                     < vehicle.parkedRestHandbrakeInput;
             const float requestedSteerCenterDegrees =
                 vehicle.description.maximumSteerAngleDegrees * vehicle.steering;
-            const bool steeringMotionRequested = std::abs(
-                requestedSteerCenterDegrees - vehicle.currentSteerCenterDegrees)
-                > 0.01f;
+            // INPUT08: no hidden parked-steering deadband. A zero-deadzone
+            // wheel must be able to move the road wheels from the first
+            // reportable hardware step even when the chassis is asleep.
+            // moveTowards() lands exactly on a stable target, so exact
+            // inequality is intentional here: if the user's wheel jitters
+            // with zero configured deadzone, that jitter is authoritative.
+            const bool steeringMotionRequested =
+                requestedSteerCenterDegrees != vehicle.currentSteerCenterDegrees;
             // Steering remains an active high-rate tire/suspension operation even
             // while the chassis itself is otherwise parkable. In particular,
             // TIRE03 parking torsion and the visual upright must continue to move
@@ -268,9 +273,12 @@ void VehicleSystem::simulate(
             && maximumWheelSpeed <= kVehicleRestWheelSpeed;
         const float requestedSteerCenterDegrees =
             vehicle.description.maximumSteerAngleDegrees * vehicle.steering;
-        const bool steeringSettled = std::abs(
-            requestedSteerCenterDegrees - vehicle.currentSteerCenterDegrees)
-            <= 0.01f;
+        // INPUT08: parked-rest eligibility must not quantize steering by
+        // accepting a hidden +/-0.01 degree error. The steering integrator
+        // reaches a stable target exactly; only that exact settled state may
+        // sleep.
+        const bool steeringSettled =
+            requestedSteerCenterDegrees == vehicle.currentSteerCenterDegrees;
         const bool canRest = allWheelsGrounded
             && normalLoadTotal > 0.0f
             && vehicle.throttle <= 0.001f
@@ -314,7 +322,10 @@ VehicleSystem::SteeringSubstepState VehicleSystem::updateSteeringSubstep(
     vehicle.currentSteeringRateFactor =
         1.0f + (vehicle.description.highSpeedSteeringRateFactor - 1.0f)
         * speedBlend;
-    const bool returningToCenter = std::abs(vehicle.steering) < 0.0001f;
+    // INPUT08: zero means zero. Do not silently classify a small but real
+    // steering command as "center"; user-configured input shaping is the only
+    // place where steering may intentionally discard motion.
+    const bool returningToCenter = vehicle.steering == 0.0f;
     const float steeringRate = returningToCenter
         ? vehicle.description.steeringReturnRateDegreesPerSecond
         : vehicle.description.steeringRateDegreesPerSecond

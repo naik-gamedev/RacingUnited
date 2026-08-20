@@ -492,3 +492,49 @@ Check ($prototypeDefinition.Contains("staticToeDegrees = 0.0")) "reference wheel
 $moduleManifestPath = Join-Path $Root "Modules\RacingUnited\module.ini"
 $moduleManifest = if (Test-Path $moduleManifestPath) { [IO.File]::ReadAllText($moduleManifestPath) } else { "" }
 Check ($moduleManifest.Contains("entry_scene = prototype")) "Racing United enters the driveable prototype scene"
+
+# CAMLAB01 vehicle camera authoring: fixed creator cameras must remain separate
+# from ChaseCamera, while Racing United owns names/defaults/save policy in Lua.
+$cameraControllerHeaderPath = Join-Path $Root "Engine\HeritageEngine\Camera\VehicleCameraController.hpp"
+$cameraControllerCppPath = Join-Path $Root "Engine\HeritageEngine\Camera\VehicleCameraController.cpp"
+$cameraBindingsPath = Join-Path $Root "Engine\HeritageEngine\Core\Modules\LuaBindings\LuaCameraBindings.cpp"
+$cameraViewsPath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\CameraViews.lua"
+$cameraLabPanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\CameraLabPanel.lua"
+$cameraAdrPath = Join-Path $Root "Docs\Decisions\ADR-085-Vehicle-Camera-Authoring-And-Persistent-Presets.md"
+$cameraDocPath = Join-Path $Root "Docs\VEHICLE_CAMERA_AUTHORING.md"
+$cameraControllerHeader = if (Test-Path $cameraControllerHeaderPath) { [IO.File]::ReadAllText($cameraControllerHeaderPath) } else { "" }
+$cameraControllerCpp = if (Test-Path $cameraControllerCppPath) { [IO.File]::ReadAllText($cameraControllerCppPath) } else { "" }
+$cameraBindings = if (Test-Path $cameraBindingsPath) { [IO.File]::ReadAllText($cameraBindingsPath) } else { "" }
+$cameraViews = if (Test-Path $cameraViewsPath) { [IO.File]::ReadAllText($cameraViewsPath) } else { "" }
+$cameraLabPanel = if (Test-Path $cameraLabPanelPath) { [IO.File]::ReadAllText($cameraLabPanelPath) } else { "" }
+Check (Test-Path $cameraAdrPath) "CAMLAB01 vehicle-camera authoring ADR exists"
+Check (Test-Path $cameraDocPath) "CAMLAB01 vehicle-camera authoring documentation exists"
+Check ($cameraControllerHeader.Contains("class VehicleCameraController") -and $cameraControllerCpp.Contains("buildLocalFrame") -and $cameraControllerCpp.Contains("updateFly")) "CAMLAB01 native vehicle camera controller owns fixed pose + free-fly mechanics"
+Check ($cameraBindings.Contains('registerFunction("Camera", "SetVehiclePose"') -and $cameraBindings.Contains('registerFunction("Camera", "SetFlyEnabled"')) "CAMLAB01 exposes a narrow Camera Lua authoring bridge"
+$requiredCameraNames = @("Cockpit", "Nose", "Gearbox", "Roll Bar", "F Susp", "R Susp", "FL Wheel", "FR Wheel", "RL Wheel", "RR Wheel")
+$allCameraNamesPresent = $true
+foreach ($cameraName in $requiredCameraNames) {
+    if (-not $cameraViews.Contains('name = "' + $cameraName + '"')) { $allCameraNamesPresent = $false }
+}
+Check $allCameraNamesPresent "CAMLAB01 Racing United defines all requested driving/suspension/wheel camera names"
+Check ($cameraViews.Contains("SaveCurrentVehicleCamera") -and $cameraViews.Contains("SaveAllVehicleCameras") -and $cameraViews.Contains("CameraSavePrefix")) "CAMLAB01 camera presets persist independently per vehicle"
+Check ($cameraLabPanel.Contains("Position X (m)") -and $cameraLabPanel.Contains("Position Y (m)") -and $cameraLabPanel.Contains("Position Z (m)") -and $cameraLabPanel.Contains("Pitch (deg)") -and $cameraLabPanel.Contains("Yaw (deg)") -and $cameraLabPanel.Contains("Roll / rotation angle (deg)")) "CAMLAB01 LAB exposes complete XYZ + pitch/yaw/roll authoring"
+Check ($cameraLabPanel.Contains("UI.SliderFloat") -and $cameraLabPanel.Contains("UI.InputFloat") -and $cameraLabPanel.Contains("START FREE FLY")) "CAMLAB01 camera authoring supports sliders, exact numeric entry and free fly"
+
+
+# UI04: revert the failed UI01/UI02/UI03 custom tab experiments. Racing United
+# creator/debug pages use Heritage's original ImGui tab bars again. Buttons use
+# natural label widths, left-to-right rows and a last-resort tiny-row wrap so a
+# SameLine() chain can never leave a mysterious one-letter button off the panel.
+$ui04LuaUiPath = Join-Path $Root "Engine\HeritageEngine\Core\Modules\LuaBindings\LuaUiBindings.cpp"
+$ui04CommonPath = Join-Path $Root "Modules\RacingUnited\Scripts\Runtime\Common.lua"
+$ui04PrototypeTabsPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\PrototypeScreen.lua"
+$ui04VehicleTabsPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\VehicleDebugPanel.lua"
+$ui04LabTabsPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\LabPanel.lua"
+$ui04LuaUi = if (Test-Path $ui04LuaUiPath) { [IO.File]::ReadAllText($ui04LuaUiPath) } else { "" }
+$ui04Common = if (Test-Path $ui04CommonPath) { [IO.File]::ReadAllText($ui04CommonPath) } else { "" }
+$ui04PrototypeTabs = if (Test-Path $ui04PrototypeTabsPath) { [IO.File]::ReadAllText($ui04PrototypeTabsPath) } else { "" }
+$ui04VehicleTabs = if (Test-Path $ui04VehicleTabsPath) { [IO.File]::ReadAllText($ui04VehicleTabsPath) } else { "" }
+$ui04LabTabs = if (Test-Path $ui04LabTabsPath) { [IO.File]::ReadAllText($ui04LabTabsPath) } else { "" }
+Check ($ui04LuaUi.Contains("ImGuiTabBarFlags_FittingPolicyScroll") -and -not $ui04Common.Contains("DrawResponsiveTabs") -and $ui04PrototypeTabs.Contains('UI.BeginTabBar("PrototypeLabTabs")') -and $ui04VehicleTabs.Contains('UI.BeginTabBar("VehicleDebugTabs")') -and $ui04LabTabs.Contains('UI.BeginTabBar("VehicleLabSubTabs")')) "UI04 restores original ImGui tab bars across Racing United LAB pages"
+Check ($ui04LuaUi.Contains("ImGui::CalcTextSize(label.c_str(), nullptr, true)") -and $ui04LuaUi.Contains("availableWidth < 120.0f") -and $ui04LuaUi.Contains("ImGui::NewLine()") -and $ui04LuaUi.Contains("state, 4, false")) "UI04 Lua buttons use natural widths and never collapse into off-panel one-letter controls"

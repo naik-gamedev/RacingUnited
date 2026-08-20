@@ -140,6 +140,29 @@ float wrappedHourDistance(float a, float b)
     return std::min(distance, 24.0f - distance);
 }
 
+float environmentLightingDifference(
+    const EnvironmentLighting& a,
+    const EnvironmentLighting& b)
+{
+    auto difference3 = [](
+        const heritage::math::Vec3& left,
+        const heritage::math::Vec3& right) {
+        return std::max({
+            std::abs(left.x - right.x),
+            std::abs(left.y - right.y),
+            std::abs(left.z - right.z) });
+    };
+    return std::max({
+        difference3(a.sunColor, b.sunColor),
+        std::abs(a.sunIntensity - b.sunIntensity),
+        difference3(a.skyHorizon, b.skyHorizon),
+        difference3(a.skyZenith, b.skyZenith),
+        difference3(a.groundHorizon, b.groundHorizon),
+        difference3(a.groundNadir, b.groundNadir),
+        std::abs(a.starIntensity - b.starIntensity),
+        std::abs(a.daylightFactor - b.daylightFactor) });
+}
+
 } // namespace
 
 bool EnvironmentMap::allocateCube(GLuint& textureId)
@@ -214,12 +237,13 @@ bool EnvironmentMap::updateProcedural(
     constexpr auto kMinimumWallInterval = std::chrono::milliseconds(200);
     if (!m_refreshInProgress)
     {
-        if (wrappedHourDistance(
-                lighting.timeOfDayHours,
-                m_lastGeneratedTimeHours) < kRefreshThresholdHours)
-        {
+        const bool timeChanged = wrappedHourDistance(
+            lighting.timeOfDayHours,
+            m_lastGeneratedTimeHours) >= kRefreshThresholdHours;
+        const bool lightingChanged = environmentLightingDifference(
+            lighting, m_pendingLighting) >= 0.015f;
+        if (!timeChanged && !lightingChanged)
             return true;
-        }
         if (m_hasUploadWallTime
             && now - m_lastUploadWallTime < kMinimumWallInterval)
         {

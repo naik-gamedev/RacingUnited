@@ -71,6 +71,7 @@ bool LuaModuleRuntime::onLoad(
     m_window = window;
     m_audio = services.audio;
     m_input = services.input;
+    m_vehicleCamera = services.vehicleCamera;
     m_entities = services.entities;
     m_physics = services.physics;
     m_environment = services.environment;
@@ -506,6 +507,7 @@ void LuaModuleRuntime::registerBindings()
     registerSaveBindings();
     registerAudioBindings();
     registerInputBindings();
+    registerCameraBindings();
     registerPhysicsBindings();
     registerVehicleBindings();
     registerEntityBindings();
@@ -1026,6 +1028,8 @@ void LuaModuleRuntime::closeOpenPanel()
         m_uiScopes.pop_back();
         if (scope == UiScopeType::TabItem)
             ImGui::EndTabItem();
+        else if (scope == UiScopeType::HorizontalScroll)
+            ImGui::EndChild();
         else
             ImGui::EndTabBar();
     }

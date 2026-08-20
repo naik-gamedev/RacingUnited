@@ -36,6 +36,15 @@ struct LuaCoreBindingHandlers
     static int luaEngineGetLuaApiCount(lua_State* state);
     static int luaEngineGetLuaApiName(lua_State* state);
     static int luaEngineDumpLuaAPI(lua_State* state);
+    static int luaCameraIsAvailable(lua_State* state);
+    static int luaCameraSetVehicleViewActive(lua_State* state);
+    static int luaCameraIsVehicleViewActive(lua_State* state);
+    static int luaCameraSetVehiclePose(lua_State* state);
+    static int luaCameraGetVehiclePose(lua_State* state);
+    static int luaCameraSetFlyEnabled(lua_State* state);
+    static int luaCameraIsFlyEnabled(lua_State* state);
+    static int luaCameraSetFlySpeed(lua_State* state);
+    static int luaCameraGetFlySpeed(lua_State* state);
     static int luaEngineRunSafetySmokeTests(lua_State* state);
     static int luaEngineGetLastSafetyReport(lua_State* state);
     static int luaEnvironmentGetTimeOfDay(lua_State* state);
@@ -117,6 +126,8 @@ struct LuaCoreBindingHandlers
     static int luaUiEndTabBar(lua_State* state);
     static int luaUiBeginTabItem(lua_State* state);
     static int luaUiEndTabItem(lua_State* state);
+    static int luaUiBeginHorizontalScroll(lua_State* state);
+    static int luaUiEndHorizontalScroll(lua_State* state);
     static int luaUiModuleLabel(lua_State* state);
     static int luaUiTitle(lua_State* state);
     static int luaUiSubtitle(lua_State* state);
@@ -141,6 +152,7 @@ struct LuaCoreBindingHandlers
     static int luaUiTextColored(lua_State* state);
     static int luaUiProgressBar(lua_State* state);
     static int luaUiPlotLines(lua_State* state);
+    static int luaUiPlotLinesRange(lua_State* state);
     static int luaVegetationIsAvailable(lua_State* state);
     static int luaVegetationReset(lua_State* state);
     static int luaVegetationRegisterSpecies(lua_State* state);

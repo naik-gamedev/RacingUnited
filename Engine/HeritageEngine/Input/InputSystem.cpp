@@ -177,14 +177,17 @@ bool InputSystem::loadActionDefinitions(
         const std::string actionName = trim(line.substr(0, equals));
         const std::string bindingList = trim(line.substr(equals + 1));
 
-        if (actionName.empty() || bindingList.empty())
+        if (actionName.empty())
         {
             message = "Invalid input action at "
                 + definitionsPath.string() + ":"
                 + std::to_string(lineNumber)
-                + ". Action name and at least one binding are required.";
+                + ". Action name is required.";
             return false;
         }
+        // INPUT03: an empty right-hand side is a valid deliberately-unbound
+        // action declaration. The Settings UI can then capture the user's own
+        // shifter/button without Heritage inventing a conflicting default.
 
         if (!registerAction(actionName, bindingList, currentGroup))
         {

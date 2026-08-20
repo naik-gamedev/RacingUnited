@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "../Camera/ChaseCamera.hpp"
+#include "../Camera/VehicleCameraController.hpp"
 
 namespace heritage::tests {
 
@@ -70,6 +71,56 @@ bool chaseCameraOrbitPersistsAndReturnsOnForwardTravel()
         && !camera.orbitReturning()
         && camera.buildLocalFrame({ 0.0, 0.0, 0.0 }, localFrame)
         && localFrame.valid;
+}
+
+
+bool vehicleCameraAuthoringPoseAndFlyAreVehicleLocal()
+{
+    heritage::camera::VehicleCameraController camera;
+    camera.setActive(true);
+    heritage::camera::VehicleCameraPose pose{};
+    pose.positionMeters = { 1.0f, 2.0f, 3.0f };
+    pose.pitchDegrees = 0.0;
+    pose.yawDegrees = 0.0;
+    pose.rollDegrees = 0.0;
+    camera.setPose(pose);
+
+    heritage::camera::CameraFrame frame{};
+    if (!camera.buildLocalFrame(
+            { 100.0, 50.0, -20.0 },
+            { 1.0f, 0.0f, 0.0f },
+            { 0.0f, 1.0f, 0.0f },
+            { 0.0f, 0.0f, 1.0f },
+            { 90.0, 40.0, -30.0 },
+            frame))
+    {
+        return false;
+    }
+
+    if (std::abs(frame.eyeLocal.x - 11.0f) > 0.0001f
+        || std::abs(frame.eyeLocal.y - 12.0f) > 0.0001f
+        || std::abs(frame.eyeLocal.z - 13.0f) > 0.0001f
+        || std::abs(frame.targetLocal.z - 23.0f) > 0.0001f)
+    {
+        return false;
+    }
+
+    camera.setFlySpeedMetersPerSecond(2.0);
+    camera.setFlyEnabled(true);
+    heritage::camera::VehicleCameraFlyInput fly{};
+    fly.moveForward = true;
+    camera.updateFly(fly, 0.5f);
+    if (std::abs(camera.pose().positionMeters.z - 4.0f) > 0.0001f)
+        return false;
+
+    fly = {};
+    fly.pointerDeltaX = 100.0;
+    fly.pointerDeltaY = -50.0;
+    camera.updateFly(fly, 1.0f / 60.0f);
+    return camera.pose().yawDegrees > 11.9
+        && camera.pose().yawDegrees < 12.1
+        && camera.pose().pitchDegrees > 5.9
+        && camera.pose().pitchDegrees < 6.1;
 }
 
 } // namespace heritage::tests

@@ -28,6 +28,9 @@
     <Filter Include="Core Math">
       <UniqueIdentifier>{D47D2C9C-26C4-4E18-89A7-38AE7C6E93D8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Core Jobs">
+      <UniqueIdentifier>{A2A3E4C7-3C67-4F8F-A2B0-0F6A4C7D2301}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Collision Architecture">
       <UniqueIdentifier>{B0F0D6B5-6FA0-4E8A-92C1-55D4CF3FC03B}</UniqueIdentifier>
     </Filter>
@@ -79,6 +82,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Graphics\Texture2D.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Graphics\Gltf\GltfBinary.cpp">
@@ -174,6 +183,9 @@
     <ClCompile Include="..\Camera\ChaseCamera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Camera\VehicleCameraController.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Audio\AudioSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -220,6 +232,36 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Physics\Surfaces\SurfaceWorld.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\SurfaceWeather.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceChunk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceBake.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfacePagePool.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceThermal.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Weather\RainMicrophysics.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Weather\PrecipitationField.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrology.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Physics\Surfaces\Presentation\SurfacePresentation.cpp">
@@ -354,6 +396,9 @@
     <ClCompile Include="..\Vehicles\Tires\VehicleTireConfiguration.cpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\VehicleTireCalibration.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
     <ClCompile Include="..\Vehicles\VehicleTelemetry.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -374,6 +419,9 @@
     </ClCompile>
     <ClCompile Include="..\Core\Diagnostics\PerformanceMonitor.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Jobs\JobSystem.cpp">
+      <Filter>Core Jobs</Filter>
     </ClCompile>
     <ClCompile Include="..\Core\Entities\EntityRegistry.cpp">
       <Filter>Source Files</Filter>
@@ -408,7 +456,16 @@
     <ClCompile Include="..\Graphics\Renderer\SurfacePresentationRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Graphics\Renderer\EntityMeshRenderer.cpp">
+    <ClCompile Include="..\Graphics\Renderer\WeatherPresentationRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+<ClCompile Include="..\Graphics\Renderer\EntityMeshRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshDynamicSurface.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshSurfaceWetness.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Graphics\Renderer\EntityMeshAssetCache.cpp">
@@ -478,6 +535,9 @@
       <Filter>Lua Bindings</Filter>
     </ClCompile>
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaEngineBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaCameraBindings.cpp">
       <Filter>Lua Bindings</Filter>
     </ClCompile>
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaEnvironmentBindings.cpp">
@@ -550,6 +610,12 @@
       <Filter>Lua Bindings\Vehicle</Filter>
     </ClCompile>
     <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireCalibrationBindings.cpp">
+      <Filter>Lua Bindings\Vehicle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireScenarioBindings.cpp">
       <Filter>Lua Bindings\Vehicle</Filter>
     </ClCompile>
     <ClCompile Include="..\Core\Modules\ModuleRuntimeManager.cpp">
@@ -638,6 +704,12 @@
     <ClInclude Include="..\Graphics\Texture2D.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Graphics\GltfBinary.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -707,6 +779,9 @@
     <ClInclude Include="..\Camera\ChaseCamera.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Camera\VehicleCameraController.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Audio\AudioSystem.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -732,6 +807,39 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Physics\Surfaces\SurfaceWorld.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\SurfaceWeather.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceTypes.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceStaticData.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceChunk.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfacePagePool.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceSystem.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceThermal.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Weather\RainMicrophysics.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Weather\PrecipitationField.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Physics\Surfaces\Water\SurfaceHydrology.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Physics\Surfaces\Presentation\SurfacePresentation.hpp">
@@ -792,6 +900,21 @@
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClInclude>
     <ClInclude Include="..\Vehicles\Tires\TireContactGeometry.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireCalibrationLab.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireCalibrationAcceptance.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireScenarioLab.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireDistributedContact.hpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Vehicles\Tires\TireFleetBenchmark.hpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClInclude>
     <ClInclude Include="..\Vehicles\Tires\TireFlexibleRingField.hpp">
@@ -908,7 +1031,10 @@
     <ClInclude Include="..\Graphics\Renderer\SurfacePresentationRenderer.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\Graphics\RenderScaler.hpp">
+    <ClInclude Include="..\Graphics\Renderer\WeatherPresentationRenderer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+<ClInclude Include="..\Graphics\RenderScaler.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Core\Settings\VideoSettings.hpp">
@@ -934,6 +1060,9 @@
     </ClInclude>
     <ClInclude Include="..\Core\Diagnostics\PerformanceMonitor.hpp">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Core\Jobs\JobSystem.hpp">
+      <Filter>Core Jobs</Filter>
     </ClInclude>
     <ClInclude Include="..\Core\Diagnostics\GeneratedBuildIdentity.hpp">
       <Filter>Header Files</Filter>
@@ -1282,6 +1411,21 @@
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
     <ClCompile Include="..\Vehicles\Tires\TireContactGeometry.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireCalibrationLab.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireCalibrationAcceptance.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireScenarioLab.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireDistributedContact.cpp">
+      <Filter>Vehicle Architecture\Tires</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireFleetBenchmark.cpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
     <ClCompile Include="..\Vehicles\Tires\TireFlexibleRingField.cpp">

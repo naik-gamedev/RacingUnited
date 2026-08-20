@@ -13,6 +13,8 @@
             surfaces.environment().ambientTemperatureC);
         thermalInput.roadTemperatureC = state.surfaceTemperatureC;
         thermalInput.forwardSpeedMps = structuralLongitudinalSpeed;
+        thermalInput.ambientAirSpeedMps = static_cast<VehicleScalar>(
+            hitSurfaceConditions.ambientAirSpeedMps);
         thermalInput.longitudinalSlipVelocityMps =
             circumferentialSpeed - structuralLongitudinalSpeed;
         thermalInput.lateralSlipVelocityMps = structuralLateralSpeed;
@@ -22,6 +24,8 @@
         thermalInput.radialDissipationWatts = state.tireRadialDissipationWatts;
         thermalInput.rollingResistanceDissipationWatts = std::abs(
             rollingResistanceForce * longitudinalSpeed);
+        thermalInput.brakeDissipationWatts = std::abs(
+            state.appliedBrakeTorque * state.wheelAngularVelocity);
         thermalInput.contactPatchAreaM2 = state.tireContactPatchArea;
         thermalInput.roadHeatTransferScale =
             (contaminationBefore.valid
@@ -181,6 +185,32 @@
     state.tireTrackMarbleMaturity = trackRubberAfter.marbleMaturity;
     state.tireTrackRubberFrictionScale = trackRubberBefore.contactFrictionScale;
     state.tireTrackRubberPassCount = static_cast<VehicleScalar>(trackRubberAfter.passCount);
+
+    // Spatial hydrology consumes the actual swept contact path. The topology
+    // is baked, but this mutation is fully dynamic: whichever line vehicles
+    // drive is the line that displaces water, creates spray and dries first.
+    heritage::physics::water::SurfaceHydrologyTireInput hydrologyContact;
+    hydrologyContact.deltaTimeSeconds = substepDeltaTime;
+    hydrologyContact.contactPatchLengthM = static_cast<double>(
+        std::max(state.tireContactPatchLength, VehicleScalar{0.02}));
+    hydrologyContact.contactPatchWidthM = static_cast<double>(
+        std::max(state.tireContactPatchWidth, VehicleScalar{0.03}));
+    hydrologyContact.contactPatchAreaM2 = static_cast<double>(
+        std::max(state.tireContactPatchArea, VehicleScalar{0.0006}));
+    hydrologyContact.normalLoadN = static_cast<double>(suspensionForce);
+    hydrologyContact.nominalLoadN = static_cast<double>(nominalLoadN);
+    hydrologyContact.forwardSpeedMps = static_cast<double>(
+        structuralLongitudinalSpeed);
+    hydrologyContact.lateralSpeedMps = static_cast<double>(
+        structuralLateralSpeed);
+    hydrologyContact.treadVoidRatio = static_cast<double>(
+        wheel.tireModel.wetSurface.treadVoidRatio);
+    hydrologyContact.slipDissipationWatts = static_cast<double>(
+        rubberContact.slipDissipationWatts);
+    hydrologyContact.surfaceMaterial = hit.surfaceMaterial;
+    hydrologyContact.forward = wheelForward;
+    hydrologyContact.right = wheelRight;
+    surfaces.applyHydrologyTireContact(hit.point, hydrologyContact);
 
     // TIRE15B2 presentation consumes the same authoritative contact/world
     // state after all tire/terrain state updates. It is deliberately one-way:

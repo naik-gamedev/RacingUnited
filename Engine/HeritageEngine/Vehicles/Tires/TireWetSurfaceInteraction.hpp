@@ -70,10 +70,18 @@ struct TireWetSurfaceInput
     heritage::physics::SurfaceMaterial surfaceMaterial =
         heritage::physics::SurfaceMaterial::Default;
     VehicleScalar surfaceWetness = 0.0;
+    VehicleScalar surfaceWeatherWetness = 0.0;
+    // Explicit world water film. When valid this is authoritative; normalized
+    // wetness remains as the backwards-compatible authored-scene bridge.
+    bool surfaceWaterDepthValid = false;
+    VehicleScalar surfaceWaterDepthM = 0.0;
 
     bool footprintSurfaceBlendValid = false;
     VehicleScalar footprintCleanHardFraction = 0.0;
     VehicleScalar footprintAverageWetness = 0.0;
+    VehicleScalar footprintAverageWeatherWetness = 0.0;
+    bool footprintAverageWaterDepthValid = false;
+    VehicleScalar footprintAverageWaterDepthM = 0.0;
 
     VehicleScalar wheelRotationDegrees = 0.0;
     VehicleScalar normalLoadN = 0.0;

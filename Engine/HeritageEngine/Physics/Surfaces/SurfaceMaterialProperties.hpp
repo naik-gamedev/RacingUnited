@@ -41,9 +41,36 @@ struct SurfaceDeformableProperties
     double relaxationScale = 2.0;
 };
 
+// Spatial rain/runoff authoring attached to the same collision triangle as
+// the tire material. Defaults describe the material family; scene metadata
+// may override invisible construction details that geometry cannot reveal
+// (porous asphalt, a grated drain, sealed soil, and so on).
+struct SurfaceHydrologyProperties
+{
+    bool authored = false;
+
+    // Water lost vertically into the material. Dense road asphalt is nearly
+    // impermeable; grass/gravel accept considerably more water.
+    double infiltrationCapacityMmPerHour = 0.15;
+
+    // Engineered drainage local to this surface cell. Ordinary asphalt is
+    // zero: it must shed water by slope toward an outlet. A drain/grate can
+    // author a large value without requiring underground pipe geometry.
+    double drainageCapacityMmPerHour = 0.0;
+
+    // Reduced-order overland-flow resistance. This is a bounded gameplay-
+    // scale coefficient, not a claim of CFD or a surveyed Manning value.
+    double flowRoughness = 0.020;
+
+    // Microscopic texture/depression storage that must fill before connected
+    // runoff becomes efficient.
+    double depressionStorageMm = 0.20;
+};
+
 struct SurfaceMaterialProperties
 {
     SurfaceDeformableProperties deformable{};
+    SurfaceHydrologyProperties hydrology{};
 
     // Optional authored local surface temperature. Runtime weather may
     // explicitly override it through SurfaceWorld; otherwise this value wins

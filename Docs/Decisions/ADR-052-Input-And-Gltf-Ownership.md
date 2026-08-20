@@ -33,3 +33,13 @@ Lua/native public interfaces remain unchanged.
 
 CLEAN06 intentionally changes no input semantics, GLB coordinate conventions, material behavior,
 animation behavior, metadata interpretation or collision extraction policy.
+
+
+## INPUT03 extension — deliberately unbound actions
+
+Module action declarations may use an empty right-hand side (`Action =`) when an
+action should exist in Settings but must not consume a factory-default control.
+This is used by Racing United's `Gears` category for direct Gear 1 through Gear 24
+selection. Neutral, reverse and sequential shift actions keep normal defaults.
+The public `InputSystem` facade remains unchanged; only registration semantics now
+permit an empty default-binding list.

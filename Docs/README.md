@@ -4,6 +4,16 @@ This directory is the repository-owned memory for Heritage Engine and Racing Uni
 
 Read these documents before changing an interconnected system:
 
+For tire/contact/surface work, read `CURRENT_TIRE_STATUS.md` first. It is the authoritative
+implemented/partial/missing ledger; older numbered tire roadmaps retain engineering history.
+`TIRE_CALIBRATION_LAB.md` defines the deterministic TIRE18 evidence and CSV contract.
+`TIRE_WEATHER_AND_FLEET_BENCHMARK.md` defines the deterministic rain/road-film baseline and the
+executable 150-car / 600-tire workload laboratory, including its deliberate exclusions.
+`SURFACE_HYDROLOGY.md` defines the automatic collision-mesh water-flow bake, topology cache,
+pooling, runtime drainage and tire-driven dynamic dry-line contract.
+`TIRE_SUSPENSION_HANDOFF.md` records the tire baseline that suspension may consume and the
+calibration/specialization work that remains intentionally non-blocking.
+
 1. `PROJECT_STATE.md` — current known-good milestone and immediate roadmap.
 2. `AI_WORKFLOW.md` — required workflow for an AI or human contributor.
 3. `ARCHITECTURE.md` — subsystem boundaries and dependency direction.

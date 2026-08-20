@@ -11,6 +11,8 @@
 #include "Surfaces/SurfaceWorld.hpp"
 #include "../Vehicles/VehicleSystem.hpp"
 
+namespace heritage::jobs { class JobSystem; }
+
 namespace heritage::physics {
 
 // Native fixed-step simulation world used by every future physics body,
@@ -52,6 +54,11 @@ public:
     const heritage::vehicles::VehicleSystem& vehicles() const { return m_vehicles; }
     SurfaceWorld& surfaces() { return m_surfaces; }
     const SurfaceWorld& surfaces() const { return m_surfaces; }
+
+    // JOB01 process-wide worker pool. Physics retains ownership of simulation
+    // state; the scheduler is only an execution service and may be absent in
+    // isolated/headless tests, which then execute the same phases serially.
+    void setJobSystem(heritage::jobs::JobSystem* jobs);
 
     // Destroys attached colliders before invalidating the body handle.
     bool destroyBody(BodyHandle handle);

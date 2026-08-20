@@ -594,6 +594,11 @@ void EntityMeshRenderer::drawShadowMaps(
 
             const bool useTireVisual =
                 tireVisualNode != nullptr && tireVisualState != nullptr;
+            const bool useTireDeformation =
+                useTireVisual
+                && tireVisualState->tireVisualDeformationFieldValid
+                && tireVisualDeformationWithinDistance(
+                    rangeModel, *tireVisualNode);
             if (useTireVisual && tireVisualState->tireVisualBareRim)
                 return;
             glUniform1i(
@@ -638,25 +643,29 @@ void EntityMeshRenderer::drawShadowMaps(
                     tireVisualState->tireWheelUpWorld.z);
                 glUniform1i(
                     m_shadowUniforms.tireVisualDeformationFieldValid,
-                    tireVisualState->tireVisualDeformationFieldValid ? 1 : 0);
-                std::array<float,
-                    heritage::entities::TireVisualDeformationFieldCount * 3>
-                    packedDisplacementM{};
-                for (std::size_t fieldIndex = 0;
-                     fieldIndex < heritage::entities::TireVisualDeformationFieldCount;
-                     ++fieldIndex)
+                    useTireDeformation ? 1 : 0);
+                if (useTireDeformation)
                 {
-                    packedDisplacementM[fieldIndex * 3] =
-                        tireVisualState->tireVisualForwardDisplacementM[fieldIndex];
-                    packedDisplacementM[fieldIndex * 3 + 1] =
-                        tireVisualState->tireVisualDownDisplacementM[fieldIndex];
-                    packedDisplacementM[fieldIndex * 3 + 2] =
-                        tireVisualState->tireVisualLateralDisplacementM[fieldIndex];
+                    std::array<float,
+                        heritage::entities::TireVisualDeformationFieldCount * 3>
+                        packedDisplacementM{};
+                    for (std::size_t fieldIndex = 0;
+                         fieldIndex < heritage::entities::TireVisualDeformationFieldCount;
+                         ++fieldIndex)
+                    {
+                        packedDisplacementM[fieldIndex * 3] =
+                            tireVisualState->tireVisualForwardDisplacementM[fieldIndex];
+                        packedDisplacementM[fieldIndex * 3 + 1] =
+                            tireVisualState->tireVisualDownDisplacementM[fieldIndex];
+                        packedDisplacementM[fieldIndex * 3 + 2] =
+                            tireVisualState->tireVisualLateralDisplacementM[fieldIndex];
+                    }
+                    glUniform3fv(
+                        m_shadowUniforms.tireVisualDisplacementM,
+                        static_cast<GLsizei>(
+                            heritage::entities::TireVisualDeformationFieldCount),
+                        packedDisplacementM.data());
                 }
-                glUniform3fv(
-                    m_shadowUniforms.tireVisualDisplacementM,
-                    static_cast<GLsizei>(heritage::entities::TireVisualDeformationFieldCount),
-                    packedDisplacementM.data());
             }
 
             MeshDrawRange paletteRange;

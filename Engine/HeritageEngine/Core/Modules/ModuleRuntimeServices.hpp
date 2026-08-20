@@ -8,6 +8,10 @@ namespace heritage::input {
 class InputSystem;
 }
 
+namespace heritage::camera {
+class VehicleCameraController;
+}
+
 namespace heritage::entities {
 class EntityRegistry;
 }
@@ -30,6 +34,7 @@ struct ModuleRuntimeServices
 {
     heritage::audio::AudioSystem* audio = nullptr;
     heritage::input::InputSystem* input = nullptr;
+    heritage::camera::VehicleCameraController* vehicleCamera = nullptr;
     heritage::entities::EntityRegistry* entities = nullptr;
     heritage::physics::PhysicsWorld* physics = nullptr;
     heritage::graphics::EnvironmentSystem* environment = nullptr;

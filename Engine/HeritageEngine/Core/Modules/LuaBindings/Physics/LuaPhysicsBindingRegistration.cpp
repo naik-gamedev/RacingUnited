@@ -12,6 +12,12 @@ void LuaModuleRuntime::registerPhysicsBindings()
     registerFunction("Physics", "GetGravity", &LuaPhysicsBindingHandlers::luaPhysicsGetGravity);
     registerFunction("Physics", "SetGravity", &LuaPhysicsBindingHandlers::luaPhysicsSetGravity);
     registerFunction("Physics", "GetSurfaceEnvironment", &LuaPhysicsBindingHandlers::luaPhysicsGetSurfaceEnvironment);
+    registerFunction("Physics", "GetSurfaceWeather", &LuaPhysicsBindingHandlers::luaPhysicsGetSurfaceWeather);
+    registerFunction("Physics", "SetSurfaceWeather", &LuaPhysicsBindingHandlers::luaPhysicsSetSurfaceWeather);
+    registerFunction("Physics", "ResetSurfaceWeather", &LuaPhysicsBindingHandlers::luaPhysicsResetSurfaceWeather);
+    registerFunction("Physics", "GetSurfaceHydrology", &LuaPhysicsBindingHandlers::luaPhysicsGetSurfaceHydrology);
+    registerFunction("Physics", "ResetSurfaceHydrology", &LuaPhysicsBindingHandlers::luaPhysicsResetSurfaceHydrology);
+    registerFunction("Physics", "SetSurfaceHydrologyDebug", &LuaPhysicsBindingHandlers::luaPhysicsSetSurfaceHydrologyDebug);
     registerFunction("Physics", "GetSurfacePresentation", &LuaPhysicsBindingHandlers::luaPhysicsGetSurfacePresentation);
     registerFunction("Physics", "GetTireDevelopmentControls", &LuaPhysicsBindingHandlers::luaPhysicsGetTireDevelopmentControls);
     registerFunction("Physics", "SetTireDevelopmentControls", &LuaPhysicsBindingHandlers::luaPhysicsSetTireDevelopmentControls);

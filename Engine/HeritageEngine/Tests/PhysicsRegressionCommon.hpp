@@ -89,6 +89,7 @@ StabilitySample sampleStability(
 void printSample(const std::string& name, const StabilitySample& sample);
 void printWheelStates(const PrototypeWorld& world, const std::string& name);
 
+bool jobSystemParallelForIsBoundedAndDeterministic();
 bool parkedVehicleStaysQuiet();
 bool flatRestSleepsAndThrottleWakes();
 bool brakeHeldSteeringWakesAndTracks();
@@ -109,6 +110,8 @@ bool wheelFitmentAndAlignmentAreReferenceSafe();
 bool terrainContactDiagnosticsClassifyFailureModes();
 bool staticTriangleRigidBodyContactsSettle();
 bool chaseCameraOrbitPersistsAndReturnsOnForwardTravel();
+bool vehicleCameraAuthoringPoseAndFlyAreVehicleLocal();
+bool physicalRainPopulationAndWorldFieldAreDeterministic();
 bool dynamicsLabCapturesHighRateTelemetry();
 bool vehicleDefinitionCompilerAndLoaderWork();
 bool steeringDirectionAndAckermannAreSymmetric();
@@ -121,6 +124,11 @@ bool assistedFrontRearSuspensionVehicleStaysStable();
 bool suspensionAntiRollBarCouplesWheelPairs();
 bool unsprungMassSettlesAndRespondsToRoadStep();
 bool magicFormula62RoadCoreBehaves();
+bool tireCalibrationLabProducesDeterministicSweeps();
+bool tireCalibrationAcceptanceRejectsOutOfEnvelopeChanges();
+bool tireScenarioLabProducesStatefulEvidence();
+bool tireDistributedContactPatchIntegratesLocalShear();
+bool tireFleetBenchmarkExecutesBoundedWork();
 bool magicFormula62TurnSlipReducesGripAndTrail();
 bool magicFormula62MotorcycleLargeCamberBehaves();
 bool tireRelaxationDynamicsAreRateStable();
@@ -143,6 +151,12 @@ bool tirePerformanceBiasesMapToMechanismsWithoutForceMultipliers();
 bool tirePartsResolveAndAssignReusableFitments();
 
 bool surfaceWorldGlobalAddressingAndChunkCacheBehave();
+bool dynamicSurfaceStaticBakeSeparatesSheetsAndCaches();
+bool dynamicSurfacePagePoolIsPersistentBudgetedAndLruSafe();
+bool dynamicSurfaceHydroResidencyUsesRealSurfacePagesAndNearestSources();
+bool dynamicSurfaceHydrologyConservesCappedVolume();
+bool dynamicSurfaceHydrologyOwnsRainCoverAndTireClearing();
+bool dynamicSurfaceThermalIsSheetAwareAndTireHeated();
 bool surfacePresentationIsBoundedAndWorldAddressed();
 bool trackRubberBuildsMigratesAndWashes();
 } // namespace heritage::tests

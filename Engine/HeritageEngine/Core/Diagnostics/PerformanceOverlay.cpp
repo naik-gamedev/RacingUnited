@@ -8,11 +8,16 @@ void drawPerformanceOverlay(
     const PerformanceSnapshot& performance,
     const heritage::graphics::EntityMeshRendererStats& meshStats,
     const heritage::graphics::EntityDebugRendererStats& debugStats,
+    const heritage::graphics::SurfacePresentationRendererStats& surfaceStats,
+    const heritage::graphics::WeatherPresentationRendererStats& weatherStats,
     const heritage::graphics::VegetationStats& vegetationStats,
     std::size_t entityCount,
     std::size_t loadedAssetCount,
+    const heritage::jobs::JobSystemStats& jobStats,
     int physicsWorldSteps,
-    bool physicsOverloaded)
+    bool physicsOverloaded,
+    bool vsyncEnabled,
+    int fpsCap)
 {
     constexpr ImGuiWindowFlags flags =
         ImGuiWindowFlags_AlwaysAutoResize
@@ -46,6 +51,12 @@ void drawPerformanceOverlay(
         performance.worstRollingFrameMs);
     ImGui::TextDisabled("Rolling frame pacing window: %zu / 4096 frames",
         performance.statisticsSampleCount);
+    if (fpsCap > 0)
+        ImGui::TextDisabled("Pacing: VSync %s | FPS cap %d",
+            vsyncEnabled ? "ON" : "off", fpsCap);
+    else
+        ImGui::TextDisabled("Pacing: VSync %s | FPS cap Unlimited",
+            vsyncEnabled ? "ON" : "off");
 
     if (performance.frameTimeGraphCount > 1)
     {
@@ -85,20 +96,24 @@ void drawPerformanceOverlay(
     ImGui::Text("Physics        %6.2f ms", performance.physicsMs);
     ImGui::Text("Game update    %6.2f ms", performance.gameUpdateMs);
     ImGui::Text("Render submit  %6.2f ms", performance.renderCpuMs);
-    ImGui::TextDisabled("  module %.2f  mesh %.2f  debug %.2f",
+    ImGui::TextDisabled("  module %.2f  mesh %.2f  surface %.2f  weather %.2f",
         performance.renderModuleMs,
         performance.renderMeshMs,
-        performance.renderDebugMs);
-    ImGui::TextDisabled("  resolve %.2f  post %.2f  span %.2f  other %.2f",
+        performance.renderSurfaceMs,
+        performance.renderWeatherMs);
+    ImGui::TextDisabled("  debug %.2f  fbo %.2f  resolve %.2f  post %.2f",
+        performance.renderDebugMs,
+        performance.renderFramebufferSetupMs,
         performance.renderMsaaResolveMs,
-        performance.renderPostProcessMs,
+        performance.renderPostProcessMs);
+    ImGui::TextDisabled("  span %.2f  residual %.2f",
         performance.renderSpanCompositeMs,
         performance.residualRenderCpuMs);
     ImGui::Text("UI             %6.2f ms", performance.uiCpuMs);
     ImGui::Text("Present/VSync  %6.2f ms", performance.presentMs);
 
     ImGui::Separator();
-    ImGui::Text("LAST CPU HITCH (>= 25 ms active)");
+    ImGui::Text("LAST CPU HITCH (>= 20 ms active)");
     if (!performance.hasCpuHitch)
     {
         ImGui::TextDisabled("None captured yet.");
@@ -117,13 +132,17 @@ void drawPerformanceOverlay(
         ImGui::Text("Game update  %6.2f   Render %6.2f",
             performance.hitchGameUpdateMs,
             performance.hitchRenderCpuMs);
-        ImGui::TextDisabled("  hitch render: module %.2f  mesh %.2f  debug %.2f",
+        ImGui::TextDisabled("  hitch: module %.2f  mesh %.2f  surface %.2f  weather %.2f",
             performance.hitchRenderModuleMs,
             performance.hitchRenderMeshMs,
-            performance.hitchRenderDebugMs);
-        ImGui::TextDisabled("  resolve %.2f  post %.2f  span %.2f  other %.2f",
+            performance.hitchRenderSurfaceMs,
+            performance.hitchRenderWeatherMs);
+        ImGui::TextDisabled("  hitch: debug %.2f  fbo %.2f  resolve %.2f  post %.2f",
+            performance.hitchRenderDebugMs,
+            performance.hitchRenderFramebufferSetupMs,
             performance.hitchRenderMsaaResolveMs,
-            performance.hitchRenderPostProcessMs,
+            performance.hitchRenderPostProcessMs);
+        ImGui::TextDisabled("  hitch: span %.2f  residual %.2f",
             performance.hitchRenderSpanCompositeMs,
             performance.hitchResidualRenderCpuMs);
         ImGui::Text("UI           %6.2f   Present %6.2f",
@@ -156,6 +175,58 @@ void drawPerformanceOverlay(
     ImGui::Text("Mesh CPU instances: %.3f ms  slowest: %.3f ms",
         meshStats.meshInstancesCpuMs,
         meshStats.slowestMeshInstanceMs);
+    ImGui::Text("LIVETRACK07 GPU Hydro 10m/256x256 <=100m + BOUNDED HISTORY");
+    ImGui::Text("Hydro GPU: %u resident (%u retained history)  due %u  backlog %u",
+        meshStats.dynamicSurfaceGpuResidentTiles,
+        meshStats.dynamicSurfaceGpuPrewarmTiles,
+        meshStats.dynamicSurfaceGpuDueTiles,
+        meshStats.dynamicSurfaceGpuBacklogTiles);
+    ImGui::Text("Hydro compute: %.3f ms  CPU submit %.3f ms  dispatch %llu  texels %llu",
+        meshStats.dynamicSurfaceGpuLodGpuMs,
+        meshStats.dynamicSurfaceGpuLodCpuMs,
+        static_cast<unsigned long long>(meshStats.dynamicSurfaceGpuLodDispatches),
+        static_cast<unsigned long long>(meshStats.dynamicSurfaceGpuLodCells));
+    ImGui::Text("Hydro input: rain %.1f  drain %.2f  evaporate %.2f mm/h | catch-up %.3f mm",
+        meshStats.dynamicSurfaceGpuRainMmPerHour,
+        meshStats.dynamicSurfaceGpuDrainageMmPerHour,
+        meshStats.dynamicSurfaceGpuEvaporationMmPerHour,
+        meshStats.dynamicSurfaceGpuBackgroundSeedDepthM * 1000.0f);
+    if (meshStats.dynamicSurfaceGpuWaterProbeValid)
+    {
+        ImGui::Text("Hydro atlas near camera: wet %u/%u  mean %.3f mm  deepest %.3f mm",
+            meshStats.dynamicSurfaceGpuWaterProbeWetTexels,
+            meshStats.dynamicSurfaceGpuWaterProbeTexels,
+            meshStats.dynamicSurfaceGpuWaterProbeMeanDepthM * 1000.0f,
+            meshStats.dynamicSurfaceGpuWaterProbeMaximumDepthM * 1000.0f);
+    }
+    else
+    {
+        ImGui::TextDisabled("Hydro atlas near camera: no authored receiver probe");
+    }
+    ImGui::Text("Due Hydro submission: one Z-batched simulation + one batched publish; per-tile dispatch/copy/barrier OFF");
+    ImGui::TextDisabled(
+        "      256x256 <=100m: one synchronized 2Hz hydraulic cohort; height/frustum do not gate simulation");
+    ImGui::TextDisabled(
+        "      physical GPU storage GL_RGBA8 for compute imageStore; values are quantized to 16 exact levels/channel");
+    ImGui::TextDisabled(
+        "      bounded 20x20 atlas + 384-layer scratch: %.1f MiB committed; one GL_LINEAR material lookup",
+        meshStats.dynamicSurfaceGpuLodCommittedMiB);
+    ImGui::TextDisabled(
+        "      >100m: up to 43 recent tiles retain exact state at 1/min; detailed rendering fades by 100m");
+    ImGui::TextDisabled(
+        "      all <=100m tiles initialize/publish as one cohort; frustum culling is presentation-only");
+    const double meshNamedCpuMs =
+        meshStats.instanceGatherMs
+        + meshStats.shadowCpuMs
+        + meshStats.environmentUpdateMs
+        + meshStats.skyDrawMs
+        + meshStats.meshInstancesCpuMs
+        + meshStats.dynamicSurfacePageSyncCpuMs
+        + meshStats.dynamicSurfaceStateUploadCpuMs
+        + meshStats.dynamicSurfaceGpuLodCpuMs;
+    const double meshResidualCpuMs = (std::max)(
+        0.0, performance.renderMeshMs - meshNamedCpuMs);
+    ImGui::TextDisabled("Mesh submit residual/driver: %.3f ms", meshResidualCpuMs);
     if (!meshStats.slowestMeshAsset.empty())
         ImGui::TextDisabled("Slowest asset: %s", meshStats.slowestMeshAsset.c_str());
     ImGui::Text("State: materials %llu  textures %llu  VAOs %llu",
@@ -166,6 +237,11 @@ void drawPerformanceOverlay(
         static_cast<unsigned long long>(meshStats.frontFaceChanges),
         static_cast<unsigned long long>(meshStats.skinnedRanges),
         static_cast<unsigned long long>(meshStats.environmentRefreshes));
+    ImGui::Text("Tire deform: %llu active  %llu beyond %.0f m",
+        static_cast<unsigned long long>(meshStats.tireDeformationActiveRanges),
+        static_cast<unsigned long long>(
+            meshStats.tireDeformationDistanceCulledRanges),
+        heritage::graphics::kTireVisualDeformationMaximumDistanceM);
     const char* shadowFilterLabel = "Nearest";
     if (meshStats.shadowFilterMode == 1)
         shadowFilterLabel = "Poisson PCF";
@@ -185,8 +261,54 @@ void drawPerformanceOverlay(
         static_cast<unsigned long long>(meshStats.shadowCulledRanges));
     ImGui::Text("Debug draws:     %llu",
         static_cast<unsigned long long>(debugStats.drawCalls));
+    ImGui::Text("Water physics: LIVETRACK04 GPU texture authority");
+    ImGui::TextDisabled(
+        "      CPU Hydro legacy/fallback telemetry: wet %llu / %llu | %.3f ms (not advanced while GPU authority is live)",
+        static_cast<unsigned long long>(surfaceStats.waterWetCells),
+        static_cast<unsigned long long>(surfaceStats.waterTotalCells),
+        surfaceStats.waterHydrologyStepMs);
+    ImGui::Text("Rain: %llu draw  %llu GPU candidates  %llu dispatch  CPU %.3f ms",
+        static_cast<unsigned long long>(weatherStats.rainDrawCalls),
+        static_cast<unsigned long long>(weatherStats.rainComputeInstances),
+        static_cast<unsigned long long>(weatherStats.rainComputeDispatches),
+        weatherStats.rainCpuMs);
+    ImGui::TextDisabled("      visibility is compacted + indirect-drawn entirely on GPU (no readback stall)");
+    ImGui::TextDisabled("      authored textured rain: 0-2m 10k | 2-10m 100k | 10-100m 10k");
+    ImGui::TextDisabled("      rate %.1f mm/h  renderer %s  overhead cover %s",
+        weatherStats.precipitationRateMmPerHour,
+        weatherStats.rendererReady ? "ready" : "NOT READY",
+        weatherStats.suppressedByCover ? "YES" : "no");
+    ImGui::TextDisabled(
+        "      physical mean %.2f mm  flux fall %.2f m/s  wind %.0f deg",
+        weatherStats.physicalMeanDiameterMm,
+        weatherStats.physicalFluxFallSpeedMps,
+        weatherStats.physicalWindDirectionDegrees);
+    ImGui::TextDisabled(
+        "      optical rain %s  material %dx%d",
+        weatherStats.opticalTexturesReady ? "TEXTURED" : "fallback",
+        weatherStats.opticalTextureWidth,
+        weatherStats.opticalTextureHeight);
+    ImGui::TextDisabled("Thermal: %.3f ms  Track cells %llu  min/avg/max %.1f / %.1f / %.1f C  tire heat contacts %llu",
+        surfaceStats.surfaceThermalStepMs,
+        static_cast<unsigned long long>(surfaceStats.surfaceThermalCells),
+        surfaceStats.surfaceTemperatureMinimumC,
+        surfaceStats.surfaceTemperatureAverageC,
+        surfaceStats.surfaceTemperatureMaximumC,
+        static_cast<unsigned long long>(surfaceStats.surfaceThermalTireContacts));
     ImGui::Text("Loaded assets:   %zu", loadedAssetCount);
     ImGui::Text("Entities:        %zu", entityCount);
+
+    ImGui::Separator();
+    ImGui::Text("JOB SYSTEM");
+    ImGui::Text("Logical processors: %u   Workers: %u + caller",
+        jobStats.hardwareThreadCount,
+        jobStats.workerThreadCount);
+    ImGui::Text("Parallel batches: %llu   ranges: %llu",
+        static_cast<unsigned long long>(jobStats.parallelBatchCount),
+        static_cast<unsigned long long>(jobStats.parallelRangeCount));
+    ImGui::TextDisabled("Worker ranges: %llu   caller ranges: %llu",
+        static_cast<unsigned long long>(jobStats.workerRangeCount),
+        static_cast<unsigned long long>(jobStats.callerRangeCount));
 
     ImGui::Separator();
     ImGui::Text("PHYSICS");

@@ -182,6 +182,20 @@ void applySurfacePropertyMetadata(
         properties.authoredSurfaceTemperatureC = temperature;
     }
 
+    bool hydrologyAuthored = properties.hydrology.authored;
+    applySurfaceDouble(metadata, "heritage.surface.infiltration_mm_per_hour",
+        0.0, 1000.0, properties.hydrology.infiltrationCapacityMmPerHour,
+        hydrologyAuthored);
+    applySurfaceDouble(metadata, "heritage.surface.drainage_mm_per_hour",
+        0.0, 100000.0, properties.hydrology.drainageCapacityMmPerHour,
+        hydrologyAuthored);
+    applySurfaceDouble(metadata, "heritage.surface.flow_roughness",
+        0.001, 1.0, properties.hydrology.flowRoughness, hydrologyAuthored);
+    applySurfaceDouble(metadata, "heritage.surface.depression_storage_mm",
+        0.0, 100.0, properties.hydrology.depressionStorageMm,
+        hydrologyAuthored);
+    properties.hydrology.authored = hydrologyAuthored;
+
     if (!properties.deformable.enabled)
         return;
 

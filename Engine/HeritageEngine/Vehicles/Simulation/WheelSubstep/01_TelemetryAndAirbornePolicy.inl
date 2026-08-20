@@ -9,6 +9,7 @@
             state.tireTreadTemperatureC = 20.0;
             state.tireCarcassTemperatureC = 20.0;
             state.tireGasTemperatureC = 20.0;
+            state.tireRimTemperatureC = 20.0;
             state.tireInflationPressurePa = wheel.tireModel.inflationPressurePa;
             state.tireThermalFrictionScale = 1.0;
             state.tireThermalStiffnessScale = 1.0;
@@ -16,11 +17,14 @@
             state.tireThermalLossDissipationWatts = 0.0;
             state.tireRoadHeatFlowWatts = 0.0;
             state.tireAirHeatFlowWatts = 0.0;
+            state.tireBrakeHeatInputWatts = 0.0;
+            state.tireRimToCarcassHeatFlowWatts = 0.0;
             return;
         }
         state.tireTreadTemperatureC = thermal.treadTemperatureC;
         state.tireCarcassTemperatureC = thermal.carcassTemperatureC;
         state.tireGasTemperatureC = thermal.gasTemperatureC;
+        state.tireRimTemperatureC = thermal.rimTemperatureC;
         state.tireInflationPressurePa = thermal.inflationPressurePa;
         state.tireThermalFrictionScale = thermal.frictionScale;
         state.tireThermalStiffnessScale = thermal.stiffnessScale;
@@ -28,6 +32,8 @@
         state.tireThermalLossDissipationWatts = thermal.carcassDissipationWatts;
         state.tireRoadHeatFlowWatts = thermal.roadHeatFlowWatts;
         state.tireAirHeatFlowWatts = thermal.airHeatFlowWatts;
+        state.tireBrakeHeatInputWatts = thermal.brakeHeatInputWatts;
+        state.tireRimToCarcassHeatFlowWatts = thermal.rimToCarcassHeatFlowWatts;
     };
     const auto writeFailureTelemetry = [&](const tires::TireFailureOutput& failure) {
         const tires::TireFailureState& persistent = wheel.failureState;
@@ -319,6 +325,10 @@
             thermalInput.roadTemperatureC = static_cast<VehicleScalar>(
                 surfaces.environment().surfaceTemperatureC);
             thermalInput.forwardSpeedMps = previousLongitudinalSpeed;
+            thermalInput.ambientAirSpeedMps = static_cast<VehicleScalar>(
+                surfaces.weatherOutput().windSpeedMps);
+            thermalInput.brakeDissipationWatts = std::abs(
+                state.appliedBrakeTorque * state.wheelAngularVelocity);
             airborneThermal = tires::advanceTireThermal(
                 wheel.tireModel.thermal, thermalInput,
                 static_cast<VehicleScalar>(substepDeltaTime), wheel.thermalState);

@@ -129,6 +129,213 @@ int LuaPhysicsBindingHandlers::luaPhysicsGetSurfaceEnvironment(lua_State* state)
     return 4;
 }
 
+int LuaPhysicsBindingHandlers::luaPhysicsGetSurfaceWeather(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    const heritage::physics::SurfaceWeatherDescription description =
+        runtime->m_physics
+            ? runtime->m_physics->surfaces().weather()
+            : heritage::physics::SurfaceWeatherDescription{};
+    const heritage::physics::SurfaceWeatherState weatherState =
+        runtime->m_physics
+            ? runtime->m_physics->surfaces().weatherState()
+            : heritage::physics::SurfaceWeatherState{};
+    const heritage::physics::SurfaceWeatherOutput output =
+        runtime->m_physics
+            ? runtime->m_physics->surfaces().weatherOutput()
+            : heritage::physics::SurfaceWeatherOutput{};
+
+    const auto precipitation = runtime->m_physics
+        ? runtime->m_physics->surfaces().precipitation().rainPopulation()
+        : heritage::physics::weather::RainDropPopulation{};
+
+    runtime->m_api.lua_createtable(state, 0, 36);
+    const auto setNumber = [&](const char* name, double value) {
+        runtime->m_api.lua_pushnumber(state, static_cast<LuaNumber>(value));
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    const auto setBoolean = [&](const char* name, bool value) {
+        runtime->m_api.lua_pushboolean(state, value ? 1 : 0);
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    setBoolean("enabled", description.enabled);
+    setBoolean("initialized", weatherState.initialized);
+    setBoolean("valid", output.valid);
+    setNumber("rain_mm_per_hour", description.precipitationRateMmPerHour);
+    setNumber("relative_humidity", description.relativeHumidity);
+    setNumber("wind_mps", description.windSpeedMps);
+    setNumber("wind_direction_deg", description.windDirectionDegrees);
+    setNumber("wind_x_mps", output.windVelocityXMps);
+    setNumber("wind_z_mps", output.windVelocityZMps);
+    setNumber("cloud_cover", description.cloudCover);
+    setNumber("drainage_capacity_mm_per_hour", description.drainageRateMmPerHour);
+    setNumber("evaporation_reference_mm_per_hour",
+        description.referenceEvaporationRateMmPerHour);
+    setNumber("maximum_water_film_mm",
+        description.maximumWaterFilmDepthM * 1000.0);
+    setNumber("water_film_mm", output.waterFilmDepthM * 1000.0);
+    setNumber("effective_wetness", output.effectiveWetness);
+    setNumber("road_temperature_c", output.roadTemperatureC);
+    setNumber("current_drainage_mm_per_hour", output.drainageRateMmPerHour);
+    setNumber("current_evaporation_mm_per_hour", output.evaporationRateMmPerHour);
+    setNumber("elapsed_seconds", weatherState.elapsedSeconds);
+    setNumber("cumulative_rain_mm", weatherState.cumulativePrecipitationMm);
+    setNumber("cumulative_drainage_mm", weatherState.cumulativeDrainageMm);
+    setNumber("cumulative_evaporation_mm", weatherState.cumulativeEvaporationMm);
+    setNumber("cumulative_overflow_mm", weatherState.cumulativeOverflowMm);
+    setNumber("rain_drop_number_concentration_m3",
+        precipitation.numberConcentrationPerM3);
+    setNumber("rain_drop_mean_diameter_mm",
+        precipitation.numberWeightedMeanDiameterMm);
+    setNumber("rain_drop_volume_mean_diameter_mm",
+        precipitation.volumeWeightedMeanDiameterMm);
+    setNumber("rain_drop_flux_terminal_mps",
+        precipitation.fluxWeightedMeanTerminalVelocityMps);
+    setNumber("rain_mass_flux_kg_m2_s",
+        precipitation.massFluxKgPerM2PerSecond);
+    return 1;
+}
+
+int LuaPhysicsBindingHandlers::luaPhysicsSetSurfaceWeather(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+    if (!runtime->m_physics)
+    {
+        runtime->m_api.lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    heritage::physics::SurfaceWeatherDescription weather =
+        runtime->m_physics->surfaces().weather();
+    weather.enabled = LuaModuleRuntime::booleanArgument(
+        *runtime, state, 1, weather.enabled);
+    weather.precipitationRateMmPerHour = LuaModuleRuntime::numberArgument(
+        *runtime, state, 2, weather.precipitationRateMmPerHour);
+    weather.relativeHumidity = LuaModuleRuntime::numberArgument(
+        *runtime, state, 3, weather.relativeHumidity);
+    weather.windSpeedMps = LuaModuleRuntime::numberArgument(
+        *runtime, state, 4, weather.windSpeedMps);
+    weather.cloudCover = LuaModuleRuntime::numberArgument(
+        *runtime, state, 5, weather.cloudCover);
+    weather.drainageRateMmPerHour = LuaModuleRuntime::numberArgument(
+        *runtime, state, 6, weather.drainageRateMmPerHour);
+    weather.referenceEvaporationRateMmPerHour = LuaModuleRuntime::numberArgument(
+        *runtime, state, 7, weather.referenceEvaporationRateMmPerHour);
+    weather.windDirectionDegrees = LuaModuleRuntime::numberArgument(
+        *runtime, state, 8, weather.windDirectionDegrees);
+    const bool result = runtime->m_physics->surfaces().setWeather(weather);
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaPhysicsBindingHandlers::luaPhysicsResetSurfaceWeather(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+    if (runtime->m_physics)
+        runtime->m_physics->surfaces().resetWeatherState();
+    runtime->m_api.lua_pushboolean(state, runtime->m_physics ? 1 : 0);
+    return 1;
+}
+
+int LuaPhysicsBindingHandlers::luaPhysicsGetSurfaceHydrology(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    const heritage::physics::dynamicsurface::DynamicSurfaceHydroStats stats =
+        runtime->m_physics
+            ? runtime->m_physics->surfaces().dynamicSurface().hydroStats()
+            : heritage::physics::dynamicsurface::DynamicSurfaceHydroStats{};
+    const heritage::physics::dynamicsurface::DynamicSurfaceStaticBakeReport bake =
+        runtime->m_physics
+            ? runtime->m_physics->surfaces().dynamicSurface().lastStaticBakeReport()
+            : heritage::physics::dynamicsurface::DynamicSurfaceStaticBakeReport{};
+    runtime->m_api.lua_createtable(state, 0, 32);
+    const auto setNumber = [&](const char* name, double value) {
+        runtime->m_api.lua_pushnumber(state, static_cast<LuaNumber>(value));
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    const auto setBoolean = [&](const char* name, bool value) {
+        runtime->m_api.lua_pushboolean(state, value ? 1 : 0);
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    const auto setString = [&](const char* name, const std::string& value) {
+        runtime->m_api.lua_pushstring(state, value.c_str());
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    setBoolean("available", stats.available);
+    setBoolean("loaded_from_cache", bake.loadedFromCache);
+    setBoolean("debug_visualization", false);
+    setNumber("source_triangles", static_cast<double>(bake.sourceTriangleCount));
+    setNumber("cells", static_cast<double>(stats.validTexels));
+    setNumber("support_cells", static_cast<double>(stats.validTexels));
+    setNumber("connected_cells", static_cast<double>(stats.validTexels));
+    setNumber("adaptive_minimum_cell_m", heritage::physics::dynamicsurface::kHydroAuthorityTexelPitchM);
+    setNumber("adaptive_maximum_cell_m", heritage::physics::dynamicsurface::kHydroAuthorityTexelPitchM);
+    setNumber("adaptive_0_1m_cells",
+        0.0);
+    setNumber("adaptive_large_cells",
+        0.0);
+    setNumber("wet_cells", static_cast<double>(stats.wetTexels));
+    setNumber("simulation_steps", static_cast<double>(stats.simulationStepCount));
+    setNumber("tire_contacts", static_cast<double>(stats.tireContactCount));
+    setNumber("update_rate_hz", stats.activePages > 0u ? heritage::physics::dynamicsurface::UpdateCadence::hydroTileHz : 0.0);
+    setNumber("water_volume_m3", stats.waterVolumeM3);
+    setNumber("maximum_water_depth_mm", stats.maximumWaterDepthM * 1000.0);
+    setNumber("rain_volume_m3", stats.cumulativeRainVolumeM3);
+    setNumber("infiltration_volume_m3", stats.cumulativeInfiltrationVolumeM3);
+    setNumber("drainage_volume_m3", stats.cumulativeDrainageVolumeM3);
+    setNumber("evaporation_volume_m3", stats.cumulativeEvaporationVolumeM3);
+    setNumber("runoff_volume_m3", stats.cumulativeRunoffVolumeM3);
+    setNumber("tire_cleared_volume_l", stats.cumulativeTireClearedVolumeM3 * 1000.0);
+    setNumber("tire_spray_volume_l", stats.cumulativeTireSprayVolumeM3 * 1000.0);
+    setNumber("last_step_ms", stats.lastStepMilliseconds);
+    setString("solver", "heritage_dynamic_surface_persistent_hydro");
+    setNumber("active_virtual_pipes",
+        0.0);
+    setNumber("maximum_virtual_pipe_flux_lps",
+        0.0);
+    setNumber("bake_ms", bake.elapsedMilliseconds);
+    setString("bake_message", bake.message);
+    setString("cache_path", bake.cachePath.string());
+    return 1;
+}
+
+int LuaPhysicsBindingHandlers::luaPhysicsResetSurfaceHydrology(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+    if (runtime->m_physics)
+        runtime->m_physics->surfaces().resetHydrologyWater();
+    runtime->m_api.lua_pushboolean(state, runtime->m_physics ? 1 : 0);
+    return 1;
+}
+
+int LuaPhysicsBindingHandlers::luaPhysicsSetSurfaceHydrologyDebug(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+    if (!runtime->m_physics)
+    {
+        runtime->m_api.lua_pushboolean(state, 0);
+        return 1;
+    }
+    runtime->m_physics->surfaces().hydrology().setDebugVisualizationEnabled(
+        LuaModuleRuntime::booleanArgument(*runtime, state, 1, false));
+    runtime->m_api.lua_pushboolean(state, 1);
+    return 1;
+}
+
 int LuaPhysicsBindingHandlers::luaPhysicsGetSurfacePresentation(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);

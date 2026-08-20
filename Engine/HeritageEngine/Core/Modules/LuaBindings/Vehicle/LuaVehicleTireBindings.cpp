@@ -273,6 +273,35 @@ int LuaVehicleBindingHandlers::luaVehicleResetTirePhysicalState(lua_State* state
     return 1;
 }
 
+int LuaVehicleBindingHandlers::luaVehicleSetTireContactFidelity(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime) return 0;
+    int converted = 0;
+    const LuaInteger raw = runtime->m_api.lua_tointegerx(state, 2, &converted);
+    const bool result = converted
+        && runtime->m_physics
+        && runtime->m_physics->vehicles().setTireContactFidelity(
+            LuaModuleRuntime::vehicleHandleArgument(*runtime, state, 1),
+            static_cast<heritage::vehicles::TireContactFidelity>(raw));
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaVehicleBindingHandlers::luaVehicleGetTireContactFidelity(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime) return 0;
+    runtime->m_api.lua_pushinteger(
+        state,
+        runtime->m_physics
+            ? static_cast<LuaInteger>(
+                runtime->m_physics->vehicles().tireContactFidelity(
+                    LuaModuleRuntime::vehicleHandleArgument(*runtime, state, 1)))
+            : 0);
+    return 1;
+}
+
 int LuaVehicleBindingHandlers::luaVehicleSetSurfacePreset(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);

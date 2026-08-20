@@ -414,6 +414,7 @@ int LuaVehicleBindingHandlers::luaVehicleGetWheelTelemetry(lua_State* state)
     pushNumberField("tireTreadTemperatureC", value.tireTreadTemperatureC);
     pushNumberField("tireCarcassTemperatureC", value.tireCarcassTemperatureC);
     pushNumberField("tireGasTemperatureC", value.tireGasTemperatureC);
+    pushNumberField("tireRimTemperatureC", value.tireRimTemperatureC);
     pushNumberField("tireInflationPressurePa", value.tireInflationPressurePa);
     pushStringField("tireFailureStage", heritage::vehicles::tires::tireFailureStageName(value.tireFailureStage));
     pushIntegerField("tireFailureStageId", static_cast<LuaInteger>(value.tireFailureStage));
@@ -433,6 +434,8 @@ int LuaVehicleBindingHandlers::luaVehicleGetWheelTelemetry(lua_State* state)
     pushNumberField("tireThermalLossDissipationWatts", value.tireThermalLossDissipationWatts);
     pushNumberField("tireRoadHeatFlowWatts", value.tireRoadHeatFlowWatts);
     pushNumberField("tireAirHeatFlowWatts", value.tireAirHeatFlowWatts);
+    pushNumberField("tireBrakeHeatInputWatts", value.tireBrakeHeatInputWatts);
+    pushNumberField("tireRimToCarcassHeatFlowWatts", value.tireRimToCarcassHeatFlowWatts);
     pushNumberField("tireTreadInsideSurfaceTemperatureC", value.tireTreadInsideSurfaceTemperatureC);
     pushNumberField("tireTreadCenterSurfaceTemperatureC", value.tireTreadCenterSurfaceTemperatureC);
     pushNumberField("tireTreadOutsideSurfaceTemperatureC", value.tireTreadOutsideSurfaceTemperatureC);

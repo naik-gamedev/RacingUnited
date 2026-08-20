@@ -32,6 +32,11 @@ PhysicsWorld::PhysicsWorld()
     reset();
 }
 
+void PhysicsWorld::setJobSystem(heritage::jobs::JobSystem* jobs)
+{
+    m_surfaces.setJobSystem(jobs);
+}
+
 void PhysicsWorld::reset()
 {
     m_vehicles.clear();

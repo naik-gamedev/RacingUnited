@@ -16,6 +16,8 @@
 #include "../../Scenes/SceneManager.hpp"
 #include "../../UI/UiImageCache.hpp"
 
+namespace heritage::camera { class VehicleCameraController; }
+
 namespace heritage::modules {
 
 struct LuaCoreBindingHandlers;
@@ -77,6 +79,7 @@ private:
     void registerSaveBindings();
     void registerAudioBindings();
     void registerInputBindings();
+    void registerCameraBindings();
     void registerPhysicsBindings();
     void registerVehicleBindings();
     void registerEntityBindings();
@@ -170,6 +173,7 @@ private:
     GLFWwindow* m_window = nullptr;
     heritage::audio::AudioSystem* m_audio = nullptr;
     heritage::input::InputSystem* m_input = nullptr;
+    heritage::camera::VehicleCameraController* m_vehicleCamera = nullptr;
     heritage::entities::EntityRegistry* m_entities = nullptr;
     heritage::physics::PhysicsWorld* m_physics = nullptr;
     heritage::graphics::EnvironmentSystem* m_environment = nullptr;
@@ -212,7 +216,8 @@ private:
     enum class UiScopeType
     {
         TabBar,
-        TabItem
+        TabItem,
+        HorizontalScroll
     };
 
     struct UiPanelPlacement

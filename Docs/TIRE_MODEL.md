@@ -1,5 +1,9 @@
 # Heritage Tire Model
 
+> **Status note (2026-08-14):** this document retains mechanism detail and milestone history.
+> `CURRENT_TIRE_STATUS.md` is authoritative for implemented/partial/missing status and the active
+> TIRE18 sequence.
+
 ## TIRE12 status
 
 TIRE12 adds `TireWetSurfaceInteraction.*` as a compiled clean-room hard-surface water layer around
@@ -482,8 +486,10 @@ After TIRE14, Heritage still does not include:
 - distributed per-cell contact-patch shear/force integration beyond the current single-MF adaptive footprint;
 - evidence-identified full 3D obstacle/contact parameterization beyond the current bounded clean-room sampler;
 - proprietary MF-Tyre Temperature & Velocity coefficient-equation parity;
-- puncture, pressure-loss, carcass structural damage or blowout mechanics;
-- a dynamic weather/track-water field that authors puddle geometry/depth independently of the current normalized surface-wetness bridge;
+- deeper puncture/material variation, carcass fatigue, bead/rim damage and detached-tread mechanics
+  beyond the current reduced-order pressure-loss/blowout/failure stages;
+- spatial rain/puddle flow and drying-line fields beyond the deterministic global rainfall,
+  road-film, drainage, evaporation, wind and road-temperature baseline;
 - proprietary Simcenter Tire 2512 wet-road implementation/parity (intentionally not a Heritage goal without public equations/data);
 - dynamic scene `SurfaceField` temperature/state authoring beyond the current explicit static-scene winter-temperature bridge;
 - final specialty low-pressure/off-road tire families and large-grid fidelity tiers.
@@ -512,7 +518,9 @@ The native physics suite now additionally verifies:
 - adaptive 2D footprint sampling expands from the bounded coarse cross to the requested full grid;
 - laterally asymmetric support produces finite cross-slope/support/roughness diagnostics without confusing a smooth local plane for an obstacle;
 - rigid-ring yaw and wind-up structural modes agree across 1000 Hz and lower-rate integration;
-- the three-node tire thermal state heats under slip/carcass losses, increases contained-gas pressure and remains close across 1000 Hz and 120 Hz integration;
+- the four-node tire thermal state (tread, carcass, contained gas and wheel/rim) heats under slip,
+  carcass and brake losses, conducts rim heat into the tire, increases contained-gas pressure and
+  remains close across 1000 Hz and 120 Hz integration;
 - TIRE08/TIRE10 spatial wear produces a positive material-fixed contact-radius deficit under a locked-wheel flat spot, while normal rotation distributes wear and strongly reduces the local radius variation;
 - warm tread/carcass state changes grip/stiffness in the intended bounded direction while an overheated state loses grip;
 - human-readable `.tir` import converts units, maps MF6.2 ranges/scaling/coefficients,

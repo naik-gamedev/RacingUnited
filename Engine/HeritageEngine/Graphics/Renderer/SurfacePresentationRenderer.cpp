@@ -8,9 +8,13 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <iostream>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace heritage::graphics {
@@ -52,11 +56,9 @@ void main()
 }
 )glsl";
 
-// TIRE16K tire marks are no longer CPU-tessellated every frame. Each persistent
-// GPU page stores one compact logical record per segment. A geometry shader
-// expands that point record into either the six-control near ribbon or the
-// uniform far strip, and evaluates age/distance fading without touching CPU
-// history. 100 m chunk origins are supplied camera-relative in FP32 per draw.
+// WATER15: settled water is rendered by EntityMeshRenderer's depth-reconstructed
+// Dynamic Track surface-state pass. SurfacePresentationRenderer now owns only
+// tire marks, rubber/marbles, particles and engineering debug overlays.
 const char* kTireMarkVertexShader = HERITAGE_SURFACE_GLSL_VERSION R"glsl(
 layout(location=0) in vec3 aStartLocal;
 layout(location=1) in vec3 aEndLocal;
@@ -829,28 +831,8 @@ void main()
 }
 )glsl";
 
-struct TrackVertex
-{
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-    float r = 1.0f;
-    float g = 1.0f;
-    float b = 1.0f;
-    float a = 1.0f;
-};
-
-struct ParticleVertex
-{
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-    float r = 1.0f;
-    float g = 1.0f;
-    float b = 1.0f;
-    float a = 1.0f;
-    float pointSize = 4.0f;
-};
+using TrackVertex = SurfaceTrackVertex;
+using ParticleVertex = SurfaceParticleVertex;
 
 // Compact TIRE16K logical record uploaded once to a persistent GPU page.
 // Positions are FP32 relative to a 100 m FP64 chunk origin; the authoritative
@@ -1467,37 +1449,36 @@ void SurfacePresentationRenderer::drawTireMarkGpuCache(
     glPolygonOffset(1.0f, 4.0f);
     glUseProgram(m_tireMarkProgram);
     glUniformMatrix4fv(
-        glGetUniformLocation(m_tireMarkProgram, "uView"),
+        m_tireMarkUniformView,
         1, GL_FALSE, view.m);
     glUniformMatrix4fv(
-        glGetUniformLocation(m_tireMarkProgram, "uProjection"),
+        m_tireMarkUniformProjection,
         1, GL_FALSE, projection.m);
     glUniform1f(
-        glGetUniformLocation(m_tireMarkProgram, "uPresentationTime"),
+        m_tireMarkUniformPresentationTime,
         presentationTime);
     glUniform1f(
-        glGetUniformLocation(m_tireMarkProgram, "uHistoryFloorBirthTime"),
+        m_tireMarkUniformHistoryFloorBirthTime,
         historyFloorBirthTime);
     glUniform1f(
-        glGetUniformLocation(m_tireMarkProgram, "uRetirementSeconds"),
+        m_tireMarkUniformRetirementSeconds,
         static_cast<float>(heritage::physics::SurfacePresentation::kTireMarkRetirementSeconds));
     glUniform1f(
-        glGetUniformLocation(m_tireMarkProgram, "uDetailedDistance"),
+        m_tireMarkUniformDetailedDistance,
         detailedDistance);
     glUniform1f(
-        glGetUniformLocation(m_tireMarkProgram, "uLodBlendWidth"),
+        m_tireMarkUniformLodBlendWidth,
         lodBlendWidth);
     glUniform1f(
-        glGetUniformLocation(m_tireMarkProgram, "uDrawDistance"),
+        m_tireMarkUniformDrawDistance,
         drawDistance);
     glUniform1f(
-        glGetUniformLocation(m_tireMarkProgram, "uVisibilityFadeWidth"),
+        m_tireMarkUniformVisibilityFadeWidth,
         visibilityFadeWidth);
     glUniform1f(
-        glGetUniformLocation(m_tireMarkProgram, "uCapDistance"),
+        m_tireMarkUniformCapDistance,
         static_cast<float>(kTireMarkGpuCapDistanceM));
-    const GLint chunkOriginLocation = glGetUniformLocation(
-        m_tireMarkProgram, "uChunkOriginRelative");
+    const GLint chunkOriginLocation = m_tireMarkUniformChunkOriginRelative;
 
     const double conservativeChunkRange = kTireMarkGpuDrawDistanceM
         + heritage::graphics::tiremarks::kChunkHorizontalHalfDiagonalM;
@@ -1589,7 +1570,8 @@ void SurfacePresentationRenderer::syncMarbleGpuCache(
         clearMarbleGpuCache();
     }
 
-    std::vector<heritage::physics::rubber::TrackRubberVisualCell> cells;
+    auto& cells = m_marbleCellScratch;
+    cells.clear();
     rubber.collectPresentationCellsUnsorted(
         cameraGlobal, kMarbleGpuDrawDistanceM + 8.0, cells, true);
     const float cellSize = rubber.description().cellSizeM;
@@ -1800,22 +1782,21 @@ void SurfacePresentationRenderer::drawMarbleGpuCache(
 
     glUseProgram(m_marbleProgram);
     glUniformMatrix4fv(
-        glGetUniformLocation(m_marbleProgram, "uView"),
+        m_marbleUniformView,
         1, GL_FALSE, view.m);
     glUniformMatrix4fv(
-        glGetUniformLocation(m_marbleProgram, "uProjection"),
+        m_marbleUniformProjection,
         1, GL_FALSE, projection.m);
     glUniform1f(
-        glGetUniformLocation(m_marbleProgram, "uDetailedDistance"), detailedDistance);
+        m_marbleUniformDetailedDistance, detailedDistance);
     glUniform1f(
-        glGetUniformLocation(m_marbleProgram, "uLodBlendWidth"), lodBlendWidth);
+        m_marbleUniformLodBlendWidth, lodBlendWidth);
     glUniform1f(
-        glGetUniformLocation(m_marbleProgram, "uDrawDistance"), drawDistance);
+        m_marbleUniformDrawDistance, drawDistance);
     glUniform1f(
-        glGetUniformLocation(m_marbleProgram, "uVisibilityFadeWidth"),
+        m_marbleUniformVisibilityFadeWidth,
         visibilityFadeWidth);
-    const GLint chunkOriginLocation = glGetUniformLocation(
-        m_marbleProgram, "uChunkOriginRelative");
+    const GLint chunkOriginLocation = m_marbleUniformChunkOriginRelative;
 
     const double conservativeRange = kMarbleGpuDrawDistanceM
         + heritage::graphics::tiremarks::kChunkHorizontalHalfDiagonalM;
@@ -1860,7 +1841,8 @@ void SurfacePresentationRenderer::drawMovingRubberGpu(
     const heritage::math::Mat4& projection,
     const heritage::math::DVec3& cameraGlobal) const
 {
-    std::vector<heritage::physics::rubber::TrackRubberTransientVisual> packets;
+    auto& packets = m_movingRubberPacketScratch;
+    packets.clear();
     surfaces.trackRubber().collectTransientPresentationUnsorted(
         cameraGlobal, kMovingRubberGpuDrawDistanceM, packets);
     if (packets.empty())
@@ -1932,15 +1914,15 @@ void SurfacePresentationRenderer::drawMovingRubberGpu(
     const float drawDistance = static_cast<float>(kMovingRubberGpuDrawDistanceM);
     glUseProgram(m_movingRubberProgram);
     glUniformMatrix4fv(
-        glGetUniformLocation(m_movingRubberProgram, "uView"),
+        m_movingRubberUniformView,
         1, GL_FALSE, view.m);
     glUniformMatrix4fv(
-        glGetUniformLocation(m_movingRubberProgram, "uProjection"),
+        m_movingRubberUniformProjection,
         1, GL_FALSE, projection.m);
     glUniform1f(
-        glGetUniformLocation(m_movingRubberProgram, "uDrawDistance"), drawDistance);
+        m_movingRubberUniformDrawDistance, drawDistance);
     glUniform1f(
-        glGetUniformLocation(m_movingRubberProgram, "uVisibilityFadeWidth"),
+        m_movingRubberUniformVisibilityFadeWidth,
         heritage::graphics::lod::visibilityFadeWidthMeters(drawDistance));
     glBindVertexArray(m_movingRubberVao);
     glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(records.size()));
@@ -1968,6 +1950,71 @@ bool SurfacePresentationRenderer::initialize()
         shutdown();
         return false;
     }
+
+    // PERF10: cache every presentation-program uniform location once. This
+    // removes dozens of driver string lookups from each rendered view.
+    m_trackUniformView = glGetUniformLocation(m_trackProgram, "uView");
+    m_trackUniformProjection = glGetUniformLocation(m_trackProgram, "uProjection");
+    m_trackUniformGamma = glGetUniformLocation(m_trackProgram, "uGamma");
+    m_trackUniformBrightness = glGetUniformLocation(m_trackProgram, "uBrightness");
+    m_trackUniformContrast = glGetUniformLocation(m_trackProgram, "uContrast");
+    m_trackUniformSaturation = glGetUniformLocation(m_trackProgram, "uSaturation");
+
+    m_tireMarkUniformView = glGetUniformLocation(m_tireMarkProgram, "uView");
+    m_tireMarkUniformProjection = glGetUniformLocation(m_tireMarkProgram, "uProjection");
+    m_tireMarkUniformPresentationTime = glGetUniformLocation(
+        m_tireMarkProgram, "uPresentationTime");
+    m_tireMarkUniformHistoryFloorBirthTime = glGetUniformLocation(
+        m_tireMarkProgram, "uHistoryFloorBirthTime");
+    m_tireMarkUniformRetirementSeconds = glGetUniformLocation(
+        m_tireMarkProgram, "uRetirementSeconds");
+    m_tireMarkUniformDetailedDistance = glGetUniformLocation(
+        m_tireMarkProgram, "uDetailedDistance");
+    m_tireMarkUniformLodBlendWidth = glGetUniformLocation(
+        m_tireMarkProgram, "uLodBlendWidth");
+    m_tireMarkUniformDrawDistance = glGetUniformLocation(
+        m_tireMarkProgram, "uDrawDistance");
+    m_tireMarkUniformVisibilityFadeWidth = glGetUniformLocation(
+        m_tireMarkProgram, "uVisibilityFadeWidth");
+    m_tireMarkUniformCapDistance = glGetUniformLocation(
+        m_tireMarkProgram, "uCapDistance");
+    m_tireMarkUniformChunkOriginRelative = glGetUniformLocation(
+        m_tireMarkProgram, "uChunkOriginRelative");
+
+    m_marbleUniformView = glGetUniformLocation(m_marbleProgram, "uView");
+    m_marbleUniformProjection = glGetUniformLocation(m_marbleProgram, "uProjection");
+    m_marbleUniformDetailedDistance = glGetUniformLocation(
+        m_marbleProgram, "uDetailedDistance");
+    m_marbleUniformLodBlendWidth = glGetUniformLocation(
+        m_marbleProgram, "uLodBlendWidth");
+    m_marbleUniformDrawDistance = glGetUniformLocation(
+        m_marbleProgram, "uDrawDistance");
+    m_marbleUniformVisibilityFadeWidth = glGetUniformLocation(
+        m_marbleProgram, "uVisibilityFadeWidth");
+    m_marbleUniformChunkOriginRelative = glGetUniformLocation(
+        m_marbleProgram, "uChunkOriginRelative");
+
+    m_movingRubberUniformView = glGetUniformLocation(
+        m_movingRubberProgram, "uView");
+    m_movingRubberUniformProjection = glGetUniformLocation(
+        m_movingRubberProgram, "uProjection");
+    m_movingRubberUniformDrawDistance = glGetUniformLocation(
+        m_movingRubberProgram, "uDrawDistance");
+    m_movingRubberUniformVisibilityFadeWidth = glGetUniformLocation(
+        m_movingRubberProgram, "uVisibilityFadeWidth");
+
+    m_particleUniformView = glGetUniformLocation(m_particleProgram, "uView");
+    m_particleUniformProjection = glGetUniformLocation(
+        m_particleProgram, "uProjection");
+
+    // PERF10: allocate transient staging capacity once, not once per frame.
+    // 240k * 28-byte TrackVertex was a ~6.7 MB (~6.4 MiB) reserve/free cycle per view.
+    m_trackVertexScratch.clear();
+    m_trackVertexScratch.reserve(240000);
+    m_particleVertexScratch.clear();
+    m_particleVertexScratch.reserve(1024);
+    m_marbleCellScratch.clear();
+    m_movingRubberPacketScratch.clear();
 
     glGenVertexArrays(1, &m_trackVao);
     glGenBuffers(1, &m_trackVbo);
@@ -2021,6 +2068,9 @@ bool SurfacePresentationRenderer::initialize()
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+    // WATER12: settled-water parcel rendering is retired from the active
+    // presentation path, so do not allocate its 65k-particle SSBOs/FBOs at
+    // startup. The class stays in-tree for future detached spray/splash work.
     return true;
 }
 
@@ -2052,12 +2102,48 @@ void SurfacePresentationRenderer::shutdown()
         glDeleteProgram(m_particleProgram);
     m_trackVbo = 0;
     m_trackVao = 0;
+    std::vector<SurfaceTrackVertex>().swap(m_trackVertexScratch);
+    std::vector<SurfaceParticleVertex>().swap(m_particleVertexScratch);
+    std::vector<heritage::physics::rubber::TrackRubberVisualCell>().swap(
+        m_marbleCellScratch);
+    std::vector<heritage::physics::rubber::TrackRubberTransientVisual>().swap(
+        m_movingRubberPacketScratch);
     m_particleVbo = 0;
     m_particleVao = 0;
     m_movingRubberVbo = 0;
     m_movingRubberVao = 0;
     m_movingRubberCapacity = 0;
     m_trackProgram = 0;
+    m_trackUniformView = -1;
+    m_trackUniformProjection = -1;
+    m_trackUniformGamma = -1;
+    m_trackUniformBrightness = -1;
+    m_trackUniformContrast = -1;
+    m_trackUniformSaturation = -1;
+    m_tireMarkUniformView = -1;
+    m_tireMarkUniformProjection = -1;
+    m_tireMarkUniformPresentationTime = -1;
+    m_tireMarkUniformHistoryFloorBirthTime = -1;
+    m_tireMarkUniformRetirementSeconds = -1;
+    m_tireMarkUniformDetailedDistance = -1;
+    m_tireMarkUniformLodBlendWidth = -1;
+    m_tireMarkUniformDrawDistance = -1;
+    m_tireMarkUniformVisibilityFadeWidth = -1;
+    m_tireMarkUniformCapDistance = -1;
+    m_tireMarkUniformChunkOriginRelative = -1;
+    m_marbleUniformView = -1;
+    m_marbleUniformProjection = -1;
+    m_marbleUniformDetailedDistance = -1;
+    m_marbleUniformLodBlendWidth = -1;
+    m_marbleUniformDrawDistance = -1;
+    m_marbleUniformVisibilityFadeWidth = -1;
+    m_marbleUniformChunkOriginRelative = -1;
+    m_movingRubberUniformView = -1;
+    m_movingRubberUniformProjection = -1;
+    m_movingRubberUniformDrawDistance = -1;
+    m_movingRubberUniformVisibilityFadeWidth = -1;
+    m_particleUniformView = -1;
+    m_particleUniformProjection = -1;
     m_tireMarkProgram = 0;
     m_marbleProgram = 0;
     m_movingRubberProgram = 0;
@@ -2069,8 +2155,12 @@ void SurfacePresentationRenderer::draw(
     const heritage::physics::SurfaceWorld& surfaces,
     const heritage::math::Mat4& projection,
     const heritage::settings::VideoSettings& videoSettings,
-    const heritage::camera::CameraFrame& cameraFrame) const
+    const heritage::camera::CameraFrame& cameraFrame,
+    const EnvironmentMap& environmentMap) const
 {
+    // WATER15 moved settled-water environment reflection to EntityMeshRenderer.
+    // Keep the shared draw signature stable for other presentation callers.
+    (void)environmentMap;
     if (!m_trackProgram || !m_tireMarkProgram || !m_marbleProgram
         || !m_movingRubberProgram || !m_particleProgram)
         return;
@@ -2089,8 +2179,8 @@ void SurfacePresentationRenderer::draw(
         { 0.0f, 0.0f, 0.0f }, cameraRelativeTarget, cameraUp);
     const heritage::math::DVec3 cameraGlobal = surfaces.localToGlobal(eyeLocal);
 
-    std::vector<TrackVertex> trackVertices;
-    trackVertices.reserve(240000);
+    auto& trackVertices = m_trackVertexScratch;
+    trackVertices.clear();
     constexpr double kTrackDrawDistanceM = 85.0;
     constexpr double kTrackDrawDistanceSquared =
         kTrackDrawDistanceM * kTrackDrawDistanceM;
@@ -2177,6 +2267,52 @@ void SurfacePresentationRenderer::draw(
         ++m_frameStats.visibleTrackMarks;
     }
 
+    // DSURF03B: water/moisture/flow diagnostics now come from Heritage
+    // Dynamic Surface authority. The old adaptive SurfaceHydrology solver is
+    // no longer advanced by SurfaceWorld and cannot own tire/rendered water.
+    const auto& hydrologyStats = surfaces.dynamicSurface().hydroStats();
+    constexpr std::size_t kCellsPerAuthorityPage =
+        heritage::physics::dynamicsurface::kHydroAuthorityResolution
+        * heritage::physics::dynamicsurface::kHydroAuthorityResolution;
+    m_frameStats.waterHydrologyStepMs = hydrologyStats.lastStepMilliseconds;
+    m_frameStats.waterHydrologyHz = hydrologyStats.activePages > 0u
+        ? heritage::physics::dynamicsurface::UpdateCadence::hydroNearHz : 0.0;
+    m_frameStats.waterWetCells = hydrologyStats.wetTexels;
+    m_frameStats.waterTotalCells = hydrologyStats.validTexels;
+    m_frameStats.waterSupportCells = hydrologyStats.validTexels;
+    m_frameStats.waterSimulationMinimumCellM =
+        heritage::physics::dynamicsurface::kHydroAuthorityTexelPitchM;
+    m_frameStats.waterSimulationMaximumCellM =
+        heritage::physics::dynamicsurface::kHydroAuthorityTexelPitchM;
+    m_frameStats.waterPresentationBasins = 0u;
+    m_frameStats.waterActivePresentationBasins = 0u;
+    m_frameStats.waterInterestSources =
+        surfaces.dynamicSurface().interestSources().size();
+    m_frameStats.waterCadence30Cells =
+        hydrologyStats.cadence30HzPages * kCellsPerAuthorityPage;
+    m_frameStats.waterCadence20Cells =
+        hydrologyStats.cadence20HzPages * kCellsPerAuthorityPage;
+    m_frameStats.waterCadence6Cells =
+        hydrologyStats.cadence6HzPages * kCellsPerAuthorityPage;
+    m_frameStats.waterCadence2Cells =
+        hydrologyStats.cadence2HzPages * kCellsPerAuthorityPage;
+    m_frameStats.waterCadenceBackgroundCells =
+        hydrologyStats.cadenceDistantPages * kCellsPerAuthorityPage;
+    m_frameStats.waterScheduledCells =
+        hydrologyStats.scheduledPagesThisAdvance * kCellsPerAuthorityPage;
+    m_frameStats.waterMaximumFlowSpeedMps = hydrologyStats.maximumFlowSpeedMps;
+
+    // DSURF04: Track.R is now the persistent, sheet-aware road-temperature
+    // authority. SurfaceWeather's scalar road temperature is only an
+    // environmental compatibility/reference value after this cutover.
+    const auto& thermalStats = surfaces.dynamicSurface().thermalStats();
+    m_frameStats.surfaceThermalStepMs = thermalStats.lastStepMilliseconds;
+    m_frameStats.surfaceThermalCells = thermalStats.validTexels;
+    m_frameStats.surfaceTemperatureMinimumC = thermalStats.minimumTemperatureC;
+    m_frameStats.surfaceTemperatureAverageC = thermalStats.averageTemperatureC;
+    m_frameStats.surfaceTemperatureMaximumC = thermalStats.maximumTemperatureC;
+    m_frameStats.surfaceThermalTireContacts = thermalStats.tireContactCount;
+
     // TIRE16L: resting marbles are synchronized as compact persistent GPU
     // cell records. Moving packets remain authoritative CPU simulation but
     // are uploaded one-record-per-packet and expanded into flakes on the GPU.
@@ -2189,6 +2325,11 @@ void SurfacePresentationRenderer::draw(
     glDepthMask(GL_FALSE);
     glDisable(GL_CULL_FACE);
 
+    // WATER15: no second settled-water geometry pass exists here. Wetness,
+    // drying lines, puddles, pooling, reflections and ripples are composited
+    // over the original scene surface by EntityMeshRenderer. This permanently
+    // removes the WATER08-WATER14 water-ring mesh from depth ownership.
+
     // TIRE16K persistent GPU tire-mark pages. No per-frame history vector,
     // sorting, ribbon tessellation or giant dynamic-VBO upload remains here.
     drawTireMarkGpuCache(
@@ -2200,15 +2341,15 @@ void SurfacePresentationRenderer::draw(
     {
         glUseProgram(m_trackProgram);
         glUniformMatrix4fv(
-            glGetUniformLocation(m_trackProgram, "uView"),
+            m_trackUniformView,
             1, GL_FALSE, view.m);
         glUniformMatrix4fv(
-            glGetUniformLocation(m_trackProgram, "uProjection"),
+            m_trackUniformProjection,
             1, GL_FALSE, projection.m);
-        glUniform1f(glGetUniformLocation(m_trackProgram, "uGamma"), videoSettings.gamma);
-        glUniform1f(glGetUniformLocation(m_trackProgram, "uBrightness"), videoSettings.brightness);
-        glUniform1f(glGetUniformLocation(m_trackProgram, "uContrast"), videoSettings.contrast);
-        glUniform1f(glGetUniformLocation(m_trackProgram, "uSaturation"), videoSettings.saturation);
+        glUniform1f(m_trackUniformGamma, videoSettings.gamma);
+        glUniform1f(m_trackUniformBrightness, videoSettings.brightness);
+        glUniform1f(m_trackUniformContrast, videoSettings.contrast);
+        glUniform1f(m_trackUniformSaturation, videoSettings.saturation);
         glBindVertexArray(m_trackVao);
         glBindBuffer(GL_ARRAY_BUFFER, m_trackVbo);
         glBufferData(
@@ -2221,8 +2362,8 @@ void SurfacePresentationRenderer::draw(
         m_frameStats.trackTriangles += trackVertices.size() / 3;
     }
 
-    std::vector<ParticleVertex> particleVertices;
-    particleVertices.reserve(1024);
+    auto& particleVertices = m_particleVertexScratch;
+    particleVertices.clear();
     constexpr double kParticleDrawDistanceM = 110.0;
     constexpr double kParticleDrawDistanceSquared =
         kParticleDrawDistanceM * kParticleDrawDistanceM;
@@ -2277,10 +2418,10 @@ void SurfacePresentationRenderer::draw(
     {
         glUseProgram(m_particleProgram);
         glUniformMatrix4fv(
-            glGetUniformLocation(m_particleProgram, "uView"),
+            m_particleUniformView,
             1, GL_FALSE, view.m);
         glUniformMatrix4fv(
-            glGetUniformLocation(m_particleProgram, "uProjection"),
+            m_particleUniformProjection,
             1, GL_FALSE, projection.m);
         glEnable(GL_PROGRAM_POINT_SIZE);
         glBindVertexArray(m_particleVao);

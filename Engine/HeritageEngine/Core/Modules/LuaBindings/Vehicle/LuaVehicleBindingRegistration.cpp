@@ -47,11 +47,18 @@ void LuaModuleRuntime::registerVehicleBindings()
     registerFunction("Vehicle", "LoadWheelTirePropertyFile", &LuaVehicleBindingHandlers::luaVehicleLoadWheelTirePropertyFile);
     registerFunction("Vehicle", "GetWheelTireModel", &LuaVehicleBindingHandlers::luaVehicleGetWheelTireModel);
     registerFunction("Vehicle", "GetWheelTireParameterInfo", &LuaVehicleBindingHandlers::luaVehicleGetWheelTireParameterInfo);
+    registerFunction("Vehicle", "RunTireCalibrationSweep", &LuaVehicleBindingHandlers::luaVehicleRunTireCalibrationSweep);
+    registerFunction("Vehicle", "ExportTireCalibrationSweepCsv", &LuaVehicleBindingHandlers::luaVehicleExportTireCalibrationSweepCsv);
+    registerFunction("Vehicle", "RunTireScenario", &LuaVehicleBindingHandlers::luaVehicleRunTireScenario);
+    registerFunction("Vehicle", "RunTireFleetBenchmark", &LuaVehicleBindingHandlers::luaVehicleRunTireFleetBenchmark);
+    registerFunction("Vehicle", "ExportTireScenarioCsv", &LuaVehicleBindingHandlers::luaVehicleExportTireScenarioCsv);
     registerFunction("Vehicle", "SetTireColdInflationPressure", &LuaVehicleBindingHandlers::luaVehicleSetTireColdInflationPressure);
     registerFunction("Vehicle", "TriggerWheelTireFailure", &LuaVehicleBindingHandlers::luaVehicleTriggerWheelTireFailure);
     registerFunction("Vehicle", "TriggerTireFailure", &LuaVehicleBindingHandlers::luaVehicleTriggerTireFailure);
     registerFunction("Vehicle", "GetTireColdInflationPressureRange", &LuaVehicleBindingHandlers::luaVehicleGetTireColdInflationPressureRange);
     registerFunction("Vehicle", "ResetTirePhysicalState", &LuaVehicleBindingHandlers::luaVehicleResetTirePhysicalState);
+    registerFunction("Vehicle", "SetTireContactFidelity", &LuaVehicleBindingHandlers::luaVehicleSetTireContactFidelity);
+    registerFunction("Vehicle", "GetTireContactFidelity", &LuaVehicleBindingHandlers::luaVehicleGetTireContactFidelity);
     registerFunction("Vehicle", "SetSurfacePreset", &LuaVehicleBindingHandlers::luaVehicleSetSurfacePreset);
     registerFunction("Vehicle", "GetSurfacePreset", &LuaVehicleBindingHandlers::luaVehicleGetSurfacePreset);
     registerFunction("Vehicle", "SetHighRateHertz", &LuaVehicleBindingHandlers::luaVehicleSetHighRateHertz);

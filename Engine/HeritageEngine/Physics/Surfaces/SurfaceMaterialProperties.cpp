@@ -113,6 +113,75 @@ SurfaceDeformableProperties deepSnowProperties()
     return p;
 }
 
+SurfaceHydrologyProperties hydrologyProperties(SurfaceMaterial material)
+{
+    SurfaceHydrologyProperties p;
+    switch (material)
+    {
+    case SurfaceMaterial::Gravel:
+        p.infiltrationCapacityMmPerHour = 28.0;
+        p.flowRoughness = 0.060;
+        p.depressionStorageMm = 1.20;
+        break;
+    case SurfaceMaterial::Dirt:
+        p.infiltrationCapacityMmPerHour = 6.0;
+        p.flowRoughness = 0.085;
+        p.depressionStorageMm = 1.80;
+        break;
+    case SurfaceMaterial::Grass:
+        p.infiltrationCapacityMmPerHour = 14.0;
+        p.flowRoughness = 0.110;
+        p.depressionStorageMm = 2.50;
+        break;
+    case SurfaceMaterial::Mud:
+        p.infiltrationCapacityMmPerHour = 0.8;
+        p.flowRoughness = 0.140;
+        p.depressionStorageMm = 3.0;
+        break;
+    case SurfaceMaterial::Sand:
+        p.infiltrationCapacityMmPerHour = 40.0;
+        p.flowRoughness = 0.090;
+        p.depressionStorageMm = 2.0;
+        break;
+    case SurfaceMaterial::SoftSoil:
+        p.infiltrationCapacityMmPerHour = 9.0;
+        p.flowRoughness = 0.120;
+        p.depressionStorageMm = 2.5;
+        break;
+    case SurfaceMaterial::Snow:
+    case SurfaceMaterial::DeepSnow:
+        p.infiltrationCapacityMmPerHour = 1.0;
+        p.flowRoughness = 0.100;
+        p.depressionStorageMm = 2.0;
+        break;
+    case SurfaceMaterial::Ice:
+        p.infiltrationCapacityMmPerHour = 0.0;
+        p.flowRoughness = 0.010;
+        p.depressionStorageMm = 0.05;
+        break;
+    case SurfaceMaterial::Kerb:
+        p.infiltrationCapacityMmPerHour = 0.03;
+        p.flowRoughness = 0.025;
+        p.depressionStorageMm = 0.15;
+        break;
+    case SurfaceMaterial::PaintedLine:
+        p.infiltrationCapacityMmPerHour = 0.01;
+        p.flowRoughness = 0.012;
+        p.depressionStorageMm = 0.08;
+        break;
+    case SurfaceMaterial::Default:
+    case SurfaceMaterial::Asphalt:
+    default:
+        // Dense conventional asphalt: almost all meaningful removal comes
+        // from camber/runoff, drains and evaporation, not rapid absorption.
+        p.infiltrationCapacityMmPerHour = 0.15;
+        p.flowRoughness = 0.020;
+        p.depressionStorageMm = 0.20;
+        break;
+    }
+    return p;
+}
+
 } // namespace
 
 bool deformableSurfaceMaterial(SurfaceMaterial material)
@@ -135,6 +204,7 @@ double defaultSurfaceTemperatureC(SurfaceMaterial material)
 SurfaceMaterialProperties defaultSurfaceMaterialProperties(SurfaceMaterial material)
 {
     SurfaceMaterialProperties result;
+    result.hydrology = hydrologyProperties(material);
     switch (material)
     {
     case SurfaceMaterial::Mud:
@@ -211,7 +281,20 @@ bool validSurfaceDeformableProperties(const SurfaceDeformableProperties& p)
 
 bool validSurfaceMaterialProperties(const SurfaceMaterialProperties& value)
 {
-    return validSurfaceDeformableProperties(value.deformable)
+    const SurfaceHydrologyProperties& h = value.hydrology;
+    const bool validHydrology = finite(h.infiltrationCapacityMmPerHour)
+        && h.infiltrationCapacityMmPerHour >= 0.0
+        && h.infiltrationCapacityMmPerHour <= 1000.0
+        && finite(h.drainageCapacityMmPerHour)
+        && h.drainageCapacityMmPerHour >= 0.0
+        && h.drainageCapacityMmPerHour <= 100000.0
+        && finite(h.flowRoughness)
+        && h.flowRoughness >= 0.001 && h.flowRoughness <= 1.0
+        && finite(h.depressionStorageMm)
+        && h.depressionStorageMm >= 0.0
+        && h.depressionStorageMm <= 100.0;
+    return validHydrology
+        && validSurfaceDeformableProperties(value.deformable)
         && (!value.hasAuthoredSurfaceTemperature
             || (finite(value.authoredSurfaceTemperatureC)
                 && value.authoredSurfaceTemperatureC >= -100.0

@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include "../../Audio/AudioSystem.hpp"
+#include "../../Core/Jobs/JobSystem.hpp"
 #include "../../Core/Settings/AudioSettings.hpp"
 #include "../../Core/Settings/VideoSettings.hpp"
 #include "../../Graphics/DisplaySystem.hpp"
@@ -21,6 +22,11 @@ namespace heritage::engine {
 // services no longer live as anonymous globals in HeritageEngine.cpp.
 struct EngineRuntimeState final
 {
+    EngineRuntimeState()
+    {
+        physics.setJobSystem(&jobs);
+    }
+
     ImFont* fontSmall = nullptr;
     ImFont* fontNormal = nullptr;
     ImFont* fontLarge = nullptr;
@@ -32,6 +38,9 @@ struct EngineRuntimeState final
     heritage::graphics::WindowSystem window;
     heritage::audio::AudioSystem audio;
     heritage::input::InputSystem input;
+    // JOB01: declared before PhysicsWorld so worker threads outlive every
+    // subsystem that may submit work during PhysicsWorld teardown/reset.
+    heritage::jobs::JobSystem jobs;
     heritage::physics::PhysicsWorld physics;
 
     std::filesystem::path videoSettingsPath;

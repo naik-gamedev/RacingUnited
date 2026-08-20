@@ -31,7 +31,19 @@ function DrawVehicleDrivePanel()
     end
     UI.Text(string.format("Detected wheelbase / steer track: %.3f / %.3f m",
         vehicleDetectedWheelbase, vehicleDetectedSteerTrack))
-    UI.TextWrapped("W throttle | S brake | A/D steer | Left Shift handbrake | E/Q shift | R reverse | N neutral")
+    local actionThrottle = Input.Value("Throttle")
+    local actionBrake = Input.Value("Brake")
+    local keyboardThrottle, keyboardBrake = ReadVehicleDriveKeyboardInputs()
+    local resolvedThrottle, resolvedBrake = ReadVehicleDriveInputs()
+    UI.Text(string.format(
+        "Drive T/B action %.2f/%.2f | keyboard %d/%d | resolved %.2f/%.2f",
+        actionThrottle, actionBrake,
+        keyboardThrottle and 1 or 0, keyboardBrake and 1 or 0,
+        resolvedThrottle, resolvedBrake))
+    UI.TextWrapped("Throttle: " .. Input.GetBinding("Throttle")
+        .. " | Brake: " .. Input.GetBinding("Brake"))
+    UI.TextWrapped("Steer left: " .. Input.GetBinding("Steer Left")
+        .. " | Steer right: " .. Input.GetBinding("Steer Right"))
 
     vehicleHighRateHertz, changed = UI.SliderFloat(
         "Vehicle tire/suspension update rate", vehicleHighRateHertz, 240.0, 1200.0, "%.0f Hz")

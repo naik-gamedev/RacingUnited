@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "../../Camera/ChaseCamera.hpp"
+#include "../../Camera/VehicleCameraController.hpp"
 #include "../../Core/Diagnostics/PerformanceMonitor.hpp"
 #include "../../Core/Entities/EntityRegistry.hpp"
 #include "../../Core/Math/Math.hpp"
@@ -27,7 +28,9 @@ void updateEngineSimulation(
     heritage::graphics::EnvironmentSystem& environmentSystem,
     heritage::entities::EntityRegistry& entityRegistry,
     heritage::camera::ChaseCamera& chaseCamera,
+    heritage::camera::VehicleCameraController& vehicleCamera,
     const heritage::camera::ChaseCameraInput& chaseCameraInput,
+    const heritage::camera::VehicleCameraFlyInput& vehicleCameraFlyInput,
     heritage::camera::CameraFrame& entityCameraFrame,
     heritage::diagnostics::PerformanceMonitor& performanceMonitor)
 {
@@ -49,6 +52,35 @@ void updateEngineSimulation(
         PerformanceSection::Physics,
         (glfwGetTime() - physicsCpuStart) * 1000.0);
 
+    // JOB03 hydrology cadence is centered on actual simulation-interest
+    // sources, not on a camera midpoint. Single-player supplies the player
+    // vehicle here; future split-screen can call setHydrologyInterestSources()
+    // with both player positions and each water chunk will use the nearest one.
+    const heritage::entities::EntityHandle cameraPlayer =
+        entityRegistry.findByName("Player Vehicle Root");
+    bool haveHydrologyInterest = false;
+    heritage::math::DVec3 hydrologyInterestGlobal{};
+    if (cameraPlayer != heritage::entities::InvalidEntity)
+    {
+        const heritage::physics::BodyHandle interestBody =
+            physics.rigidBodies().bodyForEntity(cameraPlayer);
+        heritage::physics::RigidBodyPose interestPose{};
+        bool haveInterestPose = interestBody != heritage::physics::InvalidBody
+            && physics.rigidBodies().pose(interestBody, interestPose);
+        if (!haveInterestPose)
+            haveInterestPose = entityRegistry.worldPosition(
+                cameraPlayer, interestPose.position);
+        if (haveInterestPose)
+        {
+            hydrologyInterestGlobal = physics.localToGlobal(interestPose.position);
+            haveHydrologyInterest = true;
+        }
+    }
+    if (haveHydrologyInterest)
+        physics.surfaces().setHydrologyInterestSource(hydrologyInterestGlobal);
+    else
+        physics.surfaces().clearHydrologyInterestSources();
+
     // TIRE15B2 transient spray/dust/debris ages on simulation time rather
     // than wall-clock time, so pause/single-step/time-scale remain coherent.
     const float surfacePresentationDelta =
@@ -67,8 +99,6 @@ void updateEngineSimulation(
     // happen once per monitor, so chase-camera springs must live here rather
     // than inside an individual renderer draw call.
     entityCameraFrame = {};
-    const heritage::entities::EntityHandle cameraPlayer =
-        entityRegistry.findByName("Player Vehicle Root");
     // CAM01A: a driveable player entity is sufficient to own the chase
     // camera. Do NOT gate it on the scene-visual entity: GLB hot reload,
     // world reload, or a transient visual-entity rebuild used to kick the
@@ -145,70 +175,96 @@ void updateEngineSimulation(
                     + static_cast<double>(cameraLinearVelocity.z)
                         * static_cast<double>(cameraForwardWorld.z);
             }
-            chaseCamera.update(
-                globalPlayerPosition,
-                cameraForwardWorld,
-                dt,
-                frameCameraInput);
-
-            // CAM03 collision: ray from a point above the chassis toward
-            // the DESIRED full-distance eye. Static scene triangles are
-            // included by CollisionSystem::raycast, so ditches, hills and
-            // walls pull the camera inward instead of letting it pass
-            // through terrain. The player chassis body is explicitly ignored.
-            Vec3 collisionAnchorLocal{};
-            Vec3 desiredEyeLocal{};
-            double collisionDistanceLimit = 1000000.0;
-            if (physics.globalToLocal(
-                    chaseCamera.collisionAnchorGlobal(),
-                    collisionAnchorLocal)
-                && physics.globalToLocal(
-                    chaseCamera.desiredEyeGlobal(),
-                    desiredEyeLocal))
+            // CAM06 paused inspection: a car paused while moving retains its
+            // physical velocity state. Do not let that frozen velocity trigger
+            // the chase camera's automatic return-to-rear while the ESC menu
+            // is open; the player's paused orbit should stay where they put it.
+            if (menuOpen)
+                frameCameraInput.forwardSpeedMetersPerSecond = 0.0;
+            if (vehicleCamera.active())
             {
-                const Vec3 collisionRay{
-                    desiredEyeLocal.x - collisionAnchorLocal.x,
-                    desiredEyeLocal.y - collisionAnchorLocal.y,
-                    desiredEyeLocal.z - collisionAnchorLocal.z
-                };
-                const float probeDistance = std::sqrt(
-                    collisionRay.x * collisionRay.x
-                    + collisionRay.y * collisionRay.y
-                    + collisionRay.z * collisionRay.z);
-                collisionDistanceLimit = static_cast<double>(probeDistance);
-                if (probeDistance > 0.0001f)
+                // CAMLAB01 fixed/authoring views are rigidly vehicle-local and
+                // consume the full interpolated chassis basis. This is what
+                // keeps wheel/suspension cameras attached through pitch, roll
+                // and yaw instead of behaving like a horizontal chase camera.
+                vehicleCamera.updateFly(vehicleCameraFlyInput, dt);
+                vehicleCamera.buildLocalFrame(
+                    globalPlayerPosition,
+                    cameraRightWorld,
+                    cameraUpWorld,
+                    cameraForwardWorld,
+                    physics.globalOrigin(),
+                    entityCameraFrame);
+                chaseCamera.reset();
+            }
+            else
+            {
+                chaseCamera.update(
+                    globalPlayerPosition,
+                    cameraForwardWorld,
+                    dt,
+                    frameCameraInput);
+
+                // CAM03 collision: ray from a point above the chassis toward
+                // the DESIRED full-distance eye. Static scene triangles are
+                // included by CollisionSystem::raycast, so ditches, hills and
+                // walls pull the camera inward instead of letting it pass
+                // through terrain. The player chassis body is explicitly ignored.
+                Vec3 collisionAnchorLocal{};
+                Vec3 desiredEyeLocal{};
+                double collisionDistanceLimit = 1000000.0;
+                if (physics.globalToLocal(
+                        chaseCamera.collisionAnchorGlobal(),
+                        collisionAnchorLocal)
+                    && physics.globalToLocal(
+                        chaseCamera.desiredEyeGlobal(),
+                        desiredEyeLocal))
                 {
-                    heritage::physics::CollisionQueryFilter filter{};
-                    filter.includeTriggers = false;
-                    filter.ignoredBody = cameraBody;
-                    heritage::physics::RaycastHit cameraHit{};
-                    if (physics.collisions().raycast(
-                            collisionAnchorLocal,
-                            collisionRay,
-                            probeDistance,
-                            filter,
-                            physics.rigidBodies(),
-                            cameraHit))
+                    const Vec3 collisionRay{
+                        desiredEyeLocal.x - collisionAnchorLocal.x,
+                        desiredEyeLocal.y - collisionAnchorLocal.y,
+                        desiredEyeLocal.z - collisionAnchorLocal.z
+                    };
+                    const float probeDistance = std::sqrt(
+                        collisionRay.x * collisionRay.x
+                        + collisionRay.y * collisionRay.y
+                        + collisionRay.z * collisionRay.z);
+                    collisionDistanceLimit = static_cast<double>(probeDistance);
+                    if (probeDistance > 0.0001f)
                     {
-                        collisionDistanceLimit = std::max(
-                            chaseCamera.tuning().minimumCollisionDistanceMeters,
-                            static_cast<double>(cameraHit.distance)
-                                - chaseCamera.tuning().collisionPaddingMeters);
+                        heritage::physics::CollisionQueryFilter filter{};
+                        filter.includeTriggers = false;
+                        filter.ignoredBody = cameraBody;
+                        heritage::physics::RaycastHit cameraHit{};
+                        if (physics.collisions().raycast(
+                                collisionAnchorLocal,
+                                collisionRay,
+                                probeDistance,
+                                filter,
+                                physics.rigidBodies(),
+                                cameraHit))
+                        {
+                            collisionDistanceLimit = std::max(
+                                chaseCamera.tuning().minimumCollisionDistanceMeters,
+                                static_cast<double>(cameraHit.distance)
+                                    - chaseCamera.tuning().collisionPaddingMeters);
+                        }
                     }
                 }
-            }
 
-            chaseCamera.resolveCollisionDistance(
-                collisionDistanceLimit,
-                dt);
-            chaseCamera.buildLocalFrame(
-                physics.globalOrigin(),
-                entityCameraFrame);
+                chaseCamera.resolveCollisionDistance(
+                    collisionDistanceLimit,
+                    dt);
+                chaseCamera.buildLocalFrame(
+                    physics.globalOrigin(),
+                    entityCameraFrame);
+            }
         }
     }
     else
     {
         chaseCamera.reset();
+        vehicleCamera.setFlyEnabled(false);
     }
 
     // Only scenes with NO player vehicle use the old showroom orbit. If

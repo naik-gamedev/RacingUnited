@@ -118,6 +118,12 @@ struct LuaPhysicsBindingHandlers
     static int luaPhysicsGetGravity(lua_State* state);
     static int luaPhysicsSetGravity(lua_State* state);
     static int luaPhysicsGetSurfaceEnvironment(lua_State* state);
+    static int luaPhysicsGetSurfaceWeather(lua_State* state);
+    static int luaPhysicsSetSurfaceWeather(lua_State* state);
+    static int luaPhysicsResetSurfaceWeather(lua_State* state);
+    static int luaPhysicsGetSurfaceHydrology(lua_State* state);
+    static int luaPhysicsResetSurfaceHydrology(lua_State* state);
+    static int luaPhysicsSetSurfaceHydrologyDebug(lua_State* state);
     static int luaPhysicsGetSurfacePresentation(lua_State* state);
     static int luaPhysicsGetTireDevelopmentControls(lua_State* state);
     static int luaPhysicsSetTireDevelopmentControls(lua_State* state);

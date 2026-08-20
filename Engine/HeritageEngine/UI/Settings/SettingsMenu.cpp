@@ -19,7 +19,7 @@ void drawSettingsMenu(
     int desktopHeight,
     const DisplayChangeHandler& initiateDisplayChange)
 {
-    if (!ImGui::BeginTabBar("MenuSettings"))
+    if (!ImGui::BeginTabBar("MenuSettings", ImGuiTabBarFlags_FittingPolicyResizeDown))
         return;
 
     if (ImGui::BeginTabItem("Video"))

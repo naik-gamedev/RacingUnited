@@ -125,6 +125,10 @@ local function CreatePlayerWorldVisual()
 
     Entity.AddTag(entity, "PlayerWorld")
     Entity.AddTag(entity, "CreatorAuthored")
+    -- Generic engine-facing render contract: this authored world geometry may
+    -- receive the hydrology wetness atlas. The renderer does not hard-code a
+    -- Racing United-specific entity/tag name.
+    Entity.AddTag(entity, "SurfaceWetnessReceiver")
     local originX, originY, originZ = Physics.GetWorldOrigin()
     Entity.SetLocalPosition(
         entity,

@@ -23,11 +23,16 @@ bool InputSystem::registerAction(
     std::vector<ParsedBinding> parsedDefaults;
     std::vector<std::string> canonicalDefaults;
     std::string parseError;
-    if (!parseBindingList(
-        defaultBinding,
-        parsedDefaults,
-        canonicalDefaults,
-        parseError))
+    // INPUT03: a module may deliberately declare a bindable action without a
+    // factory default. This is important for large optional control surfaces
+    // such as H-pattern/direct gear selectors: exposing Gear 1..24 must not
+    // steal arbitrary keyboard/gamepad buttons merely to make the row exist.
+    if (!trim(defaultBinding).empty()
+        && !parseBindingList(
+            defaultBinding,
+            parsedDefaults,
+            canonicalDefaults,
+            parseError))
     {
         m_lastError = "Action '" + cleanName + "': " + parseError;
         return false;

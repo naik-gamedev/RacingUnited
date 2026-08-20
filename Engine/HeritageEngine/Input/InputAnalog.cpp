@@ -211,11 +211,13 @@ InputAnalogSettings InputSystem::defaultAnalogSettings(
     if (!parsedBindingSupportsAnalog(binding))
         return settings;
 
-    const bool directInputAxis = binding.type == BindingType::DirectInput;
-    const bool trigger = binding.type != BindingType::DirectInput
-        && (binding.code == GLFW_GAMEPAD_AXIS_LEFT_TRIGGER
-            || binding.code == GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER);
-    settings.innerDeadzone = directInputAxis || trigger ? 0.02f : 0.08f;
+    // INPUT07 precision policy: Heritage never invents an analogue deadzone.
+    // Hardware axes are delivered at their full reported resolution and the
+    // user/profile is the sole authority for any inner/outer deadzone. This
+    // intentionally applies to steering wheels, pedals, triggers and sticks.
+    // Resetting an analogue binding therefore restores a truly raw 0/0
+    // deadzone rather than silently reintroducing device-specific defaults.
+    settings.innerDeadzone = 0.0f;
     settings.outerDeadzone = 0.0f;
     return settings;
 }

@@ -20,6 +20,7 @@
 #include "../../Graphics/Renderer/EntityDebugRenderer.hpp"
 #include "../../Graphics/Renderer/EntityMeshRenderer.hpp"
 #include "../../Graphics/Renderer/SurfacePresentationRenderer.hpp"
+#include "../../Graphics/Renderer/WeatherPresentationRenderer.hpp"
 #include "../../Physics/Surfaces/SurfaceWorld.hpp"
 
 namespace heritage::engine {
@@ -109,6 +110,7 @@ bool renderEngineScene(
     heritage::graphics::EntityMeshRenderer& entityMeshRenderer,
     heritage::graphics::EntityDebugRenderer& entityDebugRenderer,
     heritage::graphics::SurfacePresentationRenderer& surfacePresentationRenderer,
+    heritage::graphics::WeatherPresentationRenderer& weatherPresentationRenderer,
     const heritage::physics::SurfaceWorld& surfaces,
     heritage::entities::EntityRegistry& entityRegistry,
     const heritage::camera::CameraFrame& entityCameraFrame,
@@ -144,6 +146,7 @@ bool renderEngineScene(
     entityMeshRenderer.beginFrameStats();
     entityDebugRenderer.beginFrameStats();
     surfacePresentationRenderer.beginFrameStats();
+    weatherPresentationRenderer.beginFrameStats();
 
     bool gpuTimerActiveThisFrame = false;
     if (!state.gpuTimerQueries.empty())
@@ -179,7 +182,10 @@ bool renderEngineScene(
     const double renderCpuStart = glfwGetTime();
     double renderModuleMs = 0.0;
     double renderMeshMs = 0.0;
+    double renderSurfaceMs = 0.0;
+    double renderWeatherMs = 0.0;
     double renderDebugMs = 0.0;
+    double renderFramebufferSetupMs = 0.0;
     double renderMsaaResolveMs = 0.0;
     double renderPostProcessMs = 0.0;
     double renderSpanCompositeMs = 0.0;
@@ -190,12 +196,16 @@ bool renderEngineScene(
 
     if (spanning)
     {
-        glBindFramebuffer(GL_FRAMEBUFFER, display.spanFBO());
-        glViewport(0, 0, display.spanWidth(), display.spanHeight());
-        glClearColor(sceneClearColor.x, sceneClearColor.y, sceneClearColor.z, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_SCISSOR_TEST);
-        glEnable(GL_DEPTH_TEST);
+        {
+            const double sectionStart = glfwGetTime();
+            glBindFramebuffer(GL_FRAMEBUFFER, display.spanFBO());
+            glViewport(0, 0, display.spanWidth(), display.spanHeight());
+            glClearColor(sceneClearColor.x, sceneClearColor.y, sceneClearColor.z, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+            glEnable(GL_SCISSOR_TEST);
+            glEnable(GL_DEPTH_TEST);
+            renderFramebufferSetupMs += (glfwGetTime() - sectionStart) * 1000.0;
+        }
 
         int minX = INT_MAX, minY = INT_MAX, maxY = INT_MIN;
         for (std::size_t i = 0; i < display.monitors().size(); ++i)
@@ -223,9 +233,13 @@ bool renderEngineScene(
             const int fboW = static_cast<int>(floorf(monW * display.spanScale()));
             const int fboH = static_cast<int>(floorf(monH * display.spanScale()));
 
-            glViewport(fboX, fboY, fboW, fboH);
-            glScissor(fboX, fboY, fboW, fboH);
-            glClear(GL_DEPTH_BUFFER_BIT);
+            {
+                const double sectionStart = glfwGetTime();
+                glViewport(fboX, fboY, fboW, fboH);
+                glScissor(fboX, fboY, fboW, fboH);
+                glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+                renderFramebufferSetupMs += (glfwGetTime() - sectionStart) * 1000.0;
+            }
 
             const Mat4 projOff = display.getOffAxisProjection(i);
 
@@ -246,14 +260,30 @@ bool renderEngineScene(
                     videoSettings,
                     static_cast<float>(now),
                     entityCameraFrame,
-                    wireframeVisible);
+                    wireframeVisible,
+                    &surfaces);
                 renderMeshMs += (glfwGetTime() - sectionStart) * 1000.0;
             }
-            surfacePresentationRenderer.draw(
-                surfaces,
-                projOff,
-                videoSettings,
-                entityCameraFrame);
+            {
+                const double sectionStart = glfwGetTime();
+                surfacePresentationRenderer.draw(
+                    surfaces,
+                    projOff,
+                    videoSettings,
+                    entityCameraFrame,
+                    entityMeshRenderer.environmentMap());
+                renderSurfaceMs += (glfwGetTime() - sectionStart) * 1000.0;
+            }
+            {
+                const double sectionStart = glfwGetTime();
+                weatherPresentationRenderer.draw(
+                    surfaces,
+                    projOff,
+                    entityCameraFrame,
+                    static_cast<float>(now),
+                    entityMeshRenderer.environmentMap());
+                renderWeatherMs += (glfwGetTime() - sectionStart) * 1000.0;
+            }
             {
                 const double sectionStart = glfwGetTime();
                 entityDebugRenderer.draw(
@@ -280,15 +310,19 @@ bool renderEngineScene(
     }
     else
     {
-        if (needMSAA && state.msaaFBO.fbo)
-            glBindFramebuffer(GL_FRAMEBUFFER, state.msaaFBO.fbo);
-        else
-            glBindFramebuffer(GL_FRAMEBUFFER, state.resolveFBO.fbo);
+        {
+            const double sectionStart = glfwGetTime();
+            if (needMSAA && state.msaaFBO.fbo)
+                glBindFramebuffer(GL_FRAMEBUFFER, state.msaaFBO.fbo);
+            else
+                glBindFramebuffer(GL_FRAMEBUFFER, state.resolveFBO.fbo);
 
-        glViewport(0, 0, rW, rH);
-        glClearColor(sceneClearColor.x, sceneClearColor.y, sceneClearColor.z, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
+            glViewport(0, 0, rW, rH);
+            glClearColor(sceneClearColor.x, sceneClearColor.y, sceneClearColor.z, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            renderFramebufferSetupMs += (glfwGetTime() - sectionStart) * 1000.0;
+        }
 
         const Mat4 proj = perspectiveReversedZ(
             0.6f,
@@ -313,14 +347,30 @@ bool renderEngineScene(
                 videoSettings,
                 static_cast<float>(now),
                 entityCameraFrame,
-                wireframeVisible);
+                wireframeVisible,
+                &surfaces);
             renderMeshMs += (glfwGetTime() - sectionStart) * 1000.0;
         }
-        surfacePresentationRenderer.draw(
-            surfaces,
-            proj,
-            videoSettings,
-            entityCameraFrame);
+        {
+            const double sectionStart = glfwGetTime();
+            surfacePresentationRenderer.draw(
+                surfaces,
+                proj,
+                videoSettings,
+                entityCameraFrame,
+                entityMeshRenderer.environmentMap());
+            renderSurfaceMs += (glfwGetTime() - sectionStart) * 1000.0;
+        }
+        {
+            const double sectionStart = glfwGetTime();
+            weatherPresentationRenderer.draw(
+                surfaces,
+                proj,
+                entityCameraFrame,
+                static_cast<float>(now),
+                entityMeshRenderer.environmentMap());
+            renderWeatherMs += (glfwGetTime() - sectionStart) * 1000.0;
+        }
         {
             const double sectionStart = glfwGetTime();
             entityDebugRenderer.draw(
@@ -378,7 +428,11 @@ bool renderEngineScene(
         }
     }
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    {
+        const double sectionStart = glfwGetTime();
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        renderFramebufferSetupMs += (glfwGetTime() - sectionStart) * 1000.0;
+    }
     performanceMonitor.recordRenderSection(
         RenderPerformanceSection::ModuleRender,
         renderModuleMs);
@@ -386,8 +440,17 @@ bool renderEngineScene(
         RenderPerformanceSection::MeshRenderer,
         renderMeshMs);
     performanceMonitor.recordRenderSection(
+        RenderPerformanceSection::SurfacePresentation,
+        renderSurfaceMs);
+    performanceMonitor.recordRenderSection(
+        RenderPerformanceSection::WeatherPresentation,
+        renderWeatherMs);
+    performanceMonitor.recordRenderSection(
         RenderPerformanceSection::DebugRenderer,
         renderDebugMs);
+    performanceMonitor.recordRenderSection(
+        RenderPerformanceSection::FramebufferSetup,
+        renderFramebufferSetupMs);
     performanceMonitor.recordRenderSection(
         RenderPerformanceSection::MsaaResolve,
         renderMsaaResolveMs);

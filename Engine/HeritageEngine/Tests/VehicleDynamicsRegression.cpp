@@ -79,8 +79,20 @@ bool brakeHeldSteeringWakesAndTracks()
     if (!world.vehicles.wheelState(world.vehicle, 0, before))
         return false;
 
-    // Reproduce the user's controller case: service brake remains fully held
-    // while steering is commanded from a parked/sleeping state.
+    // INPUT08 regression: the old parked-rest wake gate ignored steering
+    // commands smaller than 0.01 road-wheel degree. 0.0001 normalized input
+    // requests only about 0.0038 degree on the prototype car, so it must still
+    // wake and become visible when the user has chosen zero deadzone.
+    world.vehicles.setInputs(world.vehicle, 0.0f, 1.0f, 0.0001f, 0.0f);
+    stepWorld(world);
+
+    bool sleepingAfterMicroSteer = true;
+    world.bodies.sleeping(world.chassis, sleepingAfterMicroSteer);
+    WheelState afterMicroSteer{};
+    if (!world.vehicles.wheelState(world.vehicle, 0, afterMicroSteer))
+        return false;
+
+    // Preserve the original large-command controller regression too.
     world.vehicles.setInputs(world.vehicle, 0.0f, 1.0f, 0.75f, 0.0f);
     stepWorld(world);
 
@@ -107,6 +119,9 @@ bool brakeHeldSteeringWakesAndTracks()
     std::cout
         << "brake_held_steering sleeping_before="
         << (sleepingBeforeSteer ? "true" : "false")
+        << " woke_on_micro_steer="
+        << (!sleepingAfterMicroSteer ? "true" : "false")
+        << " micro_deg=" << afterMicroSteer.steerAngleDegrees
         << " woke_on_steer=" << (!sleepingAfterSteer ? "true" : "false")
         << " before_deg=" << before.steerAngleDegrees
         << " right_deg=" << afterRight.steerAngleDegrees
@@ -114,6 +129,8 @@ bool brakeHeldSteeringWakesAndTracks()
         << '\n';
 
     return sleepingBeforeSteer
+        && !sleepingAfterMicroSteer
+        && std::abs(afterMicroSteer.steerAngleDegrees) > 0.0005f
         && !sleepingAfterSteer
         && afterRight.steerAngleDegrees > before.steerAngleDegrees + 2.0f
         && afterLeft.steerAngleDegrees < -2.0f;

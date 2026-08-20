@@ -28,7 +28,10 @@ enum class RenderPerformanceSection : std::size_t
 {
     ModuleRender = 0,
     MeshRenderer,
+    SurfacePresentation,
+    WeatherPresentation,
     DebugRenderer,
+    FramebufferSetup,
     MsaaResolve,
     PostProcess,
     SpanComposite,
@@ -57,7 +60,10 @@ struct PerformanceSnapshot
     // setup/state work not wrapped by a named child timer.
     double renderModuleMs = 0.0;
     double renderMeshMs = 0.0;
+    double renderSurfaceMs = 0.0;
+    double renderWeatherMs = 0.0;
     double renderDebugMs = 0.0;
+    double renderFramebufferSetupMs = 0.0;
     double renderMsaaResolveMs = 0.0;
     double renderPostProcessMs = 0.0;
     double renderSpanCompositeMs = 0.0;
@@ -93,7 +99,10 @@ struct PerformanceSnapshot
     double hitchRenderCpuMs = 0.0;
     double hitchRenderModuleMs = 0.0;
     double hitchRenderMeshMs = 0.0;
+    double hitchRenderSurfaceMs = 0.0;
+    double hitchRenderWeatherMs = 0.0;
     double hitchRenderDebugMs = 0.0;
+    double hitchRenderFramebufferSetupMs = 0.0;
     double hitchRenderMsaaResolveMs = 0.0;
     double hitchRenderPostProcessMs = 0.0;
     double hitchRenderSpanCompositeMs = 0.0;
@@ -133,7 +142,7 @@ private:
     static constexpr std::size_t kFrameTimeGraphCapacity = PerformanceSnapshot::kFrameTimeGraphCapacity;
     static constexpr std::size_t kStatisticsCapacity = 4096;
     static constexpr std::uint32_t kStatisticsRefreshFrames = 30;
-    static constexpr double kCpuHitchThresholdMs = 25.0;
+    static constexpr double kCpuHitchThresholdMs = 20.0;
 
     void pushRawFrameTime(double milliseconds);
     void refreshFrameTimeStatistics();

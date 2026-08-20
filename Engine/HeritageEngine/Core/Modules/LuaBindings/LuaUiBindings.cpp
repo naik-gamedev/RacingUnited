@@ -385,6 +385,52 @@ int LuaCoreBindingHandlers::luaUiEndTabItem(lua_State* state)
     return 0;
 }
 
+int LuaCoreBindingHandlers::luaUiBeginHorizontalScroll(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    const std::string id = LuaModuleRuntime::stringArgument(
+        *runtime, state, 1, "LuaHorizontalScroll");
+    const float requestedContentWidth = static_cast<float>(
+        LuaModuleRuntime::numberArgument(*runtime, state, 2, 0.0));
+    const float height = (std::max)(26.0f, static_cast<float>(
+        LuaModuleRuntime::numberArgument(*runtime, state, 3, 44.0)));
+    const float visibleWidth = (std::max)(1.0f, ImGui::GetContentRegionAvail().x);
+    const float contentWidth = (std::max)(visibleWidth, requestedContentWidth);
+
+    // UI03: a real one-row horizontal strip.  Unlike ImGui's tab fitting
+    // arrows, this exposes a normal scrollbar when the complete tab names do
+    // not fit.  SetNextWindowContentSize is required so SameLine() content may
+    // extend beyond the visible child width and produce a genuine scroll range.
+    ImGui::SetNextWindowContentSize(ImVec2(contentWidth, 0.0f));
+    ImGui::BeginChild(
+        id.c_str(),
+        ImVec2(0.0f, height),
+        false,
+        ImGuiWindowFlags_HorizontalScrollbar
+            | ImGuiWindowFlags_NoSavedSettings);
+    runtime->m_uiScopes.push_back(LuaModuleRuntime::UiScopeType::HorizontalScroll);
+    return 0;
+}
+
+int LuaCoreBindingHandlers::luaUiEndHorizontalScroll(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    if (!runtime->m_uiScopes.empty()
+        && runtime->m_uiScopes.back()
+            == LuaModuleRuntime::UiScopeType::HorizontalScroll)
+    {
+        ImGui::EndChild();
+        runtime->m_uiScopes.pop_back();
+    }
+    return 0;
+}
+
 int LuaCoreBindingHandlers::luaUiModuleLabel(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
@@ -489,16 +535,34 @@ int LuaCoreBindingHandlers::luaUiButton(lua_State* state)
         return 0;
 
     const std::string label = LuaModuleRuntime::stringArgument(*runtime, state, 1, "BUTTON");
-    const float defaultWidth = (std::min)(
-        360.0f,
-        (std::max)(100.0f, ImGui::GetContentRegionAvail().x));
-    const float availableWidth = (std::max)(80.0f, ImGui::GetContentRegionAvail().x);
+
+    // UI04: unspecified Lua buttons use their natural label width instead of
+    // the old 360 px centered default. The old policy was especially harmful
+    // to SameLine() rows: the first button consumed most of the panel and the
+    // final control could collapse into a one-letter sliver.
+    const float labelWidth = ImGui::CalcTextSize(label.c_str(), nullptr, true).x;
+    const float naturalWidth = (std::clamp)(
+        labelWidth + ImGui::GetStyle().FramePadding.x * 2.0f + 20.0f,
+        96.0f,
+        360.0f);
     const float requestedWidth = static_cast<float>(
-        LuaModuleRuntime::numberArgument(*runtime, state, 2, defaultWidth));
-    const float width = (std::min)((std::max)(80.0f, requestedWidth), availableWidth);
+        LuaModuleRuntime::numberArgument(*runtime, state, 2, naturalWidth));
+    float availableWidth = (std::max)(1.0f, ImGui::GetContentRegionAvail().x);
+    // If a SameLine() chain has left only a tiny fragment of the row, move
+    // the next button to a fresh line rather than drawing a clipped one-letter
+    // control at the right edge. A normal full-width line is never wrapped.
+    if (requestedWidth > availableWidth && availableWidth < 120.0f)
+    {
+        ImGui::NewLine();
+        availableWidth = (std::max)(1.0f, ImGui::GetContentRegionAvail().x);
+    }
+    const float width = (std::min)(
+        (std::max)(1.0f, requestedWidth), availableWidth);
     const float height = (std::max)(22.0f, static_cast<float>(
         LuaModuleRuntime::numberArgument(*runtime, state, 3, 38.0)));
-    const bool centered = LuaModuleRuntime::booleanArgument(*runtime, state, 4, true);
+    // Compact action rows are left-to-right by default. Callers that need a
+    // centered button can still pass true explicitly as argument four.
+    const bool centered = LuaModuleRuntime::booleanArgument(*runtime, state, 4, false);
 
     if (centered)
     {
@@ -965,6 +1029,50 @@ int LuaCoreBindingHandlers::luaUiPlotLines(lua_State* state)
     return 0;
 }
 
+int LuaCoreBindingHandlers::luaUiPlotLinesRange(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    const std::string label = LuaModuleRuntime::stringArgument(
+        *runtime, state, 1, "Plot");
+    const float height = (std::max)(40.0f, static_cast<float>(
+        LuaModuleRuntime::numberArgument(*runtime, state, 2, 90.0)));
+    float scaleMinimum = static_cast<float>(
+        LuaModuleRuntime::numberArgument(*runtime, state, 3, -1.0));
+    float scaleMaximum = static_cast<float>(
+        LuaModuleRuntime::numberArgument(*runtime, state, 4, 1.0));
+    if (!std::isfinite(scaleMinimum) || !std::isfinite(scaleMaximum)
+        || scaleMaximum <= scaleMinimum)
+    {
+        scaleMinimum = -1.0f;
+        scaleMaximum = 1.0f;
+    }
+
+    const int argumentCount = runtime->m_api.lua_gettop(state);
+    const int valueCount = (std::min)(
+        512, (std::max)(0, argumentCount - 4));
+    if (valueCount == 0)
+    {
+        ImGui::TextDisabled("%s: no calibration samples", label.c_str());
+        return 0;
+    }
+
+    std::vector<float> values;
+    values.reserve(static_cast<std::size_t>(valueCount));
+    for (int argument = 5; argument < 5 + valueCount; ++argument)
+    {
+        values.push_back(static_cast<float>(
+            LuaModuleRuntime::numberArgument(*runtime, state, argument, 0.0)));
+    }
+
+    ImGui::PlotLines(
+        label.c_str(), values.data(), valueCount, 0, nullptr,
+        scaleMinimum, scaleMaximum, ImVec2(-1.0f, height));
+    return 0;
+}
+
 void LuaModuleRuntime::registerUiBindings()
 {
     registerFunction("UI", "BeginPanel", &LuaCoreBindingHandlers::luaUiBeginPanel);
@@ -976,6 +1084,8 @@ void LuaModuleRuntime::registerUiBindings()
     registerFunction("UI", "EndTabBar", &LuaCoreBindingHandlers::luaUiEndTabBar);
     registerFunction("UI", "BeginTabItem", &LuaCoreBindingHandlers::luaUiBeginTabItem);
     registerFunction("UI", "EndTabItem", &LuaCoreBindingHandlers::luaUiEndTabItem);
+    registerFunction("UI", "BeginHorizontalScroll", &LuaCoreBindingHandlers::luaUiBeginHorizontalScroll);
+    registerFunction("UI", "EndHorizontalScroll", &LuaCoreBindingHandlers::luaUiEndHorizontalScroll);
     registerFunction("UI", "ModuleLabel", &LuaCoreBindingHandlers::luaUiModuleLabel);
     registerFunction("UI", "Title", &LuaCoreBindingHandlers::luaUiTitle);
     registerFunction("UI", "Subtitle", &LuaCoreBindingHandlers::luaUiSubtitle);
@@ -1003,6 +1113,7 @@ void LuaModuleRuntime::registerUiBindings()
     registerFunction("UI", "TextColored", &LuaCoreBindingHandlers::luaUiTextColored);
     registerFunction("UI", "ProgressBar", &LuaCoreBindingHandlers::luaUiProgressBar);
     registerFunction("UI", "PlotLines", &LuaCoreBindingHandlers::luaUiPlotLines);
+    registerFunction("UI", "PlotLinesRange", &LuaCoreBindingHandlers::luaUiPlotLinesRange);
 }
 
 } // namespace heritage::modules

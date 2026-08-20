@@ -218,14 +218,20 @@ PerformanceSnapshot PerformanceMonitor::snapshot() const
     };
     result.renderModuleMs = renderAverage(RenderPerformanceSection::ModuleRender);
     result.renderMeshMs = renderAverage(RenderPerformanceSection::MeshRenderer);
+    result.renderSurfaceMs = renderAverage(RenderPerformanceSection::SurfacePresentation);
+    result.renderWeatherMs = renderAverage(RenderPerformanceSection::WeatherPresentation);
     result.renderDebugMs = renderAverage(RenderPerformanceSection::DebugRenderer);
+    result.renderFramebufferSetupMs = renderAverage(RenderPerformanceSection::FramebufferSetup);
     result.renderMsaaResolveMs = renderAverage(RenderPerformanceSection::MsaaResolve);
     result.renderPostProcessMs = renderAverage(RenderPerformanceSection::PostProcess);
     result.renderSpanCompositeMs = renderAverage(RenderPerformanceSection::SpanComposite);
     const double namedRenderMs =
         result.renderModuleMs
         + result.renderMeshMs
+        + result.renderSurfaceMs
+        + result.renderWeatherMs
         + result.renderDebugMs
+        + result.renderFramebufferSetupMs
         + result.renderMsaaResolveMs
         + result.renderPostProcessMs
         + result.renderSpanCompositeMs;
@@ -271,7 +277,10 @@ PerformanceSnapshot PerformanceMonitor::snapshot() const
     };
     result.hitchRenderModuleMs = hitchRender(RenderPerformanceSection::ModuleRender);
     result.hitchRenderMeshMs = hitchRender(RenderPerformanceSection::MeshRenderer);
+    result.hitchRenderSurfaceMs = hitchRender(RenderPerformanceSection::SurfacePresentation);
+    result.hitchRenderWeatherMs = hitchRender(RenderPerformanceSection::WeatherPresentation);
     result.hitchRenderDebugMs = hitchRender(RenderPerformanceSection::DebugRenderer);
+    result.hitchRenderFramebufferSetupMs = hitchRender(RenderPerformanceSection::FramebufferSetup);
     result.hitchRenderMsaaResolveMs = hitchRender(RenderPerformanceSection::MsaaResolve);
     result.hitchRenderPostProcessMs = hitchRender(RenderPerformanceSection::PostProcess);
     result.hitchRenderSpanCompositeMs = hitchRender(RenderPerformanceSection::SpanComposite);

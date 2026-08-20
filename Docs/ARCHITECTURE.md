@@ -39,6 +39,15 @@ The architecture must support:
 - Data-driven arbitrary wheel counts and axle arrangements.
 - Server-authoritative multiplayer with prediction/interpolation where appropriate.
 
+## CPU concurrency
+
+`Core/Jobs/JobSystem` is the default engine-wide CPU worker pool. Heavy native systems submit bounded
+jobs to this shared scheduler rather than creating one permanent thread or private pool per subsystem.
+The caller participates in synchronous batches, and authoritative phases keep explicit barriers and
+deterministic ownership/reduction rules. Subsystems must remain valid on low-core machines; core count
+is a scheduling resource, not an assumption embedded in gameplay or physics. See ADR-076 and
+`PERFORMANCE_MULTICORE_ROADMAP.md`.
+
 ## Public contracts
 
 Public contracts are represented by:

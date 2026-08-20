@@ -76,14 +76,19 @@
     <ClCompile Include="VehicleDefinitionRegression.cpp" />
     <ClCompile Include="TireModelRegression.cpp" />
     <ClCompile Include="SurfaceWorldRegression.cpp" />
+    <ClCompile Include="DynamicSurfaceRegression.cpp" />
+    <ClCompile Include="WeatherRegression.cpp" />
     <ClCompile Include="SurfacePresentationRegression.cpp" />
     <ClCompile Include="TrackRubberRegression.cpp" />
+    <ClCompile Include="JobSystemRegression.cpp" />
+    <ClCompile Include="..\Core\Jobs\JobSystem.cpp" />
     <ClCompile Include="..\Core\Entities\EntityRegistry.cpp" />
     <ClCompile Include="..\Core\Entities\EntityHierarchy.cpp" />
     <ClCompile Include="..\Core\Entities\EntityTransforms.cpp" />
     <ClCompile Include="..\Core\Entities\EntityDebugComponents.cpp" />
     <ClCompile Include="..\Core\Entities\EntityMeshComponents.cpp" />
     <ClCompile Include="..\Camera\ChaseCamera.cpp" />
+    <ClCompile Include="..\Camera\VehicleCameraController.cpp" />
     <ClCompile Include="..\Physics\CollisionSystem.cpp" />
     <ClCompile Include="..\Physics\Collision\Broadphase\CollisionBroadphase.cpp" />
     <ClCompile Include="..\Physics\Collision\Queries\CollisionQueries.cpp" />
@@ -94,6 +99,16 @@
     <ClCompile Include="..\Physics\Surfaces\SurfaceField.cpp" />
     <ClCompile Include="..\Physics\Surfaces\SurfaceMaterialProperties.cpp" />
     <ClCompile Include="..\Physics\Surfaces\SurfaceWorld.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\SurfaceWeather.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceChunk.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceBake.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfacePagePool.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceThermal.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceSystem.cpp" />
+    <ClCompile Include="..\Physics\Weather\RainMicrophysics.cpp" />
+    <ClCompile Include="..\Physics\Weather\PrecipitationField.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrology.cpp" />
     <ClCompile Include="..\Physics\Surfaces\Presentation\SurfacePresentation.cpp" />
     <ClCompile Include="..\Physics\Surfaces\Rubber\TrackRubberState.cpp" />
     <ClCompile Include="..\Physics\StaticTriangleBvh.cpp" />
@@ -116,6 +131,11 @@
       <ClCompile Include="..\Vehicles\Tires\TireSlipDynamics.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireContactPatch.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireContactGeometry.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireCalibrationLab.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireCalibrationAcceptance.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireScenarioLab.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireDistributedContact.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireFleetBenchmark.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireFlexibleRingField.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireRoadEnveloping.cpp" />
@@ -148,6 +168,7 @@
     <ClCompile Include="..\Vehicles\DriverAids\VehicleDriverAidConfiguration.cpp" />
     <ClCompile Include="..\Vehicles\Drivetrain\VehicleDrivetrainConfiguration.cpp" />
     <ClCompile Include="..\Vehicles\Tires\VehicleTireConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\VehicleTireCalibration.cpp" />
     <ClCompile Include="..\Vehicles\VehicleTelemetry.cpp" />
     <ClCompile Include="..\Vehicles\VehicleSimulation.cpp" />
     <ClCompile Include="..\Vehicles\VehicleWheelSimulation.cpp" />
@@ -166,6 +187,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PhysicsRegressionCommon.hpp" />
+    <ClInclude Include="..\Core\Jobs\JobSystem.hpp" />
     <ClInclude Include="..\Core\Entities\EntityRegistry.hpp" />
     <ClInclude Include="..\Core\Math\Math.hpp" />
     <ClInclude Include="..\Core\Math\Quaternion.hpp" />
@@ -178,6 +200,11 @@
     <ClInclude Include="..\Physics\Surfaces\SurfaceField.hpp" />
     <ClInclude Include="..\Physics\Surfaces\SurfaceMaterialProperties.hpp" />
     <ClInclude Include="..\Physics\Surfaces\SurfaceWorld.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\SurfaceWeather.hpp" />
+    <ClInclude Include="..\Physics\Weather\RainMicrophysics.hpp" />
+    <ClInclude Include="..\Physics\Weather\PrecipitationField.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\Water\SurfaceHydrology.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\Water\VirtualPipeFlow.hpp" />
     <ClInclude Include="..\Physics\Surfaces\Presentation\SurfacePresentation.hpp" />
     <ClInclude Include="..\Physics\Surfaces\Rubber\TrackRubberState.hpp" />
     <ClInclude Include="..\Physics\StaticTriangleBvh.hpp" />
@@ -194,6 +221,11 @@
       <ClInclude Include="..\Vehicles\Tires\TireSlipDynamics.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireContactPatch.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireContactGeometry.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireCalibrationLab.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireCalibrationAcceptance.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireScenarioLab.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireDistributedContact.hpp" />
+      <ClInclude Include="..\Vehicles\Tires\TireFleetBenchmark.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireFlexibleRingField.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireRigidRing.hpp" />
       <ClInclude Include="..\Vehicles\Tires\TireRoadEnveloping.hpp" />

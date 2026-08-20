@@ -115,6 +115,7 @@ void initializeState(
     state.treadTemperatureC = clampTemperature(d, d.initialTreadTemperatureC);
     state.carcassTemperatureC = clampTemperature(d, d.initialCarcassTemperatureC);
     state.gasTemperatureC = clampTemperature(d, d.initialGasTemperatureC);
+    state.rimTemperatureC = clampTemperature(d, d.initialRimTemperatureC);
     state.containedGasMassRatio = requestedGasMassRatio;
     state.inflationPressurePa = idealGasGaugePressurePa(
         d, state.gasTemperatureC, state.containedGasMassRatio);
@@ -136,6 +137,7 @@ TireThermalOutput outputFromState(
     out.treadTemperatureC = readable.treadTemperatureC;
     out.carcassTemperatureC = readable.carcassTemperatureC;
     out.gasTemperatureC = readable.gasTemperatureC;
+    out.rimTemperatureC = readable.rimTemperatureC;
     out.inflationPressurePa = idealGasGaugePressurePa(
         d, readable.gasTemperatureC, readable.containedGasMassRatio);
     out.frictionScale = frictionScale(d, readable.treadTemperatureC);
@@ -179,6 +181,7 @@ bool validTireThermalDescription(const TireThermalDescription& d)
         d.initialTreadTemperatureC,
         d.initialCarcassTemperatureC,
         d.initialGasTemperatureC,
+        d.initialRimTemperatureC,
         d.ambientTemperatureC,
         d.roadTemperatureC,
         d.ambientPressurePa,
@@ -186,17 +189,22 @@ bool validTireThermalDescription(const TireThermalDescription& d)
         d.treadHeatCapacityJPerK,
         d.carcassHeatCapacityJPerK,
         d.gasHeatCapacityJPerK,
+        d.rimHeatCapacityJPerK,
         d.treadToCarcassConductanceWPerK,
         d.treadToRoadConductanceWPerK,
         d.treadToAirConductanceWPerK,
         d.carcassToAirConductanceWPerK,
         d.carcassToGasConductanceWPerK,
         d.gasToAmbientConductanceWPerK,
+        d.carcassToRimConductanceWPerK,
+        d.rimToAirConductanceWPerK,
         d.treadAirSpeedConductanceWPerKPerMps,
         d.carcassAirSpeedConductanceWPerKPerMps,
+        d.rimAirSpeedConductanceWPerKPerMps,
         d.slipHeatFractionToTread,
         d.slipHeatEfficiency,
         d.carcassLossHeatEfficiency,
+        d.brakeHeatFractionToRim,
         d.optimumTreadTemperatureC,
         d.coldTemperatureSpanC,
         d.hotTemperatureSpanC,
@@ -223,18 +231,23 @@ bool validTireThermalDescription(const TireThermalDescription& d)
         && d.treadHeatCapacityJPerK > 10.0
         && d.carcassHeatCapacityJPerK > 10.0
         && d.gasHeatCapacityJPerK > 1.0
+        && d.rimHeatCapacityJPerK > 10.0
         && d.treadToCarcassConductanceWPerK >= 0.0
         && d.treadToRoadConductanceWPerK >= 0.0
         && d.treadToAirConductanceWPerK >= 0.0
         && d.carcassToAirConductanceWPerK >= 0.0
         && d.carcassToGasConductanceWPerK >= 0.0
         && d.gasToAmbientConductanceWPerK >= 0.0
+        && d.carcassToRimConductanceWPerK >= 0.0
+        && d.rimToAirConductanceWPerK >= 0.0
         && d.slipHeatFractionToTread >= 0.0
         && d.slipHeatFractionToTread <= 1.0
         && d.slipHeatEfficiency >= 0.0
         && d.slipHeatEfficiency <= 1.5
         && d.carcassLossHeatEfficiency >= 0.0
         && d.carcassLossHeatEfficiency <= 1.5
+        && d.brakeHeatFractionToRim >= 0.0
+        && d.brakeHeatFractionToRim <= 1.0
         && d.coldTemperatureSpanC > 1.0
         && d.hotTemperatureSpanC > 1.0
         && d.minimumFrictionScale > 0.0
@@ -278,13 +291,16 @@ TireThermalOutput advanceTireThermal(
     const VehicleScalar carcassLossPower = d.carcassLossHeatEfficiency
         * (std::max(input.radialDissipationWatts, VehicleScalar{0.0})
             + std::max(input.rollingResistanceDissipationWatts, VehicleScalar{0.0}));
+    const VehicleScalar rimBrakeSource = d.brakeHeatFractionToRim
+        * std::max(input.brakeDissipationWatts, VehicleScalar{0.0});
 
     const VehicleScalar treadSource = slipPower * d.slipHeatFractionToTread;
     const VehicleScalar carcassSource = slipPower
         * (VehicleScalar{1.0} - d.slipHeatFractionToTread)
         + carcassLossPower;
 
-    const VehicleScalar speed = std::abs(input.forwardSpeedMps);
+    const VehicleScalar speed = std::hypot(
+        input.forwardSpeedMps, input.ambientAirSpeedMps);
     const VehicleScalar treadAirConductance = std::max(
         d.treadToAirConductanceWPerK
             + d.treadAirSpeedConductanceWPerKPerMps * speed,
@@ -292,6 +308,10 @@ TireThermalOutput advanceTireThermal(
     const VehicleScalar carcassAirConductance = std::max(
         d.carcassToAirConductanceWPerK
             + d.carcassAirSpeedConductanceWPerKPerMps * speed,
+        VehicleScalar{0.0});
+    const VehicleScalar rimAirConductance = std::max(
+        d.rimToAirConductanceWPerK
+            + d.rimAirSpeedConductanceWPerKPerMps * speed,
         VehicleScalar{0.0});
 
     const VehicleScalar ambientTemperatureC =
@@ -326,12 +346,17 @@ TireThermalOutput advanceTireThermal(
         * (state.carcassTemperatureC - state.gasTemperatureC);
     const VehicleScalar qGasAmbient = d.gasToAmbientConductanceWPerK
         * (state.gasTemperatureC - ambientTemperatureC);
+    const VehicleScalar qCarcassRim = d.carcassToRimConductanceWPerK
+        * (state.carcassTemperatureC - state.rimTemperatureC);
+    const VehicleScalar qRimAir = rimAirConductance
+        * (state.rimTemperatureC - ambientTemperatureC);
 
     const VehicleScalar treadNet = treadSource
         - qTreadCarcass - qTreadRoad - qTreadAir;
     const VehicleScalar carcassNet = carcassSource
-        + qTreadCarcass - qCarcassAir - qCarcassGas;
+        + qTreadCarcass - qCarcassAir - qCarcassGas - qCarcassRim;
     const VehicleScalar gasNet = qCarcassGas - qGasAmbient;
+    const VehicleScalar rimNet = rimBrakeSource + qCarcassRim - qRimAir;
 
     state.treadTemperatureC = clampTemperature(
         d,
@@ -345,6 +370,10 @@ TireThermalOutput advanceTireThermal(
         d,
         state.gasTemperatureC
             + gasNet / std::max(d.gasHeatCapacityJPerK, kEpsilon) * dt);
+    state.rimTemperatureC = clampTemperature(
+        d,
+        state.rimTemperatureC
+            + rimNet / std::max(d.rimHeatCapacityJPerK, kEpsilon) * dt);
     state.inflationPressurePa = idealGasGaugePressurePa(
         d, state.gasTemperatureC, state.containedGasMassRatio);
 
@@ -352,7 +381,10 @@ TireThermalOutput advanceTireThermal(
     out.slipDissipationWatts = slipPower;
     out.carcassDissipationWatts = carcassLossPower;
     out.roadHeatFlowWatts = qTreadRoad;
-    out.airHeatFlowWatts = qTreadAir + qCarcassAir + qGasAmbient;
+    out.airHeatFlowWatts = qTreadAir + qCarcassAir + qGasAmbient + qRimAir;
+    out.rimTemperatureC = state.rimTemperatureC;
+    out.brakeHeatInputWatts = rimBrakeSource;
+    out.rimToCarcassHeatFlowWatts = -qCarcassRim;
     return out;
 }
 

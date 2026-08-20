@@ -71,6 +71,9 @@
                 heritage::physics::SurfaceDeformableProperties
                     deformableProperties{};
                 VehicleScalar wetness = 0.0;
+                VehicleScalar weatherWetness = 0.0;
+                bool waterFilmDepthValid = false;
+                VehicleScalar waterFilmDepthM = 0.0;
                 VehicleScalar surfaceTemperatureC = 20.0;
             };
             std::vector<QueriedFootprintSample> queried;
@@ -103,6 +106,10 @@
                     result.material = hit.surfaceMaterial;
                     result.deformableProperties = hit.surfaceProperties.deformable;
                     result.wetness = hitSurfaceConditions.wetness;
+                    result.weatherWetness = hitSurfaceConditions.weatherWetness;
+                    result.waterFilmDepthValid =
+                        hitSurfaceConditions.waterFilmDepthValid;
+                    result.waterFilmDepthM = hitSurfaceConditions.waterFilmDepthM;
                     result.surfaceTemperatureC = hitSurfaceConditions.surfaceTemperatureC;
                     result.surface = surfaceProfile(
                         hit.surfaceMaterial, static_cast<float>(result.wetness), vehicle.surface);
@@ -158,6 +165,10 @@
                         sampleHit.surfaceWetness,
                         sampleHit.surfaceProperties);
                     result.wetness = sampleConditions.wetness;
+                    result.weatherWetness = sampleConditions.weatherWetness;
+                    result.waterFilmDepthValid =
+                        sampleConditions.waterFilmDepthValid;
+                    result.waterFilmDepthM = sampleConditions.waterFilmDepthM;
                     result.surfaceTemperatureC = sampleConditions.surfaceTemperatureC;
                     result.surface = surfaceProfile(
                         sampleHit.surfaceMaterial,
@@ -177,7 +188,9 @@
             };
 
             const bool startRefined = !envelopeDescription.adaptive2D
-                || wheel.cachedRoadEnvelopeComplex;
+                || wheel.cachedRoadEnvelopeComplex
+                || vehicle.tireContactFidelity
+                    == TireContactFidelity::Distributed3x3;
             const auto initialPattern = tires::buildTireRoadEnvelopeSamplePattern(
                 envelopeDescription, contactLength, contactWidth, startRefined);
             for (const auto& offset : initialPattern)
@@ -325,15 +338,62 @@
             VehicleScalar deepSnowCount = 0.0;
             VehicleScalar cleanHardCount = 0.0;
             VehicleScalar wetnessSum = 0.0;
+            VehicleScalar weatherWetnessSum = 0.0;
+            VehicleScalar waterFilmDepthSum = 0.0;
+            std::size_t waterFilmDepthSampleCount = 0;
             VehicleScalar surfaceTemperatureSum = 0.0;
+            std::array<VehicleScalar, tires::kDistributedContactCellCount>
+                distributedFrictionSum{};
+            std::array<VehicleScalar, tires::kDistributedContactCellCount>
+                distributedStiffnessSum{};
+            std::array<std::size_t, tires::kDistributedContactCellCount>
+                distributedQueryCount{};
+            std::array<std::size_t, tires::kDistributedContactCellCount>
+                distributedValidCount{};
             std::vector<heritage::physics::SurfaceDeformableProperties>
                 deformablePropertySamples;
             std::vector<double> deformablePropertyWeights;
             std::size_t surfaceCount = 0;
+            const VehicleScalar distributedHalfLength = std::max(
+                tires::roadEnvelopeCamCenterOffsetM(
+                    envelopeDescription, contactLength),
+                VehicleScalar{1.0e-6});
+            const VehicleScalar distributedHalfWidth = std::max(
+                tires::roadEnvelopeLateralHalfSpanM(
+                    envelopeDescription, contactWidth),
+                VehicleScalar{1.0e-6});
+            const auto distributedAxis = [](VehicleScalar offset,
+                VehicleScalar halfSpan) -> std::size_t {
+                const VehicleScalar normalizedOffset = offset / halfSpan;
+                if (normalizedOffset < VehicleScalar{-0.25}) return 0;
+                if (normalizedOffset > VehicleScalar{0.25}) return 2;
+                return 1;
+            };
             for (const auto& sample : queried)
             {
+                const std::size_t distributedLongitudinal = distributedAxis(
+                    sample.envelope.longitudinalOffsetM,
+                    distributedHalfLength);
+                const std::size_t distributedLateral = distributedAxis(
+                    sample.envelope.lateralOffsetM,
+                    distributedHalfWidth);
+                const std::size_t distributedIndex =
+                    distributedLongitudinal
+                        * tires::kDistributedContactLateralCells
+                    + distributedLateral;
+                ++distributedQueryCount[distributedIndex];
                 if (!sample.envelope.valid)
                     continue;
+                ++distributedValidCount[distributedIndex];
+                // Raw local coefficients retain split-water and split-material
+                // contrast. The force phase applies them as ratios around the
+                // already-selected aggregate provider base, so dedicated wet,
+                // winter and terrain mechanisms remain single authoritative
+                // providers rather than being evaluated nine times.
+                distributedFrictionSum[distributedIndex] +=
+                    sample.surface.frictionMultiplier;
+                distributedStiffnessSum[distributedIndex] +=
+                    sample.surface.stiffnessMultiplier;
                 frictionSum += sample.surface.frictionMultiplier;
                 stiffnessSum += sample.surface.stiffnessMultiplier;
                 rollingSum += sample.surface.rollingResistanceMultiplier;
@@ -353,6 +413,14 @@
                     frictionMaximum,
                     static_cast<VehicleScalar>(sample.surface.frictionMultiplier));
                 wetnessSum += std::clamp(sample.wetness, VehicleScalar{0.0}, VehicleScalar{1.0});
+                weatherWetnessSum += std::clamp(
+                    sample.weatherWetness, VehicleScalar{0.0}, VehicleScalar{1.0});
+                if (sample.waterFilmDepthValid)
+                {
+                    waterFilmDepthSum += std::max(
+                        sample.waterFilmDepthM, VehicleScalar{0.0});
+                    ++waterFilmDepthSampleCount;
+                }
                 surfaceTemperatureSum += sample.surfaceTemperatureC;
                 if (sample.deformableProperties.enabled)
                 {
@@ -426,6 +494,39 @@
                     providerBaseRelaxationSum * inverseCount;
                 wheel.cachedFootprintFrictionSpread = std::max(
                     frictionMaximum - frictionMinimum, VehicleScalar{0.0});
+                wheel.cachedDistributedContactValid = true;
+                for (std::size_t index = 0;
+                     index < tires::kDistributedContactCellCount;
+                     ++index)
+                {
+                    if (distributedQueryCount[index] == 0)
+                    {
+                        wheel.cachedDistributedFrictionMultiplier[index] =
+                            wheel.cachedFootprintFrictionMultiplier;
+                        wheel.cachedDistributedStiffnessMultiplier[index] =
+                            wheel.cachedFootprintStiffnessMultiplier;
+                        wheel.cachedDistributedSupported[index] = true;
+                        continue;
+                    }
+                    wheel.cachedDistributedSupported[index] =
+                        distributedValidCount[index] > 0;
+                    if (distributedValidCount[index] > 0)
+                    {
+                        const VehicleScalar inverseLocalCount =
+                            VehicleScalar{1.0}
+                            / static_cast<VehicleScalar>(
+                                distributedValidCount[index]);
+                        wheel.cachedDistributedFrictionMultiplier[index] =
+                            distributedFrictionSum[index] * inverseLocalCount;
+                        wheel.cachedDistributedStiffnessMultiplier[index] =
+                            distributedStiffnessSum[index] * inverseLocalCount;
+                    }
+                    else
+                    {
+                        wheel.cachedDistributedFrictionMultiplier[index] = 0.0;
+                        wheel.cachedDistributedStiffnessMultiplier[index] = 0.0;
+                    }
+                }
                 wheel.cachedFootprintMaterialBlendValid = true;
                 wheel.cachedFootprintGrassFraction = grassCount * inverseCount;
                 wheel.cachedFootprintDirtFraction = dirtCount * inverseCount;
@@ -439,6 +540,12 @@
                 wheel.cachedFootprintDeepSnowFraction = deepSnowCount * inverseCount;
                 wheel.cachedFootprintCleanHardFraction = cleanHardCount * inverseCount;
                 wheel.cachedFootprintAverageWetness = wetnessSum * inverseCount;
+                wheel.cachedFootprintAverageWeatherWetness =
+                    weatherWetnessSum * inverseCount;
+                wheel.cachedFootprintAverageWaterDepthM =
+                    waterFilmDepthSum * inverseCount;
+                wheel.cachedFootprintAverageWaterDepthValid =
+                    waterFilmDepthSampleCount == surfaceCount;
                 wheel.cachedFootprintAverageSurfaceTemperatureC =
                     surfaceTemperatureSum * inverseCount;
                 if (!deformablePropertySamples.empty())
@@ -473,6 +580,10 @@
                 wheel.cachedFootprintProviderBaseRollingResistanceMultiplier = 1.0;
                 wheel.cachedFootprintProviderBaseRelaxationMultiplier = 1.0;
                 wheel.cachedFootprintFrictionSpread = 0.0;
+                wheel.cachedDistributedContactValid = false;
+                wheel.cachedDistributedFrictionMultiplier.fill(1.0);
+                wheel.cachedDistributedStiffnessMultiplier.fill(1.0);
+                wheel.cachedDistributedSupported.fill(true);
                 wheel.cachedFootprintMaterialBlendValid = false;
                 wheel.cachedFootprintGrassFraction = 0.0;
                 wheel.cachedFootprintDirtFraction = 0.0;
@@ -485,6 +596,9 @@
                 wheel.cachedFootprintDeepSnowFraction = 0.0;
                 wheel.cachedFootprintCleanHardFraction = 0.0;
                 wheel.cachedFootprintAverageWetness = 0.0;
+                wheel.cachedFootprintAverageWeatherWetness = 0.0;
+                wheel.cachedFootprintAverageWaterDepthM = 0.0;
+                wheel.cachedFootprintAverageWaterDepthValid = false;
                 wheel.cachedFootprintAverageSurfaceTemperatureC = 20.0;
                 wheel.cachedFootprintDeformableProperties = {};
                 wheel.cachedFootprintDeformablePropertiesValid = false;
@@ -518,6 +632,10 @@
         wheel.cachedFootprintProviderBaseRollingResistanceMultiplier = 1.0;
         wheel.cachedFootprintProviderBaseRelaxationMultiplier = 1.0;
         wheel.cachedFootprintFrictionSpread = 0.0;
+        wheel.cachedDistributedContactValid = false;
+        wheel.cachedDistributedFrictionMultiplier.fill(1.0);
+        wheel.cachedDistributedStiffnessMultiplier.fill(1.0);
+        wheel.cachedDistributedSupported.fill(true);
         wheel.cachedFootprintMaterialBlendValid = false;
         wheel.cachedFootprintGrassFraction = 0.0;
         wheel.cachedFootprintDirtFraction = 0.0;
@@ -530,6 +648,9 @@
         wheel.cachedFootprintDeepSnowFraction = 0.0;
         wheel.cachedFootprintCleanHardFraction = 0.0;
         wheel.cachedFootprintAverageWetness = 0.0;
+        wheel.cachedFootprintAverageWeatherWetness = 0.0;
+        wheel.cachedFootprintAverageWaterDepthM = 0.0;
+        wheel.cachedFootprintAverageWaterDepthValid = false;
         wheel.cachedFootprintAverageSurfaceTemperatureC = 20.0;
         wheel.cachedFootprintDeformableProperties = {};
         wheel.cachedFootprintDeformablePropertiesValid = false;

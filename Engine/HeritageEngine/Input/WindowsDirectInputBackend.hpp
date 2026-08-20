@@ -74,7 +74,13 @@ public:
     // Returns the first newly activated DirectInput control in canonical
     // Heritage Engine binding syntax, for example:
     // DInput[guid]:AxisX- or DInput[guid]:Button3.
-    bool captureBinding(std::string& binding) const;
+    // Snapshot the current DirectInput axis positions when the user clicks a
+    // binding cell. Axis capture then measures deliberate movement from this
+    // per-capture baseline instead of depending on a one-frame threshold
+    // crossing from the device startup neutral. This is important for wheels
+    // and pedals whose rest values may be asymmetric or inverted.
+    void beginCapture();
+    bool captureBinding(std::string& binding);
 
     static std::string axisName(int axisIndex);
     static int axisIndexFromName(const std::string& name);

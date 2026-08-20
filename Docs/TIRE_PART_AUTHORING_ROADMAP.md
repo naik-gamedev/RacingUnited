@@ -1,5 +1,8 @@
 # Heritage Tire Part Authoring Roadmap
 
+> **Status note (2026-08-14):** `CURRENT_TIRE_STATUS.md` is authoritative for present completion
+> status. This file remains the detailed reusable-part and authoring-tool plan.
+
 **TIRE17C implementation status (2026-08-11):** TIRE17A's reusable `TirePartDefinition`/specialty `TireFamily` baseline and TIRE17B's versioned `TirePerformanceBiasMapping` now feed a runtime `TirePartResolver`. A tire part carries engineering width/aspect/rim/load/reference-pressure data plus optional authoritative `.tir` provenance; the resolver uses explicit property data when present and otherwise generates the estimated family+bias model. `VehicleSystem` can assign the same reusable part per wheel while each fitment owns its own cold inflation pressure. Direct low-level tire-model edits clear reusable-part assignment identity rather than leaving stale metadata. Topology-aware axle/group assignment and the Parts Lab UI remain later TIRE17/TIRE18 work.
 
 ## Purpose

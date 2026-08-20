@@ -11,6 +11,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -345,6 +346,35 @@ int LuaPhysicsBindingHandlers::luaPhysicsLoadStaticTriangleScene(lua_State* stat
     if (importedSpawn.found)
         toCurrentLocal(importedSpawn.groundPoint);
 
+    // DSURF01: the same authoritative static collision mesh is baked once into
+    // persistent 100m Dynamic Surface chunks/sheets before any dynamic state
+    // migrates into them. The cache stores only immutable surface geometry and
+    // metadata; water/rubber/dirt state never belongs to this file.
+    const std::size_t surfacePathHash = std::hash<std::string>{}(
+        resolved.lexically_normal().generic_string());
+    const std::filesystem::path dynamicSurfaceCache =
+        runtime->m_context->settingsRoot()
+        / "DynamicSurface"
+        / (resolved.stem().string() + "_"
+            + std::to_string(surfacePathHash) + ".hdsurf");
+    heritage::physics::dynamicsurface::DynamicSurfaceStaticBakeReport
+        dynamicSurfaceReport;
+    runtime->m_physics->surfaces().loadOrBakeDynamicSurface(
+        triangles, dynamicSurfaceCache, dynamicSurfaceReport);
+
+    // Compatibility-only legacy hydrology bake: Dynamic Surface owns runtime
+    // water/moisture/flow as of DSURF03B. This old index remains temporarily
+    // for static precipitation-cover queries and historical regression paths
+    // until those final non-state responsibilities migrate.
+    const std::filesystem::path hydrologyCache =
+        runtime->m_context->settingsRoot()
+        / "Hydrology"
+        / (resolved.stem().string() + "_"
+            + std::to_string(surfacePathHash) + ".hhyd");
+    heritage::physics::water::SurfaceHydrologyBakeReport hydrologyReport;
+    runtime->m_physics->surfaces().loadOrBakeHydrology(
+        triangles, hydrologyCache, hydrologyReport);
+
     runtime->m_physics->collisions().setStaticSceneTriangles(std::move(triangles));
     runtime->m_api.lua_pushinteger(
         state,
@@ -375,7 +405,10 @@ int LuaPhysicsBindingHandlers::luaPhysicsUnloadStaticTriangleScene(lua_State* st
     if (!runtime)
         return 0;
     if (runtime->m_physics)
+    {
         runtime->m_physics->collisions().clearStaticSceneTriangles();
+        runtime->m_physics->surfaces().clearHydrology();
+    }
     runtime->m_lastPhysicsError.clear();
     runtime->m_api.lua_pushboolean(state, 1);
     return 1;

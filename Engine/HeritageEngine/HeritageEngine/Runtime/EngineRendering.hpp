@@ -17,6 +17,7 @@ class DisplaySystem;
 class EntityDebugRenderer;
 class EntityMeshRenderer;
 class SurfacePresentationRenderer;
+class WeatherPresentationRenderer;
 }
 namespace heritage::modules { class ModuleRuntimeManager; }
 namespace heritage::physics { class SurfaceWorld; }
@@ -67,6 +68,7 @@ bool renderEngineScene(
     heritage::graphics::EntityMeshRenderer& entityMeshRenderer,
     heritage::graphics::EntityDebugRenderer& entityDebugRenderer,
     heritage::graphics::SurfacePresentationRenderer& surfacePresentationRenderer,
+    heritage::graphics::WeatherPresentationRenderer& weatherPresentationRenderer,
     const heritage::physics::SurfaceWorld& surfaces,
     heritage::entities::EntityRegistry& entityRegistry,
     const heritage::camera::CameraFrame& entityCameraFrame,

@@ -36,6 +36,19 @@ The current counters include:
 These are deliberately named rather than pretending to be every GPU command in
 the engine. Future renderer passes can add their own counters.
 
+## Job-system counters
+
+JOB01 adds a `JOB SYSTEM` block containing:
+
+- reported logical processor count;
+- persistent worker count (the caller/main thread also participates);
+- cumulative parallel batches and ranges;
+- ranges executed by workers versus the caller.
+
+When hydrology is active on a multi-core machine, worker-range activity should
+increase. These counters prove scheduling activity, not useful speedup by
+themselves; compare named phase milliseconds before and after each migration.
+
 ## Physics and vegetation counters
 
 The monitor also reports:

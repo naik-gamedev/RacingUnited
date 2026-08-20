@@ -1,5 +1,8 @@
 # Current Project State
 
+> **Tire-status note (2026-08-14):** use `CURRENT_TIRE_STATUS.md` for the authoritative mechanism
+> ledger and `TIRE_SUSPENSION_HANDOFF.md` for the current development boundary.
+
 ## Current checkpoint
 
 **User-confirmed cleanup baseline:** CLEAN13 — the planned CLEAN01-CLEAN13 architecture program builds, launches and drives. The architecture-only cleanup stop rule is now active.
@@ -14,7 +17,22 @@
 
 
 
-**Historical milestone narrative:** archived verbatim at `Docs/History/PROJECT_STATE_MILESTONES_THROUGH_CLEAN12.md`. Keep this file focused on the current working state rather than appending every completed milestone forever.
+**Current tire baseline:** TIRE41 + TIRE18A-E. The user-validated single-authority flexible-ring
+deformation is retained; installed-tire steady-state sweeps, A/B plots and CSV/build manifests,
+stateful relaxation/thermal/wear/failure/brake-rim scenarios, provenance-labelled acceptance checks,
+the experimental bounded `Distributed3x3` contact tier, deterministic rain/road-film weather and an
+executable 150-car / 600-tire workload laboratory compile and pass native regressions. Measured
+commercial datasets and a real complete 150-car scene profile remain external evidence gates rather
+than blockers for suspension development. The older “current tire candidate” paragraph above is
+retained only as historical context and is superseded by this baseline.
+
+**Current Dynamic Surface candidate:** LIVETRACK01 — the expensive DSURF04G 10 m / 512² GPU CFD experiment is runtime-retired. Wet-track authority is again the persistent world-addressed Dynamic Surface Hydro field: one **100 m surface-sheet page with 64 x 64 sensors** (1.5625 m/cell), sampled and modified by both tire physics and wet-track presentation. Only pages within **350 m of real simulation-interest sources** actively evolve; dormant pages retain their session water/moisture state so puddles and tire-cleared dry lines survive leaving and returning to a section. Atmospheric forcing runs at 2 Hz while downhill hydraulic transport internally substeps to **<= 0.05 s**.
+
+**Water/tire authority:** authored collision/surface-sheet data supplies support height, precipitation exposure, roughness, infiltration, drainage and depression storage. Tires clear and redistribute water in this same Hydro state; the tire model samples the same state for wetness/hydroplaning rather than reading a separate visual water field. Repeated traffic can therefore create a physical dry line that persists while rain, drainage and evaporation continue evolving the surrounding track.
+
+**Presentation and performance:** the existing compact Dynamic Surface GPU page pool mirrors resident 64² Hydro/support pages only. The ordinary authored material shader reconstructs smooth water with bilinear/world-space sampling and bounded shoreline breakup. A 0.35 mm mobile film is treated primarily as wet material response; excess depth drives standing-puddle optics. LIVETRACK01 never initializes or updates `DynamicSurfaceGpuLodPrototype`, so the former **3.0 GiB R32UI WaterState atlas + 0.75 GiB R8 presentation atlas** are not allocated and their CFD dispatches do not run. The prototype source remains compiled temporarily for rollback/low-risk cleanup, but it is not a live authority. See `LIVETRACK01_PERSISTENT_SENSOR_SURFACE.md` and `Decisions/ADR-137-Persistent-Sensor-LiveTrack-Surface.md`.
+
+**Superseded water layouts:** DSURF04G fixed 10 m / 512² GPU WaterState, DSURF04F9/F10 high-resolution rings and WATER15-18 renderer-owned puddle experiments are historical only. The live rule is one persistent sensor Hydro authority plus a presentation mirror—no duplicate water solver and no camera-owned puddle memory.
 
 ## CLEAN13 validated — cleanup stop rule active
 
@@ -78,7 +96,9 @@ Tires are reusable vehicle parts. Engineering geometry/construction/pressure/loa
 
 These controls nudge coherent physical parameter generation/calibration; they are **not** direct final-force multipliers. Brand names never determine physics by themselves. Advanced authoring remains able to supply explicit engineering/fitted data.
 
-Current native authoring ownership is under `Vehicles/Tires/Authoring/`; `TirePartDefinition` reserves the bias contract but the active tire solver does not consume those creator biases yet.
+Current native authoring ownership is under `Vehicles/Tires/Authoring/`; `TirePartDefinition`, family
+baselines and the bounded bias mapper resolve into active fitted/estimated per-wheel tire models while
+preserving imported property-file authority and provenance.
 
 See `TIRE_PART_AUTHORING_ROADMAP.md`, `TIRE_SURFACE_ROADMAP.md`, ADR-055 and ADR-058.
 
@@ -112,10 +132,10 @@ The current Peugeot 206 RC wheel/tire mesh is not treated as manufacturing-accur
 
 ## Immediate roadmap after CLEAN13
 
-1. **User-validate TIRE16 tire marks.** Check hard braking, wheelspin and sliding for continuous soft-edged marks whose darkness changes smoothly with physical slip and whose width shows subtle pressure/camber asymmetry without visible stamp boundaries.
-2. **TIRE17:** specialty tire-family authoring by reusing common mechanisms where physically valid, including road/performance, slick/wet race, winter/studded, rally/gravel, motorcycle, kart, truck/commercial and low-pressure off-road families.
-3. **TIRE18:** Tire/Surface Lab tooling, calibration/provenance workflow, split-surface/water/terrain regressions and large-grid fidelity/rate tiers, including endurance-scale tire-mark persistence/streaming profiling.
-4. Then return to fitment clearance/mass/inertia/bearing loads, suspension topology expansion, full motorcycle dynamics, FFB, aero and other deferred domains.
+1. Begin the suspension program against the contract in `TIRE_SUSPENSION_HANDOFF.md`.
+2. Acquire lawful measured tire/suspension evidence when available; do not invent commercial fits.
+3. Return to TIRE18F for an actual 150-car scene profile once the AI/grid scene exists.
+4. Continue full motorcycle dynamics, FFB, aero and other vehicle domains after the suspension baseline.
 
 `TIRE_SURFACE_ROADMAP.md` is authoritative for detailed tire/surface sequencing.
 
@@ -180,4 +200,3 @@ TIRE16G fixes tire-mark middle-distance starvation/popping by expanding per-band
 The directional CSM pass no longer loops over four cascades and resubmits every accepted mesh range four times. The four 3072² depth maps remain a texture array, but the framebuffer now attaches the array as one layered target. A dedicated shadow geometry stage receives a per-draw cascade bit mask and writes primitives to `gl_Layer`, preserving the existing cascade matrices, culling policy, tire deformation, skinning, reflected winding, depth bias and main-view reversed-Z restoration while moving cascade fan-out to the GPU.
 
 The CPU evaluates each mesh instance/node pose once, resolves tire-deformation overrides once, tests static range bounds against all four cascade frusta once, and then submits each accepted shadow batch once. Contiguous draw ranges that differ only by visible material split and share node transform + skin are coalesced because the depth-only shadow pass does not consume material state. The F8 `shadow draws` counter now measures actual OpenGL shadow draw submissions; `shadow triangles` continues to represent emitted cascade triangle work. This is the first large CPU-submission reduction step; fully GPU-built indirect command lists remain a later option if large-grid/vegetation profiling still justifies them.
-

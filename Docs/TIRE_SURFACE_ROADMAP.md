@@ -1,5 +1,9 @@
 # Tire + Driven-Surface Completion Roadmap
 
+> **Status note (2026-08-14):** preserve this file as the detailed tire/surface roadmap.
+> `CURRENT_TIRE_STATUS.md` reconciles it with current source, tests, TIRE41 deformation and the
+> implemented first TIRE18 calibration slice.
+
 ## Purpose
 
 Heritage Engine now treats tire simulation and driven-surface interaction as one continuous

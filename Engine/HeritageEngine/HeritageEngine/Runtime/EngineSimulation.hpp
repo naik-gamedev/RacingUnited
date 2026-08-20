@@ -2,8 +2,10 @@
 
 namespace heritage::camera {
 class ChaseCamera;
+class VehicleCameraController;
 struct CameraFrame;
 struct ChaseCameraInput;
+struct VehicleCameraFlyInput;
 }
 namespace heritage::diagnostics { class PerformanceMonitor; }
 namespace heritage::entities { class EntityRegistry; }
@@ -22,7 +24,9 @@ void updateEngineSimulation(
     heritage::graphics::EnvironmentSystem& environmentSystem,
     heritage::entities::EntityRegistry& entityRegistry,
     heritage::camera::ChaseCamera& chaseCamera,
+    heritage::camera::VehicleCameraController& vehicleCamera,
     const heritage::camera::ChaseCameraInput& chaseCameraInput,
+    const heritage::camera::VehicleCameraFlyInput& vehicleCameraFlyInput,
     heritage::camera::CameraFrame& entityCameraFrame,
     heritage::diagnostics::PerformanceMonitor& performanceMonitor);
 

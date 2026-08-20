@@ -31,8 +31,28 @@
 namespace heritage::input {
 namespace {
 
-constexpr float kAxisCaptureThreshold = 0.55f;
-constexpr float kAxisNoiseFloor = 0.02f;
+// Racing wheels should not require half of their full mechanical travel just to
+// bind an axis. Capture now measures movement from the value present when the
+// binding cell is clicked, so 0.08 is safely above normal G29 noise while
+// requiring only a small deliberate wheel turn or pedal press.
+constexpr float kAxisCaptureThreshold = 0.08f;
+
+// INPUT06: DirectInput axis neutral is learned once from a short *stable*
+// startup window, rather than from the first sample or by assuming every axis
+// should eventually return to zero. Logitech G29 pedals are endpoint-resting
+// axes (typically released near +1), while steering is centre-resting. Treating
+// a pedal's midpoint as neutral turns pedal release into the opposite action.
+constexpr float kNeutralSettleDelta = 0.012f;
+constexpr std::uint16_t kNeutralSettleStableFrames = 30;
+constexpr float kEndpointNeutralThreshold = 0.80f;
+
+bool directInputButtonPressed(BYTE value)
+{
+    // DirectInput defines button state through the high bit. The low seven
+    // bits are not a pressed/not-pressed contract and must not be treated as
+    // truthy state.
+    return (value & 0x80u) != 0;
+}
 
 std::string lower(std::string value)
 {
@@ -94,33 +114,16 @@ bool guidEqualsText(const GUID& guid, const std::string& text)
     return guidToString(guid) == lower(text);
 }
 
-int axisIndexFromOffset(DWORD offset)
-{
-    // Use the standard offsetof macro instead of DirectInput's legacy
-    // DIJOFS_* FIELD_OFFSET macros.  This avoids MSVC C4644 warnings while
-    // producing the same DIJOYSTATE2 byte offsets.
-    constexpr DWORD x = static_cast<DWORD>(offsetof(DIJOYSTATE2, lX));
-    constexpr DWORD y = static_cast<DWORD>(offsetof(DIJOYSTATE2, lY));
-    constexpr DWORD z = static_cast<DWORD>(offsetof(DIJOYSTATE2, lZ));
-    constexpr DWORD rx = static_cast<DWORD>(offsetof(DIJOYSTATE2, lRx));
-    constexpr DWORD ry = static_cast<DWORD>(offsetof(DIJOYSTATE2, lRy));
-    constexpr DWORD rz = static_cast<DWORD>(offsetof(DIJOYSTATE2, lRz));
-    constexpr DWORD slider0 = static_cast<DWORD>(offsetof(DIJOYSTATE2, rglSlider));
-    constexpr DWORD slider1 = slider0 + static_cast<DWORD>(sizeof(LONG));
-
-    switch (offset)
-    {
-    case x: return 0;
-    case y: return 1;
-    case z: return 2;
-    case rx: return 3;
-    case ry: return 4;
-    case rz: return 5;
-    case slider0: return 6;
-    case slider1: return 7;
-    default: return -1;
-    }
-}
+constexpr std::array<DWORD, WindowsDirectInputBackend::kAxisCount> kAxisStateOffsets = {
+    static_cast<DWORD>(offsetof(DIJOYSTATE2, lX)),
+    static_cast<DWORD>(offsetof(DIJOYSTATE2, lY)),
+    static_cast<DWORD>(offsetof(DIJOYSTATE2, lZ)),
+    static_cast<DWORD>(offsetof(DIJOYSTATE2, lRx)),
+    static_cast<DWORD>(offsetof(DIJOYSTATE2, lRy)),
+    static_cast<DWORD>(offsetof(DIJOYSTATE2, lRz)),
+    static_cast<DWORD>(offsetof(DIJOYSTATE2, rglSlider)),
+    static_cast<DWORD>(offsetof(DIJOYSTATE2, rglSlider) + sizeof(LONG))
+};
 
 LONG axisRaw(const DIJOYSTATE2& state, int index)
 {
@@ -138,13 +141,22 @@ LONG axisRaw(const DIJOYSTATE2& state, int index)
     }
 }
 
-float normalizeAxis(LONG raw)
+float normalizeAxis(LONG raw, LONG minimumRaw, LONG maximumRaw)
 {
-    constexpr float minimum = -32768.0f;
-    constexpr float maximum = 32767.0f;
-    const float clamped = std::clamp(static_cast<float>(raw), minimum, maximum);
+    // DirectInput racing hardware is not required to expose -32768..32767.
+    // Logitech wheels in particular may keep a native 0..65535 range when a
+    // requested DIPROP_RANGE is ignored by the driver. Assuming a signed
+    // range makes a centred wheel look like +1.0 and limits the opposite
+    // direction to only ~0.5, which prevents Heritage's 0.55 capture threshold
+    // from ever seeing steering-left or some pedal axes. Always normalize from
+    // the range actually reported by the device.
+    if (maximumRaw <= minimumRaw)
+        return 0.0f;
+    const double minimum = static_cast<double>(minimumRaw);
+    const double maximum = static_cast<double>(maximumRaw);
+    const double clamped = std::clamp(static_cast<double>(raw), minimum, maximum);
     return std::clamp(
-        (clamped - minimum) / (maximum - minimum) * 2.0f - 1.0f,
+        static_cast<float>((clamped - minimum) / (maximum - minimum) * 2.0 - 1.0),
         -1.0f,
         1.0f);
 }
@@ -269,6 +281,8 @@ public:
         std::string productGuidText;
         std::string name;
         std::array<bool, kAxisCount> axisPresent{};
+        std::array<LONG, kAxisCount> axisMinimumRaw{};
+        std::array<LONG, kAxisCount> axisMaximumRaw{};
         int buttonCount = 0;
         int povCount = 0;
         bool connected = false;
@@ -278,8 +292,17 @@ public:
         std::array<float, kAxisCount> axes{};
         std::array<float, kAxisCount> previousAxes{};
         std::array<float, kAxisCount> neutralAxes{};
+        std::array<float, kAxisCount> neutralCandidateAxes{};
+        std::array<std::uint16_t, kAxisCount> neutralStableFrames{};
+        std::array<bool, kAxisCount> neutralCalibrated{};
+        std::array<float, kAxisCount> captureAxes{};
+        bool captureBaselineValid = false;
 
-        Device() = default;
+        Device()
+        {
+            axisMinimumRaw.fill(-32768);
+            axisMaximumRaw.fill(32767);
+        }
         Device(const Device&) = delete;
         Device& operator=(const Device&) = delete;
 
@@ -300,6 +323,8 @@ public:
             productGuidText = std::move(other.productGuidText);
             name = std::move(other.name);
             axisPresent = other.axisPresent;
+            axisMinimumRaw = other.axisMinimumRaw;
+            axisMaximumRaw = other.axisMaximumRaw;
             buttonCount = other.buttonCount;
             povCount = other.povCount;
             connected = other.connected;
@@ -309,6 +334,11 @@ public:
             axes = other.axes;
             previousAxes = other.previousAxes;
             neutralAxes = other.neutralAxes;
+            neutralCandidateAxes = other.neutralCandidateAxes;
+            neutralStableFrames = other.neutralStableFrames;
+            neutralCalibrated = other.neutralCalibrated;
+            captureAxes = other.captureAxes;
+            captureBaselineValid = other.captureBaselineValid;
             return *this;
         }
 
@@ -378,37 +408,66 @@ public:
         std::vector<std::string> seen;
     };
 
-    static BOOL CALLBACK enumerateAxisCallback(
-        const DIDEVICEOBJECTINSTANCEW* object,
-        VOID* context)
+    static void configureAxesForCurrentDataFormat(Device& device)
     {
-        Device* device = static_cast<Device*>(context);
-        if (!device || !device->handle || !object)
-            return DIENUM_CONTINUE;
+        if (!device.handle)
+            return;
 
-        const int axisIndex = axisIndexFromOffset(object->dwOfs);
-        if (axisIndex < 0 || axisIndex >= static_cast<int>(kAxisCount))
-            return DIENUM_CONTINUE;
+        device.axisPresent.fill(false);
 
-        DIPROPRANGE range{};
-        range.diph.dwSize = sizeof(range);
-        range.diph.dwHeaderSize = sizeof(range.diph);
-        range.diph.dwHow = DIPH_BYID;
-        range.diph.dwObj = object->dwType;
-        range.lMin = -32768;
-        range.lMax = 32767;
-        device->handle->SetProperty(DIPROP_RANGE, &range.diph);
+        // DirectInput's EnumObjects callback exposes dwOfs in the DEVICE'S
+        // NATIVE/raw format, not in the application's current c_dfDIJoystick2
+        // format. Treating that native offset as DIJOYSTATE2 lX/lY/... is
+        // therefore invalid and can silently lose or misidentify wheel axes.
+        // Query each canonical DIJOYSTATE2 slot through DIPH_BYOFFSET after
+        // SetDataFormat instead. This is exactly what DirectInput defines as
+        // the offset into the CURRENT data format.
+        for (std::size_t axisIndex = 0; axisIndex < kAxisCount; ++axisIndex)
+        {
+            const DWORD stateOffset = kAxisStateOffsets[axisIndex];
 
-        DIPROPDWORD deadzone{};
-        deadzone.diph.dwSize = sizeof(deadzone);
-        deadzone.diph.dwHeaderSize = sizeof(deadzone.diph);
-        deadzone.diph.dwHow = DIPH_BYID;
-        deadzone.diph.dwObj = object->dwType;
-        deadzone.dwData = 0;
-        device->handle->SetProperty(DIPROP_DEADZONE, &deadzone.diph);
+            DIDEVICEOBJECTINSTANCEW object{};
+            object.dwSize = sizeof(object);
+            if (FAILED(device.handle->GetObjectInfo(
+                &object, stateOffset, DIPH_BYOFFSET)))
+            {
+                continue;
+            }
 
-        device->axisPresent[static_cast<std::size_t>(axisIndex)] = true;
-        return DIENUM_CONTINUE;
+            DIPROPRANGE requestedRange{};
+            requestedRange.diph.dwSize = sizeof(requestedRange);
+            requestedRange.diph.dwHeaderSize = sizeof(requestedRange.diph);
+            requestedRange.diph.dwHow = DIPH_BYOFFSET;
+            requestedRange.diph.dwObj = stateOffset;
+            requestedRange.lMin = -32768;
+            requestedRange.lMax = 32767;
+            device.handle->SetProperty(DIPROP_RANGE, &requestedRange.diph);
+
+            // Always retain the effective range actually used by DirectInput.
+            // The driver is allowed to refuse/modify a requested range.
+            DIPROPRANGE effectiveRange{};
+            effectiveRange.diph.dwSize = sizeof(effectiveRange);
+            effectiveRange.diph.dwHeaderSize = sizeof(effectiveRange.diph);
+            effectiveRange.diph.dwHow = DIPH_BYOFFSET;
+            effectiveRange.diph.dwObj = stateOffset;
+            if (SUCCEEDED(device.handle->GetProperty(
+                DIPROP_RANGE, &effectiveRange.diph))
+                && effectiveRange.lMax > effectiveRange.lMin)
+            {
+                device.axisMinimumRaw[axisIndex] = effectiveRange.lMin;
+                device.axisMaximumRaw[axisIndex] = effectiveRange.lMax;
+            }
+
+            DIPROPDWORD deadzone{};
+            deadzone.diph.dwSize = sizeof(deadzone);
+            deadzone.diph.dwHeaderSize = sizeof(deadzone.diph);
+            deadzone.diph.dwHow = DIPH_BYOFFSET;
+            deadzone.diph.dwObj = stateOffset;
+            deadzone.dwData = 0;
+            device.handle->SetProperty(DIPROP_DEADZONE, &deadzone.diph);
+
+            device.axisPresent[axisIndex] = true;
+        }
     }
 
     bool createDevice(const DIDEVICEINSTANCEW& instance)
@@ -461,10 +520,7 @@ public:
                 static_cast<DWORD>(kPovCount)));
         }
 
-        device.handle->EnumObjects(
-            enumerateAxisCallback,
-            &device,
-            DIDFT_AXIS);
+        configureAxesForCurrentDataFormat(device);
         device.handle->Acquire();
         devices.push_back(std::move(device));
         return true;
@@ -548,7 +604,10 @@ public:
         {
             if (!device.axisPresent[axis])
                 continue;
-            device.axes[axis] = normalizeAxis(axisRaw(state, static_cast<int>(axis)));
+            device.axes[axis] = normalizeAxis(
+                axisRaw(state, static_cast<int>(axis)),
+                device.axisMinimumRaw[axis],
+                device.axisMaximumRaw[axis]);
         }
 
         if (!device.hasState)
@@ -556,7 +615,52 @@ public:
             device.previousState = device.state;
             device.previousAxes = device.axes;
             device.neutralAxes = device.axes;
+            device.neutralCandidateAxes = device.axes;
+            device.neutralStableFrames.fill(1);
+            device.neutralCalibrated.fill(false);
             device.hasState = true;
+        }
+        else
+        {
+            for (std::size_t axis = 0; axis < kAxisCount; ++axis)
+            {
+                if (!device.axisPresent[axis] || device.neutralCalibrated[axis])
+                    continue;
+
+                // Do not assume zero means neutral. A G29 steering axis rests
+                // near zero, but its independent accelerator/brake/clutch axes
+                // normally rest at an endpoint. Wait until the driver/device
+                // has produced a stable value for a short startup window, then
+                // freeze that value as this session's rest position. This also
+                // ignores transient values while G HUB/DirectInput settles.
+                const float current = device.axes[axis];
+                if (std::abs(current - device.neutralCandidateAxes[axis])
+                    <= kNeutralSettleDelta)
+                {
+                    // Gently converge the candidate so small analogue noise does
+                    // not keep resetting the settle timer.
+                    device.neutralCandidateAxes[axis] =
+                        device.neutralCandidateAxes[axis] * 0.85f + current * 0.15f;
+                    if (device.neutralStableFrames[axis]
+                        < kNeutralSettleStableFrames)
+                    {
+                        ++device.neutralStableFrames[axis];
+                    }
+                }
+                else
+                {
+                    device.neutralCandidateAxes[axis] = current;
+                    device.neutralStableFrames[axis] = 1;
+                }
+
+                if (device.neutralStableFrames[axis]
+                    >= kNeutralSettleStableFrames)
+                {
+                    device.neutralAxes[axis] =
+                        device.neutralCandidateAxes[axis];
+                    device.neutralCalibrated[axis] = true;
+                }
+            }
         }
 
         device.connected = true;
@@ -580,7 +684,8 @@ public:
     {
         if (axis < 0 || axis >= static_cast<int>(kAxisCount)
             || !device.axisPresent[static_cast<std::size_t>(axis)]
-            || !device.hasState)
+            || !device.hasState
+            || !device.neutralCalibrated[static_cast<std::size_t>(axis)])
         {
             return 0.0f;
         }
@@ -589,6 +694,21 @@ public:
             ? device.previousAxes[static_cast<std::size_t>(axis)]
             : device.axes[static_cast<std::size_t>(axis)];
         const float neutral = device.neutralAxes[static_cast<std::size_t>(axis)];
+
+        // INPUT09: no backend noise/dead-zone threshold is permitted here.
+        // Once a DirectInput axis has a calibrated rest position, every
+        // representable movement away from that rest position must propagate
+        // to the binding. User/profile analogue settings are the sole authority
+        // for any intentional deadzone.
+        // Endpoint-resting pedals only have meaningful travel away from their
+        // released endpoint. A stale opposite-direction binding (for example
+        // Brake=AxisY+ on the same inverted G29 accelerator axis used by
+        // Throttle=AxisY-) must never turn *release* into brake application.
+        if ((positive && neutral >= kEndpointNeutralThreshold)
+            || (!positive && neutral <= -kEndpointNeutralThreshold))
+        {
+            return 0.0f;
+        }
 
         if (positive)
         {
@@ -729,7 +849,8 @@ float WindowsDirectInputBackend::value(
     case ControlType::Button:
         return controlIndex >= 0
             && controlIndex < device->buttonCount
-            && device->state.rgbButtons[controlIndex] != 0 ? 1.0f : 0.0f;
+            && directInputButtonPressed(device->state.rgbButtons[controlIndex])
+            ? 1.0f : 0.0f;
     case ControlType::AxisPositive:
         return Impl::directionalAxisValue(*device, controlIndex, true, false);
     case ControlType::AxisNegative:
@@ -749,13 +870,34 @@ float WindowsDirectInputBackend::value(
         == requestedDirection ? 1.0f : 0.0f;
 }
 
-bool WindowsDirectInputBackend::captureBinding(std::string& binding) const
+void WindowsDirectInputBackend::beginCapture()
+{
+    if (!m_impl)
+        return;
+
+    // Capture from the position the hardware is in when the binding cell is
+    // clicked. A G29 steering wheel can therefore bind either direction with
+    // a small deliberate turn, and an inverted clutch pedal can bind from its
+    // released end-stop without relying on startup-neutral assumptions.
+    for (Impl::Device& device : m_impl->devices)
+    {
+        if (!device.connected || !device.hasState)
+        {
+            device.captureBaselineValid = false;
+            continue;
+        }
+        device.captureAxes = device.axes;
+        device.captureBaselineValid = true;
+    }
+}
+
+bool WindowsDirectInputBackend::captureBinding(std::string& binding)
 {
     binding.clear();
     if (!m_impl)
         return false;
 
-    for (const Impl::Device& device : m_impl->devices)
+    for (Impl::Device& device : m_impl->devices)
     {
         if (!device.connected || !device.hasState)
             continue;
@@ -764,8 +906,10 @@ bool WindowsDirectInputBackend::captureBinding(std::string& binding) const
 
         for (int button = 0; button < device.buttonCount; ++button)
         {
-            const bool current = device.state.rgbButtons[button] != 0;
-            const bool previous = device.previousState.rgbButtons[button] != 0;
+            const bool current = directInputButtonPressed(
+                device.state.rgbButtons[button]);
+            const bool previous = directInputButtonPressed(
+                device.previousState.rgbButtons[button]);
             if (current && !previous)
             {
                 binding = prefix + "Button" + std::to_string(button + 1);
@@ -785,34 +929,49 @@ bool WindowsDirectInputBackend::captureBinding(std::string& binding) const
             }
         }
 
+        int strongestAxis = -1;
+        float strongestMovement = 0.0f;
         for (int axis = 0; axis < static_cast<int>(kAxisCount); ++axis)
         {
-            if (!device.axisPresent[static_cast<std::size_t>(axis)])
+            const std::size_t axisSlot = static_cast<std::size_t>(axis);
+            if (!device.axisPresent[axisSlot])
                 continue;
 
-            const float currentPositive = Impl::directionalAxisValue(
-                device, axis, true, false);
-            const float previousPositive = Impl::directionalAxisValue(
-                device, axis, true, true);
-            if (currentPositive >= kAxisCaptureThreshold
-                && previousPositive < kAxisCaptureThreshold
-                && currentPositive - previousPositive > kAxisNoiseFloor)
+            // Compare against the exact value present when capture began.
+            // Scan every axis first and bind the one with the largest deliberate
+            // movement. Racing-wheel pedal potentiometers and force-feedback
+            // steering can exhibit small simultaneous noise on other axes;
+            // first-axis-wins capture can therefore select the wrong control.
+            const float baseline = device.captureBaselineValid
+                ? device.captureAxes[axisSlot]
+                : device.previousAxes[axisSlot];
+            const float movement = device.axes[axisSlot] - baseline;
+            if (std::abs(movement) > std::abs(strongestMovement))
             {
-                binding = prefix + axisName(axis) + "+";
-                return true;
+                strongestMovement = movement;
+                strongestAxis = axis;
             }
+        }
 
-            const float currentNegative = Impl::directionalAxisValue(
-                device, axis, false, false);
-            const float previousNegative = Impl::directionalAxisValue(
-                device, axis, false, true);
-            if (currentNegative >= kAxisCaptureThreshold
-                && previousNegative < kAxisCaptureThreshold
-                && currentNegative - previousNegative > kAxisNoiseFloor)
-            {
-                binding = prefix + axisName(axis) + "-";
-                return true;
-            }
+        if (strongestAxis >= 0
+            && std::abs(strongestMovement) >= kAxisCaptureThreshold)
+        {
+            const std::size_t axisSlot = static_cast<std::size_t>(strongestAxis);
+            const float baseline = device.captureBaselineValid
+                ? device.captureAxes[axisSlot]
+                : device.previousAxes[axisSlot];
+            binding = prefix + axisName(strongestAxis)
+                + (strongestMovement >= 0.0f ? "+" : "-");
+
+            // Binding capture starts while the control is released. Preserve
+            // that exact position as the session neutral for asymmetric or
+            // inverted pedal axes instead of trusting the first startup poll.
+            device.neutralAxes[axisSlot] = baseline;
+            device.neutralCandidateAxes[axisSlot] = baseline;
+            device.neutralStableFrames[axisSlot] = kNeutralSettleStableFrames;
+            device.neutralCalibrated[axisSlot] = true;
+            device.captureBaselineValid = false;
+            return true;
         }
     }
 
@@ -917,7 +1076,8 @@ float WindowsDirectInputBackend::value(
     const std::string&,
     ControlType,
     int) const { return 0.0f; }
-bool WindowsDirectInputBackend::captureBinding(std::string&) const { return false; }
+void WindowsDirectInputBackend::beginCapture() {}
+bool WindowsDirectInputBackend::captureBinding(std::string&) { return false; }
 
 std::string WindowsDirectInputBackend::axisName(int axisIndex)
 {

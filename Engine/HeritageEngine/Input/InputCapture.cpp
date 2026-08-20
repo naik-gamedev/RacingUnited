@@ -23,6 +23,7 @@ bool InputSystem::beginBindingCapture(
     m_captureAction = actionName;
     m_captureBindingIndex = bindingIndex;
     m_captureAppend = false;
+    m_directInput.beginCapture();
     m_lastError.clear();
     return true;
 }
@@ -58,6 +59,7 @@ bool InputSystem::beginAddBindingCapture(const std::string& actionName)
     m_captureAction = actionName;
     m_captureBindingIndex = emptySlot;
     m_captureAppend = true;
+    m_directInput.beginCapture();
     m_lastError.clear();
     return true;
 }

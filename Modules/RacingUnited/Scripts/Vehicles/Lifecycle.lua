@@ -24,10 +24,9 @@ function VehicleFixedUpdate(fixedDeltaTime)
     local controlled, throttle, brake, steering, handbrake =
         VehicleDynamicsLabFixedInputs(fixedDeltaTime)
     if not controlled then
-        throttle = Input.Value("Throttle")
-        brake = Input.Value("Brake")
+        throttle, brake = ReadVehicleDriveInputs()
         steering = ReadVehicleSteeringInput()
-        handbrake = Input.Value("Handbrake")
+        handbrake = ReadVehicleHandbrakeInput()
     end
     Vehicle.SetInputs(
         nativeVehicle, throttle, brake, steering, handbrake)
@@ -61,8 +60,10 @@ function VehicleFixedUpdate(fixedDeltaTime)
 end
 
 function VehicleUpdate(deltaTime)
+    VehicleCameraUpdate()
     local steering = ReadVehicleSteeringInput()
-    inputDrive = Input.Value("Throttle") - Input.Value("Brake")
+    local driveThrottle, driveBrake = ReadVehicleDriveInputs()
+    inputDrive = driveThrottle - driveBrake
     inputPosition = math.max(
         0.0,
         math.min(1.0, inputPosition + steering * deltaTime * 0.65))
@@ -77,24 +78,30 @@ function VehicleUpdate(deltaTime)
         return
     end
 
-    if Input.Pressed("Shift Up") then
+    if not VehicleCameraOwnsNavigationInput() and Input.Pressed("Shift Up") then
         ReportVehicleGearChange(
             Vehicle.ShiftUp(nativeVehicle),
             "Requested the next higher gear")
     end
-    if Input.Pressed("Shift Down") then
+    if not VehicleCameraOwnsNavigationInput() and Input.Pressed("Shift Down") then
         ReportVehicleGearChange(
             Vehicle.ShiftDown(nativeVehicle),
             "Requested the next lower gear")
     end
-    if Input.Pressed("Select Reverse") then
-        ReportVehicleGearChange(
-            Vehicle.SetGear(nativeVehicle, -1),
-            "Requested reverse gear")
-    end
-    if Input.Pressed("Select Neutral") then
-        ReportVehicleGearChange(
-            Vehicle.SetGear(nativeVehicle, 0),
-            "Requested neutral")
+    local directGear = ReadVehicleDirectGearSelection()
+    if directGear ~= nil then
+        local forwardGearCount = Vehicle.GetForwardGearCount(nativeVehicle)
+        if directGear > 0 and directGear > forwardGearCount then
+            vehicleMessage = "Gear " .. tostring(directGear)
+                .. " is not available on this transmission ("
+                .. tostring(forwardGearCount) .. " forward gears)."
+        else
+            local gearName = directGear < 0 and "reverse"
+                or (directGear == 0 and "neutral"
+                    or ("gear " .. tostring(directGear)))
+            ReportVehicleGearChange(
+                Vehicle.SetGear(nativeVehicle, directGear),
+                "Requested " .. gearName)
+        end
     end
 end

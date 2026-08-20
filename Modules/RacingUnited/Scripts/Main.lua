@@ -1,12 +1,9 @@
--- Racing United - modular Lua entry point.
-
 local function Include(relativePath)
     local ok, message = Script.Include(relativePath)
     if not ok then
         error(message or ("Could not include Lua file: " .. relativePath), 0)
     end
 end
-
 Include("Runtime/State.lua")
 Include("Runtime/Common.lua")
 Include("Runtime/PhysicsDemo.lua")
@@ -23,6 +20,7 @@ Include("Vehicles/Definitions/VehicleDefinitionV2Serialization.lua")
 Include("Vehicles/Definitions/Peugeot206RC/AlignmentSpecification.lua")
 Include("Vehicles/Definitions/PrototypeCar.lua")
 Include("Vehicles/State.lua")
+Include("Vehicles/CameraViews.lua")
 Include("Vehicles/Visuals.lua")
 Include("Vehicles/VisualWheels.lua")
 Include("Vehicles/Input.lua")
@@ -63,6 +61,8 @@ Include("UI/Vehicle/DriverAidsPanel.lua")
 Include("UI/Vehicle/TelemetryPanel.lua")
 Include("UI/Vehicle/WorkshopPanel.lua")
 Include("UI/Vehicle/DynamicsLabPanel.lua")
+Include("UI/Vehicle/CameraLabPanel.lua")
+Include("UI/Vehicle/LabPanel.lua")
 Include("UI/VehicleDebugPanel.lua")
 Include("UI/Physics/WorldPanel.lua")
 Include("UI/Physics/SuspensionPanel.lua")

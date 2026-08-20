@@ -28,6 +28,7 @@ This workflow exists to prevent context-window drift, invented function signatur
 - Add or update validation beside the feature.
 - Treat validator source discovery as part of the contract: if implementations move between files, update validator scans in the same change before deleting the old layout.
 - Keep heavy deterministic simulation in native C++ and Lua orchestration/data in named modules.
+- Route CPU-parallel native simulation through `Core/Jobs/JobSystem` by default; do not create subsystem-private worker pools without an architecture decision. Preserve explicit phase ownership and deterministic reductions.
 - Update documentation when a contract or ownership rule changes.
 
 ## Before claiming success

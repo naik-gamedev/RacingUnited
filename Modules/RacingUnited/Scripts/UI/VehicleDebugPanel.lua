@@ -46,7 +46,7 @@ function DrawVehicleDebugPanel()
             UI.EndTabItem()
         end
         if UI.BeginTabItem("LAB") then
-            DrawVehicleDynamicsLabPanel()
+            DrawVehicleLabPanel()
             UI.EndTabItem()
         end
         UI.EndTabBar()

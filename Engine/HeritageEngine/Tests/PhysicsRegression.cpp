@@ -9,6 +9,11 @@ int main()
     std::cout << std::fixed << std::setprecision(6);
 
     int failed = 0;
+    const bool jobSystemPassed = jobSystemParallelForIsBoundedAndDeterministic();
+    std::cout << (jobSystemPassed ? "PASS" : "FAIL")
+        << " engine job-system parallel-for and nested safety\n";
+    failed += jobSystemPassed ? 0 : 1;
+
     const bool parkedPassed = parkedVehicleStaysQuiet();
     std::cout << (parkedPassed ? "PASS" : "FAIL")
         << " parked vehicle stability\n";
@@ -120,6 +125,18 @@ int main()
         << " chase-camera orbit persistence and forward return\n";
     failed += chaseCameraOrbitPassed ? 0 : 1;
 
+    const bool vehicleCameraPassed =
+        vehicleCameraAuthoringPoseAndFlyAreVehicleLocal();
+    std::cout << (vehicleCameraPassed ? "PASS" : "FAIL")
+        << " vehicle-camera local pose and fly authoring\n";
+    failed += vehicleCameraPassed ? 0 : 1;
+
+    const bool rainMicrophysicsPassed =
+        physicalRainPopulationAndWorldFieldAreDeterministic();
+    std::cout << (rainMicrophysicsPassed ? "PASS" : "FAIL")
+        << " physical rain population and world precipitation field\n";
+    failed += rainMicrophysicsPassed ? 0 : 1;
+
     const bool dynamicsLabPassed = dynamicsLabCapturesHighRateTelemetry();
     std::cout << (dynamicsLabPassed ? "PASS" : "FAIL")
         << " high-rate vehicle dynamics laboratory\n";
@@ -189,6 +206,36 @@ int main()
     std::cout << (mf62RoadPassed ? "PASS" : "FAIL")
         << " MF6.2 road force/moment core\n";
     failed += mf62RoadPassed ? 0 : 1;
+
+    const bool tireCalibrationLabPassed =
+        tireCalibrationLabProducesDeterministicSweeps();
+    std::cout << (tireCalibrationLabPassed ? "PASS" : "FAIL")
+        << " deterministic TIRE18 calibration sweeps\n";
+    failed += tireCalibrationLabPassed ? 0 : 1;
+
+    const bool tireAcceptancePassed =
+        tireCalibrationAcceptanceRejectsOutOfEnvelopeChanges();
+    std::cout << (tireAcceptancePassed ? "PASS" : "FAIL")
+        << " provenance-labelled tire calibration acceptance envelopes\n";
+    failed += tireAcceptancePassed ? 0 : 1;
+
+    const bool tireScenarioLabPassed =
+        tireScenarioLabProducesStatefulEvidence();
+    std::cout << (tireScenarioLabPassed ? "PASS" : "FAIL")
+        << " deterministic TIRE18 stateful scenarios\n";
+    failed += tireScenarioLabPassed ? 0 : 1;
+
+    const bool tireDistributedContactPassed =
+        tireDistributedContactPatchIntegratesLocalShear();
+    std::cout << (tireDistributedContactPassed ? "PASS" : "FAIL")
+        << " bounded distributed tire contact integration\n";
+    failed += tireDistributedContactPassed ? 0 : 1;
+
+    const bool tireFleetBenchmarkPassed =
+        tireFleetBenchmarkExecutesBoundedWork();
+    std::cout << (tireFleetBenchmarkPassed ? "PASS" : "FAIL")
+        << " executable 150-car / 600-tire workload benchmark\n";
+    failed += tireFleetBenchmarkPassed ? 0 : 1;
 
     const bool mf62TurnSlipPassed = magicFormula62TurnSlipReducesGripAndTrail();
     std::cout << (mf62TurnSlipPassed ? "PASS" : "FAIL")
@@ -280,6 +327,42 @@ int main()
     std::cout << (surfaceWorldPassed ? "PASS" : "FAIL")
         << " world-owned chunked SurfaceWorld addressing\n";
     failed += surfaceWorldPassed ? 0 : 1;
+
+    const bool dynamicSurfaceBakePassed =
+        dynamicSurfaceStaticBakeSeparatesSheetsAndCaches();
+    std::cout << (dynamicSurfaceBakePassed ? "PASS" : "FAIL")
+        << " DSURF01 static chunk/sheet bake, curb isolation and cache\n";
+    failed += dynamicSurfaceBakePassed ? 0 : 1;
+
+    const bool dynamicSurfacePagePoolPassed =
+        dynamicSurfacePagePoolIsPersistentBudgetedAndLruSafe();
+    std::cout << (dynamicSurfacePagePoolPassed ? "PASS" : "FAIL")
+        << " DSURF02 persistent budgeted Dynamic Surface page residency\n";
+    failed += dynamicSurfacePagePoolPassed ? 0 : 1;
+
+    const bool dynamicSurfaceHydroResidencyPassed =
+        dynamicSurfaceHydroResidencyUsesRealSurfacePagesAndNearestSources();
+    std::cout << (dynamicSurfaceHydroResidencyPassed ? "PASS" : "FAIL")
+        << " DSURF03 real-surface Hydro residency and multi-source selection\n";
+    failed += dynamicSurfaceHydroResidencyPassed ? 0 : 1;
+
+    const bool dynamicSurfaceHydroConservationPassed =
+        dynamicSurfaceHydrologyConservesCappedVolume();
+    std::cout << (dynamicSurfaceHydroConservationPassed ? "PASS" : "FAIL")
+        << " DSURF03B capped rain/flow Hydro mass conservation\n";
+    failed += dynamicSurfaceHydroConservationPassed ? 0 : 1;
+
+    const bool dynamicSurfaceHydroAuthorityPassed =
+        dynamicSurfaceHydrologyOwnsRainCoverAndTireClearing();
+    std::cout << (dynamicSurfaceHydroAuthorityPassed ? "PASS" : "FAIL")
+        << " DSURF03B Dynamic Surface rain/cover/tire Hydro authority\n";
+    failed += dynamicSurfaceHydroAuthorityPassed ? 0 : 1;
+
+    const bool dynamicSurfaceThermalPassed =
+        dynamicSurfaceThermalIsSheetAwareAndTireHeated();
+    std::cout << (dynamicSurfaceThermalPassed ? "PASS" : "FAIL")
+        << " DSURF04 Dynamic Surface sheet-aware thermal/tire-heat authority\n";
+    failed += dynamicSurfaceThermalPassed ? 0 : 1;
 
     const bool surfacePresentationPassed =
         surfacePresentationIsBoundedAndWorldAddressed();

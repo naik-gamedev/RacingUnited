@@ -190,6 +190,7 @@ user32.lib
     <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_widgets.cpp" />
     <ClCompile Include="..\Camera\OrbitCamera.cpp" />
     <ClCompile Include="..\Camera\ChaseCamera.cpp" />
+    <ClCompile Include="..\Camera\VehicleCameraController.cpp" />
     <ClCompile Include="..\Audio\AudioSystem.cpp" />
     <ClCompile Include="$(ProjectDir)..\Input\InputSystem.cpp" />
     <ClCompile Include="$(ProjectDir)..\Input\InputBindings.cpp" />
@@ -211,6 +212,16 @@ user32.lib
     <ClCompile Include="..\Physics\Surfaces\SurfaceField.cpp" />
     <ClCompile Include="..\Physics\Surfaces\SurfaceMaterialProperties.cpp" />
     <ClCompile Include="..\Physics\Surfaces\SurfaceWorld.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\SurfaceWeather.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceChunk.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceBake.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfacePagePool.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceThermal.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceSystem.cpp" />
+    <ClCompile Include="..\Physics\Weather\RainMicrophysics.cpp" />
+    <ClCompile Include="..\Physics\Weather\PrecipitationField.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrology.cpp" />
     <ClCompile Include="..\Physics\Surfaces\Presentation\SurfacePresentation.cpp" />
     <ClCompile Include="..\Physics\Surfaces\Rubber\TrackRubberState.cpp" />
     <ClCompile Include="..\Physics\StaticTriangleBvh.cpp" />
@@ -257,6 +268,7 @@ user32.lib
     <ClCompile Include="..\Vehicles\DriverAids\VehicleDriverAidConfiguration.cpp" />
     <ClCompile Include="..\Vehicles\Drivetrain\VehicleDrivetrainConfiguration.cpp" />
     <ClCompile Include="..\Vehicles\Tires\VehicleTireConfiguration.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\VehicleTireCalibration.cpp" />
     <ClCompile Include="..\Vehicles\VehicleTelemetry.cpp" />
     <ClCompile Include="..\Vehicles\VehicleSimulation.cpp" />
     <ClCompile Include="..\Vehicles\VehicleWheelSimulation.cpp" />
@@ -270,6 +282,7 @@ user32.lib
     <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesAccumulator.cpp" />
     <ClCompile Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesDiagnostics.cpp" />
     <ClCompile Include="..\Core\Diagnostics\PerformanceMonitor.cpp" />
+    <ClCompile Include="..\Core\Jobs\JobSystem.cpp" />
     <ClCompile Include="..\Core\Entities\EntityRegistry.cpp" />
     <ClCompile Include="..\Core\Entities\EntityHierarchy.cpp" />
     <ClCompile Include="..\Core\Entities\EntityTransforms.cpp" />
@@ -291,6 +304,7 @@ user32.lib
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTransformBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaAudioBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaEngineBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaCameraBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaEnvironmentBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaInputBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaModuleBindings.cpp" />
@@ -315,6 +329,8 @@ user32.lib
     <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleSuspensionBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTelemetryBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireCalibrationBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireScenarioBindings.cpp" />
     <ClCompile Include="..\Core\Modules\ModuleRuntimeManager.cpp" />
     <ClCompile Include="..\Core\Modules\ScriptedUiRuntime.cpp" />
     <ClCompile Include="..\Scenes\LogoShowcaseScene.cpp" />
@@ -331,6 +347,8 @@ user32.lib
     <ClCompile Include="..\Graphics\VegetationSystem.cpp" />
     <ClCompile Include="..\Graphics\Material.cpp" />
     <ClCompile Include="..\Graphics\Texture2D.cpp" />
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.cpp" />
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.cpp" />
     <ClCompile Include="..\Graphics\Gltf\GltfBinary.cpp" />
     <ClCompile Include="..\Graphics\Gltf\GltfJson.cpp" />
     <ClCompile Include="..\Graphics\Gltf\GltfDocument.cpp" />
@@ -342,7 +360,10 @@ user32.lib
     <ClCompile Include="..\Graphics\Renderer\SceneRenderer.cpp" />
     <ClCompile Include="..\Graphics\Renderer\EntityDebugRenderer.cpp" />
     <ClCompile Include="..\Graphics\Renderer\SurfacePresentationRenderer.cpp" />
-    <ClCompile Include="..\Graphics\Renderer\EntityMeshRenderer.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\WeatherPresentationRenderer.cpp" />
+<ClCompile Include="..\Graphics\Renderer\EntityMeshRenderer.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshDynamicSurface.cpp" />
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshSurfaceWetness.cpp" />
     <ClCompile Include="..\Graphics\Renderer\EntityMeshAssetCache.cpp" />
     <ClCompile Include="..\Graphics\Renderer\EntityMeshAnimation.cpp" />
     <ClCompile Include="..\Graphics\Renderer\EntityMeshShadows.cpp" />
@@ -381,6 +402,7 @@ user32.lib
     <ClInclude Include="..\..\..\ThirdParty\IMGUI\imgui.h" />
     <ClInclude Include="..\Camera\OrbitCamera.hpp" />
     <ClInclude Include="..\Camera\ChaseCamera.hpp" />
+    <ClInclude Include="..\Camera\VehicleCameraController.hpp" />
     <ClInclude Include="..\Audio\AudioSystem.hpp" />
     <ClInclude Include="$(ProjectDir)..\Input\InputSystem.hpp" />
     <ClInclude Include="$(ProjectDir)..\Input\InputSystemInternal.hpp" />
@@ -391,6 +413,18 @@ user32.lib
     <ClInclude Include="..\Physics\Surfaces\SurfaceField.hpp" />
     <ClInclude Include="..\Physics\Surfaces\SurfaceMaterialProperties.hpp" />
     <ClInclude Include="..\Physics\Surfaces\SurfaceWorld.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\SurfaceWeather.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceTypes.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceStaticData.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceChunk.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfacePagePool.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceThermal.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceSystem.hpp" />
+    <ClInclude Include="..\Physics\Weather\RainMicrophysics.hpp" />
+    <ClInclude Include="..\Physics\Weather\PrecipitationField.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\Water\SurfaceHydrology.hpp" />
+    <ClInclude Include="..\Physics\Surfaces\Water\VirtualPipeFlow.hpp" />
     <ClInclude Include="..\Physics\Surfaces\Presentation\SurfacePresentation.hpp" />
     <ClInclude Include="..\Physics\Surfaces\Rubber\TrackRubberState.hpp" />
     <ClInclude Include="..\Physics\StaticTriangleBvh.hpp" />
@@ -411,6 +445,11 @@ user32.lib
       <ClInclude Include="..\Vehicles\Tires\TireSlipDynamics.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireContactPatch.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireContactGeometry.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireCalibrationLab.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireCalibrationAcceptance.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireScenarioLab.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireDistributedContact.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireFleetBenchmark.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireFlexibleRingField.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireRigidRing.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireRoadEnveloping.hpp" />
@@ -467,6 +506,7 @@ user32.lib
     <ClInclude Include="..\Core\Entities\EntityPrefabDocument.hpp" />
     <ClInclude Include="..\Core\Diagnostics\BuildIdentity.hpp" />
     <ClInclude Include="..\Core\Diagnostics\PerformanceMonitor.hpp" />
+    <ClInclude Include="..\Core\Jobs\JobSystem.hpp" />
     <ClInclude Include="..\Core\Diagnostics\GeneratedBuildIdentity.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleInfo.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleLoader.hpp" />
@@ -510,6 +550,8 @@ user32.lib
     <ClInclude Include="..\Graphics\TireMarkChunking.hpp" />
     <ClInclude Include="..\Graphics\Material.hpp" />
     <ClInclude Include="..\Graphics\Texture2D.hpp" />
+    <ClInclude Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.hpp" />
+    <ClInclude Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.hpp" />
     <ClInclude Include="..\Graphics\GltfBinary.hpp" />
     <ClInclude Include="..\Graphics\Gltf\GltfInternal.hpp" />
     <ClInclude Include="..\Graphics\GltfSceneData.hpp" />
@@ -518,7 +560,8 @@ user32.lib
     <ClInclude Include="..\Graphics\Renderer\SceneRenderer.hpp" />
     <ClInclude Include="..\Graphics\Renderer\EntityDebugRenderer.hpp" />
     <ClInclude Include="..\Graphics\Renderer\SurfacePresentationRenderer.hpp" />
-    <ClInclude Include="..\Graphics\Renderer\EntityMeshRenderer.hpp" />
+    <ClInclude Include="..\Graphics\Renderer\WeatherPresentationRenderer.hpp" />
+<ClInclude Include="..\Graphics\Renderer\EntityMeshRenderer.hpp" />
     <ClInclude Include="..\Graphics\Renderer\EntityMeshRendererInternal.hpp" />
     <ClInclude Include="..\Graphics\Renderer\EntityMeshShaders.hpp" />
     <ClInclude Include="..\Graphics\Renderer\EntityMeshShadowConfig.hpp" />
@@ -583,6 +626,11 @@ user32.lib
     <None Include="..\Vehicles\Wheels\Fitment\InstalledWheelMassProperties.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireContactPatch.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireContactGeometry.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireCalibrationLab.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireCalibrationAcceptance.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireScenarioLab.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireDistributedContact.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireFleetBenchmark.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireFlexibleRingField.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireRoadEnveloping.cpp" />

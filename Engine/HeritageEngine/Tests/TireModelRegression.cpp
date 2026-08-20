@@ -8,6 +8,11 @@
 #include "../Vehicles/Tires/TireSlipDynamics.hpp"
 #include "../Vehicles/Tires/TireContactPatch.hpp"
 #include "../Vehicles/Tires/TireContactGeometry.hpp"
+#include "../Vehicles/Tires/TireCalibrationLab.hpp"
+#include "../Vehicles/Tires/TireCalibrationAcceptance.hpp"
+#include "../Vehicles/Tires/TireScenarioLab.hpp"
+#include "../Vehicles/Tires/TireDistributedContact.hpp"
+#include "../Vehicles/Tires/TireFleetBenchmark.hpp"
 #include "../Vehicles/Tires/TireFlexibleRingField.hpp"
 #include "../Vehicles/Tires/TireRigidRing.hpp"
 #include "../Vehicles/Tires/TireRoadEnveloping.hpp"
@@ -20,7 +25,9 @@
 #include "../Vehicles/Tires/TireDeformableTerrainInteraction.hpp"
 #include "../Physics/SurfaceField.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace heritage::tests {
 namespace {
@@ -96,6 +103,448 @@ bool magicFormula62RoadCoreBehaves()
         // force or response stiffness under the same load and slip.
         && std::abs(flatTire.lateralForce) < std::abs(fy.lateralForce) * 0.60
         && flatTire.corneringStiffness < fy.corneringStiffness * 0.20;
+}
+
+bool tireCalibrationLabProducesDeterministicSweeps()
+{
+    TireModelDescription tire;
+    tire.provider = TireProviderKind::MagicFormula62;
+
+    const auto descriptions =
+        heritage::vehicles::standardTireCalibrationSweeps(tire, 0.316);
+    const auto first =
+        heritage::vehicles::runStandardTireCalibrationSuite(tire, 0.316);
+    const auto second =
+        heritage::vehicles::runStandardTireCalibrationSuite(tire, 0.316);
+    if (descriptions.size() != 7
+        || first.size() != descriptions.size()
+        || second.size() != first.size())
+    {
+        return false;
+    }
+
+    const heritage::vehicles::TireCalibrationSweepResult* pureLongitudinal = nullptr;
+    const heritage::vehicles::TireCalibrationSweepResult* pureLateral = nullptr;
+    const heritage::vehicles::TireCalibrationSweepResult* combined = nullptr;
+    const heritage::vehicles::TireCalibrationSweepResult* load = nullptr;
+    const heritage::vehicles::TireCalibrationSweepResult* pressure = nullptr;
+    for (std::size_t index = 0; index < first.size(); ++index)
+    {
+        const auto& result = first[index];
+        const auto& repeat = second[index];
+        const std::size_t expected = descriptions[index].primary.sampleCount
+            * descriptions[index].secondary.sampleCount;
+        if (!result.valid || !repeat.valid
+            || result.samples.size() != expected
+            || repeat.samples.size() != result.samples.size())
+        {
+            return false;
+        }
+
+        for (std::size_t sampleIndex = 0;
+             sampleIndex < result.samples.size();
+             sampleIndex += std::max<std::size_t>(
+                 std::size_t{1}, result.samples.size() / 17))
+        {
+            const auto& a = result.samples[sampleIndex];
+            const auto& b = repeat.samples[sampleIndex];
+            if (std::abs(a.force.longitudinalForce
+                    - b.force.longitudinalForce) > 1.0e-12
+                || std::abs(a.force.lateralForce
+                    - b.force.lateralForce) > 1.0e-12
+                || std::abs(a.force.aligningTorque
+                    - b.force.aligningTorque) > 1.0e-12)
+            {
+                return false;
+            }
+        }
+
+        if (result.name == "pure_longitudinal") pureLongitudinal = &result;
+        else if (result.name == "pure_lateral") pureLateral = &result;
+        else if (result.name == "combined_slip_map") combined = &result;
+        else if (result.name == "load_sensitivity") load = &result;
+        else if (result.name == "pressure_sensitivity") pressure = &result;
+    }
+
+    if (!pureLongitudinal || !pureLateral || !combined || !load || !pressure)
+        return false;
+
+    const auto& braking = pureLongitudinal->samples.front().force;
+    const auto& driving = pureLongitudinal->samples.back().force;
+    const auto& leftSlip = pureLateral->samples.front().force;
+    const auto& rightSlip = pureLateral->samples.back().force;
+    const auto& lightLoad = load->samples.front();
+    const auto& heavyLoad = load->samples.back();
+    const auto& lowPressure = pressure->samples.front();
+    const auto& highPressure = pressure->samples.back();
+
+    return braking.longitudinalForce < -100.0
+        && driving.longitudinalForce > 100.0
+        && leftSlip.lateralForce > 100.0
+        && rightSlip.lateralForce < -100.0
+        && combined->samples.size() == 41u * 49u
+        && std::abs(heavyLoad.force.lateralForce)
+            > std::abs(lightLoad.force.lateralForce)
+        && highPressure.input.inflationPressurePa
+            > lowPressure.input.inflationPressurePa
+        // A sweep must preserve zero-valued/unidentified pressure
+        // coefficients honestly. It records a flat curve rather than
+        // inventing sensitivity that is absent from the fitted dataset.
+        && finite(lowPressure.force.corneringStiffness)
+        && finite(highPressure.force.corneringStiffness);
+}
+
+bool tireCalibrationAcceptanceRejectsOutOfEnvelopeChanges()
+{
+    TireModelDescription tire;
+    tire.provider = TireProviderKind::MagicFormula62;
+    const auto sweeps = heritage::vehicles::standardTireCalibrationSweeps(
+        tire, 0.316);
+    if (sweeps.empty())
+        return false;
+    const auto reference = heritage::vehicles::runTireCalibrationSweep(
+        tire, sweeps.front());
+    const auto envelope =
+        heritage::vehicles::buildRelativeTireCalibrationEnvelope(
+            reference,
+            "synthetic_regression_reference",
+            "generated by Heritage deterministic calibration suite",
+            true,
+            0.20,
+            0.04,
+            20.0,
+            0.06,
+            1.0);
+    const auto accepted =
+        heritage::vehicles::evaluateTireCalibrationAcceptance(
+            tire, reference, envelope);
+    if (!accepted.valid || !accepted.passed
+        || !accepted.usedSyntheticReference
+        || accepted.evaluatedSampleCount != reference.samples.size())
+    {
+        return false;
+    }
+
+    auto changed = reference;
+    const std::size_t changedIndex = changed.samples.size() * 3 / 4;
+    changed.samples[changedIndex].force.longitudinalForce += 2500.0;
+    const auto rejected =
+        heritage::vehicles::evaluateTireCalibrationAcceptance(
+            tire, changed, envelope);
+
+    auto wrongTopology = envelope;
+    wrongTopology.sweepName = "different_sweep";
+    const auto invalid =
+        heritage::vehicles::evaluateTireCalibrationAcceptance(
+            tire, reference, wrongTopology);
+
+    return rejected.valid && !rejected.passed
+        && rejected.violationCount > 0
+        && !invalid.valid && !invalid.error.empty();
+}
+
+bool tireScenarioLabProducesStatefulEvidence()
+{
+    using heritage::vehicles::runStandardTireScenario;
+    using heritage::vehicles::tires::TireFamily;
+    using heritage::vehicles::tires::TireFamilyBaselineInput;
+    using heritage::vehicles::tires::buildTireFamilyBaseline;
+
+    TireFamilyBaselineInput input;
+    input.sectionWidthM = 0.205;
+    input.aspectRatio = 0.45;
+    input.rimRadiusM = 0.2159;
+    input.nominalLoadN = 3500.0;
+    input.inflationPressurePa = 220000.0;
+    const auto baseline = buildTireFamilyBaseline(
+        TireFamily::RoadSummerPerformance, input);
+    if (!baseline.valid)
+        return false;
+
+    const VehicleScalar radius = input.rimRadiusM
+        + input.sectionWidthM * input.aspectRatio;
+    const auto relaxation = runStandardTireScenario(
+        baseline.model, radius, "relaxation_step");
+    const auto thermal = runStandardTireScenario(
+        baseline.model, radius, "heating_cooling");
+    const auto cornering = runStandardTireScenario(
+        baseline.model, radius, "sustained_cornering_wear");
+    const auto flatSpot = runStandardTireScenario(
+        baseline.model, radius, "braking_flat_spot");
+    const auto brakeRim = runStandardTireScenario(
+        baseline.model, radius, "brake_rim_soak");
+    const auto puncture = runStandardTireScenario(
+        baseline.model, radius, "slow_puncture_pressure_loss");
+    const auto blowout = runStandardTireScenario(
+        baseline.model, radius, "blowout_pressure_loss");
+    if (!relaxation.valid || !thermal.valid || !cornering.valid
+        || !flatSpot.valid || !brakeRim.valid || !puncture.valid || !blowout.valid
+        || relaxation.samples.empty() || thermal.samples.empty()
+        || cornering.samples.empty() || flatSpot.samples.empty()
+        || brakeRim.samples.empty()
+        || puncture.samples.empty() || blowout.samples.empty())
+    {
+        return false;
+    }
+
+    const auto hottest = std::max_element(
+        thermal.samples.begin(), thermal.samples.end(),
+        [](const auto& left, const auto& right) {
+            return left.treadTemperatureC < right.treadTemperatureC;
+        });
+    const auto highestPressure = std::max_element(
+        thermal.samples.begin(), thermal.samples.end(),
+        [](const auto& left, const auto& right) {
+            return left.inflationPressurePa < right.inflationPressurePa;
+        });
+    const auto& relaxationFinal = relaxation.samples.back();
+    const auto& thermalInitial = thermal.samples.front();
+    const auto& thermalFinal = thermal.samples.back();
+    const auto& corneringInitial = cornering.samples.front();
+    const auto& corneringFinal = cornering.samples.back();
+    const auto& flatSpotFinal = flatSpot.samples.back();
+    const auto hottestRim = std::max_element(
+        brakeRim.samples.begin(), brakeRim.samples.end(),
+        [](const auto& left, const auto& right) {
+            return left.rimTemperatureC < right.rimTemperatureC;
+        });
+    const auto& brakeRimInitial = brakeRim.samples.front();
+    const auto& brakeRimFinal = brakeRim.samples.back();
+    const auto& punctureInitial = puncture.samples.front();
+    const auto& punctureFinal = puncture.samples.back();
+    const auto& blowoutFinal = blowout.samples.back();
+
+    return std::abs(relaxationFinal.effectiveLongitudinalSlip
+            - relaxationFinal.targetLongitudinalSlip) < 0.001
+        && std::abs(relaxationFinal.effectiveSlipAngleRadians
+            - relaxationFinal.targetSlipAngleRadians) < 0.001
+        && hottest->treadTemperatureC
+            > thermalInitial.treadTemperatureC + 1.0
+        && thermalFinal.treadTemperatureC < hottest->treadTemperatureC
+        && highestPressure->inflationPressurePa
+            > thermalInitial.inflationPressurePa
+        && corneringFinal.averageTreadDepthM
+            < corneringInitial.averageTreadDepthM
+        && flatSpotFinal.flatSpotDepthM > 0.00005
+        && hottestRim->rimTemperatureC
+            > brakeRimInitial.rimTemperatureC + 5.0
+        && brakeRimFinal.rimTemperatureC < hottestRim->rimTemperatureC
+        && brakeRimFinal.carcassTemperatureC
+            > brakeRimInitial.carcassTemperatureC
+        && punctureFinal.inflationPressurePa
+            < punctureInitial.inflationPressurePa
+        && blowoutFinal.containedGasMassRatio < 0.99
+        && blowoutFinal.failureStage
+            != heritage::vehicles::tires::TireFailureStage::Healthy;
+}
+
+bool tireDistributedContactPatchIntegratesLocalShear()
+{
+    using heritage::vehicles::tires::TireDistributedContactInput;
+    using heritage::vehicles::tires::evaluateTireDistributedContact;
+
+    std::size_t gridWholeTireEvaluations = 0;
+    std::size_t gridBrushCells = 0;
+    // One player car at the spatial tier, 149 cars at aggregate fidelity.
+    // Every tire still evaluates the same whole-tire model exactly once.
+    for (std::size_t vehicle = 0; vehicle < 150; ++vehicle)
+    {
+        const auto work = heritage::vehicles::tires::tireContactWorkEstimate(
+            vehicle == 0 ? 1 : 0);
+        gridWholeTireEvaluations += 4 * work.wholeTireForceEvaluations;
+        gridBrushCells += 4 * work.localBrushCells;
+    }
+    if (gridWholeTireEvaluations != 600 || gridBrushCells != 36)
+        return false;
+
+    TireModelDescription tire;
+    tire.provider = TireProviderKind::MagicFormula62;
+
+    TireDistributedContactInput homogeneous;
+    homogeneous.aggregateInput.normalLoad = tire.nominalLoad;
+    homogeneous.aggregateInput.longitudinalSlip = 0.055;
+    homogeneous.aggregateInput.slipAngleRadians = 0.065;
+    homogeneous.aggregateInput.forwardSpeedMps = 24.0;
+    homogeneous.aggregateInput.wheelRadiusM = 0.316;
+    homogeneous.aggregateInput.inflationPressurePa = 220000.0;
+    homogeneous.contactPatchLengthM = 0.135;
+    homogeneous.contactPatchWidthM = 0.205;
+    constexpr VehicleScalar longitudinalWeights[3] = {0.25, 0.50, 0.25};
+    constexpr VehicleScalar lateralWeights[3] = {0.30, 0.40, 0.30};
+    for (std::size_t longitudinal = 0; longitudinal < 3; ++longitudinal)
+    {
+        for (std::size_t lateral = 0; lateral < 3; ++lateral)
+        {
+            const std::size_t index = longitudinal * 3 + lateral;
+            homogeneous.cells[index].normalLoadFraction =
+                longitudinalWeights[longitudinal] * lateralWeights[lateral];
+        }
+    }
+
+    const auto reference = evaluateTireDistributedContact(tire, homogeneous);
+    const auto repeat = evaluateTireDistributedContact(tire, homogeneous);
+    std::cout << "distributed_contact_uniform valid=" << reference.valid
+        << " delta_fx_n="
+        << reference.integrated.longitudinalForce
+            - reference.aggregateBaseline.longitudinalForce
+        << " delta_fy_n="
+        << reference.integrated.lateralForce
+            - reference.aggregateBaseline.lateralForce
+        << " delta_mz_nm="
+        << reference.integrated.aligningTorque
+            - reference.aggregateBaseline.aligningTorque
+        << " max_util=" << reference.maximumCellUtilization
+        << '\n';
+    if (!reference.valid || !repeat.valid
+        || std::abs(reference.integrated.longitudinalForce
+            - reference.aggregateBaseline.longitudinalForce) > 1.0e-5
+        || std::abs(reference.integrated.lateralForce
+            - reference.aggregateBaseline.lateralForce) > 1.0e-5
+        || std::abs(reference.integrated.aligningTorque
+            - reference.aggregateBaseline.aligningTorque) > 1.0e-5
+        || std::abs(reference.integrated.longitudinalForce
+            - repeat.integrated.longitudinalForce) > 1.0e-12
+        || std::abs(reference.integrated.lateralForce
+            - repeat.integrated.lateralForce) > 1.0e-12)
+    {
+        return false;
+    }
+
+    TireDistributedContactInput splitFriction = homogeneous;
+    for (std::size_t longitudinal = 0; longitudinal < 3; ++longitudinal)
+    {
+        splitFriction.cells[longitudinal * 3].frictionScale = 0.18;
+        splitFriction.cells[longitudinal * 3 + 2].frictionScale = 1.20;
+    }
+    const auto split = evaluateTireDistributedContact(tire, splitFriction);
+
+    TireDistributedContactInput partialSupport = homogeneous;
+    for (std::size_t longitudinal = 0; longitudinal < 3; ++longitudinal)
+        partialSupport.cells[longitudinal * 3].supported = false;
+    const auto edge = evaluateTireDistributedContact(tire, partialSupport);
+
+    VehicleScalar splitLeftUtilization = 0.0;
+    VehicleScalar splitRightUtilization = 0.0;
+    VehicleScalar splitLeftForce = 0.0;
+    VehicleScalar splitRightForce = 0.0;
+    VehicleScalar edgeNormalLoad = 0.0;
+    for (std::size_t longitudinal = 0; longitudinal < 3; ++longitudinal)
+    {
+        splitLeftUtilization += split.cells[longitudinal * 3].utilization;
+        splitRightUtilization += split.cells[longitudinal * 3 + 2].utilization;
+        splitLeftForce += std::hypot(
+            split.cells[longitudinal * 3].longitudinalForceN,
+            split.cells[longitudinal * 3].lateralForceN);
+        splitRightForce += std::hypot(
+            split.cells[longitudinal * 3 + 2].longitudinalForceN,
+            split.cells[longitudinal * 3 + 2].lateralForceN);
+    }
+    for (const auto& cell : edge.cells)
+        edgeNormalLoad += cell.normalLoadN;
+
+    std::cout << "distributed_contact uniform_delta_fx_n="
+        << reference.integrated.longitudinalForce
+            - reference.aggregateBaseline.longitudinalForce
+        << " uniform_delta_fy_n="
+        << reference.integrated.lateralForce
+            - reference.aggregateBaseline.lateralForce
+        << " uniform_delta_mz_nm="
+        << reference.integrated.aligningTorque
+            - reference.aggregateBaseline.aligningTorque
+        << " split_delta_mz_nm="
+        << split.integrated.aligningTorque
+            - reference.integrated.aligningTorque
+        << " split_left_util=" << splitLeftUtilization
+        << " split_right_util=" << splitRightUtilization
+        << " split_left_force_n=" << splitLeftForce
+        << " split_right_force_n=" << splitRightForce
+        << " edge_support=" << edge.supportedLoadFraction
+        << " edge_load_n=" << edgeNormalLoad
+        << " edge_delta_mx_nm="
+        << edge.integrated.overturningMoment
+            - reference.integrated.overturningMoment
+        << '\n';
+
+    if (!split.valid || !edge.valid
+        || split.supportedLoadFraction < 0.999999
+        || edge.supportedLoadFraction >= 0.999999
+        || std::abs(split.integrated.aligningTorque
+            - reference.integrated.aligningTorque) < 0.01
+        || std::abs(edge.integrated.overturningMoment
+            - reference.integrated.overturningMoment) < 1.0)
+    {
+        return false;
+    }
+
+    return splitLeftForce < splitRightForce * 0.50
+        && std::abs(edgeNormalLoad - tire.nominalLoad) < 1.0e-6
+        && finite(split.integrated.longitudinalForce)
+        && finite(split.integrated.lateralForce)
+        && finite(edge.integrated.aligningTorque);
+}
+
+bool tireFleetBenchmarkExecutesBoundedWork()
+{
+    TireModelDescription tire;
+    tire.provider = TireProviderKind::MagicFormula62;
+    tire.thermal.enabled = true;
+    tire.wear.enabled = true;
+    tire.wetSurface.enabled = true;
+
+    heritage::vehicles::tires::TireFleetBenchmarkDescription description;
+    description.vehicleCount = 150;
+    description.tiresPerVehicle = 4;
+    // Long enough to execute at least one 30 Hz spatial-water flow step in
+    // addition to the 1000 Hz tire contacts.
+    description.simulatedDurationSeconds = 0.050;
+    description.tireRateHz = 1000.0;
+    description.physicalStateRateHz = 100.0;
+    description.distributedContactVehicleCount = 1;
+    const auto dry = heritage::vehicles::tires::runTireFleetBenchmark(
+        tire, 0.316, description);
+    description.wetWeather = true;
+    const auto wet = heritage::vehicles::tires::runTireFleetBenchmark(
+        tire, 0.316, description);
+
+    constexpr std::size_t expectedTires = 150 * 4;
+    constexpr std::size_t expectedSteps = 50;
+    constexpr std::size_t expectedStateUpdates = expectedTires * 5;
+    constexpr std::size_t expectedBrushCells = 4 * expectedSteps
+        * heritage::vehicles::tires::kDistributedContactCellCount;
+    std::cout << "fleet_tire_benchmark dry_ms=" << dry.wallClockMilliseconds
+        << " wet_ms=" << wet.wallClockMilliseconds
+        << " dry_rtf=" << dry.realTimeFactor
+        << " wet_rtf=" << wet.realTimeFactor
+        << " evals=" << dry.wholeTireForceEvaluations
+        << " hydro_cells=" << wet.hydrologyCellCount
+        << " hydro_steps=" << wet.hydrologySteps
+        << " hydro_contacts=" << wet.hydrologyTireContacts
+        << '\n';
+    return dry.valid && wet.valid
+        && dry.tireCount == expectedTires
+        && dry.tireSteps == expectedSteps
+        && dry.wholeTireForceEvaluations == expectedTires * expectedSteps
+        && wet.wholeTireForceEvaluations == expectedTires * expectedSteps
+        && dry.distributedBrushCellEvaluations == expectedBrushCells
+        && dry.thermalStateUpdates == expectedStateUpdates
+        && dry.wearStateUpdates == expectedStateUpdates
+        && dry.wetStateUpdates == expectedStateUpdates
+        && dry.hydrologyCellCount == 0u
+        && dry.hydrologyTireContacts == 0u
+        // WATER14: this count is now the authoritative adaptive control-volume
+        // count, not the immutable 0.5 m support raster. The benchmark terrain
+        // should compress below the old >1000-cell fixed-grid expectation.
+        && wet.hydrologyCellCount > 0u
+        && wet.hydrologyCellCount < 1000u
+        && wet.hydrologySteps >= 1u
+        && wet.hydrologyTireContacts == expectedTires * expectedSteps
+        && dry.wallClockMilliseconds > 0.0
+        && wet.wallClockMilliseconds > 0.0
+        && dry.tireEvaluationsPerSecond > 0.0
+        && dry.microsecondsPerVehicleStep > 0.0
+        && finite(static_cast<VehicleScalar>(dry.checksum))
+        && finite(static_cast<VehicleScalar>(wet.checksum))
+        && std::abs(dry.checksum - wet.checksum) > 1.0e-8;
 }
 
 bool magicFormula62TurnSlipReducesGripAndTrail()
@@ -1024,6 +1473,7 @@ bool tireThermalPressureAndGripStateAreRateStable()
     input.lateralForceN = 1800.0;
     input.radialDissipationWatts = 200.0;
     input.rollingResistanceDissipationWatts = 180.0;
+    input.brakeDissipationWatts = 4000.0;
     input.contactPatchAreaM2 = 0.018;
 
     const auto integrateFor = [&](VehicleScalar dt) {
@@ -1054,18 +1504,47 @@ bool tireThermalPressureAndGripStateAreRateStable()
     const auto hot = heritage::vehicles::tires::evaluateTireThermalState(
         description, hotState);
 
+    const auto coolWithWind = [&](VehicleScalar windMps) {
+        heritage::vehicles::tires::TireThermalState state;
+        state.initialized = true;
+        state.treadTemperatureC = 90.0;
+        state.carcassTemperatureC = 80.0;
+        state.gasTemperatureC = 45.0;
+        state.rimTemperatureC = 75.0;
+        state.inflationPressurePa = 220000.0;
+        heritage::vehicles::tires::TireThermalInput cooling;
+        cooling.environmentTemperatureOverride = true;
+        cooling.ambientTemperatureC = 20.0;
+        cooling.roadTemperatureC = 20.0;
+        cooling.ambientAirSpeedMps = windMps;
+        heritage::vehicles::tires::TireThermalOutput output;
+        for (int step = 0; step < 1000; ++step)
+        {
+            output = heritage::vehicles::tires::advanceTireThermal(
+                description, cooling, 0.01, state);
+        }
+        return output;
+    };
+    const auto stillCooling = coolWithWind(0.0);
+    const auto windyCooling = coolWithWind(20.0);
+
     return highRate.valid && lowRate.valid && warm.valid && hot.valid
+        && stillCooling.valid && windyCooling.valid
         && highRate.treadTemperatureC > 24.0
         && highRate.carcassTemperatureC > 20.2
         && highRate.gasTemperatureC > 20.0
+        && highRate.rimTemperatureC > 20.2
         && highRate.inflationPressurePa > 220000.0
         && highRate.slipDissipationWatts > 1000.0
         && std::abs(highRate.treadTemperatureC - lowRate.treadTemperatureC) < 0.20
         && std::abs(highRate.carcassTemperatureC - lowRate.carcassTemperatureC) < 0.20
+        && std::abs(highRate.rimTemperatureC - lowRate.rimTemperatureC) < 0.20
         && std::abs(highRate.inflationPressurePa - lowRate.inflationPressurePa) < 250.0
         && warm.frictionScale > 1.0
         && hot.frictionScale < warm.frictionScale
-        && warm.stiffnessScale < 1.0;
+        && warm.stiffnessScale < 1.0
+        && windyCooling.treadTemperatureC < stillCooling.treadTemperatureC
+        && windyCooling.rimTemperatureC < stillCooling.rimTemperatureC;
 }
 
 bool tireFailurePressureLossAndStructuralStagesBehave()
@@ -1440,6 +1919,21 @@ bool tireWetSurfaceHydroplaningAndDrainageBehave()
     const TireWetSurfaceOutput highPressureFlooded = evaluateTireWetSurface(
         description, wear, highPressure, treadState);
 
+    TireWetSurfaceInput explicitWeatherFilm = input;
+    explicitWeatherFilm.surfaceWetness = 0.50;
+    explicitWeatherFilm.surfaceWeatherWetness = 0.50;
+    explicitWeatherFilm.surfaceWaterDepthValid = true;
+    explicitWeatherFilm.surfaceWaterDepthM = 0.00040;
+    const TireWetSurfaceOutput explicitFilm = evaluateTireWetSurface(
+        description, wear, explicitWeatherFilm, treadState);
+
+    TireWetSurfaceInput authoredPlusWeather = explicitWeatherFilm;
+    // 0.75 is the union of 0.50 authored/manual coverage and 0.50 dynamic
+    // weather coverage. The authored bridge therefore contributes 1.5 mm.
+    authoredPlusWeather.surfaceWetness = 0.75;
+    const TireWetSurfaceOutput combinedFilm = evaluateTireWetSurface(
+        description, wear, authoredPlusWeather, treadState);
+
     TireWetSurfaceOutput retained;
     for (int i = 0; i < 800; ++i)
     {
@@ -1462,6 +1956,7 @@ bool tireWetSurfaceHydroplaningAndDrainageBehave()
 
     return flooded.valid && thin.valid && wornFlooded.valid
         && lowPressureFlooded.valid && highPressureFlooded.valid
+        && explicitFilm.valid && combinedFilm.valid
         && flooded.roadWaterDepthM > 0.0029
         && flooded.waterWedgeFraction > 0.5
         && flooded.hydroplaningFraction > 0.25
@@ -1477,6 +1972,8 @@ bool tireWetSurfaceHydroplaningAndDrainageBehave()
             < highPressureFlooded.classicalPressureHydroplaningSpeedMps
         && lowPressureFlooded.hydroplaningFraction
             >= highPressureFlooded.hydroplaningFraction
+        && std::abs(explicitFilm.roadWaterDepthM - 0.00040) < 1.0e-9
+        && std::abs(combinedFilm.roadWaterDepthM - 0.00150) < 1.0e-9
         && retainedWet > 1.0e-5
         && drying.averageRetainedWaterDepthM < retainedWet * 0.75;
 }

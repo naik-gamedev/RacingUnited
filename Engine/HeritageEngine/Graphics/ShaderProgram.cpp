@@ -64,4 +64,27 @@ GLuint buildShaderProgram(
     return program;
 }
 
+GLuint buildComputeShaderProgram(const char* computeSource)
+{
+    const GLuint computeShader = compileShader(GL_COMPUTE_SHADER, computeSource);
+    const GLuint program = glCreateProgram();
+    glAttachShader(program, computeShader);
+    glLinkProgram(program);
+
+    GLint succeeded = GL_FALSE;
+    glGetProgramiv(program, GL_LINK_STATUS, &succeeded);
+    if (succeeded == GL_FALSE)
+    {
+        char log[2048] = {};
+        glGetProgramInfoLog(program, sizeof(log), nullptr, log);
+        std::cerr << "Compute shader program link failed:\n" << log << '\n';
+        glDeleteShader(computeShader);
+        glDeleteProgram(program);
+        return 0;
+    }
+
+    glDeleteShader(computeShader);
+    return program;
+}
+
 } // namespace heritage::graphics

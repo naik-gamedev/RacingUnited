@@ -10,8 +10,8 @@ namespace heritage::vehicles::tires {
 // lineage contains explicit Temperature & Velocity behavior, but the complete
 // proprietary T&V equations/identified coefficients are not public. Heritage
 // therefore keeps the thermal network independent from the MF6.2 equations:
-// three energy states (tread, carcass, contained gas), physical heat flows and
-// ideal-gas pressure feedback. A fitted/reference T&V provider can replace the
+// four energy states (tread, carcass, contained gas, wheel/rim), physical heat
+// flows and ideal-gas pressure feedback. A fitted/reference T&V provider can replace the
 // empirical grip/stiffness modifiers later without changing the wheel solver.
 struct TireThermalDescription
 {
@@ -23,6 +23,7 @@ struct TireThermalDescription
     VehicleScalar initialTreadTemperatureC = 20.0;
     VehicleScalar initialCarcassTemperatureC = 20.0;
     VehicleScalar initialGasTemperatureC = 20.0;
+    VehicleScalar initialRimTemperatureC = 20.0;
     VehicleScalar ambientTemperatureC = 20.0;
     VehicleScalar roadTemperatureC = 20.0;
     VehicleScalar ambientPressurePa = 101325.0;
@@ -33,6 +34,7 @@ struct TireThermalDescription
     VehicleScalar treadHeatCapacityJPerK = 4200.0;
     VehicleScalar carcassHeatCapacityJPerK = 9500.0;
     VehicleScalar gasHeatCapacityJPerK = 220.0;
+    VehicleScalar rimHeatCapacityJPerK = 18000.0;
 
     // Thermal conductances [W/K]. Speed-dependent terms are added to the air
     // paths using abs(vehicle speed) in m/s.
@@ -42,14 +44,22 @@ struct TireThermalDescription
     VehicleScalar carcassToAirConductanceWPerK = 8.0;
     VehicleScalar carcassToGasConductanceWPerK = 10.0;
     VehicleScalar gasToAmbientConductanceWPerK = 2.0;
+    VehicleScalar carcassToRimConductanceWPerK = 13.0;
+    VehicleScalar rimToAirConductanceWPerK = 12.0;
     VehicleScalar treadAirSpeedConductanceWPerKPerMps = 0.70;
     VehicleScalar carcassAirSpeedConductanceWPerKPerMps = 0.35;
+    VehicleScalar rimAirSpeedConductanceWPerKPerMps = 0.65;
 
     // Frictional slip power is primarily created in the tread/contact region;
     // the remainder enters the carcass. Radial/rolling losses enter carcass.
     VehicleScalar slipHeatFractionToTread = 0.85;
     VehicleScalar slipHeatEfficiency = 0.92;
     VehicleScalar carcassLossHeatEfficiency = 0.95;
+    // Fraction of brake friction power conducted into this wheel/rim thermal
+    // mass. The remainder leaves through the disc/drum, hub and cooling air.
+    // This is an identified/authoring parameter rather than an assumed tire
+    // force coefficient.
+    VehicleScalar brakeHeatFractionToRim = 0.32;
 
     // Clean-room temperature response around an optimum. The curve is
     // normalized to referenceTemperatureC, so enabling TIRE07 does not create
@@ -84,6 +94,7 @@ struct TireThermalState
     VehicleScalar treadTemperatureC = 20.0;
     VehicleScalar carcassTemperatureC = 20.0;
     VehicleScalar gasTemperatureC = 20.0;
+    VehicleScalar rimTemperatureC = 20.0;
     VehicleScalar inflationPressurePa = 220000.0;
     // Current contained mass divided by mass at the fitted cold reference.
     // TIRE19 owns leak integration; TIRE07 turns that mass and temperature
@@ -95,12 +106,16 @@ struct TireThermalInput
 {
     bool grounded = false;
     VehicleScalar forwardSpeedMps = 0.0;
+    // World-air speed crossing the tire even while the vehicle is stationary.
+    // Combined with vehicle speed for convection; it does not alter slip.
+    VehicleScalar ambientAirSpeedMps = 0.0;
     VehicleScalar longitudinalSlipVelocityMps = 0.0;
     VehicleScalar lateralSlipVelocityMps = 0.0;
     VehicleScalar longitudinalForceN = 0.0;
     VehicleScalar lateralForceN = 0.0;
     VehicleScalar radialDissipationWatts = 0.0;
     VehicleScalar rollingResistanceDissipationWatts = 0.0;
+    VehicleScalar brakeDissipationWatts = 0.0;
     VehicleScalar contactPatchAreaM2 = 0.0;
 
     // TIRE15B live world-surface climate input. Legacy/direct unit tests can
@@ -120,6 +135,7 @@ struct TireThermalOutput
     VehicleScalar treadTemperatureC = 20.0;
     VehicleScalar carcassTemperatureC = 20.0;
     VehicleScalar gasTemperatureC = 20.0;
+    VehicleScalar rimTemperatureC = 20.0;
     VehicleScalar inflationPressurePa = 220000.0;
     VehicleScalar frictionScale = 1.0;
     VehicleScalar stiffnessScale = 1.0;
@@ -127,6 +143,9 @@ struct TireThermalOutput
     VehicleScalar carcassDissipationWatts = 0.0;
     VehicleScalar roadHeatFlowWatts = 0.0;
     VehicleScalar airHeatFlowWatts = 0.0;
+    VehicleScalar brakeHeatInputWatts = 0.0;
+    // Positive means heat is flowing from rim into the tire carcass.
+    VehicleScalar rimToCarcassHeatFlowWatts = 0.0;
 };
 
 bool validTireThermalDescription(const TireThermalDescription& value);

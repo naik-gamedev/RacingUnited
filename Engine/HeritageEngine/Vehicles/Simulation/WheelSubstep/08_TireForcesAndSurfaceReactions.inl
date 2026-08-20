@@ -101,9 +101,59 @@
     tireInput.stiffnessMultiplier = surface.stiffnessMultiplier
         * (thermalBefore.valid ? thermalBefore.stiffnessScale : VehicleScalar{1.0})
         * dedicatedStiffnessScale;
-    const TireForceResult tireResult = evaluateAdvancedRoadTire(
-        wheel.tireModel,
-        tireInput);
+    TireForceResult tireResult;
+    if (vehicle.tireContactFidelity
+            == TireContactFidelity::Distributed3x3
+        && wheel.cachedDistributedContactValid)
+    {
+        tires::TireDistributedContactInput distributedInput;
+        distributedInput.aggregateInput = tireInput;
+        distributedInput.contactPatchLengthM = std::max(
+            state.tireContactPatchLength, VehicleScalar{0.02});
+        distributedInput.contactPatchWidthM = std::max(
+            state.tireContactPatchWidth, VehicleScalar{0.03});
+        constexpr VehicleScalar longitudinalWeights[3] = {
+            0.25, 0.50, 0.25 };
+        constexpr VehicleScalar lateralWeights[3] = {
+            0.30, 0.40, 0.30 };
+        const VehicleScalar aggregateRawFriction = std::max(
+            wheel.cachedFootprintFrictionMultiplier,
+            VehicleScalar{0.01});
+        const VehicleScalar aggregateRawStiffness = std::max(
+            wheel.cachedFootprintStiffnessMultiplier,
+            VehicleScalar{0.01});
+        for (std::size_t longitudinal = 0; longitudinal < 3; ++longitudinal)
+        {
+            for (std::size_t lateral = 0; lateral < 3; ++lateral)
+            {
+                const std::size_t index = longitudinal * 3 + lateral;
+                auto& cell = distributedInput.cells[index];
+                cell.normalLoadFraction =
+                    longitudinalWeights[longitudinal]
+                    * lateralWeights[lateral];
+                cell.frictionScale = std::clamp(
+                    wheel.cachedDistributedFrictionMultiplier[index]
+                        / aggregateRawFriction,
+                    VehicleScalar{0.0}, VehicleScalar{4.0});
+                cell.stiffnessScale = std::clamp(
+                    wheel.cachedDistributedStiffnessMultiplier[index]
+                        / aggregateRawStiffness,
+                    VehicleScalar{0.0}, VehicleScalar{4.0});
+                cell.supported =
+                    wheel.cachedDistributedSupported[index];
+            }
+        }
+        const tires::TireDistributedContactOutput distributed =
+            tires::evaluateTireDistributedContact(
+                wheel.tireModel, distributedInput);
+        tireResult = distributed.valid
+            ? distributed.integrated
+            : evaluateAdvancedRoadTire(wheel.tireModel, tireInput);
+    }
+    else
+    {
+        tireResult = evaluateAdvancedRoadTire(wheel.tireModel, tireInput);
+    }
 
     VehicleScalar longitudinalForce = tireResult.longitudinalForce;
     // TIRE03 now owns torsional parking behavior in TireContactPatch. Keep

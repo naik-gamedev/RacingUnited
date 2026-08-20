@@ -37,6 +37,9 @@ heritage::math::Vec3 transformPoint(
     const heritage::math::Mat4& matrix,
     const std::array<float, 3>& point);
 float maximumLinearScale(const heritage::math::Mat4& matrix);
+bool tireVisualDeformationWithinDistance(
+    const heritage::math::Mat4& rangeModel,
+    const MeshNode& tireVisualNode);
 bool sphereOutsideFrustum(
     const ViewFrustum& frustum,
     const heritage::math::Vec3& center,

@@ -61,12 +61,22 @@
         wetInput.grounded = true;
         wetInput.surfaceMaterial = hit.surfaceMaterial;
         wetInput.surfaceWetness = hitSurfaceConditions.wetness;
+        wetInput.surfaceWeatherWetness = hitSurfaceConditions.weatherWetness;
+        wetInput.surfaceWaterDepthValid =
+            hitSurfaceConditions.waterFilmDepthValid;
+        wetInput.surfaceWaterDepthM = hitSurfaceConditions.waterFilmDepthM;
         wetInput.footprintSurfaceBlendValid =
             wheel.cachedFootprintMaterialBlendValid;
         wetInput.footprintCleanHardFraction =
             wheel.cachedFootprintCleanHardFraction;
         wetInput.footprintAverageWetness =
             wheel.cachedFootprintAverageWetness;
+        wetInput.footprintAverageWeatherWetness =
+            wheel.cachedFootprintAverageWeatherWetness;
+        wetInput.footprintAverageWaterDepthValid =
+            wheel.cachedFootprintAverageWaterDepthValid;
+        wetInput.footprintAverageWaterDepthM =
+            wheel.cachedFootprintAverageWaterDepthM;
         wetInput.wheelRotationDegrees = state.wheelRotationDegrees;
         wetInput.normalLoadN = suspensionForce;
         wetInput.inflationPressurePa = dynamicInflationPressurePa;

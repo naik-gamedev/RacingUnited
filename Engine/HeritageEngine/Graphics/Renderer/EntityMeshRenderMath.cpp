@@ -115,6 +115,20 @@ float maximumLinearScale(const heritage::math::Mat4& matrix)
     return std::max({ columnLength(0), columnLength(4), columnLength(8) });
 }
 
+bool tireVisualDeformationWithinDistance(
+    const heritage::math::Mat4& rangeModel,
+    const MeshNode& tireVisualNode)
+{
+    // rangeModel is camera-relative in both the material and shadow passes.
+    // Transforming the inferred tire centre therefore measures the individual
+    // tire, rather than the owning vehicle or asset origin.
+    const heritage::math::Vec3 tireCenter =
+        transformPoint(rangeModel, tireVisualNode.tireVisualCenter);
+    return dot(tireCenter, tireCenter)
+        <= kTireVisualDeformationMaximumDistanceM
+            * kTireVisualDeformationMaximumDistanceM;
+}
+
 bool sphereOutsideFrustum(
     const ViewFrustum& frustum,
     const heritage::math::Vec3& center,
