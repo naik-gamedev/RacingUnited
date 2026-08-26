@@ -1,4 +1,4 @@
-# CLEAN12 validation module. Dot-sourced by Tools/ValidateProject.ps1.
+﻿# CLEAN12 validation module. Dot-sourced by Tools/ValidateProject.ps1.
 # It intentionally shares the caller scope so existing checks keep the same
 # variables and Check()/ReadText() helpers while ownership is physically split.
 
@@ -163,6 +163,8 @@ $physicsWorldCppPath = Join-Path $Root "Engine\HeritageEngine\Physics\PhysicsWor
 $physicsWorldCpp = if (Test-Path $physicsWorldCppPath) { [IO.File]::ReadAllText($physicsWorldCppPath) } else { "" }
 $meshRendererPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshRenderer.cpp"
 $meshRenderer = if (Test-Path $meshRendererPath) { [IO.File]::ReadAllText($meshRendererPath) } else { "" }
+$meshRendererFramePrepPath = Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshAnimation.cpp"
+$meshRendererFramePrep = if (Test-Path $meshRendererFramePrepPath) { [IO.File]::ReadAllText($meshRendererFramePrepPath) } else { "" }
 $vehicleFactoryPath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Factory.lua"
 $vehicleFactory = if (Test-Path $vehicleFactoryPath) { [IO.File]::ReadAllText($vehicleFactoryPath) } else { "" }
 Check ($mathHeader.Contains("struct DVec3")) "large-world absolute coordinate type is FP64"
@@ -173,7 +175,7 @@ Check ($luaRuntimeAndBindingsCpp.Contains('registerFunction("Physics", "GetBodyG
 Check ($luaRuntimeAndBindingsCpp.Contains('registerFunction("Physics", "GetBodyCenterOfMassLocal"')) "Lua exposes body-local physical COM readback"
 Check ($luaRuntimeAndBindingsCpp.Contains('registerFunction("Physics", "SetBodyCenterOfMassLocal"')) "Lua exposes body-local physical COM authoring"
 Check ($luaRuntimeAndBindingsCpp.Contains('registerFunction("Physics", "GetBodyCenterOfMassWorld"')) "Lua exposes world physical COM readback"
-Check ($meshRenderer.Contains("cameraRelativeInstance.position")) "mesh renderer submits camera-relative FP32 positions"
+Check ($meshRenderer.Contains("prepareFrameInstances(instances, eye, elapsedSeconds)") -and $meshRendererFramePrep.Contains("cameraRelativeInstance.position") -and $meshRendererFramePrep.Contains("instance.position.x - eye.x") -and $meshRendererFramePrep.Contains("instance.position.y - eye.y") -and $meshRendererFramePrep.Contains("instance.position.z - eye.z") -and $meshRendererFramePrep.Contains("prepared.instanceModel = modelMatrix(cameraRelativeInstance)")) "mesh renderer submits camera-relative FP32 positions"
 Check ($vehicleCpp.Contains("pointVelocityFromOffset")) "vehicle solver uses chassis-local point-velocity offsets"
 Check ($vehicleFactory.Contains("Physics.SetFloatingOriginAnchor(nativeVehicleBody, 4096.0)")) "Racing United anchors floating origin to the player chassis"
 
@@ -418,7 +420,6 @@ $surfaceMaterialPropertiesHeader = if (Test-Path $surfaceMaterialPropertiesHeade
 $surfaceMaterialPropertiesCpp = if (Test-Path $surfaceMaterialPropertiesCppPath) { [IO.File]::ReadAllText($surfaceMaterialPropertiesCppPath) } else { "" }
 $staticTriangleSceneImporter = if (Test-Path $staticTriangleSceneImporterPath) { [IO.File]::ReadAllText($staticTriangleSceneImporterPath) } else { "" }
 $surfaceFieldCompatHeader = if (Test-Path $surfaceFieldCompatHeaderPath) { [IO.File]::ReadAllText($surfaceFieldCompatHeaderPath) } else { "" }
-$surfaceFieldCompatCpp = if (Test-Path $surfaceFieldCompatCppPath) { [IO.File]::ReadAllText($surfaceFieldCompatCppPath) } else { "" }
 $trackRubberHeader = if (Test-Path $trackRubberHeaderPath) { [IO.File]::ReadAllText($trackRubberHeaderPath) } else { "" }
 $trackRubberCpp = if (Test-Path $trackRubberCppPath) { [IO.File]::ReadAllText($trackRubberCppPath) } else { "" }
 $trackRubberRegression = if (Test-Path $trackRubberRegressionPath) { [IO.File]::ReadAllText($trackRubberRegressionPath) } else { "" }
@@ -434,7 +435,7 @@ Check ($vehicleCpp.Contains("deformableTerrainSurfaceMaterial") -and $vehicleCpp
 Check (-not $vehicleHeader.Contains("m_surfaceField") -and $vehicleHeader.Contains("SurfaceWorld& surfaces")) "CLEAN10 VehicleSystem consumes world surface state instead of owning a private SurfaceField"
 Check ($surfaceWorldHeader.Contains("class SurfaceWorld") -and $surfaceWorldHeader.Contains("sampleDeformable") -and $surfaceWorldHeader.Contains("applyDeformable") -and $surfaceWorldCpp.Contains("localToGlobal")) "CLEAN10 SurfaceWorld owns the local-FP32 to global-FP64 driven-surface boundary"
 Check ($physicsWorldHeader.Contains("SurfaceWorld m_surfaces") -and $physicsWorldHeader.Contains("SurfaceWorld& surfaces()") -and $physicsWorldCpp.Contains("m_surfaces.setGlobalOrigin(m_globalOrigin)")) "CLEAN10 PhysicsWorld owns SurfaceWorld and keeps it synchronized with floating-origin changes"
-Check ($surfaceFieldCompatHeader.Contains("Surfaces/SurfaceField.hpp") -and $surfaceFieldCompatCpp.Contains("compatibility signpost")) "CLEAN10 legacy Physics/SurfaceField path is compatibility-only"
+Check ($surfaceFieldCompatHeader.Contains("Surfaces/SurfaceField.hpp") -and -not (Test-Path $surfaceFieldCompatCppPath)) "OPT01 legacy Physics/SurfaceField keeps only the compatibility include header; dead cpp signpost is retired"
 Check ($trackRubberHeader.Contains("class TrackRubberState") -and $trackRubberHeader.Contains("TrackRubberContactInput") -and $trackRubberHeader.Contains("TrackRubberVisualCell") -and $trackRubberCpp.Contains("applyContact") -and $trackRubberCpp.Contains("collectPresentationCells")) "TIRE15C dedicated TrackRubberState owns bounded deposited-rubber/marble state instead of deformable terrain"
 Check ($surfaceMaterialPropertiesHeader.Contains("SurfaceDeformableProperties") -and $surfaceMaterialPropertiesHeader.Contains("SurfaceMaterialProperties") -and $surfaceMaterialPropertiesCpp.Contains("defaultSurfaceMaterialProperties") -and $surfaceMaterialPropertiesCpp.Contains("blendSurfaceDeformableProperties")) "TIRE15B1 world surface subsystem owns authored deformable material properties and finite-footprint blending"
 Check ($staticTriangleSceneImporter.Contains('heritage.surface.bekker_kc') -and $staticTriangleSceneImporter.Contains('heritage.surface.cohesion_pa') -and $staticTriangleSceneImporter.Contains('heritage.surface.temperature_c') -and $staticTriangleSceneImporter.Contains("applySurfacePropertyMetadata")) "TIRE15B1 GLB collision authoring imports physical surface parameters and local road temperature"
@@ -446,7 +447,13 @@ Check ($luaRuntimeAndBindingsCpp.Contains('registerFunction("Physics", "GetSurfa
 $surfacePresentationHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Presentation\SurfacePresentation.hpp")
 $surfacePresentationCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Presentation\SurfacePresentation.cpp")
 $surfacePresentationRendererHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\SurfacePresentationRenderer.hpp")
-$surfacePresentationRendererCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\SurfacePresentationRenderer.cpp")
+$surfacePresentationRendererCpp = (@(
+    "SurfacePresentationRenderer.cpp",
+    "SurfacePresentationTireMarks.cpp",
+    "SurfacePresentationRubber.cpp",
+    "SurfacePresentationShaders.cpp",
+    "SurfacePresentationRendererInternal.hpp"
+) | ForEach-Object { ReadText (Join-Path $Root ("Engine\HeritageEngine\Graphics\Renderer\" + $_)) }) -join "`n"
 $tireMarkChunkingHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\TireMarkChunking.hpp")
 $shaderProgramHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\ShaderProgram.hpp")
 $shaderProgramCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\ShaderProgram.cpp")
@@ -748,103 +755,212 @@ Check ($dsurfChunk.Contains('staticTriangles()') -and $dsurfChunk.Contains('stat
 Check ($dsurfRegression.Contains('bridge') -and $dsurfRegression.Contains('0.15f') -and $dsurfRegression.Contains('crossChunkSheetLinkCount') -and $dsurfRegression.Contains('loadedFromCache')) "DSURF01 regression protects bridge/road separation, 15cm curb boundary, chunk seam links and cache reload"
 Check ((Test-Path (Join-Path $Root "Docs\DSURF01_STATIC_SCENE_SURFACE_BAKE.md")) -and (Test-Path (Join-Path $Root "Build\Reports\DSURF01_StaticSceneSurfaceBake.txt"))) "DSURF01 static-scene surface bake documentation and milestone report are present"
 
-# DSURF02 page-pool machinery remains, but DSURF04C deliberately collapses the
-# former 4096/256 sparse hierarchy into one 64x64 page per 100m surface sheet.
+# DSURF02 CPU page residency remains the persistent physics/Track authority, but
+# OPT03 retires the renderer-side DynamicSurfaceGpuPagePool duplicate entirely.
+# The live renderer now has one explicit production GPU owner: DynamicSurfaceGpuRuntime.
 $dsurfTypes = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfaceTypes.hpp")
 $dsurfPagePoolHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfacePagePool.hpp")
 $dsurfPagePoolCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfacePagePool.cpp")
-$dsurfGpuPoolHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.hpp")
-$dsurfGpuPoolCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.cpp")
 $dsurfMeshRendererHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshRenderer.hpp")
 $dsurfMeshRendererCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshRenderer.cpp")
 $dsurfMeshDynamicSurface = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshDynamicSurface.cpp")
 $dsurfPerfOverlay = ReadText (Join-Path $Root "Engine\HeritageEngine\Core\Diagnostics\PerformanceOverlay.cpp")
-Check ($vehicleProject.Contains('DynamicSurface\DynamicSurfacePagePool.cpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.cpp') -and $vehicleProject.Contains('Graphics\Renderer\EntityMeshDynamicSurface.cpp') -and $vehicleProject.Contains('DynamicSurface\DynamicSurfacePagePool.hpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.hpp')) "DSURF02 engine project compiles/tracks CPU residency manager, GPU physical page pool and modular renderer bridge"
+Check ($vehicleProject.Contains('DynamicSurface\DynamicSurfacePagePool.cpp') -and $vehicleProject.Contains('Graphics\Renderer\EntityMeshDynamicSurface.cpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuRuntime.cpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuResources.cpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuResidency.cpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuTopology.cpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuGeometry.cpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuDispatch.cpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuTireEvents.cpp') -and $vehicleProject.Contains('Graphics\DynamicSurface\DynamicSurfaceGpuTimers.cpp')) "OPT03 engine project compiles CPU residency authority plus the split production DynamicSurfaceGpuRuntime"
 Check ($physicsTestProject.Contains('DynamicSurface\DynamicSurfacePagePool.cpp') -and $physicsTestProject.Contains('DynamicSurfaceRegression.cpp')) "DSURF02 native regression target compiles software virtual page residency"
-Check ($dsurfTypes.Contains('kLogicalResolution = 64') -and $dsurfTypes.Contains('kPhysicalPageResolution = 64') -and $dsurfTypes.Contains('kPagesPerAxis = 1') -and $dsurfTypes.Contains('kPhysicalPageMipLevels = 7u')) "LIVETRACK04 keeps the legacy persistent page identity for 64x64 Track/rubber/temperature state"
-Check ($dsurfPagePoolHeader.Contains('VirtualPageAddress') -and $dsurfPagePoolHeader.Contains('kDefaultBudgetBytes = 96ull * 1024ull * 1024ull') -and $dsurfPagePoolHeader.Contains('PagePlaneMask') -and $dsurfPagePoolCpp.Contains('findEvictionCandidate()') -and $dsurfPagePoolCpp.Contains('assignment.pinned') -and $dsurfPagePoolCpp.Contains('any(slot.assignment.dirtyPlanes)')) "DSURF02 CPU page pool is budgeted, persistent and refuses to evict dirty/pinned authority"
-Check ($dsurfGpuPoolCpp.Contains('GL_TEXTURE_2D_ARRAY') -and $dsurfGpuPoolCpp.Contains('GL_RGBA16F') -and $dsurfGpuPoolCpp.Contains('GL_RGBA8') -and $dsurfGpuPoolCpp.Contains('glTexStorage3D') -and $dsurfGpuPoolCpp.Contains('buildComputeShaderProgram') -and $dsurfGpuPoolCpp.Contains('GL_TEXTURE_MIN_FILTER, GL_LINEAR') -and -not $dsurfGpuPoolCpp.Contains('glGenerateMipmap')) "DSURF02/04D GPU pool owns typed texture arrays and compute initialization while live Dynamic Surface presentation remains base-mip-only"
-Check ($dsurfGpuPoolCpp.Contains('m_pageTableBuffer') -and $dsurfGpuPoolCpp.Contains('m_dirtyQueueBuffer') -and $dsurfGpuPoolCpp.Contains('pagePool.tableGeneration()') -and $dsurfGpuPoolHeader.Contains('pageTableBuffer()')) "DSURF02 mirrors virtual residency through a generation-gated GPU page table and dirty work queue"
-Check ($dsurfMeshRendererHeader.Contains('DynamicSurfaceGpuPagePool') -and $dsurfMeshRendererCpp.Contains('initializeDynamicSurfacePageResources()') -and $dsurfMeshRendererCpp.Contains('synchronizeDynamicSurfacePageResources(surfaceWorld)') -and $dsurfMeshDynamicSurface.Contains('m_dynamicSurfaceGpuPagePool.initialize') -and $dsurfMeshDynamicSurface.Contains('surfaceWorld->dynamicSurface().pagePool()') -and $dsurfMeshDynamicSurface.Contains('m_dynamicSurfaceGpuPagePool.synchronize')) "DSURF02 modular render bridge initializes and synchronizes the persistent Dynamic Surface GPU mirror"
-Check ($dsurfRegression.Contains('dynamicSurfacePagePoolIsPersistentBudgetedAndLruSafe') -and $dsurfRegression.Contains('Dirty state is never silently evicted') -and $dsurfRegression.Contains('Pinning independently protects a page') -and $dsurfRegression.Contains('evictionCount != 1u')) "DSURF02 native regression protects stable identity, strict budget, clean LRU and dirty/pinned eviction safety"
+Check ($dsurfTypes.Contains('kLogicalResolution = 64') -and $dsurfTypes.Contains('kPhysicalPageResolution = 64') -and $dsurfTypes.Contains('kPagesPerAxis = 1') -and $dsurfTypes.Contains('kPhysicalPageMipLevels = 7u')) "LIVETRACK04 keeps the persistent page identity for CPU Track/rubber/temperature state"
+Check ($dsurfPagePoolHeader.Contains('VirtualPageAddress') -and $dsurfPagePoolHeader.Contains('kDefaultBudgetBytes = 96ull * 1024ull * 1024ull') -and $dsurfPagePoolHeader.Contains('PagePlaneMask') -and $dsurfPagePoolCpp.Contains('findEvictionCandidate()') -and $dsurfPagePoolCpp.Contains('assignment.pinned') -and $dsurfPagePoolCpp.Contains('any(slot.assignment.dirtyPlanes)')) "DSURF02 CPU page pool remains budgeted, persistent and dirty/pinned-safe"
+Check (
+    -not (Test-Path (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.cpp")) -and
+    -not (Test-Path (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.hpp")) -and
+    -not $vehicleProject.Contains('DynamicSurfaceGpuPagePool') -and
+    -not $dsurfMeshRendererHeader.Contains('DynamicSurfaceGpuPagePool') -and
+    -not $dsurfMeshDynamicSurface.Contains('m_dynamicSurfaceGpuPagePool') -and
+    $dsurfMeshRendererCpp.Contains('obsolete renderer-side DynamicSurfaceGpuPagePool has been') -and
+    $dsurfPerfOverlay.Contains('Legacy renderer page mirror: RETIRED (OPT03)')
+) "OPT03 removes the proven-unused renderer GPU page mirror instead of retaining dead regression-only graphics code"
+Check ($dsurfRegression.Contains('dynamicSurfacePagePoolIsPersistentBudgetedAndLruSafe') -and $dsurfRegression.Contains('Dirty state is never silently evicted') -and $dsurfRegression.Contains('Pinning independently protects a page') -and $dsurfRegression.Contains('evictionCount != 1u')) "DSURF02 native regression protects stable CPU page identity, strict budget, clean LRU and dirty/pinned eviction safety"
 # LIVETRACK04: GPU texture authority supersedes the CPU 100m/256x256 Hydro
 # experiment. The old CPU DynamicSurface Hydro remains compiled as a fallback
 # and regression oracle, but runtime per-texel water advancement is skipped once
 # the GPU authority is ready.
-$liveTrack04GpuHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.hpp")
-$liveTrack04GpuCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.cpp")
+$liveTrack04GpuHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuRuntime.hpp")
+$liveTrack04GpuCpp = @(
+    ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuRuntime.cpp")
+    ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuResources.cpp")
+    ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuResidency.cpp")
+    ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuTopology.cpp")
+    ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuGeometry.cpp")
+    ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuDispatch.cpp")
+    ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuTireEvents.cpp")
+    ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\DynamicSurface\DynamicSurfaceGpuTimers.cpp")
+) -join "`n"
 $liveTrack04SurfaceWorld = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\SurfaceWorld.cpp")
+$liveTrack10CpuHydro = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\Reference\DynamicSurfaceHydrologyReference.cpp")
+$liveTrack13WorldHydro = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Water\SurfaceHydrology.cpp")
+$liveTrack13WorldHydroTopology = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Water\SurfaceHydrologyTopology.cpp")
+$liveTrack13WorldHydroTiles = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Water\SurfaceHydrologyTiles.cpp")
+$liveTrack13WorldHydroCache = ReadText (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Water\SurfaceHydrologyCache.cpp")
+$surfaceWorldRegression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SurfaceWorldRegression.cpp")
 $liveTrack04Wetness = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshSurfaceWetness.cpp")
 $liveTrack04Shaders = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshShaders.hpp")
 $liveTrack04Renderer = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshRenderer.cpp")
-
+$waterLaboratoryHeaderPath = Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\Water\WaterLaboratory.hpp"
 Check (
     $liveTrack04GpuHeader.Contains('kTileWorldSizeM = 10.0f') -and
     $liveTrack04GpuHeader.Contains('kTileResolution = 256u') -and
-    $liveTrack04GpuHeader.Contains('kSimulationRadiusM = 100.0f')
-) "LIVETRACK06 defines one 256x256 GPU Hydro field per 10m detailed tile"
+    $liveTrack04GpuHeader.Contains('kSimulationRadiusM = 100.0f') -and
+    $liveTrack04GpuHeader.Contains('kTopologyPrefetchRadiusM = 105.0f') -and
+    $liveTrack04GpuHeader.Contains('kPresentationRadiusM = 500.0f') -and
+    $liveTrack04GpuHeader.Contains('kFarTileResolution = 32u') -and
+    $liveTrack04GpuHeader.Contains('kPresentationPollIntervalSeconds = 1.0 / 20.0') -and
+    $liveTrack13WorldHydroCache.Contains('constexpr std::uint32_t kCacheVersion = 15;') -and
+    $liveTrack13WorldHydroCache.Contains('CachePrebakedFarTile') -and
+    $liveTrack13WorldHydroTiles.Contains('rebuildPrebakedFarTileCache()') -and
+    $liveTrack13WorldHydroTiles.Contains('encoded[localIndex].encoding = 2u;') -and
+    $liveTrack13WorldHydroTiles.Contains('cf[texel] = static_cast<std::uint8_t>((capacityCode << 4u) | flowCode);') -and
+    $liveTrack13WorldHydroTopology.Contains('runoffAccumulationAM2') -and
+    $liveTrack13WorldHydroTopology.Contains('accumulatedAreaM2[target] += accumulatedAreaM2[i] * targetInfo.fraction;') -and
+    $liveTrack13WorldHydroTopology.Contains('priority flood from true open boundaries') -and
+    $liveTrack13WorldHydroTiles.Contains('0.0, 0.00001, 0.00005, 0.00010, 0.00015, 0.00020, 0.00025, 0.00030,') -and
+    $liveTrack13WorldHydroTiles.Contains('0.00035, 0.00040, 0.00045, 0.00050, 0.00055, 0.00060, 0.00065, 0.00070') -and
+    (-not $liveTrack13WorldHydroTiles.Contains('capacityDither01')) -and
+    $liveTrack13WorldHydroTiles.Contains('const auto encodeCapacity = [&](double capacityM) -> std::uint8_t') -and
+    $liveTrack04Shaders.Contains('float waterDepthFromLadderCode(int code)') -and
+    $liveTrack04Shaders.Contains('float quantizeStandingWaterDepth(float depthM)') -and
+    $liveTrack04Shaders.Contains('return waterDepthFromLadderCode(code);') -and
+    $liveTrack04Shaders.Contains('combined.depthM = quantizeStandingWaterDepth(combined.depthM);')
+) "LIVETRACK21I defines compressed v15 world-baked topology with the exact literal 0..0.70mm 4-bit standing-depth ladder and no dithering"
 Check (
-    -not $liveTrack04GpuCpp.Contains('    dispatchWorldTileSimulation(elapsedSeconds, precipitationRateMmPerHour,') -and
-    -not $liveTrack04GpuCpp.Contains('    applyWorldTireEvents(tireEvents);') -and
-    $liveTrack04GpuCpp.Contains('if (prewarm)') -and
-    $liveTrack04GpuCpp.Contains('return 1.0f / 60.0f;') -and
-    $liveTrack04GpuCpp.Contains('up to 43 history')
-) "LIVETRACK07 keeps bounded recent-tile history without duplicate all-scene GPU water state"
+    -not (Test-Path $waterLaboratoryHeaderPath) -and
+    -not $liveTrack04GpuCpp.Contains('m_waterLaboratorySettings') -and
+    -not $liveTrack04Shaders.Contains('uWaterLab') -and
+    -not $liveTrack04Wetness.Contains('waterLaboratorySettings')
+) "LIVETRACK15 keeps runtime Water Laboratory strategy mutation removed"
 Check (
-    $liveTrack04GpuCpp.Contains('layout(rgba8, binding = 1) writeonly uniform image2DArray uDestinationBatchScratch;') -and
-    $liveTrack04GpuCpp.Contains('dispatchWaterBatch(cohort, elapsedSeconds') -and
-    $liveTrack04GpuCpp.Contains('allocateState(m_water, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE')
-) "LIVETRACK06 keeps detailed water evolution and authoritative storage on GPU"
+    $liveTrack04GpuCpp.Contains('prebakedFarPuddleResponseTile(') -and
+    $liveTrack04GpuCpp.Contains('m_prebakedRgbaScratch.assign(texelCount * 4u, 0u);') -and
+    $liveTrack04GpuCpp.Contains('releaseTileSlot(it->second.slot);') -and
+    $liveTrack04GpuCpp.Contains('m_tiles.erase(it);') -and
+    $liveTrack04GpuCpp.Contains('topologyBecameReady') -and
+    $liveTrack04GpuCpp.Contains('streamFarTopology(') -and
+    -not $liveTrack04GpuCpp.Contains('kFarTopologyUploadBudgetPerPoll') -and
+    $liveTrack04GpuHeader.Contains('kFarBulkUploadThreshold = 512u') -and
+    $liveTrack04GpuCpp.Contains('m_farAtlasCpuMirror')
+) "LIVETRACK15 admits complete near topology and the complete lower-resolution 500m far topology set in one poll"
 Check (
-    $liveTrack04GpuCpp.Contains('if (distanceM <= kSimulationRadiusM) return 2.0f;') -and
-    $liveTrack04GpuCpp.Contains('return distanceM <= kSimulationRadiusM ? 0u : 3u;')
-) "LIVETRACK07 advances the complete <=100m high-resolution Hydro field as one synchronized cohort"
+    $liveTrack04Shaders.Contains('uniform float uPrebakedWaterExposureM;') -and
+    $liveTrack04Shaders.Contains('uniform float uRainWettingExposureM;') -and
+    $liveTrack04Shaders.Contains('uniform float uRainRateMmPerHour;') -and
+    $liveTrack04Shaders.Contains('float capacityM = decodeGpuWaterDepth(state.b);') -and
+    $liveTrack04Shaders.Contains('const float kStandingWaterMaxDepthM = 0.00070;') -and
+    $liveTrack04Shaders.Contains('float retainedHeadDriverM = clamp(') -and
+    $liveTrack04Shaders.Contains('float headDeficitM = kStandingWaterMaxDepthM') -and
+    $liveTrack04Shaders.Contains('float equilibriumDepthM = max(capacityM - headDeficitM, 0.0);') -and
+    $liveTrack04Shaders.Contains('decoded.depthM = min(equilibriumDepthM, capacityM)') -and
+    $liveTrack04Shaders.Contains('dynamicSurfacePuddleDepthM = standingDepthM;') -and
+    $liveTrack04Shaders.Contains('float kinematicRunoffDepthM(GpuWaterDecoded state)') -and
+    $liveTrack04Shaders.Contains('const float manningN = 0.014;') -and
+    $liveTrack04Wetness.Contains('stats().backgroundSeedDepthM') -and
+    $liveTrack04Wetness.Contains('stats().surfaceWettingExposureM') -and
+    $liveTrack04Wetness.Contains('stats().runoffDriverMmPerHour') -and
+    $liveTrack04GpuCpp.Contains('m_runoffDriverMmPerHour * std::exp(-dt / 45.0f)') -and
+    $liveTrack04GpuCpp.Contains('const float retainedRainM = rainM * captureFraction;') -and
+    $liveTrack04GpuCpp.Contains('LIVETRACK19 persistence contract: retained basin water NEVER') -and
+    -not $liveTrack04Shaders.Contains('rainImpactWetting(') -and
+    -not $liveTrack04GpuCpp.Contains('spatialRainMultiplier')
+) "LIVETRACK21I uses persistent wet film + 0..0.70mm baked standing-depth authority + a 45s live kinematic runoff driver with no circular impact puddles"
 Check (
-    $liveTrack04GpuCpp.Contains('depth = max(depth, 0.0001);') -and
-    $liveTrack04GpuCpp.Contains('encodeWaterStochastic(depth, worldCell, uTickIndex)') -and
-    $liveTrack04Shaders.Contains('dynamicSurfaceFilm = clamp(uSurfaceWeatherFilmWetness, 0.0, 1.0)') -and
-    $liveTrack04Shaders.Contains('smoothstep(0.00002, 0.00050, dynamicSurfaceDepthM)')
-) "LIVETRACK04B restores visible weather wetness while local Hydro adds puddles and dry-line state"
+    $liveTrack04GpuCpp.Contains('Rain itself dispatches no full-field compute') -and
+    -not $liveTrack04GpuCpp.Contains('dispatchWaterBatch(cohort, elapsedSeconds') -and
+    -not $liveTrack04GpuCpp.Contains('glGenTextures(1, &m_waterBatchScratch)') -and
+    $liveTrack04GpuCpp.Contains('4u, false, errorMessage') -and
+    -not $liveTrack04GpuCpp.Contains('glGetTextureSubImage')
+) "LIVETRACK15 removes the periodic full-field water pulse, water scratch texture and blocking atlas readback"
 Check (
-    $liveTrack04GpuCpp.Contains('q.x < 7 ? -float(7 - q.x) / 7.0') -and
-    $liveTrack04GpuCpp.Contains('unresolvedRoadReliefM(globalXZ)') -and
-    $liveTrack04GpuCpp.Contains('vec2(1.0 / 3.0)') -and
-    $liveTrack04GpuCpp.Contains('float hydraulicHeadDifferenceM = leftDepth - rightDepth + groundDropLeftToRightM;') -and
-    $liveTrack04GpuCpp.Contains('const float kHeadDeadBandM = 0.000035;') -and
-    $liveTrack04GpuCpp.Contains('float maximumLeftToRightM = leftDepth * 0.20;') -and
-    -not $liveTrack04GpuCpp.Contains('float fraction = clamp(abs(signedFlow) * dt * 0.75, 0.0, 0.18);')
-) "LIVETRACK08 uses conservative hydraulic-head puddle flow, shallow-slope companding and deterministic sub-grid road relief"
+    $liveTrack04GpuHeader.Contains('kOptionalTileBudgetPerFrame = 12u') -and
+    $liveTrack04GpuCpp.Contains('processed >= kOptionalTileBudgetPerFrame') -and
+    $liveTrack04GpuCpp.Contains('m_appliedHydrologyResetSerial != hydrologyResetSerial') -and
+    $liveTrack04SurfaceWorld.Contains('++m_hydrologyResetSerial;')
+) "LIVETRACK15 prevents optional-state cohort pulses and keeps Reset Surface Water synchronized with GPU presentation state"
 Check (
-    $liveTrack04SurfaceWorld.Contains('if (!m_gpuDynamicSurfaceAuthorityEnabled)') -and
-    $liveTrack04SurfaceWorld.Contains('m_dynamicSurface.advanceHydro(') -and
+    $liveTrack04Shaders.Contains('const vec2 offsets[4] = vec2[4](') -and
+    $liveTrack04Shaders.Contains('decoded.depthM = depthSum * inverseWeight;') -and
+    $liveTrack04Shaders.Contains('decoded.runoffPotential = runoffSum * inverseWeight;') -and
+    $liveTrack04Shaders.Contains('decoded.runoffAreaM2 = runoffAreaSum * inverseWeight;') -and
+    $liveTrack04Shaders.Contains('normalize(flowSum)') -and
+    $liveTrack04Shaders.Contains('bool gpuFarWaterDecoded(vec3 positionRelative, out GpuWaterDecoded decoded)') -and
+    $liveTrack04Shaders.Contains('bool nearValid = false;') -and
+    $liveTrack04Shaders.Contains('bool farValid = false;') -and
+    $liveTrack04Shaders.Contains('if (distanceM < 85.0)') -and
+    $liveTrack04Shaders.Contains('else if (distanceM > 100.0)') -and
+    $liveTrack04Shaders.Contains('combined.depthM = quantizeStandingWaterDepth(combined.depthM);') -and
+    $liveTrack04Shaders.Contains('lodDetail = 1.0 - smoothstep(450.0, 500.0, distanceM);') -and
+    $liveTrack04Shaders.Contains('const float visibleWaterOnsetM = 0.000010;') -and
+    -not $liveTrack04Shaders.Contains('rainImpactWetting(') -and
+    $liveTrack04Shaders.Contains('LIVETRACK21I performance: retain hardware GL_LINEAR filtering but reduce') -and
+    $liveTrack04Shaders.Contains('state = texture(uGpuWaterAtlas, atlasUv);') -and
+    $liveTrack04Shaders.Contains('bool gpuWaterNearestState(vec3 positionRelative, out vec4 state)') -and
+    $liveTrack04Shaders.IndexOf('bool gpuWaterNearestState(vec3 positionRelative, out vec4 state)') -lt $liveTrack04Shaders.IndexOf('bool gpuNearWaterDecoded(vec3 positionRelative, out GpuWaterDecoded decoded)') -and
+    $liveTrack04Shaders.Contains('float kinematicRunoffDepthM(GpuWaterDecoded state)') -and
+    $liveTrack04Shaders.Contains('float runoffSheet = runoff * max(film, 0.12) * runoffPatch') -and
+    $liveTrack04Shaders.Contains('vec3 rainImpactRippleNormal(') -and
+    $liveTrack04Shaders.Contains('float puddleGate = smoothstep(0.00001, 0.00008, standingDepthM) * standing;') -and
+    $liveTrack04Shaders.Contains('float runoffGate = smoothstep(0.00005, 0.00030, runoffDepthM) * runoff * 0.10;') -and
+    $liveTrack04Shaders.Contains('float connected = smoothstep(0.000010, 0.000180, uRainWettingExposureM);') -and
+    $liveTrack04Shaders.Contains('smoothstep(0.02, 0.25, rainIntensity)') -and
+    -not $liveTrack04Shaders.Contains('float ring = sin((n1 + uSurfacePresentationTime') -and
+    $liveTrack04Shaders.Contains('dynamicSurfaceFlowDirection') -and
+    $liveTrack04Shaders.Contains('uSurfaceWetnessBreakupMask') -and
+    $liveTrack04Shaders.Contains('dynamicSurfacePuddleDepthM = standingDepthM;') -and
+    $liveTrack04Shaders.Contains('float runningDepthM = gpuValid ? kinematicRunoffDepthM(gpuState) : 0.0;') -and
+    $liveTrack04Shaders.Contains('float headDeficitM = kStandingWaterMaxDepthM') -and
+    $liveTrack04Shaders.Contains('float freeSurfaceDepthM = max(puddleDepthM, 0.0);') -and
+    $liveTrack04Shaders.Contains('float runoffDepthM = max(presentationDepthM, 0.0);') -and
+    (-not $liveTrack04Shaders.Contains('mix(0.028, 0.0')) -and
+    (-not $liveTrack04Shaders.Contains('vWorldPosition, max(standingDepthM, runningDepthM)')) -and
+    $liveTrack04Shaders.Contains('0.045')
+) "LIVETRACK21I keeps the fast single-snap range-gated near/far water path, 500m topology, 0.01mm standing-water onset, catchment kinematic runoff and puddle-gated rain ripples"
+Check (
+    -not $liveTrack04SurfaceWorld.Contains('m_dynamicSurface.advanceHydro(') -and
+    -not $liveTrack04SurfaceWorld.Contains('m_dynamicSurface.sampleHydro(') -and
     $liveTrack04SurfaceWorld.Contains('if (m_gpuDynamicSurfaceAuthorityEnabled)') -and
-    $liveTrack04SurfaceWorld.Contains('m_gpuDynamicSurfaceTireEvents')
-) "LIVETRACK06 stops legacy CPU Hydro advancement and aggregates tire contacts for GPU authority"
+    $liveTrack04SurfaceWorld.Contains('m_gpuDynamicSurfaceTireEvents') -and
+    $liveTrack04SurfaceWorld.Contains('no CPU spatial-water fallback') -and
+    -not $liveTrack04Wetness.Contains('dynamicSurface.rasterHydroPage(') -and
+    -not $liveTrack04Wetness.Contains('uploadHydroMip(') -and
+    -not $liveTrack04Shaders.Contains('uDynamicSurfaceHydroPages')
+) "OPT03C production SurfaceWorld has one GPU spatial-water authority and no CPU Hydro fallback"
+
 Check (
-    $liveTrack04Shaders.Contains('vec4 gpuWaterFilteredSingleSample(vec3 positionRelative, out bool valid)') -and
-    $liveTrack04Shaders.Contains('vec2 blurHalfOffsetM = vec2(0.5 * texelSizeM);') -and
-    $liveTrack04Shaders.Contains('vec4 filtered = 0.25 * (s00 + s10 + s01 + s11);') -and
-    -not $liveTrack04Shaders.Contains('if (distanceM <= 50.0)') -and
-    $liveTrack04Shaders.Contains('GpuWaterDecoded decoded = decodeGpuWater(filtered);') -and
-    $liveTrack04Shaders.Contains('lodDetail = 1.0 - smoothstep(0.0, 100.0, distanceM);') -and
-    -not $liveTrack04Shaders.Contains('valid = distanceM <= 100.0')
-) "LIVETRACK04B reconstructs rain/puddles with four coherent taps throughout the continuous 100m optical fade"
+    $dsurfTypes.Contains('static constexpr double hydroDistantHz = 0.0;') -and
+    $liveTrack10CpuHydro.Contains('if (nearest > nearRadiusSquared)') -and
+    $liveTrack10CpuHydro.Contains('it = m_pages.erase(it);') -and
+    $surfaceWorldRegression.Contains('multiMidpoint.valid') -and
+    $surfaceWorldRegression.Contains('multiStats.cadenceDistantPages != 0u')
+) "OPT03C test-only CPU Hydro reference remains bounded to the <=100m interest union for historical regression coverage"
 Check (
-    $dsurfMeshDynamicSurface.Contains('m_dynamicSurfaceGpuLodPrototype.initialize(errorMessage)') -and
-    $dsurfMeshDynamicSurface.Contains('m_dynamicSurfaceGpuLodPrototype.update(') -and
+    $dsurfMeshDynamicSurface.Contains('m_dynamicSurfaceGpuRuntime.initialize(errorMessage)') -and
+    $dsurfMeshDynamicSurface.Contains('m_dynamicSurfaceGpuRuntime.update(') -and
     $dsurfMeshDynamicSurface.Contains('setGpuDynamicSurfaceAuthorityEnabled(')
 ) "LIVETRACK06 renderer initializes, updates and promotes the GPU Hydro field to runtime authority"
 Check (
-    $dsurfPerfOverlay.Contains('LIVETRACK07 GPU Hydro 10m/256x256 <=100m + BOUNDED HISTORY') -and
-    $dsurfPerfOverlay.Contains('bounded 20x20 atlas + 384-layer scratch') -and
-    $dsurfPerfOverlay.Contains('up to 43 recent tiles retain exact state at 1/min')
-) "LIVETRACK07 F8 telemetry exposes the bounded 100m workload and recent history"
+    $dsurfPerfOverlay.Contains('LIVETRACK21 STANDING + RUNNING WATER <=500m / 20Hz TOPOLOGY POLL') -and
+    $dsurfPerfOverlay.Contains('Near source: %u prebaked | %u fallback | %u uploads this frame') -and
+    $dsurfPerfOverlay.Contains('Far topology <=500m: %u/%u resident | %u admitted this poll | unavailable %u') -and
+    $dsurfPerfOverlay.Contains('static .hhyd v15: priority-flood 4-bit standing-depth ceiling + total-contributing MFD catchment + flow direction; terminal minima retain catchment area') -and
+    $dsurfPerfOverlay.Contains('100-500m: complete lower-resolution prebaked runoff/standing-depth/flow set; every desired tile admitted together') -and
+    $dsurfPerfOverlay.Contains('tile membership poll: fixed 20Hz; no progressive far streamer; optical shading remains per-frame') -and
+    $dsurfPerfOverlay.Contains('rain water full-field CFD: OFF') -and
+    $dsurfPerfOverlay.Contains('localized tire dry-line remains compute-shader driven') -and
+    $dsurfPerfOverlay.Contains('synchronous atlas readback: OFF')
+) "LIVETRACK15 F8 telemetry exposes compressed near/far topology coverage, complete 500m admission, GPU reconstruction and 20Hz stutter guards"
 Check (
-    (Test-Path (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.cpp")) -and
+    -not (Test-Path (Join-Path $Root "Engine\HeritageEngine\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.cpp")) -and
+    (Test-Path (Join-Path $Root "Engine\HeritageEngine\Tests\Reference\DynamicSurfaceHydrologyReference.cpp")) -and
     (Test-Path (Join-Path $Root "Engine\HeritageEngine\Tests\DynamicSurfaceRegression.cpp")) -and
-    $liveTrack04SurfaceWorld.Contains('if (!m_gpuDynamicSurfaceAuthorityEnabled)') -and
-    $liveTrack04SurfaceWorld.Contains('m_dynamicSurface.advanceHydro(')
-) "LIVETRACK04 retains CPU Hydro fallback/regression code without making it live runtime authority"
+    -not $liveTrack04SurfaceWorld.Contains('m_dynamicSurface.advanceHydro(') -and
+    $dsurfRegression.Contains('DynamicSurfaceHydrologyReference')
+) "OPT03C quarantines the retired CPU Hydro implementation under native tests only"
 Check ($dsurfRegression.Contains('dynamicSurfaceHydrologyConservesCappedVolume') -and $dsurfRegression.Contains('dynamicSurfaceThermalIsSheetAwareAndTireHeated')) "LIVETRACK04 retains legacy Hydro conservation and Track thermal regressions as safety oracles"
 Check (
     (Test-Path (Join-Path $Root "Docs\LIVETRACK01_PERSISTENT_SENSOR_SURFACE.md")) -and

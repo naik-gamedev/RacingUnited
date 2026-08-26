@@ -102,6 +102,69 @@ bool physicalRainPopulationAndWorldFieldAreDeterministic()
             laterBefore.globalPosition.y,
             1.0e-9);
 
+    PrecipitationField regionalField;
+    regionalField.configureWeather(80.0, 0.82, 0.58, 12.0, 90.0);
+    regionalField.setElapsedSeconds(1.5);
+    const auto regionalA = regionalField.regionalWeatherSample(1200.0, -3400.0);
+    const auto regionalB = regionalField.regionalWeatherSample(1200.0, -3400.0);
+    const auto regionalFar = regionalField.regionalWeatherSample(19400.0, 15100.0);
+    const auto regionalFarther = regionalField.regionalWeatherSample(-22100.0, 27600.0);
+    const bool regionalDeterministic =
+        regionalA.valid && regionalB.valid && regionalFar.valid && regionalFarther.valid
+        && closeEnough(regionalA.cloudCover, regionalB.cloudCover, 1.0e-12)
+        && closeEnough(regionalA.relativeHumidity, regionalB.relativeHumidity, 1.0e-12)
+        && closeEnough(regionalA.currentRateMmPerHour,
+            regionalB.currentRateMmPerHour, 1.0e-12)
+        && regionalA.cloudCover >= 0.0 && regionalA.cloudCover <= 1.0
+        && regionalA.relativeHumidity >= 0.0 && regionalA.relativeHumidity <= 1.0
+        && regionalA.currentRateMmPerHour >= 0.0
+        && regionalA.currentRateMmPerHour <= 80.0 + 1.0e-9;
+    // CLOUDURP15H4A: H4 intentionally remaps authored cloud coverage so
+    // 82% + 80 mm/h is allowed to saturate to a fully overcast storm cell.
+    // Spatial variation is therefore tested under a moderate non-saturated
+    // weather state instead of incorrectly requiring variation at the storm
+    // ceiling. This keeps the spatial-field safety net meaningful.
+    PrecipitationField variationField;
+    variationField.configureWeather(20.0, 0.02, 0.72, 12.0, 90.0);
+    variationField.setElapsedSeconds(1.5);
+    const auto variationA = variationField.regionalWeatherSample(1200.0, -3400.0);
+    const auto variationFar = variationField.regionalWeatherSample(19400.0, 15100.0);
+    const auto variationFarther = variationField.regionalWeatherSample(-22100.0, 27600.0);
+    const double regionalSpan = std::max({
+        std::abs(variationA.cloudCover - variationFar.cloudCover),
+        std::abs(variationA.cloudCover - variationFarther.cloudCover),
+        std::abs(variationA.currentRateMmPerHour
+            - variationFar.currentRateMmPerHour) / 80.0,
+        std::abs(variationA.currentRateMmPerHour
+            - variationFarther.currentRateMmPerHour) / 80.0 });
+    const bool regionalSpatialVariation = variationA.valid
+        && variationFar.valid
+        && variationFarther.valid
+        && regionalSpan > 0.01;
+
+    const auto surfaceWind = regionalField.atmosphericWindVelocityMps(0.0);
+    const auto cloudWind = regionalField.atmosphericWindVelocityMps(2500.0);
+    const auto upperWind = regionalField.atmosphericWindVelocityMps(5500.0);
+    const double surfaceWindSpeed = std::hypot(surfaceWind.x, surfaceWind.z);
+    const double cloudWindSpeed = std::hypot(cloudWind.x, cloudWind.z);
+    const double upperWindSpeed = std::hypot(upperWind.x, upperWind.z);
+    const bool atmosphericWindShear =
+        closeEnough(surfaceWindSpeed, 12.0, 1.0e-5)
+        && cloudWindSpeed > surfaceWindSpeed
+        && upperWindSpeed > cloudWindSpeed
+        && std::abs(cloudWind.z) > 0.01f;
+
+    heritage::physics::weather::RainRadarSnapshot radar;
+    regionalField.buildRainRadarSnapshot(
+        0.0, 0.0, 10000.0, 16u, radar);
+    const bool radarValid = radar.valid
+        && radar.resolution == 16u
+        && radar.currentRateMmPerHour.size() == 256u
+        && radar.cumulativePrecipitationMm.size() == 256u
+        && radar.maximumCurrentRateMmPerHour >= 0.0
+        && radar.maximumCurrentRateMmPerHour <= 80.0 + 1.0e-6
+        && radar.maximumCumulativePrecipitationMm >= 0.0;
+
     std::cout
         << "rain_microphysics light_mean_mm="
         << light.numberWeightedMeanDiameterMm
@@ -111,6 +174,13 @@ bool physicalRainPopulationAndWorldFieldAreDeterministic()
         << " sample_d_mm=" << a.diameterMm
         << " sample_vy_mps=" << a.velocityMps.y
         << " sample_vx_mps=" << a.velocityMps.x
+        << " regional_cloud=" << regionalA.cloudCover
+        << " regional_rain_mmph=" << regionalA.currentRateMmPerHour
+        << " radar_peak_mmph=" << radar.maximumCurrentRateMmPerHour
+        << " moderate_weather_span=" << regionalSpan
+        << " surface_wind_mps=" << surfaceWindSpeed
+        << " cloud_wind_mps=" << cloudWindSpeed
+        << " upper_wind_mps=" << upperWindSpeed
         << "\n";
 
     return massFluxMatches
@@ -118,7 +188,11 @@ bool physicalRainPopulationAndWorldFieldAreDeterministic()
         && terminalVelocityCurve
         && deterministicIdentity
         && windTrajectory
-        && worldTimeMovesDrop;
+        && worldTimeMovesDrop
+        && regionalDeterministic
+        && regionalSpatialVariation
+        && atmosphericWindShear
+        && radarValid;
 }
 
 } // namespace heritage::tests

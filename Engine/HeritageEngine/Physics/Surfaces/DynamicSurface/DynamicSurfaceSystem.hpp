@@ -8,7 +8,6 @@
 
 #include "DynamicSurfaceChunk.hpp"
 #include "DynamicSurfacePagePool.hpp"
-#include "DynamicSurfaceHydrology.hpp"
 #include "DynamicSurfaceThermal.hpp"
 #include "../../CollisionSystem.hpp"
 
@@ -94,30 +93,10 @@ public:
         return m_hydroMigrationStats;
     }
 
-    // DSURF03B: authoritative water/moisture/flow now lives in persistent
-    // Dynamic Surface page addresses. SurfaceHydrology remains only as a
-    // temporary static-cover/debug compatibility service in SurfaceWorld.
-    void advanceHydro(
-        const SurfaceWeatherDescription& weather,
-        const SurfaceWeatherOutput& weatherOutput,
-        double deltaTimeSeconds);
-    void clearHydroState();
-    void resetHydroWater();
-    DynamicSurfaceHydroSample sampleHydro(
-        const heritage::math::DVec3& globalPosition) const;
-    DynamicSurfaceHydroTireResult applyHydroTireContact(
-        const heritage::math::DVec3& globalPosition,
-        const DynamicSurfaceHydroTireInput& input);
-    bool rasterHydroPage(
-        const VirtualPageAddress& address,
-        std::uint32_t outputResolution,
-        std::vector<std::uint16_t>& hydroRgba4) const;
-    std::uint64_t hydroPageRevision(const VirtualPageAddress& address) const;
-    bool setUniformHydroDepthForLab(double waterDepthM);
-    const DynamicSurfaceHydroStats& hydroStats() const
-    {
-        return m_hydrology.stats();
-    }
+    // OPT03C: production water authority is renderer-owned GPU runtime backed by
+    // immutable .hhyd v15 topology. DynamicSurfaceSystem no longer embeds a
+    // second CPU water solver. This service retains only static sheets/page
+    // residency and the independent Track thermal field.
 
     // DSURF04: Track-plane surface temperature is now persistent Dynamic
     // Surface authority. It shares the same world/chunk/sheet/page identity
@@ -146,7 +125,6 @@ public:
     }
 
 private:
-    friend class DynamicSurfaceHydrology;
     friend class DynamicSurfaceThermal;
     std::uint64_t staticSceneFingerprint(
         const std::vector<StaticSceneTriangle>& localTriangles,
@@ -164,7 +142,6 @@ private:
     DynamicSurfaceStaticBakeReport m_lastStaticBakeReport{};
     std::vector<heritage::math::DVec3> m_interestSources;
     DynamicSurfacePagePool m_pagePool;
-    DynamicSurfaceHydrology m_hydrology;
     DynamicSurfaceThermal m_thermal;
     DynamicSurfaceHydroMigrationStats m_hydroMigrationStats{};
 };

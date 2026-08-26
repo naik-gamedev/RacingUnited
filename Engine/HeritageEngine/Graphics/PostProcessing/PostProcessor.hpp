@@ -24,6 +24,10 @@ private:
     GLuint m_fxaaProgram = 0;
     GLuint m_blitProgram = 0;
     GLuint m_fullscreenVao = 0;
+    GLint m_fxaaUniformScene = -1;
+    GLint m_fxaaUniformTexelSize = -1;
+    GLint m_blitUniformScene = -1;
+    GLint m_blitUniformNearestNeighbour = -1;
 };
 
 } // namespace heritage::graphics

@@ -111,6 +111,8 @@ bool terrainContactDiagnosticsClassifyFailureModes();
 bool staticTriangleRigidBodyContactsSettle();
 bool chaseCameraOrbitPersistsAndReturnsOnForwardTravel();
 bool vehicleCameraAuthoringPoseAndFlyAreVehicleLocal();
+bool detachedFreeCameraCopiesCurrentFrameAndMovesInWorldSpace();
+bool chaseCameraDynamicOffsetsAreDampedAndBounded();
 bool physicalRainPopulationAndWorldFieldAreDeterministic();
 bool dynamicsLabCapturesHighRateTelemetry();
 bool vehicleDefinitionCompilerAndLoaderWork();

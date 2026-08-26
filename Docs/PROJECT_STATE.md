@@ -5,6 +5,8 @@
 
 ## Current checkpoint
 
+**Architecture audit candidate (2026-08-25):** ARCH14 fresh-tree inspection reopens cleanup under the CLEAN13 concrete-blocker exception. It is documentation/audit only and does not supersede the current runtime/visual milestone. See `CODE_HEALTH_OPTIMIZATION_ROADMAP_2026_08_25.md` and `Build/Reports/ARCH14_ProjectArchitectureAudit.txt`.
+
 **User-confirmed cleanup baseline:** CLEAN13 — the planned CLEAN01-CLEAN13 architecture program builds, launches and drives. The architecture-only cleanup stop rule is now active.
 
 **User-confirmed tire checkpoint:** TIRE15B2 — authored/live surface conditions plus bounded driven-surface rut/sinkage/spray/dust/debris presentation build, launch and drive.
@@ -26,13 +28,15 @@ commercial datasets and a real complete 150-car scene profile remain external ev
 than blockers for suspension development. The older “current tire candidate” paragraph above is
 retained only as historical context and is superseded by this baseline.
 
-**Current Dynamic Surface candidate:** LIVETRACK01 — the expensive DSURF04G 10 m / 512² GPU CFD experiment is runtime-retired. Wet-track authority is again the persistent world-addressed Dynamic Surface Hydro field: one **100 m surface-sheet page with 64 x 64 sensors** (1.5625 m/cell), sampled and modified by both tire physics and wet-track presentation. Only pages within **350 m of real simulation-interest sources** actively evolve; dormant pages retain their session water/moisture state so puddles and tire-cleared dry lines survive leaving and returning to a section. Atmospheric forcing runs at 2 Hz while downhill hydraulic transport internally substeps to **<= 0.05 s**.
+**Current Dynamic Surface candidate:** OPT03C4/OPT06 — production spatial water is the prebaked `.hhyd v15` path plus the explicitly named `DynamicSurfaceGpuRuntime`. Authored collision triangles bake 10 m tiles with 256 x 256 near payloads (3.90625 cm/texel) and 32 x 32 far payloads through 500 m. The cache stores standing-depth ceiling, downhill flow and total contributing MFD runoff area; runtime reconstructs standing/running water from live weather exposure and GPU tire dry-line state without a second production CFD solver.
 
-**Water/tire authority:** authored collision/surface-sheet data supplies support height, precipitation exposure, roughness, infiltration, drainage and depression storage. Tires clear and redistribute water in this same Hydro state; the tire model samples the same state for wetness/hydroplaning rather than reading a separate visual water field. Repeated traffic can therefore create a physical dry line that persists while rain, drainage and evaporation continue evolving the surrounding track.
+**Water/tire authority:** `DynamicSurfaceGpuRuntime` is the single production spatial-water authority. Tire contacts clear the same GPU field used by presentation, and tire physics samples that filtered field through OPT03B's fenced three-slot SSBO bridge. The bridge never performs a full atlas readback and never waits for the GPU; a stale/unavailable sample temporarily falls back to scalar weather film rather than advancing another hydrology simulation. The historical CPU `DynamicSurfaceHydrology` implementation exists only under `Tests/Reference` as a regression oracle.
 
-**Presentation and performance:** the existing compact Dynamic Surface GPU page pool mirrors resident 64² Hydro/support pages only. The ordinary authored material shader reconstructs smooth water with bilinear/world-space sampling and bounded shoreline breakup. A 0.35 mm mobile film is treated primarily as wet material response; excess depth drives standing-puddle optics. LIVETRACK01 never initializes or updates `DynamicSurfaceGpuLodPrototype`, so the former **3.0 GiB R32UI WaterState atlas + 0.75 GiB R8 presentation atlas** are not allocated and their CFD dispatches do not run. The prototype source remains compiled temporarily for rollback/low-risk cleanup, but it is not a live authority. See `LIVETRACK01_PERSISTENT_SENSOR_SURFACE.md` and `Decisions/ADR-137-Persistent-Sensor-LiveTrack-Surface.md`.
+**Presentation and performance (current):** OPT06 freezes the OPT00-OPT05 optimization chain. The renderer-side `DynamicSurfaceGpuPagePool` duplicate and production CPU Hydro are retired; `.hhyd v15` remains unchanged. OPT04A splits large renderer owners, OPT04B removes redundant synchronous GL state/name work, OPT04C shares mesh/animation preparation across shadow and material passes without reducing CSM/PCSS quality, and OPT05 removes cloud history-copy/pass bandwidth without reducing the 32-step volumetric cloud model. F8/OPT00 asynchronous CPU/GPU timers remain the evidence source for any future targeted optimization.
 
-**Superseded water layouts:** DSURF04G fixed 10 m / 512² GPU WaterState, DSURF04F9/F10 high-resolution rings and WATER15-18 renderer-owned puddle experiments are historical only. The live rule is one persistent sensor Hydro authority plus a presentation mirror—no duplicate water solver and no camera-owned puddle memory.
+**Current atmosphere/cloud candidate:** PBSKY01/PBSKY01A provide the Heritage-native OpenGL/GLSL physically based atmosphere derived from jiaozi158's MIT-licensed UnityPhysicallyBasedSkyURP architecture. VCLOUD01 replaces the accumulated CLOUDURP15 artistic marcher with a clean HDRP-derived UnityVolumetricCloudsURP translation: four upstream preset curve families, 32-step adaptive/empty-space ray integration, two light steps, dual-HG two-octave multiple scattering, PBSKY transmittance coupling and the upstream 16-segment cloud-shadow trace. CELESTIAL01 adds independent physical Sun and Moon illumination inside that same cloud volume and makes the existing ground cloud-shadow cookie follow Heritage's continuous astronomical celestial key: Sun-directed by day, Moon-directed by night, continuous through twilight. Heritage's astronomical sun/moon/star/day-night authority and regional radar/rain/hydrology weather field remain authoritative.
+
+**Superseded water layouts:** DSURF04G fixed 10 m / 512² live GPU CFD, DSURF04F9/F10 high-resolution rings, LIVETRACK01 CPU sensor Hydro as production authority, and WATER15-18 renderer-owned puddle experiments are historical only. The live rule is one production GPU spatial-water authority backed by immutable prebaked `.hhyd v15` topology/capacity/flow data; there is no production CPU water solver or camera-owned puddle memory.
 
 ## CLEAN13 validated — cleanup stop rule active
 
@@ -200,3 +204,34 @@ TIRE16G fixes tire-mark middle-distance starvation/popping by expanding per-band
 The directional CSM pass no longer loops over four cascades and resubmits every accepted mesh range four times. The four 3072² depth maps remain a texture array, but the framebuffer now attaches the array as one layered target. A dedicated shadow geometry stage receives a per-draw cascade bit mask and writes primitives to `gl_Layer`, preserving the existing cascade matrices, culling policy, tire deformation, skinning, reflected winding, depth bias and main-view reversed-Z restoration while moving cascade fan-out to the GPU.
 
 The CPU evaluates each mesh instance/node pose once, resolves tire-deformation overrides once, tests static range bounds against all four cascade frusta once, and then submits each accepted shadow batch once. Contiguous draw ranges that differ only by visible material split and share node transform + skin are coalesced because the depth-only shadow pass does not consume material state. The F8 `shadow draws` counter now measures actual OpenGL shadow draw submissions; `shadow triangles` continues to represent emitted cascade triangle work. This is the first large CPU-submission reduction step; fully GPU-built indirect command lists remain a later option if large-grid/vegetation profiling still justifies them.
+
+
+## CELESTIAL02 checkpoint — stronger lunar interior fill and ground cloud shadows
+
+CELESTIAL02 keeps CELESTIAL01's single Sun/Moon cloud-lighting authority but increases
+visible higher-order Moon scattering inside dense cloud. The one VCLOUD ground cookie
+now applies a 2x optical-depth response to direct celestial light, and material
+composition preserves regional cloud-transmission magnitude instead of normalizing it
+away. Ambient sky/IBL remains unshadowed, so the effect is stronger without becoming
+a black projected decal.
+
+
+## CELESTIAL03 checkpoint — lunar aureole and receiver-visible cloud shadows
+
+CELESTIAL03 adds a narrow g=0.90 lunar forward-scattering aureole to the shared VCLOUD01 transport and lowers the higher-order lunar fill density threshold. Ground receivers use the same 256x256 Sun/Moon cloud cookie plus a conservative regional-cloud floor; direct celestial light is strongly attenuated and diffuse sky/IBL is attenuated modestly so moving cloud shadows remain visible instead of being washed out by ambient light.
+
+
+## CLOUDURP15E4 checkpoint — corrected history filtering and adaptive 20/60/5000% cloud TAA
+
+User testing of CLOUDURP15E3 still showed obvious salt-and-pepper stochastic cloud
+noise. Inspection found that the full-resolution reprojected cloud-history texture was
+being sampled through a dedicated `GL_NEAREST` sampler, quantizing sub-pixel temporal
+reprojection. CLOUDURP15E4 changes that history sampler to `GL_LINEAR`. Stable cloud
+structure receives 20% history, mild detected dithering 60%, and severe dithering uses
+a 50:1 history/current persistence ratio (98.0392% history) as the bounded mathematical
+interpretation of the requested 5000% TAA intensity. Coherent structural change and
+reprojection velocity still reduce stale history to limit visible ghost trails.
+
+## CLOUDURP15E6 checkpoint — upstream temporal denoiser replaces experimental cloud TAA
+
+CLOUDURP15E6 retires the post-VCLOUD01 adaptive cloud-TAA experiments as runtime code and restores the temporal denoising architecture used by the HDRP-derived `jiaozi158/UnityVolumetricCloudsURP` path. The authoritative sequence is low-resolution stochastic cloud raymarch, full-resolution scene/cloud composition with cloud transmittance in alpha, point-clamped reprojected history, a five-pixel current-frame RGB clamp box, and the source-default 0.95 history accumulation reduced by screen-space camera motion. The raymarch integration jitter also matches the upstream semantics: one per-frame stochastic scalar starts the ray at a raw 0..1 offset and is used only for the first relative step. The former 20/60/50:1 classifier, stochastic-noise classifier, low-frequency reactive rejection, sigma clipping, cloud-depth temporal reprojection, and GL_LINEAR history override are no longer active cloud-TAA paths. CELESTIAL04 ground cloud shadows remain outside temporal history.

@@ -18,6 +18,7 @@ struct GlbMetadataDocument
 {
     std::vector<MeshNode> nodes;
     std::vector<int> rootNodeIndices;
+    AssetMetadataMap sceneMetadata;
 };
 
 // Lightweight metadata inspection path. Parses the GLB JSON/node hierarchy and

@@ -44,6 +44,19 @@ struct SurfaceWorldDevelopmentControls
 };
 
 
+struct GpuDynamicSurfaceWaterSampleRequest
+{
+    heritage::math::DVec3 globalPosition{};
+};
+
+struct GpuDynamicSurfaceWaterSample
+{
+    heritage::math::DVec3 globalPosition{};
+    double waterDepthM = 0.0;
+    double dryLine = 0.0;
+    bool valid = false;
+};
+
 struct GpuDynamicSurfaceTireEvent
 {
     heritage::math::DVec3 globalPosition{};
@@ -99,7 +112,10 @@ public:
     const SurfaceWeatherDescription& weather() const { return m_weather; }
     const SurfaceWeatherState& weatherState() const { return m_weatherState; }
     SurfaceWeatherOutput weatherOutput() const;
+    SurfaceWeatherOutput regionalWeatherOutputAt(
+        const heritage::math::DVec3& globalPosition) const;
     void resetWeatherState();
+    std::uint64_t hydrologyResetSerial() const { return m_hydrologyResetSerial; }
 
     const weather::PrecipitationField& precipitation() const
     {
@@ -117,29 +133,35 @@ public:
     void clearHydrology()
     {
         m_hydrology.clear();
-        m_dynamicSurface.clearHydroState();
+        m_gpuDynamicSurfaceWaterSamples.clear();
+        m_gpuDynamicSurfaceWaterSampleRequests.clear();
+        m_gpuDynamicSurfaceWaterSampleRequestByCell.clear();
+        m_gpuDynamicSurfaceTireEvents.clear();
+        m_gpuDynamicSurfaceTireEventByCell.clear();
+        ++m_hydrologyResetSerial;
     }
     void resetHydrologyWater()
     {
-        m_hydrology.resetWater();
-        m_dynamicSurface.resetHydroWater();
+        m_gpuDynamicSurfaceWaterSamples.clear();
+        m_gpuDynamicSurfaceWaterSampleRequests.clear();
+        m_gpuDynamicSurfaceWaterSampleRequestByCell.clear();
+        m_gpuDynamicSurfaceTireEvents.clear();
+        m_gpuDynamicSurfaceTireEventByCell.clear();
+        ++m_hydrologyResetSerial;
     }
     water::SurfaceHydrology& hydrology() { return m_hydrology; }
     const water::SurfaceHydrology& hydrology() const { return m_hydrology; }
     void clearHydrologyInterestSources()
     {
-        m_hydrology.clearInterestSources();
         m_dynamicSurface.setInterestSources({});
     }
     void setHydrologyInterestSource(const heritage::math::DVec3& source)
     {
-        m_hydrology.setInterestSource(source);
         m_dynamicSurface.setInterestSources({ source });
     }
     void setHydrologyInterestSources(
         const std::vector<heritage::math::DVec3>& sources)
     {
-        m_hydrology.setInterestSources(sources);
         m_dynamicSurface.setInterestSources(sources);
     }
     water::SurfaceHydrologyTireResult applyHydrologyTireContact(
@@ -163,11 +185,20 @@ public:
     dynamicsurface::DynamicSurfaceSystem& dynamicSurface() { return m_dynamicSurface; }
     const dynamicsurface::DynamicSurfaceSystem& dynamicSurface() const { return m_dynamicSurface; }
 
-    // DSURF04F: the renderer-owned compute field is the single water authority
-    // while active. The old CPU Hydro state remains compiled for regression and
-    // static support/sheet infrastructure, but it is not advanced in live play.
+    // OPT03C: renderer-owned GPU water is the only production spatial-water
+    // authority. If the GPU runtime is unavailable or has not produced a sample
+    // yet, physics falls back only to the scalar weather film; there is no
+    // second CPU Hydro simulation hidden behind this switch.
     void setGpuDynamicSurfaceAuthorityEnabled(bool enabled)
     {
+        if (m_gpuDynamicSurfaceAuthorityEnabled != enabled)
+        {
+            m_gpuDynamicSurfaceWaterSamples.clear();
+            m_gpuDynamicSurfaceWaterSampleRequests.clear();
+            m_gpuDynamicSurfaceWaterSampleRequestByCell.clear();
+            m_gpuDynamicSurfaceTireEvents.clear();
+            m_gpuDynamicSurfaceTireEventByCell.clear();
+        }
         m_gpuDynamicSurfaceAuthorityEnabled = enabled;
     }
     bool gpuDynamicSurfaceAuthorityEnabled() const
@@ -176,6 +207,10 @@ public:
     }
     void consumeGpuDynamicSurfaceTireEvents(
         std::vector<GpuDynamicSurfaceTireEvent>& outEvents);
+    void consumeGpuDynamicSurfaceWaterSampleRequests(
+        std::vector<GpuDynamicSurfaceWaterSampleRequest>& outRequests);
+    void publishGpuDynamicSurfaceWaterSamples(
+        const std::vector<GpuDynamicSurfaceWaterSample>& samples);
 
     SurfaceField& deformableTerrain() { return m_deformableTerrain; }
     const SurfaceField& deformableTerrain() const { return m_deformableTerrain; }
@@ -221,6 +256,10 @@ private:
     water::SurfaceHydrology m_hydrology;
     dynamicsurface::DynamicSurfaceSystem m_dynamicSurface;
     bool m_gpuDynamicSurfaceAuthorityEnabled = false;
+    mutable std::vector<GpuDynamicSurfaceWaterSampleRequest> m_gpuDynamicSurfaceWaterSampleRequests;
+    mutable std::unordered_map<std::uint64_t, std::size_t> m_gpuDynamicSurfaceWaterSampleRequestByCell;
+    std::unordered_map<std::uint64_t, GpuDynamicSurfaceWaterSample> m_gpuDynamicSurfaceWaterSamples;
+    std::uint64_t m_hydrologyResetSerial = 1u;
     std::vector<GpuDynamicSurfaceTireEvent> m_gpuDynamicSurfaceTireEvents;
     std::unordered_map<std::uint64_t, std::size_t> m_gpuDynamicSurfaceTireEventByCell;
     SurfaceWorldDevelopmentControls m_developmentControls{};

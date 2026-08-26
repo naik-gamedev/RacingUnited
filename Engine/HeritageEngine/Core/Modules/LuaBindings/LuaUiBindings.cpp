@@ -643,6 +643,59 @@ int LuaCoreBindingHandlers::luaUiSliderFloat(lua_State* state)
     return 2;
 }
 
+int LuaCoreBindingHandlers::luaUiCombo(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    const std::string label = LuaModuleRuntime::stringArgument(
+        *runtime, state, 1, "Selection");
+    int validInteger = 0;
+    int selected = static_cast<int>(
+        runtime->m_api.lua_tointegerx(state, 2, &validInteger));
+    if (!validInteger)
+        selected = 1;
+
+    const int argumentCount = runtime->m_api.lua_gettop(state);
+    const int itemCount = (std::max)(0, argumentCount - 2);
+    std::vector<std::string> labels;
+    labels.reserve(static_cast<std::size_t>(itemCount));
+    for (int argument = 3; argument <= argumentCount; ++argument)
+    {
+        labels.push_back(LuaModuleRuntime::stringArgument(
+            *runtime, state, argument, "Unnamed"));
+    }
+
+    selected = (std::clamp)(selected, 1, (std::max)(itemCount, 1));
+    int zeroBased = selected - 1;
+    bool changed = false;
+    ImGui::BeginDisabled(!runtime->m_allowInteraction || itemCount == 0);
+    const char* preview = itemCount > 0
+        ? labels[static_cast<std::size_t>(zeroBased)].c_str()
+        : "No choices";
+    if (ImGui::BeginCombo(label.c_str(), preview))
+    {
+        for (int index = 0; index < itemCount; ++index)
+        {
+            const bool current = index == zeroBased;
+            if (ImGui::Selectable(labels[static_cast<std::size_t>(index)].c_str(), current))
+            {
+                zeroBased = index;
+                changed = true;
+            }
+            if (current)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::EndDisabled();
+
+    runtime->m_api.lua_pushinteger(state, static_cast<LuaInteger>(zeroBased + 1));
+    runtime->m_api.lua_pushboolean(state, changed ? 1 : 0);
+    return 2;
+}
+
 int LuaCoreBindingHandlers::luaUiInputFloat(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
@@ -1097,6 +1150,7 @@ void LuaModuleRuntime::registerUiBindings()
     registerFunction("UI", "SameLine", &LuaCoreBindingHandlers::luaUiSameLine);
     registerFunction("UI", "GetAvailableWidth", &LuaCoreBindingHandlers::luaUiGetAvailableWidth);
     registerFunction("UI", "Button", &LuaCoreBindingHandlers::luaUiButton);
+    registerFunction("UI", "Combo", &LuaCoreBindingHandlers::luaUiCombo);
     registerFunction("UI", "SliderFloat", &LuaCoreBindingHandlers::luaUiSliderFloat);
     registerFunction("UI", "InputFloat", &LuaCoreBindingHandlers::luaUiInputFloat);
     registerFunction("UI", "Checkbox", &LuaCoreBindingHandlers::luaUiCheckbox);

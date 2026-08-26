@@ -17,6 +17,7 @@ function VehicleOnPrototypeExit()
 end
 
 function VehicleFixedUpdate(fixedDeltaTime)
+    UpdateVehicleInputToggles()
     if nativeVehicle == 0 or not Vehicle.Exists(nativeVehicle) then
         return
     end
@@ -60,6 +61,7 @@ function VehicleFixedUpdate(fixedDeltaTime)
 end
 
 function VehicleUpdate(deltaTime)
+    UpdateVehicleInputToggles()
     VehicleCameraUpdate()
     local steering = ReadVehicleSteeringInput()
     local driveThrottle, driveBrake = ReadVehicleDriveInputs()

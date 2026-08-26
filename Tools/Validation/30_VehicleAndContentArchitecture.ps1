@@ -2,36 +2,20 @@
 # It intentionally shares the caller scope so existing checks keep the same
 # variables and Check()/ReadText() helpers while ownership is physically split.
 
-# ARCH04 / BASE02: future vehicle mechanisms are scaffolded on disk and visible
-# in the Visual Studio project without being compiled until implementation begins.
-# Validate the complete declared scaffold group rather than a handful of examples;
-# this catches path drift such as a scaffold being created one directory too high.
-$scaffoldGroup = [regex]::Match(
+# ARCH04 / BASE02 / OPT01: future vehicle mechanisms are architecture intent,
+# not fake translation units. The project group now contains only real tracked
+# implementation files; planned seams live in the manifest until implemented.
+$vehicleArchitectureGroup = [regex]::Match(
     $vehicleProject,
-    '<ItemGroup Label="VehicleArchitectureScaffolds">(?<body>.*?)</ItemGroup>',
+    '<ItemGroup Label="VehicleArchitecture">(?<body>.*?)</ItemGroup>',
     [Text.RegularExpressions.RegexOptions]::Singleline)
-Check $scaffoldGroup.Success "Visual Studio project exposes vehicle architecture scaffolds"
-$scaffoldEntries = @()
-if ($scaffoldGroup.Success) {
-    $scaffoldEntries = @([regex]::Matches(
-        $scaffoldGroup.Groups['body'].Value,
-        '<None Include="(?<path>[^"]+\.cpp)"'))
-}
-Check ($scaffoldEntries.Count -ge 20) "vehicle architecture exposes a substantial future-mechanism scaffold set"
-$allScaffoldEntriesExist = $true
-$allScaffoldEntriesNonCompiled = $true
-foreach ($entry in $scaffoldEntries) {
-    $projectRelative = $entry.Groups['path'].Value
-    $absolute = [IO.Path]::GetFullPath((Join-Path (Split-Path $vehicleProjectPath) $projectRelative))
-    if (-not (Test-Path $absolute)) { $allScaffoldEntriesExist = $false }
-    if ($vehicleProject.Contains('<ClCompile Include="' + $projectRelative + '"')) {
-        $allScaffoldEntriesNonCompiled = $false
-    }
-}
-Check $allScaffoldEntriesExist "every project-visible vehicle architecture scaffold exists at its declared path"
-Check $allScaffoldEntriesNonCompiled "unimplemented vehicle architecture scaffolds remain non-compiled"
-Check ($vehicleProject.Contains('<None Include="..\Vehicles\Suspension\Geometry\DoubleWishbone\DoubleWishboneKinematics.cpp"')) "double-wishbone scaffold remains project-visible"
-Check ($vehicleProject.Contains('<None Include="..\Vehicles\Aerodynamics\AerodynamicsSystem.cpp"')) "aerodynamics scaffold uses the declared Aerodynamics directory"
+Check $vehicleArchitectureGroup.Success "Visual Studio project exposes the real vehicle architecture implementation group"
+$vehicleArchitectureBody = if ($vehicleArchitectureGroup.Success) { $vehicleArchitectureGroup.Groups['body'].Value } else { "" }
+Check (-not $vehicleArchitectureBody.Contains('<None Include="..\Vehicles\')) "OPT01 vehicle architecture project group contains no fake source placeholders"
+Check ($vehicleArchitectureBody.Contains('<ClCompile Include="..\Vehicles\Tires\TireContactPatch.cpp"') -and $vehicleArchitectureBody.Contains('<ClCompile Include="..\Vehicles\Tires\TireWear.cpp"')) "OPT01 vehicle architecture group tracks real compiled mechanisms"
+$opt01VehicleManifestPath30 = Join-Path $Root "Docs\VEHICLE_SUBSYSTEM_ARCHITECTURE_MANIFEST.md"
+$opt01VehicleManifest30 = if (Test-Path $opt01VehicleManifestPath30) { [IO.File]::ReadAllText($opt01VehicleManifestPath30) } else { "" }
+Check ($opt01VehicleManifest30.Contains("Double wishbone") -and $opt01VehicleManifest30.Contains("Aerodynamics system") -and $opt01VehicleManifest30.Contains("Create source only when implementation exists")) "OPT01 future vehicle mechanisms remain explicitly documented without empty source files"
 Check (-not (Test-Path (Join-Path $Root "Engine\HeritageEngine\Vehicles\AerodynamicsSystem.cpp"))) "obsolete root-level AerodynamicsSystem scaffold is absent"
 Check (-not (Test-Path (Join-Path $Root "Engine\HeritageEngine\Vehicles\AeroSurface.cpp"))) "obsolete root-level AeroSurface scaffold is absent"
 Check (-not (Test-Path (Join-Path $Root "Engine\HeritageEngine\Vehicles\GroundEffect.cpp"))) "obsolete root-level GroundEffect scaffold is absent"
@@ -152,6 +136,8 @@ if (Test-Path $mainLuaPath) {
     $mainLua = [IO.File]::ReadAllText($mainLuaPath)
     $lineCount = (Get-Content $mainLuaPath).Count
     Check ($lineCount -lt 80) "Main.lua remains a small include coordinator"
+    Check ($mainLua.Contains('Include("UI/Physics/Panels.lua")')) "Main.lua delegates physics UI loading to its subsystem coordinator"
+    Check ($mainLua.Contains('Include("UI/Scene/Panels.lua")')) "Main.lua delegates scene weather/hydrology UI loading to its subsystem coordinator"
     Check (-not $mainLua.Contains("Runtime/VehicleDemo.lua")) "obsolete VehicleDemo.lua is not included"
     Check ($mainLua.Contains('Include("Vehicles/Definitions/Peugeot206RC/AlignmentSpecification.lua")')) "Racing United includes Peugeot 206 RC alignment evidence before prototype definition"
     $includeMatches = [regex]::Matches($mainLua, 'Include\("(?<path>[^"]+\.lua)"\)')
@@ -167,6 +153,20 @@ if (Test-Path $mainLuaPath) {
     $definitionSerializationIndex = $mainLua.IndexOf('Include("Vehicles/Definitions/VehicleDefinitionV2Serialization.lua")')
     Check ($definitionCoreIndex -ge 0 -and $definitionCoreIndex -lt $definitionBuilderIndex -and $definitionBuilderIndex -lt $definitionValidationIndex -and $definitionValidationIndex -lt $definitionDynamicsValidationIndex -and $definitionDynamicsValidationIndex -lt $definitionCompatibilityIndex -and $definitionCompatibilityIndex -lt $definitionSerializationIndex) "VehicleDefinitionV2 responsibility files load in schema-builder-core-dynamics-compatibility-serialization order"
 }
+$physicsPanelsCoordinatorPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Physics\Panels.lua"
+$scenePanelsCoordinatorPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Scene\Panels.lua"
+$physicsPanelsCoordinator = if (Test-Path $physicsPanelsCoordinatorPath) { [IO.File]::ReadAllText($physicsPanelsCoordinatorPath) } else { "" }
+$scenePanelsCoordinator = if (Test-Path $scenePanelsCoordinatorPath) { [IO.File]::ReadAllText($scenePanelsCoordinatorPath) } else { "" }
+Check (
+    $physicsPanelsCoordinator.Contains('UI/Physics/WorldPanel.lua') -and
+    $physicsPanelsCoordinator.Contains('UI/Physics/SuspensionPanel.lua') -and
+    $physicsPanelsCoordinator.Contains('UI/Physics/QueriesPanel.lua') -and
+    $physicsPanelsCoordinator.Contains('UI/Physics/BodyPanel.lua')
+) "Physics UI coordinator owns the physics panel include set"
+Check (
+    $scenePanelsCoordinator.Contains('UI/Scene/WeatherPanel.lua') -and
+    -not $scenePanelsCoordinator.Contains('WaterLaboratoryPanel.lua')
+) "Scene UI coordinator owns weather without the retired Water Laboratory panel"
 Check (-not (Test-Path (Join-Path $Root "Modules\RacingUnited\Scripts\Runtime\VehicleDemo.lua"))) "obsolete Runtime/VehicleDemo.lua is absent"
 
 # SUS03B: hardpoint authoring distinguishes evidence quality. Reusable front

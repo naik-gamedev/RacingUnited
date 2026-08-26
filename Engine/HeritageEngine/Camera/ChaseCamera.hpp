@@ -25,6 +25,11 @@ struct ChaseCameraInput
     double pointerDeltaX = 0.0;
     double pointerDeltaY = 0.0;
     double forwardSpeedMetersPerSecond = 0.0;
+    double lateralSpeedMetersPerSecond = 0.0;
+
+    // Paused gameplay keeps the chase/orbit camera interactive but must not
+    // interpret a frozen rigid-body velocity as a new acceleration impulse.
+    bool dynamicMotionResponseActive = true;
 };
 
 // CAM03 chase camera policy:
@@ -42,16 +47,19 @@ class ChaseCamera
 public:
     struct Tuning
     {
-        double distanceMeters = 6.6;
-        double eyeHeightMeters = 2.70;
-        double targetHeightMeters = 0.85;
-        double lookAheadMeters = 2.0;
+        // CAM07 lowers and flattens the normal chase composition toward the
+        // classic street-racing view: more horizon, less roof/ground seen from
+        // above, while keeping enough distance for collision recovery.
+        double distanceMeters = 6.80;
+        double eyeHeightMeters = 2.20;
+        double targetHeightMeters = 0.95;
+        double lookAheadMeters = 2.75;
 
         // NFSU-like yaw inertia. The hard lag cone is the safety guarantee that
         // prevents the camera from becoming a free 360-degree orbit camera.
         double maximumHeadingLagDegrees = 7.0;
         double headingSpringFrequencyHz = 1.15;
-        double headingDampingRatio = 0.95;
+        double headingDampingRatio = 1.02;
 
         // Hold the primary pointer button and drag to orbit. The chosen view
         // persists at rest; once the chassis travels forward, it returns to
@@ -64,11 +72,37 @@ public:
         double orbitReturnDampingRatio = 1.0;
 
         // Jump/landing response.
-        double verticalInertia = 0.68;
-        double maximumVerticalLagMeters = 1.10;
-        double verticalSpringFrequencyHz = 1.85;
-        double verticalDampingRatio = 0.62;
-        double targetVerticalResponse = 0.18;
+        double verticalInertia = 0.56;
+        double maximumVerticalLagMeters = 0.90;
+        double verticalSpringFrequencyHz = 1.65;
+        double verticalDampingRatio = 0.88;
+        double targetVerticalResponse = 0.16;
+
+        // CAM07 dynamic chase inertia. Constant speed adds only a small
+        // rearward extension; acceleration/braking and lateral acceleration
+        // add bounded spring-damped offsets. These are deliberately small so
+        // the camera feels alive without becoming an arcade wobble camera.
+        double speedPullbackMetersPerMeterPerSecond = 0.0080;
+        double maximumSpeedPullbackMeters = 0.38;
+        double longitudinalAccelerationGain = 0.030;
+        double maximumAccelerationPullbackMeters = 0.30;
+        double maximumBrakingPushForwardMeters = 0.24;
+        double lateralAccelerationGain = 0.022;
+        double maximumLateralSwayMeters = 0.34;
+        double motionSpringFrequencyHz = 1.35;
+        double motionDampingRatio = 1.05;
+        double maximumSampleAccelerationMetersPerSecondSquared = 25.0;
+
+        // CAM09 lateral FOLLOW damper. CAM07 damped the small acceleration
+        // sway offset, but the whole chase rig still inherited the chassis'
+        // horizontal side translation immediately. Accumulate only the
+        // chassis displacement perpendicular to its forward axis, then let a
+        // critically damped spring catch the rig up. Forward travel remains
+        // direct, so high speed does not leave the camera metres behind.
+        double lateralFollowInertia = 0.85;
+        double maximumLateralFollowLagMeters = 0.65;
+        double lateralFollowSpringFrequencyHz = 1.05;
+        double lateralFollowDampingRatio = 1.0;
 
         // CAM04 camera collision volume. A swept sphere protects the camera
         // centre AND its near-plane neighbourhood from terrain/wall corners.
@@ -119,6 +153,18 @@ public:
     double orbitPitchDegrees() const { return m_orbitPitchDegrees; }
     bool orbitReturning() const { return m_orbitReturnActive; }
     double verticalLagMeters() const { return m_verticalLagMeters; }
+    double longitudinalDynamicOffsetMeters() const
+    {
+        return m_longitudinalDynamicOffsetMeters;
+    }
+    double lateralDynamicOffsetMeters() const
+    {
+        return m_lateralDynamicOffsetMeters;
+    }
+    double lateralFollowLagMeters() const
+    {
+        return m_lateralFollowLagMeters;
+    }
     double currentCollisionDistanceMeters() const
     {
         return m_collisionRayDistanceMeters;
@@ -147,6 +193,9 @@ private:
         const heritage::math::Vec3& horizontalForward);
     void rebuildCollisionResolvedEye();
     void updateOrbit(const ChaseCameraInput& input, double deltaSeconds);
+    void updateDynamicMotion(
+        const ChaseCameraInput& input,
+        double deltaSeconds);
 
     Tuning m_tuning{};
     bool m_initialized = false;
@@ -166,6 +215,15 @@ private:
     bool m_orbitReturnActive = false;
     double m_verticalLagMeters = 0.0;
     double m_verticalLagVelocity = 0.0;
+    double m_longitudinalDynamicOffsetMeters = 0.0;
+    double m_longitudinalDynamicOffsetVelocity = 0.0;
+    double m_lateralDynamicOffsetMeters = 0.0;
+    double m_lateralDynamicOffsetVelocity = 0.0;
+    double m_lateralFollowLagMeters = 0.0;
+    double m_lateralFollowLagVelocity = 0.0;
+    double m_previousForwardSpeedMetersPerSecond = 0.0;
+    double m_previousLateralSpeedMetersPerSecond = 0.0;
+    bool m_haveDynamicMotionSample = false;
     double m_collisionRayDistanceMeters = 0.0;
     double m_collisionRayDistanceVelocity = 0.0;
 };

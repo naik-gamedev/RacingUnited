@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
@@ -13,7 +13,11 @@ set "REPORTS=%ROOT%\Build\Reports"
 set "DIAGNOSTICS=%ROOT%\UserData\Diagnostics"
 set "BUILD_LOG=%REPORTS%\CurrentBuild.log"
 set "TEST_LOG=%DIAGNOSTICS%\physics_regression_current.txt"
-set "MILESTONE=LIVETRACK06-100M-ONLY-GPU-HYDRO"
+set "CODE_HEALTH_REPORT=%REPORTS%\CodeHealthSnapshot.txt"
+set "RUNTIME_CAPTURE=%ROOT%\Tools\Diagnostics\LaunchEngineCaptured.ps1"
+set "RUNTIME_LOG=%DIAGNOSTICS%\RuntimeConsoleLatest.log"
+set "RUNTIME_CRASH=%DIAGNOSTICS%\RuntimeCrashLatest.txt"
+set "MILESTONE=CLOUDURP15E7_SELECTIVE_STOCHASTIC_ACCUMULATION"
 set "MSBUILD_TARGET=Build"
 set "BUILD_MODE=incremental"
 if /I "%~1"=="full" (
@@ -27,19 +31,16 @@ if not exist "%DIAGNOSTICS%" mkdir "%DIAGNOSTICS%"
 cls
 echo ============================================================
 echo Heritage Engine - CURRENT build + run [%MILESTONE%]
-echo LIVETRACK06: 10m / 256x256 GPU Hydro inside 100m plus bounded recent-tile history
-echo Hydro texel: 0.0390625m = 3.90625cm ^| no CPU per-texel water solver when GPU authority is ready
-echo Near cadence: 0-20m 6Hz ^| 20-40m 4Hz ^| 40-60m 2Hz ^| 60-80m 1Hz ^| 80-100m 0.5Hz
-echo Far cadence: 100-150m 0.25Hz ^| 150-250m 0.125Hz ^| 250-400m 0.0625Hz ^| 400-600m 0.03125Hz
-echo Far cadence 2: 600-800m 0.015625Hz ^| 800-1000m 0.0078125Hz ^| beyond 1000m initial state only
-echo Submission: every due high-resolution tile shares one Z-batched compute dispatch + one publish dispatch
-echo Rain deposition: stochastic sub-0.1mm accumulation restored ^| no forced global 0.1mm sheet
-echo Logical channels: 4-bit water ^| 4-bit dry-line ^| 4-bit flow-X ^| 4-bit flow-Z
-echo GPU storage: GL_RGBA8 compute-writable atlas restricted to 16 exact levels/channel ^| GL_LINEAR + 3x3/4-tap presentation
-echo Rendering: camera/frustum only affects presentation ^| puddle optics fade continuously to wet material by 100m
-echo Ownership: one X/Z Hydro field per 10m tile ^| vertical Hydro sheets OFF
-echo Tires: aggregated tire events modify the same GPU water/dry-line field
-echo F8: adaptive Hydro cadence/workload ^| CPU Hydro disabled while GPU authority is live
+echo CLOUDURP15E7: upstream UnityVolumetricCloudsURP/HDRP temporal denoiser remains the sole TAA authority; stochastic partial samples receive selective extra persistence
+echo Temporal path: full-resolution scene+cloud ^| 5-pixel AABB ^| point history ^| coherent cloud = 95%% ^| noisy partial samples = up to 98.5-99.75%%
+echo Single clear stochastic holes at cloud boundaries now accumulate; only a fully clear 5-pixel neighbourhood bypasses history
+echo Raymarch jitter also matches upstream semantics: one 0..1 sample per pixel/frame, raw initial offset, same sample only on first relative step
+echo CELESTIAL04 dedicated post-opaque Sun/Moon cloud-shadow receiver and the existing 256x256 optical-depth cookie are otherwise unchanged
+echo Scene materials attenuate direct celestial light strongly and diffuse sky/IBL modestly under the same cookie, making moving cloud shadows visible without black decals
+echo PBSKY01 atmosphere, VCLOUD01 cloud morphology, PERF05 link-status caching, PERF06A F8 diagnostics and OPT00 async timing remain intact
+echo Heritage regional weather remains the sole radar/rain/hydrology/cloud-map authority; no second weather simulation is introduced
+echo OPT03C4 single GPU-water authority, OPT03B tire-water bridge and byte-compatible OPT02 .hhyd v15 architecture remain intact
+echo Native stdout/stderr and Windows crash/minidump capture remain enabled
 echo ============================================================
 echo Root: %ROOT%
 echo Build mode: %BUILD_MODE%  ^(pass FULL for an explicit full rebuild^)
@@ -51,6 +52,11 @@ for %%F in (
     "%ROOT%\Tools\GenerateLuaApiManifest.ps1"
     "%ROOT%\Tools\GenerateBuildIdentity.ps1"
     "%ROOT%\Tools\EnsureIncrementalBuildFreshness.ps1"
+    "%ROOT%\Tools\Diagnostics\CodeHealthAudit.ps1"
+    "%ROOT%\Tools\Diagnostics\ApplyOPT01Retirement.ps1"
+    "%ROOT%\Tools\Diagnostics\ApplyOPT02Retirement.ps1"
+    "%ROOT%\Tools\Diagnostics\ApplyOPT03Retirement.ps1"
+    "%RUNTIME_CAPTURE%"
 ) do if not exist "%%~F" (
     echo ERROR: Required build/safety infrastructure is missing:
     echo %%~F
@@ -73,6 +79,10 @@ for %%F in (
     "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterContourMesher.hpp"
     "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterSurfaceStitcher.hpp"
     "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\EntityMeshShaders.hpp.bak_livetrack01"
+    "%ROOT%\Modules\RacingUnited\Scripts\UI\Vehicle\WaterLaboratoryPanel.lua"
+    "%ROOT%\Modules\RacingUnited\Scripts\UI\Scene\WaterLaboratoryPanel.lua"
+    "%ROOT%\Engine\HeritageEngine\Physics\Surfaces\Water\WaterLaboratory.hpp"
+    "%ROOT%\Docs\Water-Laboratory.md"
     "%ROOT%\Tools\WEATHER08A_BuildAndRun.cmd"
 ) do if exist "%%~F" del /f /q "%%~F" >nul 2>nul
 
@@ -85,18 +95,44 @@ if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.cpp
 if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.hpp" goto :legacy_cleanup_failed
 if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterContourMesher.hpp" goto :legacy_cleanup_failed
 if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterSurfaceStitcher.hpp" goto :legacy_cleanup_failed
+if exist "%ROOT%\Modules\RacingUnited\Scripts\UI\Vehicle\WaterLaboratoryPanel.lua" goto :legacy_cleanup_failed
+if exist "%ROOT%\Modules\RacingUnited\Scripts\UI\Scene\WaterLaboratoryPanel.lua" goto :legacy_cleanup_failed
+if exist "%ROOT%\Engine\HeritageEngine\Physics\Surfaces\Water\WaterLaboratory.hpp" goto :legacy_cleanup_failed
+if exist "%ROOT%\Docs\Water-Laboratory.md" goto :legacy_cleanup_failed
 
-echo [0/4] Incremental-build freshness guard...
+echo [pre] Converging OPT01 retirement deletions...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Tools\Diagnostics\ApplyOPT01Retirement.ps1" -Root "%ROOT%"
+if errorlevel 1 goto :retirement_cleanup_failed
+echo.
+echo [pre] Converging OPT02 hydrology retirement deletions...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Tools\Diagnostics\ApplyOPT02Retirement.ps1" -Root "%ROOT%"
+if errorlevel 1 goto :retirement_cleanup_failed
+echo.
+echo [pre] Converging OPT03 production-water/runtime retirement deletions...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Tools\Diagnostics\ApplyOPT03Retirement.ps1" -Root "%ROOT%"
+if errorlevel 1 goto :retirement_cleanup_failed
+echo.
+echo [pre] Converging OPT03C static-bake CPU-Hydro retirement...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Tools\Diagnostics\ApplyOPT03C4StaticBakeConvergence.ps1" -Root "%ROOT%"
+if errorlevel 1 goto :retirement_cleanup_failed
+echo.
+
+echo [0/5] Incremental-build freshness guard...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Tools\EnsureIncrementalBuildFreshness.ps1" -Root "%ROOT%"
 if errorlevel 1 goto :freshness_failed
 
 echo.
-echo [1/4] Static repository validation...
+echo [1/5] Static code-health snapshot...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Tools\Diagnostics\CodeHealthAudit.ps1" -Root "%ROOT%"
+if errorlevel 1 goto :audit_failed
+
+echo.
+echo [2/5] Static repository validation...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Tools\ValidateProject.ps1" -Root "%ROOT%"
 if errorlevel 1 goto :validation_failed
 
 echo.
-echo [2/4] Build identity...
+echo [3/5] Build identity...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\Tools\GenerateBuildIdentity.ps1" -Root "%ROOT%" -Configuration "Release" -Milestone "%MILESTONE%"
 if errorlevel 1 goto :identity_failed
 
@@ -115,7 +151,7 @@ if not defined MSBUILD (
 if not defined MSBUILD goto :msbuild_missing
 
 echo.
-echo [3/4] Building the current solution Release x64 [%BUILD_MODE%]...
+echo [4/5] Building the current solution Release x64 [%BUILD_MODE%]...
 taskkill /IM HeritageEngine.exe /F >nul 2>nul
 if exist "%ENGINE%" del /q "%ENGINE%" >nul 2>nul
 "%MSBUILD%" "%SOLUTION%" /t:%MSBUILD_TARGET% /p:Configuration=Release /p:Platform=x64 /m /nologo /v:minimal /fl /flp:"logfile=%BUILD_LOG%;verbosity=normal"
@@ -124,7 +160,7 @@ if not exist "%TEST_EXE%" goto :test_exe_missing
 if not exist "%ENGINE%" goto :engine_exe_missing
 
 echo.
-echo [4/4] Headless native physics regressions...
+echo [5/5] Headless native physics regressions...
 "%TEST_EXE%" > "%TEST_LOG%" 2>&1
 set "TEST_RESULT=!ERRORLEVEL!"
 type "%TEST_LOG%"
@@ -134,13 +170,41 @@ echo.
 echo ============================================================
 echo BUILD + REGRESSION SUCCEEDED
 echo Validation: %REPORTS%\ValidationReport.txt
+echo Code health: %CODE_HEALTH_REPORT%
 echo Physics:    %TEST_LOG%
 echo Build:      %BUILD_LOG%
-echo Launching the exact freshly built Racing United module now.
+echo Launching the exact freshly built Racing United module now IN THE FOREGROUND.
+echo If HeritageEngine exits unexpectedly, this console will remain open and show its process exit code.
 echo ============================================================
-start "" "%ENGINE%" --project-root "%ROOT%" --module-path "%MODULE%" --module "RacingUnited"
-exit /b 0
+echo.
+echo [run] HeritageEngine starting with persistent console/crash capture...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%RUNTIME_CAPTURE%" -Engine "%ENGINE%" -Root "%ROOT%" -ModulePath "%MODULE%" -DiagnosticsDirectory "%DIAGNOSTICS%"
+set "ENGINE_RESULT=!ERRORLEVEL!"
+echo.
+echo ============================================================
+echo HeritageEngine process exited with code !ENGINE_RESULT!.
+echo Diagnostics directory: %DIAGNOSTICS%
+echo Runtime console log:  %RUNTIME_LOG%
+echo Native crash report:  %RUNTIME_CRASH%
+echo Build log:            %BUILD_LOG%
+echo ============================================================
+if not "!ENGINE_RESULT!"=="0" (
+    echo ERROR: HeritageEngine exited abnormally.
+    echo Send RuntimeConsoleLatest.log and RuntimeCrashLatest.txt if it exists; the failure is now persistent.
+) else (
+    echo HeritageEngine returned normally.
+)
+echo.
+pause
+exit /b !ENGINE_RESULT!
 
+
+:retirement_cleanup_failed
+echo.
+echo ERROR: OPT01/OPT02/OPT03 retirement convergence failed.
+echo The repository was not validated because stale retired files may still be present.
+pause
+exit /b 1
 :legacy_cleanup_failed
 echo ERROR: Could not remove obsolete/misplaced architecture files.
 echo Close editors/processes locking those files and run this helper again.
@@ -150,6 +214,12 @@ goto :failed
 echo.
 echo ERROR: Incremental-build freshness guard failed.
 echo Run this helper with FULL as a temporary fallback and send the PowerShell error above.
+goto :failed
+
+:audit_failed
+echo.
+echo ERROR: Static code-health audit failed.
+echo Send the PowerShell error above.
 goto :failed
 
 :validation_failed

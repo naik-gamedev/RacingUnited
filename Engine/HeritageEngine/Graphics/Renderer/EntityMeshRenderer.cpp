@@ -21,66 +21,6 @@ namespace {
 constexpr const char* kTextureMapFoundationMarker =
     "HERITAGE_GFX2_STATIC_MESH_IMPORT HERITAGE_GFX3_GLB_SKINNING_ANIMATION HERITAGE_GFX4_ANIMATION_CONTROL HERITAGE_GFX5_GLB_SPECULAR_VERTEX_COLOR HERITAGE_GFX6_ENVIRONMENT_IBL HERITAGE_GFX7_SKY_DAY_NIGHT HERITAGE_GFX9_CASCADED_SUN_SHADOWS HERITAGE_VA02_GLB_NODE_BINDING HERITAGE_SC01_GLB_SCENE_COLLISION";
 
-heritage::math::Vec3 weatherMix(
-    const heritage::math::Vec3& a,
-    const heritage::math::Vec3& b,
-    float t)
-{
-    t = std::clamp(t, 0.0f, 1.0f);
-    return {
-        a.x + (b.x - a.x) * t,
-        a.y + (b.y - a.y) * t,
-        a.z + (b.z - a.z) * t
-    };
-}
-
-EnvironmentLighting applyWeatherLighting(
-    EnvironmentLighting lighting,
-    const heritage::physics::SurfaceWorld* surfaces)
-{
-    if (!surfaces)
-        return lighting;
-    const auto& weather = surfaces->weather();
-    if (!weather.enabled)
-        return lighting;
-
-    const float cloud = std::clamp(
-        static_cast<float>(weather.cloudCover), 0.0f, 1.0f);
-    const float rain = std::clamp(
-        static_cast<float>(weather.precipitationRateMmPerHour / 80.0),
-        0.0f, 1.0f);
-    const float storm = std::clamp(
-        cloud * 0.72f + rain * 0.52f, 0.0f, 1.0f);
-
-    // WEATHER06A: weather authority now changes the real environment lighting,
-    // not just a translucent visual overlay. Dense cloud attenuates direct sun,
-    // desaturates/darkens the sky and ground hemispheres, and the same adjusted
-    // lighting is fed into the staged environment cubemap for wet reflections.
-    lighting.sunIntensity *= std::max(
-        0.12f, 1.0f - cloud * 0.76f - rain * 0.18f);
-    lighting.sunColor = weatherMix(
-        lighting.sunColor,
-        { 0.72f, 0.76f, 0.80f },
-        storm * 0.52f);
-    lighting.skyZenith = weatherMix(
-        lighting.skyZenith,
-        { 0.075f, 0.095f, 0.125f },
-        storm * 0.88f);
-    lighting.skyHorizon = weatherMix(
-        lighting.skyHorizon,
-        { 0.16f, 0.18f, 0.20f },
-        storm * 0.82f);
-    lighting.groundHorizon = weatherMix(
-        lighting.groundHorizon,
-        { 0.10f, 0.11f, 0.115f },
-        storm * 0.72f);
-    lighting.groundNadir = weatherMix(
-        lighting.groundNadir,
-        { 0.025f, 0.028f, 0.032f },
-        storm * 0.68f);
-    lighting.starIntensity *= (1.0f - cloud);
-    return lighting;
-}
 }
 
 bool EntityMeshRenderer::initialize(
@@ -160,6 +100,15 @@ bool EntityMeshRenderer::initialize(
     m_uniforms.saturation = uniform("uSaturation");
     m_uniforms.weatherFogDensity = uniform("uWeatherFogDensity");
     m_uniforms.weatherFogColor = uniform("uWeatherFogColor");
+    m_uniforms.regionalWeatherMap = uniform("uRegionalWeatherMap");
+    m_uniforms.regionalWeatherMapValid = uniform("uRegionalWeatherMapValid");
+    m_uniforms.regionalWeatherCameraOffsetXZ = uniform("uRegionalWeatherCameraOffsetXZ");
+    m_uniforms.regionalWeatherAdvectionXZ = uniform("uRegionalWeatherAdvectionXZ");
+    m_uniforms.regionalWeatherHalfRangeM = uniform("uRegionalWeatherHalfRangeM");
+    m_uniforms.weatherCloudBaseM = uniform("uWeatherCloudBaseM");
+    m_uniforms.volumetricCloudShadow = uniform("uVolumetricCloudShadow");
+    m_uniforms.hasVolumetricCloudShadow = uniform("uHasVolumetricCloudShadow");
+    m_uniforms.volumetricCloudShadowHalfRangeM = uniform("uVolumetricCloudShadowHalfRangeM");
     m_uniforms.hasEnvironmentMap = uniform("uHasEnvironmentMap");
     m_uniforms.environmentMaxLod = uniform("uEnvironmentMaxLod");
     m_uniforms.model = uniform("uModel");
@@ -227,8 +176,10 @@ bool EntityMeshRenderer::initialize(
     glUniform1i(m_uniforms.opacityMap, 7);
     glUniform1i(m_uniforms.specularFactorMap, 8);
     glUniform1i(m_uniforms.environmentMap, 9);
+    glUniform1i(m_uniforms.regionalWeatherMap, 15);
     glUniform1i(m_uniforms.shadowMap, 10);
     glUniform1i(m_uniforms.shadowDepthMap, 11);
+    glUniform1i(m_uniforms.volumetricCloudShadow, 12);
     // WATER15C1: surface-state shader plumbing lives with the wetness module,
     // keeping this file as lifecycle/draw orchestration only.
     initializeSurfaceWetnessMaterialBindings();
@@ -246,7 +197,7 @@ bool EntityMeshRenderer::initialize(
             << m_environmentMap.lastError() << '\n';
     }
 
-    if (!m_skyRenderer.initialize())
+    if (!m_skyRenderer.initialize(m_assetRoot))
     {
         std::cerr
             << "Heritage renderer warning: visible sky shader unavailable; "
@@ -260,8 +211,11 @@ bool EntityMeshRenderer::initialize(
             << "rendering continues without shadows.\n";
     }
 
-    initializeDynamicSurfacePageResources();
-    initializeDynamicSurfaceGpuLodPrototype();
+    // OPT03: the obsolete renderer-side DynamicSurfaceGpuPagePool has been
+    // retired entirely. The production DynamicSurfaceGpuRuntime owns the GPU
+    // presentation atlases; CPU Track/rubber/temperature authority remains in
+    // SurfaceWorld without an unused duplicate GPU mirror.
+    initializeDynamicSurfaceGpuRuntime();
 
     std::cout
         << "Heritage renderer: OBJ/MTL + GLB static mesh import enabled ["
@@ -275,9 +229,9 @@ void EntityMeshRenderer::shutdown()
     clearCache();
     m_skyRenderer.shutdown();
     m_environmentMap.shutdown();
+    shutdownRegionalWeatherMap();
     shutdownShadowResources();
-    shutdownDynamicSurfaceGpuLodPrototype();
-    shutdownDynamicSurfacePageResources();
+    shutdownDynamicSurfaceGpuRuntime();
     m_environmentSystem = nullptr;
     if (m_program)
     {
@@ -289,6 +243,7 @@ void EntityMeshRenderer::shutdown()
     m_resolvedTexturePaths.clear();
     m_reportedTireVisualProofNodes.clear();
     m_reportedTireColliderProofNodes.clear();
+    m_preparedFrameInstanceScratch.clear();
     m_uniforms = {};
     m_hotReloadEpoch = 1;
     m_lastError.clear();
@@ -299,6 +254,7 @@ void EntityMeshRenderer::draw(
     const heritage::settings::VideoSettings& videoSettings,
     float elapsedSeconds,
     const heritage::camera::CameraFrame& cameraFrame,
+    const EntityMeshRenderTargetState& renderTargetState,
     bool wireframeVisible,
     const heritage::physics::SurfaceWorld* surfaceWorld)
 {
@@ -346,38 +302,78 @@ void EntityMeshRenderer::draw(
         lookAt(cameraRelativeEye, cameraRelativeTarget, cameraUp);
     const ViewFrustum viewFrustum = extractViewFrustum(projection, view);
 
+    // OPT04C: acquire meshes and evaluate camera-relative node/animation/tire
+    // transforms once. The same prepared data feeds both the layered shadow
+    // pass and the normal material pass below.
+    const auto framePreparationStart = PerfClock::now();
+    prepareFrameInstances(instances, eye, elapsedSeconds);
+    m_frameStats.framePreparationCpuMs += millisecondsSince(framePreparationStart);
+
     const heritage::math::DVec3 cameraGlobalForSurface = surfaceWorld
         ? surfaceWorld->localToGlobal(eye)
         : heritage::math::toDouble(eye);
 
-    // LIVETRACK04: Hydro authority is the GPU-resident 10m / 256x256 texture
-    // field. Update it first so SurfaceWorld can disable its legacy per-texel CPU
-    // Hydro path immediately. The persistent CPU Dynamic Surface page mirror is
-    // still synchronized every frame for Track/rubber/temperature state only;
-    // updateDynamicSurfaceStatePages() explicitly skips Hydro uploads while GPU
-    // authority is ready. This avoids running two water solvers.
-    updateDynamicSurfaceGpuLodPrototype(
+    // LIVETRACK21 GPU atlas authority. PERF09 removes the obsolete persistent
+    // GPU page mirror from the live renderer: no shader or presentation pass
+    // consumes its Track/Hydro/contamination texture arrays or page-table SSBO.
+    // Keeping that dead mirror synchronized was costing roughly 21 ms/frame on
+    // the user's GTX 1660 Ti system. SurfaceWorld still owns Track/rubber/thermal
+    // simulation; only the unused rendering copy is gone.
+    const auto dynamicSurfaceUpdateStart = PerfClock::now();
+    updateDynamicSurfaceGpuRuntime(
         surfaceWorld, cameraGlobalForSurface, elapsedSeconds);
+    m_frameStats.dynamicSurfaceUpdateCpuMs += millisecondsSince(dynamicSurfaceUpdateStart);
 
-    synchronizeDynamicSurfacePageResources(surfaceWorld);
-    if (surfaceWorld && m_dynamicSurfaceGpuPagePool.ready())
+    const auto regionalWeatherUpdateStart = PerfClock::now();
+    const bool regionalWeatherMapReady = updateRegionalWeatherMap(
+        surfaceWorld, cameraGlobalForSurface, elapsedSeconds);
+    m_frameStats.regionalWeatherUpdateCpuMs += millisecondsSince(regionalWeatherUpdateStart);
+
+    heritage::physics::weather::RegionalWeatherSample cameraRegionalWeather{};
+    if (surfaceWorld)
     {
-        updateDynamicSurfaceStatePages(
-            surfaceWorld, cameraGlobalForSurface, elapsedSeconds);
+        cameraRegionalWeather = surfaceWorld->precipitation().regionalWeatherSample(
+            cameraGlobalForSurface.x, cameraGlobalForSurface.z);
     }
 
-    const EnvironmentLighting lighting = applyWeatherLighting(
+    // Weather-film wetness used to be updated as a side effect of the obsolete
+    // Track page uploader. Preserve that visible behavior directly and cheaply.
+    m_surfaceWeatherFilmWetness = 0.0f;
+    if (surfaceWorld)
+    {
+        const auto weatherOutput = surfaceWorld->weatherOutput();
+        if (weatherOutput.valid)
+        {
+            m_surfaceWeatherFilmWetness = static_cast<float>(std::clamp(
+                weatherOutput.effectiveWetness, 0.0, 1.0));
+        }
+    }
+
+    const auto weatherLightingStart = PerfClock::now();
+    const EnvironmentLighting lighting = weatherAdjustedLighting(
         m_environmentSystem ? m_environmentSystem->lighting() : EnvironmentLighting{},
-        surfaceWorld);
+        surfaceWorld,
+        cameraGlobalForSurface);
+    m_frameStats.weatherLightingCpuMs += millisecondsSince(weatherLightingStart);
 
     const auto shadowStart = PerfClock::now();
+    const auto shadowSettingsStart = PerfClock::now();
     const bool shadowSettingsReady = synchronizeShadowSettings(videoSettings);
-    m_shadowsActive =
-        shadowSettingsReady
-        && lighting.sunIntensity > 0.01f
-        && buildShadowCascades(projection, view, lighting.sunDirection);
+    m_frameStats.shadowSettingsCpuMs += millisecondsSince(shadowSettingsStart);
+
+    bool shadowCascadesReady = false;
+    if (shadowSettingsReady && lighting.keyLightIntensity > 0.01f)
+    {
+        const auto shadowCascadeStart = PerfClock::now();
+        shadowCascadesReady = buildShadowCascades(
+            projection, view, lighting.keyLightDirection);
+        m_frameStats.shadowCascadeCpuMs += millisecondsSince(shadowCascadeStart);
+    }
+    m_shadowsActive = shadowSettingsReady
+        && lighting.keyLightIntensity > 0.01f
+        && shadowCascadesReady;
     if (m_shadowsActive)
-        drawShadowMaps(instances, eye, elapsedSeconds);
+        drawShadowMaps(m_preparedFrameInstanceScratch, renderTargetState);
     m_frameStats.shadowCpuMs += millisecondsSince(shadowStart);
     m_frameStats.shadowsActive = m_shadowsActive;
     m_frameStats.shadowCascadeCount = m_shadowsActive ? kCascadeCount : 0;
@@ -403,16 +399,46 @@ void EntityMeshRenderer::draw(
     {
         const auto& weather = surfaceWorld->weather();
         skyWeather.enabled = weather.enabled;
-        skyWeather.cloudCover = static_cast<float>(weather.cloudCover);
-        skyWeather.relativeHumidity = static_cast<float>(weather.relativeHumidity);
+        skyWeather.cloudCover = static_cast<float>(cameraRegionalWeather.valid
+            ? cameraRegionalWeather.cloudCover : weather.cloudCover);
+        skyWeather.authoredCloudCover = static_cast<float>(std::clamp(
+            weather.cloudCover, 0.0, 1.0));
+        skyWeather.relativeHumidity = static_cast<float>(cameraRegionalWeather.valid
+            ? cameraRegionalWeather.relativeHumidity : weather.relativeHumidity);
         skyWeather.precipitationRateMmPerHour = static_cast<float>(
-            weather.precipitationRateMmPerHour);
-        const auto weatherOutput = surfaceWorld->weatherOutput();
+            cameraRegionalWeather.valid
+                ? cameraRegionalWeather.currentRateMmPerHour
+                : weather.precipitationRateMmPerHour);
+        const auto weatherOutput = surfaceWorld->regionalWeatherOutputAt(
+            cameraGlobalForSurface);
         skyWeather.windVelocityXMps = static_cast<float>(
             weatherOutput.windVelocityXMps);
         skyWeather.windVelocityZMps = static_cast<float>(
             weatherOutput.windVelocityZMps);
+        const auto cloudBaseWind = surfaceWorld->precipitation().atmosphericWindVelocityMps(1000.0);
+        const auto cloudTopWind = surfaceWorld->precipitation().atmosphericWindVelocityMps(3500.0);
+        skyWeather.cloudBaseWindVelocityXMps = cloudBaseWind.x;
+        skyWeather.cloudBaseWindVelocityZMps = cloudBaseWind.z;
+        skyWeather.cloudTopWindVelocityXMps = cloudTopWind.x;
+        skyWeather.cloudTopWindVelocityZMps = cloudTopWind.z;
         skyWeather.cameraGlobal = surfaceWorld->localToGlobal(eye);
+        skyWeather.regionalWeatherTexture = regionalWeatherMapReady
+            ? m_regionalWeatherTexture : 0;
+        skyWeather.regionalWeatherCameraOffsetX = static_cast<float>(
+            cameraGlobalForSurface.x - m_regionalWeatherCenterX);
+        skyWeather.regionalWeatherCameraOffsetZ = static_cast<float>(
+            cameraGlobalForSurface.z - m_regionalWeatherCenterZ);
+        const double weatherFieldAgeSeconds = std::max(
+            surfaceWorld->precipitation().elapsedSeconds()
+                - m_regionalWeatherFieldElapsedAtUpload,
+            0.0);
+        const auto weatherFieldWind = surfaceWorld->precipitation().weatherSteeringWindVelocityMps();
+        skyWeather.regionalWeatherAdvectionOffsetX = static_cast<float>(
+            -static_cast<double>(weatherFieldWind.x) * weatherFieldAgeSeconds * 0.38);
+        skyWeather.regionalWeatherAdvectionOffsetZ = static_cast<float>(
+            -static_cast<double>(weatherFieldWind.z) * weatherFieldAgeSeconds * 0.38);
+        skyWeather.regionalWeatherHalfRangeM = static_cast<float>(
+            m_regionalWeatherHalfRangeM);
     }
     else
     {
@@ -425,6 +451,14 @@ void EntityMeshRenderer::draw(
         m_environmentMap,
         lighting,
         skyWeather,
+        SkyRenderTargetState{
+            renderTargetState.framebuffer,
+            renderTargetState.viewportX, renderTargetState.viewportY,
+            renderTargetState.viewportWidth, renderTargetState.viewportHeight,
+            renderTargetState.samples,
+            renderTargetState.scissorEnabled,
+            renderTargetState.scissorX, renderTargetState.scissorY,
+            renderTargetState.scissorWidth, renderTargetState.scissorHeight },
         videoSettings.gamma,
         videoSettings.brightness,
         videoSettings.contrast,
@@ -432,8 +466,25 @@ void EntityMeshRenderer::draw(
     m_frameStats.skyDrawMs += millisecondsSince(skyDrawStart);
 
     if (instances.empty())
+    {
+        const auto cloudAfterOpaqueStart = PerfClock::now();
+        m_skyRenderer.drawVolumetricCloudsAfterOpaque(
+            view, projection, lighting, skyWeather,
+            SkyRenderTargetState{
+                renderTargetState.framebuffer,
+                renderTargetState.viewportX, renderTargetState.viewportY,
+                renderTargetState.viewportWidth, renderTargetState.viewportHeight,
+                renderTargetState.samples,
+                renderTargetState.scissorEnabled,
+                renderTargetState.scissorX, renderTargetState.scissorY,
+                renderTargetState.scissorWidth, renderTargetState.scissorHeight });
+        m_frameStats.cloudAfterOpaqueCpuMs += millisecondsSince(cloudAfterOpaqueStart);
+        copySkyPerformanceStats(
+            m_frameStats, m_skyRenderer.gpuStats(), m_skyRenderer.cpuStats());
         return;
+    }
 
+    const auto materialSetupStart = PerfClock::now();
     // DEBUG-WIREFRAME01: only visible authored entity geometry switches to
     // line rasterization. Restore fill before presentation/post/UI passes.
     if (wireframeVisible)
@@ -451,14 +502,14 @@ void EntityMeshRenderer::draw(
         0.0f, 0.0f, 0.0f);
     glUniform3f(
         m_uniforms.sunDirection,
-        lighting.sunDirection.x,
-        lighting.sunDirection.y,
-        lighting.sunDirection.z);
+        lighting.keyLightDirection.x,
+        lighting.keyLightDirection.y,
+        lighting.keyLightDirection.z);
     glUniform3f(
         m_uniforms.sunRadiance,
-        lighting.sunColor.x * lighting.sunIntensity,
-        lighting.sunColor.y * lighting.sunIntensity,
-        lighting.sunColor.z * lighting.sunIntensity);
+        lighting.keyLightColor.x * lighting.keyLightIntensity,
+        lighting.keyLightColor.y * lighting.keyLightIntensity,
+        lighting.keyLightColor.z * lighting.keyLightIntensity);
     glUniform1f(
         m_uniforms.gamma,
         videoSettings.gamma);
@@ -471,28 +522,12 @@ void EntityMeshRenderer::draw(
     glUniform1f(
         m_uniforms.saturation,
         videoSettings.saturation);
-    float weatherFogDensity = 0.0f;
-    heritage::math::Vec3 weatherFogColor = lighting.skyHorizon;
-    if (surfaceWorld && surfaceWorld->weather().enabled)
-    {
-        const auto& weather = surfaceWorld->weather();
-        const float rain = std::clamp(
-            static_cast<float>(weather.precipitationRateMmPerHour / 80.0),
-            0.0f, 1.0f);
-        const float cloud = std::clamp(
-            static_cast<float>(weather.cloudCover), 0.0f, 1.0f);
-        weatherFogDensity = rain * (0.00115f + cloud * 0.00115f);
-        weatherFogColor = weatherMix(
-            lighting.skyHorizon,
-            { 0.17f, 0.19f, 0.21f },
-            rain * 0.62f);
-    }
-    glUniform1f(m_uniforms.weatherFogDensity, weatherFogDensity);
-    glUniform3f(
-        m_uniforms.weatherFogColor,
-        weatherFogColor.x,
-        weatherFogColor.y,
-        weatherFogColor.z);
+    bindRegionalWeatherMaterialState(
+        surfaceWorld,
+        cameraGlobalForSurface,
+        cameraRegionalWeather,
+        regionalWeatherMapReady,
+        lighting);
     glUniform1i(
         m_uniforms.tireProbeDebugVisible,
         m_tireProbeDebugVisible ? 1 : 0);
@@ -508,6 +543,18 @@ void EntityMeshRenderer::draw(
         glActiveTexture(GL_TEXTURE0 + 9);
         glBindTexture(GL_TEXTURE_CUBE_MAP, m_environmentMap.textureId());
     }
+
+    glUniform1i(
+        m_uniforms.hasVolumetricCloudShadow,
+        m_skyRenderer.cloudShadowValid() ? 1 : 0);
+    glUniform1f(
+        m_uniforms.volumetricCloudShadowHalfRangeM,
+        m_skyRenderer.cloudShadowHalfRangeM());
+    glActiveTexture(GL_TEXTURE0 + 12);
+    glBindTexture(
+        GL_TEXTURE_2D,
+        m_skyRenderer.cloudShadowValid() ? m_skyRenderer.cloudShadowTexture() : 0);
+    glActiveTexture(GL_TEXTURE0);
 
     // WATER15C1: bind the Dynamic Track surface-state clipmaps through the
     // dedicated wetness module; this draw function only orchestrates the pass.
@@ -540,7 +587,8 @@ void EntityMeshRenderer::draw(
     }
     glActiveTexture(GL_TEXTURE0);
 
-    const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
+    // OPT04B: renderer passes own deterministic state. Do not query the driver
+    // for a previous blend-enable bit on this hot path.
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
@@ -632,18 +680,22 @@ void EntityMeshRenderer::draw(
     bool lastMaterialHasBaseColorTexture = false;
     GLenum activeFrontFace = GL_CCW;
     glFrontFace(activeFrontFace);
+    m_frameStats.materialSetupCpuMs += millisecondsSince(materialSetupStart);
 
-    for (const auto& instance : instances)
+    for (std::size_t instanceIndex = 0;
+         instanceIndex < instances.size();
+         ++instanceIndex)
     {
         const auto meshInstanceStart = PerfClock::now();
-        const Mesh* mesh =
-            acquireMesh(
-                instance.assetPath,
-                instance.normalize,
-                instance.blenderCoordinates);
+        const auto& instance = instances[instanceIndex];
+        const PreparedFrameInstance& preparedInstance =
+            m_preparedFrameInstanceScratch[instanceIndex];
+        const Mesh* mesh = preparedInstance.mesh;
         if (!mesh)
         {
-            const double instanceMs = millisecondsSince(meshInstanceStart);
+            const double visibleInstanceMs = millisecondsSince(meshInstanceStart);
+            const double instanceMs = preparedInstance.prepareCpuMs + visibleInstanceMs;
+            m_frameStats.meshVisibleInstancesCpuMs += visibleInstanceMs;
             m_frameStats.meshInstancesCpuMs += instanceMs;
             if (instanceMs > m_frameStats.slowestMeshInstanceMs)
             {
@@ -664,18 +716,9 @@ void EntityMeshRenderer::draw(
         else
             glEnable(GL_CULL_FACE);
 
-        heritage::entities::MeshInstance cameraRelativeInstance = instance;
-        cameraRelativeInstance.position = {
-            instance.position.x - eye.x,
-            instance.position.y - eye.y,
-            instance.position.z - eye.z
-        };
-        const heritage::math::Mat4 instanceModel =
-            modelMatrix(cameraRelativeInstance);
-        std::vector<heritage::math::Mat4> nodeGlobals =
-            animationTransformsForInstance(*mesh, instance, elapsedSeconds);
-        applyMeshNodeOverrides(
-            *mesh, instance, instanceModel, eye, nodeGlobals);
+        const heritage::math::Mat4& instanceModel = preparedInstance.instanceModel;
+        const std::vector<heritage::math::Mat4>& nodeGlobals =
+            preparedInstance.nodeGlobals;
         glBindVertexArray(mesh->vao);
         ++m_frameStats.vaoBinds;
 
@@ -714,14 +757,12 @@ void EntityMeshRenderer::draw(
                 if (candidate.hasTireVisualGeometry)
                 {
                     tireVisualNode = &candidate;
-                    for (const auto& overrideValue : instance.nodeOverrides)
+                    const std::size_t nodeIndex =
+                        static_cast<std::size_t>(range.nodeIndex);
+                    if (nodeIndex < preparedInstance.tireVisualOverrides.size())
                     {
-                        if (overrideValue.nodeName == candidate.name
-                            && overrideValue.hasTireVisualDeformation)
-                        {
-                            tireVisualState = &overrideValue;
-                            break;
-                        }
+                        tireVisualState =
+                            preparedInstance.tireVisualOverrides[nodeIndex];
                     }
                 }
             }
@@ -909,20 +950,22 @@ void EntityMeshRenderer::draw(
                 useSkinning ? 1 : 0);
             if (useSkinning)
             {
-                std::array<float, 16 * kMaxSkinJoints> jointData{};
-                const heritage::math::Mat4 identity = heritage::math::identity();
-                for (int joint = 0; joint < kMaxSkinJoints; ++joint)
+                // OPT04C: upload only the palette entries this skin can index.
+                // The old path repacked and submitted all 64 matrices for every
+                // skinned range, padding unused joints with identity matrices.
+                std::array<float, 16 * kMaxSkinJoints> jointData;
+                for (std::size_t joint = 0; joint < palette.size(); ++joint)
                 {
-                    const heritage::math::Mat4& source =
-                        joint < static_cast<int>(palette.size())
-                        ? palette[static_cast<std::size_t>(joint)]
-                        : identity;
+                    const heritage::math::Mat4& source = palette[joint];
                     for (int value = 0; value < 16; ++value)
-                        jointData[static_cast<std::size_t>(joint) * 16 + value] = source.m[value];
+                    {
+                        jointData[joint * 16 + static_cast<std::size_t>(value)] =
+                            source.m[value];
+                    }
                 }
                 glUniformMatrix4fv(
                     m_uniforms.jointMatrices,
-                    kMaxSkinJoints,
+                    static_cast<GLsizei>(palette.size()),
                     GL_FALSE,
                     jointData.data());
             }
@@ -1053,13 +1096,10 @@ void EntityMeshRenderer::draw(
                 lastMaterialHasBaseColorTexture ? 1.0f : instance.color.y,
                 lastMaterialHasBaseColorTexture ? 1.0f : instance.color.z);
 
-            glDrawElements(
-                GL_TRIANGLES,
-                static_cast<GLsizei>(range.indexCount),
-                GL_UNSIGNED_INT,
-                reinterpret_cast<const void*>(
-                    range.firstIndex
-                    * sizeof(unsigned int)));
+            drawElementsProfiled(
+                m_frameStats, GL_TRIANGLES,
+                static_cast<GLsizei>(range.indexCount), GL_UNSIGNED_INT,
+                reinterpret_cast<const void*>(range.firstIndex * sizeof(unsigned int)));
             ++m_frameStats.drawCalls;
             m_frameStats.triangles +=
                 static_cast<std::uint64_t>(range.indexCount / 3);
@@ -1077,12 +1117,10 @@ void EntityMeshRenderer::draw(
             if (drawFailureStrip)
             {
                 glUniform1i(m_uniforms.tireFailureRenderPass, 1);
-                glDrawElements(
-                    GL_TRIANGLES,
-                    static_cast<GLsizei>(range.indexCount),
-                    GL_UNSIGNED_INT,
-                    reinterpret_cast<const void*>(
-                        range.firstIndex * sizeof(unsigned int)));
+                drawElementsProfiled(
+                    m_frameStats, GL_TRIANGLES,
+                    static_cast<GLsizei>(range.indexCount), GL_UNSIGNED_INT,
+                    reinterpret_cast<const void*>(range.firstIndex * sizeof(unsigned int)));
                 glUniform1i(m_uniforms.tireFailureRenderPass, 0);
                 ++m_frameStats.drawCalls;
                 m_frameStats.triangles +=
@@ -1105,7 +1143,9 @@ void EntityMeshRenderer::draw(
             }
         }
 
-        const double instanceMs = millisecondsSince(meshInstanceStart);
+        const double visibleInstanceMs = millisecondsSince(meshInstanceStart);
+        const double instanceMs = preparedInstance.prepareCpuMs + visibleInstanceMs;
+        m_frameStats.meshVisibleInstancesCpuMs += visibleInstanceMs;
         m_frameStats.meshInstancesCpuMs += instanceMs;
         if (instanceMs > m_frameStats.slowestMeshInstanceMs)
         {
@@ -1117,60 +1157,41 @@ void EntityMeshRenderer::draw(
     // WATER15C: no second water draw. SurfaceWetnessReceiver fragments were
     // shaded with Dynamic Track state during their normal material draw above.
 
+    const auto rendererRestoreStart = PerfClock::now();
     glBindVertexArray(0);
-    glActiveTexture(GL_TEXTURE0);
-    for (int unit = 0; unit < 9; ++unit)
-    {
-        glActiveTexture(GL_TEXTURE0 + unit);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
-    glActiveTexture(GL_TEXTURE0 + 9);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-    glActiveTexture(GL_TEXTURE0 + 10);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+
+    // OPT04B: texture bindings are not global cleanliness requirements. Every
+    // following pass explicitly binds the texture target/unit it consumes.
+    // Avoid dozens of guaranteed-redundant glBindTexture(..., 0) calls here.
+    // Sampler objects are different: units 10/11 are reused by later passes,
+    // so release the shadow-specific sampler overrides before handing off.
     glBindSampler(10, 0);
-    glActiveTexture(GL_TEXTURE0 + 11);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     glBindSampler(11, 0);
-    glActiveTexture(GL_TEXTURE0 + 12);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0 + 13);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0 + 14);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glActiveTexture(GL_TEXTURE0 + 15);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    for (int unit = 16; unit <= 24; ++unit)
-    {
-        glActiveTexture(GL_TEXTURE0 + unit);
-        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-    }
     glActiveTexture(GL_TEXTURE0);
 
     glFrontFace(GL_CCW);
     glEnable(GL_CULL_FACE);
-    if (!blendWasEnabled)
-        glDisable(GL_BLEND);
+    glDisable(GL_BLEND);
     if (wireframeVisible)
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-}
-void EntityMeshRenderer::requestHotReloadPoll()
-{
-    ++m_hotReloadEpoch;
-    if (m_hotReloadEpoch == 0)
-        m_hotReloadEpoch = 1;
-    m_textureCache.setHotReloadEpoch(m_hotReloadEpoch);
-}
-std::size_t EntityMeshRenderer::loadedAssetCount() const
-{
-    return static_cast<std::size_t>(
-        std::count_if(
-            m_cache.begin(),
-            m_cache.end(),
-            [](const auto& item)
-            {
-                return item.second.loaded;
-            }));
-}
+    m_frameStats.rendererRestoreCpuMs += millisecondsSince(rendererRestoreStart);
 
+    // UnityVolumetricCloudsURP runs before transparents. At this point Heritage
+    // has completed opaque scene shading and can temporally combine clouds with
+    // the actual camera colour while keeping ordinary geometry occlusion.
+    const auto cloudAfterOpaqueStart = PerfClock::now();
+    m_skyRenderer.drawVolumetricCloudsAfterOpaque(
+        view, projection, lighting, skyWeather,
+        SkyRenderTargetState{
+            renderTargetState.framebuffer,
+            renderTargetState.viewportX, renderTargetState.viewportY,
+            renderTargetState.viewportWidth, renderTargetState.viewportHeight,
+            renderTargetState.samples,
+            renderTargetState.scissorEnabled,
+            renderTargetState.scissorX, renderTargetState.scissorY,
+            renderTargetState.scissorWidth, renderTargetState.scissorHeight });
+    m_frameStats.cloudAfterOpaqueCpuMs += millisecondsSince(cloudAfterOpaqueStart);
+    copySkyPerformanceStats(
+        m_frameStats, m_skyRenderer.gpuStats(), m_skyRenderer.cpuStats());
+}
 } // namespace heritage::graphics

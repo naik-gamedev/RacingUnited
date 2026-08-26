@@ -405,18 +405,14 @@ uniform sampler2D uOpacityMap;
 uniform samplerCube uEnvironmentMap;
 uniform sampler2DArrayShadow uShadowMap;
 uniform sampler2DArray uShadowDepthMap;
+uniform sampler2D uVolumetricCloudShadow;
 
-// LIVETRACK03: persistent Hydro is one X/Z RGBA4 page per 100m chunk. The camera-
-// local indirection texture stores exactly one physical Hydro slot per tile;
-// water rendering has no vertical surface-sheet list or height resolver.
-uniform sampler2DArray uDynamicSurfaceHydroPages;
-uniform isampler2D uDynamicSurfacePageIndirection;
-// DSURF04G2: one fixed-resolution 10m WaterState authority. Every resident
-// tile is 512x512 (~1.953125cm/cell) regardless of distance. Physics remains
-// R32UI; presentation may sample a same-resolution R8 cache derived from that
-// authority by barrier-aware GPU filtering. The cache never feeds simulation.
+// LIVETRACK15 production water uses a near 10m/256x256 RGBA8 topology atlas
+// plus a rolling 10m/32x32 RGB8 far topology cache through 500m. Both carry immutable
+// mesh-prebaked runoff / 4-bit standing-depth ceiling / flow; live fill is reconstructed on-GPU.
 uniform sampler2D uGpuWaterAtlas;
-uniform sampler2D uGpuWaterPresentationAtlas;
+uniform sampler2D uGpuFarWaterAtlas;
+uniform isampler2D uGpuFarTileTags;
 uniform usampler2D uGpuSnowAtlas;
 uniform usampler2D uGpuMudAtlas;
 uniform usampler2D uGpuTileIndirection;
@@ -433,28 +429,31 @@ uniform bool uHasEmissiveMap;
 uniform bool uHasOpacityMap;
 uniform bool uHasEnvironmentMap;
 uniform bool uHasShadowMap;
+uniform bool uHasVolumetricCloudShadow;
+uniform float uVolumetricCloudShadowHalfRangeM;
 uniform bool uSurfaceWetnessReceiver;
 uniform bool uHasSurfaceWetnessBreakupMask;
-uniform bool uDynamicSurfaceActive;
 uniform bool uGpuDynamicSurfaceAuthorityActive;
-uniform bool uGpuWaterPresentationReady;
 uniform bool uGpuDynamicSurfaceSnowReady;
 uniform bool uGpuDynamicSurfaceMudReady;
 uniform vec2 uGpuDynamicSurfaceCenterOriginRelativeXZ;
+uniform ivec2 uGpuDynamicSurfaceCenterWorldTile;
 uniform ivec2 uGpuDynamicSurfaceTileMapCenter;
 uniform int uGpuDynamicSurfaceTileResolution;
 uniform int uGpuDynamicSurfaceAtlasColumns;
-uniform vec2 uDynamicSurfaceIndirectionOriginRelativeXZ;
-uniform float uDynamicSurfacePageWorldSizeM;
-uniform int uDynamicSurfaceIndirectionResolution;
-uniform int uDynamicSurfaceHydroBaseMip;
-uniform float uDynamicSurfaceCameraGlobalY;
+uniform int uGpuFarTileResolution;
+uniform int uGpuFarAtlasTilesPerAxis;
 uniform vec2 uSurfacePatternCameraModuloXZ;
 uniform float uSurfacePresentationTime;
-// Compatibility weather-film fallback. Once DSURF04F GPU authority is live,
- // local wetness/free-surface coverage is derived only from WaterState depth.
+// Ordinary scene wetness remains the cheap fallback outside detailed topology.
 uniform float uSurfaceWeatherFilmWetness;
-uniform float uSurfaceWeatherFilmDepthM;
+// LIVETRACK15: one scene rainfall accumulator drives every resident prebaked
+// puddle tile. Static standing-depth ceiling/flow live in the near/far atlases; the
+// fill head is derived every draw inside the same 0..0.70mm domain, so rain never
+// requires a periodic full-field compute pulse.
+uniform float uPrebakedWaterExposureM;
+uniform float uRainWettingExposureM;
+uniform float uRainRateMmPerHour;
 
 uniform int uRoughnessChannel;
 uniform int uMetallicChannel;
@@ -477,6 +476,12 @@ uniform float uContrast;
 uniform float uSaturation;
 uniform float uWeatherFogDensity;
 uniform vec3 uWeatherFogColor;
+uniform sampler2D uRegionalWeatherMap;
+uniform bool uRegionalWeatherMapValid;
+uniform vec2 uRegionalWeatherCameraOffsetXZ;
+uniform vec2 uRegionalWeatherAdvectionXZ;
+uniform float uRegionalWeatherHalfRangeM;
+uniform float uWeatherCloudBaseM;
 
 out vec4 FragColor;
 
@@ -491,6 +496,81 @@ float sampleChannel(vec4 texel, int channel)
     if (channel == 3)
         return texel.a;
     return texel.r;
+}
+
+
+vec4 sampleRegionalWeather(vec2 cameraRelativeXZ)
+{
+    if (!uRegionalWeatherMapValid || uRegionalWeatherHalfRangeM <= 1.0)
+        return vec4(0.0);
+    vec2 relativeToFieldCenter = cameraRelativeXZ
+        + uRegionalWeatherCameraOffsetXZ
+        + uRegionalWeatherAdvectionXZ;
+    vec2 uv = vec2(0.5) + relativeToFieldCenter
+        / (2.0 * uRegionalWeatherHalfRangeM);
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
+        return vec4(0.0);
+    return texture(uRegionalWeatherMap, uv);
+}
+
+vec3 regionalCloudSunTransmission(vec3 surfacePosition, vec3 lightDirection)
+{
+    if (!uRegionalWeatherMapValid || lightDirection.y <= 0.02)
+        return vec3(1.0);
+
+    // Project the surface point toward the sun into the representative cloud
+    // layer. The same regional weather texture also drives visible volumetric
+    // cloud density and radar precipitation, so moving cloud cells darken the
+    // corresponding world region instead of using an unrelated shadow decal.
+    float heightToCloudM = max(uWeatherCloudBaseM - surfacePosition.y, 0.0);
+    vec2 projectedXZ = surfacePosition.xz
+        + lightDirection.xz * (heightToCloudM / max(lightDirection.y, 0.06));
+    vec4 weather = sampleRegionalWeather(projectedXZ);
+    float cloud = weather.r;
+    float rain = weather.g;
+    float storm = weather.a;
+    float optical = smoothstep(0.18, 0.88, cloud)
+        * mix(0.55, 1.0, storm);
+    float transmission = mix(1.0, 0.22, optical);
+    transmission *= mix(1.0, 0.78, rain * storm);
+    // Dense cloud shifts direct sunlight slightly cooler/greyer. Day/night sun
+    // colour remains the astronomical authority; weather only filters it.
+    vec3 tint = mix(vec3(1.0), vec3(0.80, 0.86, 0.94), optical * 0.34);
+    return tint * transmission;
+}
+
+vec3 volumetricCloudSunTransmission(vec3 surfacePosition, vec3 lightDirection)
+{
+    // CELESTIAL01: uSunDirection is Heritage's continuous celestial key in the
+    // material pass. The same cookie therefore filters sunlight by day and
+    // moonlight by night, while regional weather supplies a subtle spectral
+    // shift under dense cloud instead of a purely grey visibility multiplier.
+    vec3 regionalTransmission = regionalCloudSunTransmission(surfacePosition, lightDirection);
+    if (!uHasVolumetricCloudShadow || uVolumetricCloudShadowHalfRangeM <= 1.0)
+        return regionalTransmission;
+
+    // The shadow texture is generated on Heritage's y=0 receiver plane. Project
+    // this surface point backwards along the incoming celestial light onto that
+    // plane, matching the light-space cookie trace.
+    float safeLightY = max(lightDirection.y, 0.06);
+    vec2 receiverXZ = surfacePosition.xz - lightDirection.xz * (surfacePosition.y / safeLightY);
+    vec2 uv = vec2(0.5) + receiverXZ / (2.0 * uVolumetricCloudShadowHalfRangeM);
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
+        return regionalTransmission;
+
+    float detailedTransmission = clamp(texture(uVolumetricCloudShadow, uv).r, 0.0, 1.0);
+    float regionalLuminance = max(
+        dot(regionalTransmission, vec3(0.2126, 0.7152, 0.0722)),
+        0.02);
+    vec3 spectralShape = clamp(regionalTransmission / regionalLuminance, vec3(0.75), vec3(1.25));
+
+    // CELESTIAL02: CELESTIAL01 accidentally normalized away the magnitude of
+    // the regional transmission when the detailed cookie was present.  Keep
+    // its colour shape, but never let the detailed cookie make an overcast
+    // region brighter.  The cookie itself already carries the strengthened
+    // optical-depth trace, so this remains a direct-light attenuation only.
+    float combinedTransmission=min(regionalLuminance,detailedTransmission);
+    return clamp(spectralShape * combinedTransmission, vec3(0.0), vec3(1.0));
 }
 
 float distributionGGX(vec3 normal, vec3 halfwayDirection, float roughness)
@@ -573,12 +653,17 @@ float sampleShadowPoissonPcf(
     vec3 shadowCoord,
     int cascade,
     float receiverDepth,
-    float radiusTexels)
+    float radiusTexels,
+    int sampleCount)
 {
+    // CLOUDURP15BK: hardware linear shadow comparison already gives a useful
+    // 2x2 footprint per fetch. Eight Poisson taps are ample near the camera;
+    // far cascades use four. This replaces the old unconditional 16 taps.
     vec2 texel = 1.0 / vec2(textureSize(uShadowMap, 0).xy);
     float visible = 0.0;
-    for (int index = 0; index < 16; ++index)
+    for (int index = 0; index < 8; ++index)
     {
+        if(index>=sampleCount) break;
         vec2 disk = rotateShadowPoisson(kShadowPoissonDisk[index], cascade);
         visible += texture(
             uShadowMap,
@@ -587,7 +672,7 @@ float sampleShadowPoissonPcf(
                 float(cascade),
                 receiverDepth));
     }
-    return visible * (1.0 / 16.0);
+    return visible / max(float(sampleCount),1.0);
 }
 
 float sampleShadowPcssPoisson(
@@ -605,7 +690,7 @@ float sampleShadowPcssPoisson(
     float blockerDepthSum = 0.0;
     float blockerCount = 0.0;
     float searchRadiusTexels = clamp(3.25 * resolutionScale, 1.25, 5.0);
-    for (int index = 0; index < 12; ++index)
+    for (int index = 0; index < 4; ++index)
     {
         vec2 disk = rotateShadowPoisson(kShadowPoissonDisk[index], cascade);
         float storedDepth = texture(
@@ -636,7 +721,8 @@ float sampleShadowPcssPoisson(
         shadowCoord,
         cascade,
         receiverDepth,
-        penumbraTexels);
+        penumbraTexels,
+        8);
 }
 
 float sampleSunShadow(vec3 normal, vec3 lightDirection)
@@ -683,14 +769,31 @@ float sampleSunShadow(vec3 normal, vec3 lightDirection)
             shadowCoord,
             cascade,
             receiverDepth,
-            radiusTexels);
+            radiusTexels,
+            cascade >= 2 ? 4 : 8);
     }
     else
     {
-        filteredVisibility = sampleShadowPcssPoisson(
-            shadowCoord,
-            cascade,
-            receiverDepth);
+        // CLOUDURP15BK: PCSS is only worth its blocker search in the two near
+        // cascades. Far cascades use four hardware-linear PCF taps instead of
+        // paying the old 12-blocker + 16-filter fetch budget per fragment.
+        if(cascade>=2)
+        {
+            float resolutionScale = float(textureSize(uShadowMap, 0).x) / 4096.0;
+            filteredVisibility = sampleShadowPoissonPcf(
+                shadowCoord,
+                cascade,
+                receiverDepth,
+                max(1.0,2.5*resolutionScale),
+                4);
+        }
+        else
+        {
+            filteredVisibility = sampleShadowPcssPoisson(
+                shadowCoord,
+                cascade,
+                receiverDepth);
+        }
     }
 
     return mix(
@@ -705,42 +808,158 @@ struct GpuWaterDecoded
 {
     float depthM;
     float dryLine;
-    vec2 flow;
+    float basinStrength;
+    float runoffPotential;
+    float runoffAreaM2;
+    float flowStrength;
+    vec2 flowDirection;
 };
+
+float decodeGpuRunoffAreaM2(float encoded)
+{
+    // Matches the .hhyd v9 4-bit logarithmic catchment ladder. Keeping the
+    // physical contributing area lets the runtime estimate discharge from
+    // actual rainfall intensity instead of treating runoff as a cosmetic mask.
+    float level = clamp(encoded, 0.0, 1.0) * 15.0;
+    if (level <= 0.0) return 0.0;
+    if (level <= 1.0) return mix(0.0, 0.25, level);
+    if (level <= 2.0) return mix(0.25, 0.50, level - 1.0);
+    if (level <= 3.0) return mix(0.50, 1.0, level - 2.0);
+    if (level <= 4.0) return mix(1.0, 2.0, level - 3.0);
+    if (level <= 5.0) return mix(2.0, 4.0, level - 4.0);
+    if (level <= 6.0) return mix(4.0, 8.0, level - 5.0);
+    if (level <= 7.0) return mix(8.0, 16.0, level - 6.0);
+    if (level <= 8.0) return mix(16.0, 32.0, level - 7.0);
+    if (level <= 9.0) return mix(32.0, 64.0, level - 8.0);
+    if (level <= 10.0) return mix(64.0, 128.0, level - 9.0);
+    if (level <= 11.0) return mix(128.0, 256.0, level - 10.0);
+    if (level <= 12.0) return mix(256.0, 512.0, level - 11.0);
+    if (level <= 13.0) return mix(512.0, 1024.0, level - 12.0);
+    if (level <= 14.0) return mix(1024.0, 2048.0, level - 13.0);
+    return mix(2048.0, 4096.0, level - 14.0);
+}
+
+float waterDepthFromLadderCode(int code)
+{
+    // LIVETRACK21I authoritative 4-bit ultra-shallow ladder, metres:
+    // 0.00, 0.01, 0.05, 0.10, 0.15 ... 0.70 mm. Codes 2..15 are a
+    // regular 0.05-mm sequence, so decoding is arithmetic instead of a
+    // 16-entry lookup.
+    code = clamp(code, 0, 15);
+    if (code == 0) return 0.0;
+    if (code == 1) return 0.00001;
+    return float(code - 1) * 0.00005;
+}
+
+const float kStandingWaterMaxDepthM = 0.00070;
+
+float quantizeStandingWaterDepth(float depthM)
+{
+    // LIVETRACK21I: the exact 16-value ladder is the standing-water authority,
+    // not merely a capacity hint. Every final puddle depth is snapped back to
+    // the same codebook that the prebake writes.
+    depthM = clamp(depthM, 0.0, kStandingWaterMaxDepthM);
+    if (depthM < 0.000005) return 0.0;
+    if (depthM < 0.000030) return 0.00001;
+    int code = clamp(int(floor(depthM / 0.00005 + 0.5)) + 1, 2, 15);
+    return float(code - 1) * 0.00005;
+}
 
 float decodeGpuWaterDepth(float encoded)
 {
-    float level = clamp(encoded, 0.0, 1.0) * 15.0;
-    if (level <= 1.0) return level * 0.0001;
-    if (level <= 2.0) return mix(0.0001, 0.0005, level - 1.0);
-    if (level <= 3.0) return mix(0.0005, 0.0010, level - 2.0);
-    if (level <= 4.0) return mix(0.0010, 0.0020, level - 3.0);
-    if (level <= 5.0) return mix(0.0020, 0.0030, level - 4.0);
-    if (level <= 6.0) return mix(0.0030, 0.0040, level - 5.0);
-    if (level <= 7.0) return mix(0.0040, 0.0060, level - 6.0);
-    if (level <= 8.0) return mix(0.0060, 0.0080, level - 7.0);
-    if (level <= 9.0) return mix(0.0080, 0.0100, level - 8.0);
-    if (level <= 10.0) return mix(0.0100, 0.0130, level - 9.0);
-    if (level <= 11.0) return mix(0.0130, 0.0160, level - 10.0);
-    if (level <= 12.0) return mix(0.0160, 0.0200, level - 11.0);
-    if (level <= 13.0) return mix(0.0200, 0.0240, level - 12.0);
-    if (level <= 14.0) return mix(0.0240, 0.0280, level - 13.0);
-    return mix(0.0280, 0.0320, level - 14.0);
+    // The RGBA8 atlas stores the 4-bit code as exact multiples of 17/255.
+    // Hardware filtering remains enabled, but capacity is rounded back to a
+    // legal code before its physical meaning is used. The decoded capacity
+    // therefore always comes from the exact LIVETRACK21I ladder.
+    int code = int(round(clamp(encoded, 0.0, 1.0) * 15.0));
+    return waterDepthFromLadderCode(code);
+}
+
+vec2 decodeGpuFlowDirection(float encoded)
+{
+    // Constant lookup avoids doing sin/cos for every sample in the 3x3 water
+    // filter. Codes 1 and 15 intentionally meet at the -X wrap direction.
+    const vec2 directions[16] = vec2[16](
+        vec2(0.0, 0.0),
+        vec2(-1.00000000, 0.00000000),
+        vec2(-0.90096887, -0.43388374),
+        vec2(-0.62348980, -0.78183148),
+        vec2(-0.22252093, -0.97492791),
+        vec2( 0.22252093, -0.97492791),
+        vec2( 0.62348980, -0.78183148),
+        vec2( 0.90096887, -0.43388374),
+        vec2( 1.00000000,  0.00000000),
+        vec2( 0.90096887,  0.43388374),
+        vec2( 0.62348980,  0.78183148),
+        vec2( 0.22252093,  0.97492791),
+        vec2(-0.22252093,  0.97492791),
+        vec2(-0.62348980,  0.78183148),
+        vec2(-0.90096887,  0.43388374),
+        vec2(-1.00000000,  0.00000000));
+    int angleCode = int(round(clamp(encoded, 0.0, 1.0) * 15.0));
+    return directions[clamp(angleCode, 0, 15)];
 }
 
 GpuWaterDecoded decodeGpuWater(vec4 state)
 {
     GpuWaterDecoded decoded;
-    decoded.depthM = decodeGpuWaterDepth(state.r);
     decoded.dryLine = clamp(state.g, 0.0, 1.0);
-    ivec2 flowCode = ivec2(round(clamp(state.ba, 0.0, 1.0) * 15.0));
-    // B/A 0/0 is the just-resident initialization sentinel. 0/1 is a legacy
-    // invalid code that current Hydro initialization recovers rather than
-    // preserving. Neither should look like a full-speed (-1,-1) flow vector.
-    decoded.flow = (flowCode.x == 0 && flowCode.y <= 1)
-        ? vec2(0.0)
-        : clamp(state.ba * 2.0 - 1.0, vec2(-1.0), vec2(1.0));
+    decoded.runoffPotential = clamp(state.r, 0.0, 1.0);
+    decoded.runoffAreaM2 = decodeGpuRunoffAreaM2(state.r);
+
+    // B is the immutable mesh-prebaked STANDING-WATER DEPTH CEILING. The bake
+    // writes only the user's 16 legal depths. Runtime filling is deliberately
+    // solved in the SAME 0..0.70 mm domain; no hidden 28/32 mm legacy range is
+    // allowed to reinterpret the field.
+    float catchmentFill = mix(0.72, 1.22,
+        smoothstep(0.10, 0.78, decoded.runoffPotential));
+    float retainedHeadDriverM = clamp(
+        uPrebakedWaterExposureM * catchmentFill, 0.0, 0.0040);
+    float capacityM = decodeGpuWaterDepth(state.b);
+    // Encoding already rejects sub-0.005 mm mesh noise into code zero. Any
+    // non-zero baked code is therefore a genuine standing-water candidate.
+    decoded.basinStrength = step(0.000005, capacityM);
+
+    // Priority-flood capacity = spill elevation - local terrain. A common
+    // below-spill hydraulic head preserves a horizontal free surface. The head
+    // deficit now spans exactly the ladder's 0.70 mm physical range, so changing
+    // the ladder necessarily changes the simulated and rendered puddle depths.
+    float fillProgress = smoothstep(0.000050, 0.00350, retainedHeadDriverM);
+    float headDeficitM = kStandingWaterMaxDepthM
+        * (1.0 - pow(fillProgress, 0.72));
+    float equilibriumDepthM = max(capacityM - headDeficitM, 0.0);
+    decoded.depthM = min(equilibriumDepthM, capacityM)
+        * (1.0 - 0.72 * decoded.dryLine);
+
+    decoded.flowDirection = decodeGpuFlowDirection(state.a);
+    decoded.flowStrength = length(decoded.flowDirection) > 0.5 ? 1.0 : 0.0;
     return decoded;
+}
+
+GpuWaterDecoded weightedGpuWaterDecoded(
+    GpuWaterDecoded a, float wa,
+    GpuWaterDecoded b, float wb,
+    GpuWaterDecoded c, float wc,
+    GpuWaterDecoded d, float wd)
+{
+    float total = max(wa + wb + wc + wd, 1.0e-6);
+    GpuWaterDecoded outValue;
+    outValue.depthM = (a.depthM * wa + b.depthM * wb
+        + c.depthM * wc + d.depthM * wd) / total;
+    outValue.dryLine = (a.dryLine * wa + b.dryLine * wb
+        + c.dryLine * wc + d.dryLine * wd) / total;
+    outValue.basinStrength = (a.basinStrength * wa + b.basinStrength * wb
+        + c.basinStrength * wc + d.basinStrength * wd) / total;
+    outValue.runoffPotential = (a.runoffPotential * wa + b.runoffPotential * wb
+        + c.runoffPotential * wc + d.runoffPotential * wd) / total;
+    outValue.runoffAreaM2 = (a.runoffAreaM2 * wa + b.runoffAreaM2 * wb
+        + c.runoffAreaM2 * wc + d.runoffAreaM2 * wd) / total;
+    vec2 flow = a.flowDirection * wa + b.flowDirection * wb
+        + c.flowDirection * wc + d.flowDirection * wd;
+    float coherence = length(flow) / total;
+    outValue.flowStrength = clamp(coherence, 0.0, 1.0);
+    outValue.flowDirection = coherence > 1.0e-4 ? normalize(flow) : vec2(0.0);
+    return outValue;
 }
 
 bool gpuDynamicSurfaceTile(
@@ -771,35 +990,10 @@ ivec2 gpuDynamicSurfaceAtlasOrigin(uint slot)
         int(slot / uint(max(uGpuDynamicSurfaceAtlasColumns, 1))) * uGpuDynamicSurfaceTileResolution);
 }
 
-vec4 gpuWaterHardwareSample(
-    vec3 positionRelative,
-    out bool valid,
-    out ivec2 tileDelta,
-    out vec2 tileUv,
-    out uint slot)
-{
-    valid = false;
-    tileDelta = ivec2(0);
-    tileUv = vec2(0.0);
-    slot = 0u;
-    if (!uGpuDynamicSurfaceAuthorityActive
-        || !gpuDynamicSurfaceTile(positionRelative, tileDelta, tileUv, slot))
-    {
-        return vec4(0.0);
-    }
-
-    float resolution = float(max(uGpuDynamicSurfaceTileResolution, 1));
-    ivec2 origin = gpuDynamicSurfaceAtlasOrigin(slot);
-    vec2 atlasSize = vec2(textureSize(uGpuWaterAtlas, 0));
-    vec2 halfTexel = vec2(0.5) / atlasSize;
-    vec2 minUv = (vec2(origin) + vec2(0.5)) / atlasSize;
-    vec2 maxUv = (vec2(origin) + vec2(resolution - 0.5)) / atlasSize;
-    vec2 atlasUv = (vec2(origin) + tileUv * resolution) / atlasSize;
-    atlasUv = clamp(atlasUv, minUv, maxUv);
-    valid = true;
-    return texture(uGpuWaterAtlas, atlasUv);
-}
-
+// LIVETRACK18B GL_LINEAR experiment: use the existing near RGBA8 atlas and
+// its hardware linear sampler directly. No extra texture, channel or decoded
+// presentation buffer is introduced. The packed capacity/flow channels are
+// intentionally allowed to interpolate for this visual experiment.
 bool gpuWaterNearestState(vec3 positionRelative, out vec4 state)
 {
     state = vec4(0.0);
@@ -808,133 +1002,268 @@ bool gpuWaterNearestState(vec3 positionRelative, out vec4 state)
     uint slot = 0u;
     if (!gpuDynamicSurfaceTile(positionRelative, tileDelta, tileUv, slot))
         return false;
-    int resolution = max(uGpuDynamicSurfaceTileResolution, 1);
-    ivec2 localTexel = clamp(
-        ivec2(floor(tileUv * float(resolution))),
-        ivec2(0), ivec2(resolution - 1));
-    state = texelFetch(
-        uGpuWaterAtlas,
-        gpuDynamicSurfaceAtlasOrigin(slot) + localTexel,
-        0);
+
+    float resolution = float(max(uGpuDynamicSurfaceTileResolution, 1));
+    ivec2 origin = gpuDynamicSurfaceAtlasOrigin(slot);
+    vec2 atlasSize = vec2(textureSize(uGpuWaterAtlas, 0));
+    vec2 minUv = (vec2(origin) + vec2(0.5)) / atlasSize;
+    vec2 maxUv = (vec2(origin) + vec2(resolution - 0.5)) / atlasSize;
+    vec2 atlasUv = (vec2(origin) + tileUv * resolution) / atlasSize;
+    atlasUv = clamp(atlasUv, minUv, maxUv);
+    state = texture(uGpuWaterAtlas, atlasUv);
     return true;
 }
 
-vec4 gpuWaterWorldBilinear(vec3 positionRelative, out bool valid)
+bool gpuNearWaterDecoded(vec3 positionRelative, out GpuWaterDecoded decoded)
 {
-    valid = false;
-    ivec2 tileDelta = ivec2(0);
-    vec2 tileUv = vec2(0.0);
-    uint slot = 0u;
-    if (!gpuDynamicSurfaceTile(positionRelative, tileDelta, tileUv, slot))
-        return vec4(0.0);
+    vec4 centerState = vec4(0.0);
+    if (!gpuWaterNearestState(positionRelative, centerState))
+        return false;
+    GpuWaterDecoded center = decodeGpuWater(centerState);
 
+    // LIVETRACK21I performance: retain hardware GL_LINEAR filtering but reduce
+    // the old 3x3/9-state decode to a five-tap cross kernel. The old kernel made
+    // nine tile-indirection lookups plus nine atlas samples per near fragment.
+    // Center + N/S/E/W keeps the important low-frequency smoothing at nearly
+    // half that topology-sampling cost.
     float resolution = float(max(uGpuDynamicSurfaceTileResolution, 1));
-    float cellSizeM = 10.0 / resolution;
+    float texelSizeM = 10.0 / resolution;
+    float depthSum = center.depthM * 4.0;
+    float drySum = center.dryLine * 4.0;
+    float basinSum = center.basinStrength * 4.0;
+    float runoffSum = center.runoffPotential * 4.0;
+    float runoffAreaSum = center.runoffAreaM2 * 4.0;
+    vec2 flowSum = center.flowDirection * 4.0;
+    float weightSum = 4.0;
+    const vec2 offsets[4] = vec2[4](
+        vec2(-1.0, 0.0), vec2(1.0, 0.0),
+        vec2(0.0, -1.0), vec2(0.0, 1.0));
+    for (int i = 0; i < 4; ++i)
+    {
+        vec3 p = positionRelative;
+        p.xz += offsets[i] * texelSizeM;
+        vec4 sampleState = centerState;
+        GpuWaterDecoded sampleValue = center;
+        if (gpuWaterNearestState(p, sampleState))
+            sampleValue = decodeGpuWater(sampleState);
+        const float weight = 2.0;
+        depthSum += sampleValue.depthM * weight;
+        drySum += sampleValue.dryLine * weight;
+        basinSum += sampleValue.basinStrength * weight;
+        runoffSum += sampleValue.runoffPotential * weight;
+        runoffAreaSum += sampleValue.runoffAreaM2 * weight;
+        flowSum += sampleValue.flowDirection * weight;
+        weightSum += weight;
+    }
+    float inverseWeight = 1.0 / weightSum;
+    decoded.depthM = depthSum * inverseWeight;
+    decoded.dryLine = drySum * inverseWeight;
+    decoded.basinStrength = basinSum * inverseWeight;
+    decoded.runoffPotential = runoffSum * inverseWeight;
+    decoded.runoffAreaM2 = runoffAreaSum * inverseWeight;
+    float flowCoherence = length(flowSum) * inverseWeight;
+    decoded.flowStrength = clamp(flowCoherence, 0.0, 1.0);
+    decoded.flowDirection = flowCoherence > 1.0e-4
+        ? normalize(flowSum) : vec2(0.0);
+    return true;
+}
+
+int positiveModulo(int value, int divisor)
+{
+    int result = value % divisor;
+    return result < 0 ? result + divisor : result;
+}
+
+bool gpuFarWaterNearestState(vec3 positionRelative, out vec4 state)
+{
+    state = vec4(0.0);
+    if (!uGpuDynamicSurfaceAuthorityActive)
+        return false;
+
+    vec2 tilePosition = (positionRelative.xz - uGpuDynamicSurfaceCenterOriginRelativeXZ)
+        / 10.0;
+    ivec2 tileDelta = ivec2(floor(tilePosition));
+    vec2 tileUv = fract(tilePosition);
+    ivec2 worldTile = uGpuDynamicSurfaceCenterWorldTile + tileDelta;
+    int axis = max(uGpuFarAtlasTilesPerAxis, 1);
+    ivec2 slotCoord = ivec2(
+        positiveModulo(worldTile.x, axis),
+        positiveModulo(worldTile.y, axis));
+    ivec2 tag = texelFetch(uGpuFarTileTags, slotCoord, 0).rg;
+    if (any(notEqual(tag, worldTile)))
+        return false;
+
+    int resolution = max(uGpuFarTileResolution, 1);
+    ivec2 localTexel = clamp(
+        ivec2(floor(tileUv * float(resolution))),
+        ivec2(0), ivec2(resolution - 1));
+    vec3 rcf = texelFetch(
+        uGpuFarWaterAtlas,
+        slotCoord * resolution + localTexel,
+        0).rgb;
+    // Far RGB mirrors near logical channels without dry-line:
+    // R=runoff accumulation, G=capacity, B=flow angle.
+    state = vec4(rcf.r, 0.0, rcf.g, rcf.b);
+    return true;
+}
+
+bool gpuFarWaterDecoded(vec3 positionRelative, out GpuWaterDecoded decoded)
+{
+    if (!uGpuDynamicSurfaceAuthorityActive)
+        return false;
+
+    vec2 tilePosition = (positionRelative.xz - uGpuDynamicSurfaceCenterOriginRelativeXZ)
+        / 10.0;
+    ivec2 tileDelta = ivec2(floor(tilePosition));
+    vec2 tileUv = fract(tilePosition);
+    float resolution = float(max(uGpuFarTileResolution, 1));
+    float texelSizeM = 10.0 / resolution;
     vec2 texelCoordinate = tileUv * resolution - vec2(0.5);
     ivec2 base = ivec2(floor(texelCoordinate));
     vec2 f = fract(texelCoordinate);
     vec2 tileOriginRelative = uGpuDynamicSurfaceCenterOriginRelativeXZ
         + vec2(tileDelta) * 10.0;
-    vec2 sampleXZ = tileOriginRelative + (vec2(base) + vec2(0.5)) * cellSizeM;
+    vec2 sampleXZ = tileOriginRelative + (vec2(base) + vec2(0.5)) * texelSizeM;
 
     vec4 s00 = vec4(0.0), s10 = vec4(0.0), s01 = vec4(0.0), s11 = vec4(0.0);
     vec3 p = positionRelative;
     p.xz = sampleXZ;
-    if (!gpuWaterNearestState(p, s00))
-        return vec4(0.0);
-    p.xz = sampleXZ + vec2(cellSizeM, 0.0);
-    if (!gpuWaterNearestState(p, s10)) s10 = s00;
-    p.xz = sampleXZ + vec2(0.0, cellSizeM);
-    if (!gpuWaterNearestState(p, s01)) s01 = s00;
-    p.xz = sampleXZ + vec2(cellSizeM);
-    if (!gpuWaterNearestState(p, s11)) s11 = mix(s10, s01, 0.5);
+    if (!gpuFarWaterNearestState(p, s00))
+        return false;
+    p.xz = sampleXZ + vec2(texelSizeM, 0.0);
+    if (!gpuFarWaterNearestState(p, s10)) s10 = s00;
+    p.xz = sampleXZ + vec2(0.0, texelSizeM);
+    if (!gpuFarWaterNearestState(p, s01)) s01 = s00;
+    p.xz = sampleXZ + vec2(texelSizeM);
+    if (!gpuFarWaterNearestState(p, s11)) s11 = s10;
 
-    valid = true;
-    return mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
+    // Decoded bilinear filtering: interpolate physical water quantities and
+    // circular flow vectors, never packed nibble/angle codes.
+    GpuWaterDecoded d00 = decodeGpuWater(s00);
+    GpuWaterDecoded d10 = decodeGpuWater(s10);
+    GpuWaterDecoded d01 = decodeGpuWater(s01);
+    GpuWaterDecoded d11 = decodeGpuWater(s11);
+    decoded = weightedGpuWaterDecoded(
+        d00, (1.0 - f.x) * (1.0 - f.y),
+        d10, f.x * (1.0 - f.y),
+        d01, (1.0 - f.x) * f.y,
+        d11, f.x * f.y);
+    decoded.dryLine = 0.0;
+    return true;
 }
 
-vec4 gpuWaterFilteredSingleSample(vec3 positionRelative, out bool valid)
+bool gpuWaterFiltered(
+    vec3 positionRelative,
+    out GpuWaterDecoded combined,
+    out float lodDetail)
 {
-    valid = false;
-    if (!uGpuDynamicSurfaceAuthorityActive)
-        return vec4(0.0);
-
-    ivec2 tileDelta = ivec2(0);
-    vec2 tileUv = vec2(0.0);
-    uint slot = 0u;
-    bool hardwareValid = false;
-    vec4 filtered = gpuWaterHardwareSample(
-        positionRelative, hardwareValid, tileDelta, tileUv, slot);
-    if (!hardwareValid)
-        return vec4(0.0);
-
-    // Fixed-function GL_LINEAR handles the interior. Inside a one-texel seam
-    // band, switch to logical-world bilinear sampling so a 10m tile edge never
-    // samples the physically adjacent atlas slot.
-    float resolution = float(max(uGpuDynamicSurfaceTileResolution, 1));
-    vec4 edgeCells = vec4(tileUv.x, 1.0 - tileUv.x, tileUv.y, 1.0 - tileUv.y)
-        * resolution;
-    float nearestEdgeCells = min(min(edgeCells.x, edgeCells.y), min(edgeCells.z, edgeCells.w));
-    if (nearestEdgeCells < 1.25)
-    {
-        bool logicalValid = false;
-        vec4 logical = gpuWaterWorldBilinear(positionRelative, logicalValid);
-        if (logicalValid)
-            filtered = mix(filtered, logical, 1.0 - smoothstep(0.25, 1.25, nearestEdgeCells));
-    }
-
-    valid = true;
-    return filtered;
-}
-
-vec4 gpuWaterFiltered(vec3 positionRelative, out bool valid, out float lodDetail)
-{
-    valid = false;
     lodDetail = 0.0;
     if (!uGpuDynamicSurfaceAuthorityActive)
-        return vec4(0.0);
+        return false;
 
-    float resolution = float(max(uGpuDynamicSurfaceTileResolution, 1));
-    float texelSizeM = 10.0 / resolution;
-    vec2 blurHalfOffsetM = vec2(0.5 * texelSizeM);
-
-    bool centerValid = false;
-    vec4 center = gpuWaterFilteredSingleSample(positionRelative, centerValid);
-    if (!centerValid)
-        return vec4(0.0);
-
-    vec3 p00 = positionRelative;
-    vec3 p10 = positionRelative;
-    vec3 p01 = positionRelative;
-    vec3 p11 = positionRelative;
-    p00.xz += vec2(-blurHalfOffsetM.x, -blurHalfOffsetM.y);
-    p10.xz += vec2( blurHalfOffsetM.x, -blurHalfOffsetM.y);
-    p01.xz += vec2(-blurHalfOffsetM.x,  blurHalfOffsetM.y);
-    p11.xz += vec2( blurHalfOffsetM.x,  blurHalfOffsetM.y);
-
-    bool s00Valid = false;
-    bool s10Valid = false;
-    bool s01Valid = false;
-    bool s11Valid = false;
-    vec4 s00 = gpuWaterFilteredSingleSample(p00, s00Valid);
-    vec4 s10 = gpuWaterFilteredSingleSample(p10, s10Valid);
-    vec4 s01 = gpuWaterFilteredSingleSample(p01, s01Valid);
-    vec4 s11 = gpuWaterFilteredSingleSample(p11, s11Valid);
-    if (!s00Valid) s00 = center;
-    if (!s10Valid) s10 = center;
-    if (!s01Valid) s01 = center;
-    if (!s11Valid) s11 = center;
-
-    // Preserve the known-good Blur3x3/FadeFix presentation across the complete
-    // 100m authority disk. Four bilinear corner taps approximate a compact
-    // Gaussian kernel without the cost of a naive nine-tap fragment blur.
-    vec4 filtered = 0.25 * (s00 + s10 + s01 + s11);
-
-    GpuWaterDecoded decoded = decodeGpuWater(filtered);
     float distanceM = length(positionRelative.xz);
-    lodDetail = 1.0 - smoothstep(0.0, 100.0, distanceM);
-    valid = true;
-    return vec4(decoded.depthM, decoded.dryLine, decoded.flow);
+    if (distanceM > 500.0)
+        return false;
+
+    GpuWaterDecoded nearDecoded;
+    GpuWaterDecoded farDecoded;
+    bool nearValid = false;
+    bool farValid = false;
+
+    // LIVETRACK21I performance: do not evaluate both topology LODs for every
+    // fragment. The two fields are needed simultaneously only in the 85..100m
+    // transition ring. This removes the far four-tap path from almost every
+    // near fragment and removes the expensive near 3x3 path from every far
+    // fragment. Missing-cache fallbacks still preserve continuity.
+    if (distanceM < 85.0)
+    {
+        nearValid = gpuNearWaterDecoded(positionRelative, nearDecoded);
+        if (!nearValid)
+            farValid = gpuFarWaterDecoded(positionRelative, farDecoded);
+    }
+    else if (distanceM > 100.0)
+    {
+        farValid = gpuFarWaterDecoded(positionRelative, farDecoded);
+        if (!farValid && distanceM <= 105.0)
+            nearValid = gpuNearWaterDecoded(positionRelative, nearDecoded);
+    }
+    else
+    {
+        nearValid = gpuNearWaterDecoded(positionRelative, nearDecoded);
+        farValid = gpuFarWaterDecoded(positionRelative, farDecoded);
+    }
+
+    if (!nearValid && !farValid)
+        return false;
+
+    combined = nearValid ? nearDecoded : farDecoded;
+    if (nearValid && farValid)
+    {
+        float nearWeight = 1.0 - smoothstep(85.0, 100.0, distanceM);
+        float farWeight = 1.0 - nearWeight;
+        combined.depthM = farDecoded.depthM * farWeight
+            + nearDecoded.depthM * nearWeight;
+        combined.dryLine = farDecoded.dryLine * farWeight
+            + nearDecoded.dryLine * nearWeight;
+        combined.basinStrength = farDecoded.basinStrength * farWeight
+            + nearDecoded.basinStrength * nearWeight;
+        combined.runoffPotential = farDecoded.runoffPotential * farWeight
+            + nearDecoded.runoffPotential * nearWeight;
+        combined.runoffAreaM2 = farDecoded.runoffAreaM2 * farWeight
+            + nearDecoded.runoffAreaM2 * nearWeight;
+        vec2 flow = farDecoded.flowDirection * farWeight
+            + nearDecoded.flowDirection * nearWeight;
+        float coherence = length(flow);
+        combined.flowStrength = clamp(coherence, 0.0, 1.0);
+        combined.flowDirection = coherence > 1.0e-4
+            ? normalize(flow) : vec2(0.0);
+    }
+
+    // Exactly one standing-depth quantisation per fragment. The bake and every
+    // final rendered standing-water result therefore share the same 16 values,
+    // without the three redundant branch-heavy snaps used by LIVETRACK21G.
+    combined.depthM = quantizeStandingWaterDepth(combined.depthM);
+    lodDetail = 1.0 - smoothstep(450.0, 500.0, distanceM);
+    return true;
+}
+
+float kinematicRunoffDepthM(GpuWaterDecoded state)
+{
+    // LIVETRACK21 moving-water solve. The MFD bake supplies contributing area
+    // and downhill direction. Runtime rain intensity converts that catchment to
+    // discharge, then a compact Manning-style kinematic-wave relation estimates
+    // the flowing sheet/channel depth. No circular rain splats and no 20-million
+    // cell CFD pass are required.
+    if (state.runoffAreaM2 <= 0.25 || state.flowStrength <= 0.035)
+        return 0.0;
+
+    // uRainRateMmPerHour is the live runoff driver: it attacks immediately with
+    // rainfall and is allowed to decay for tens of seconds after the shower by
+    // the CPU-side scalar state. It is deliberately independent of the much
+    // longer-lived material wetness film.
+    float effectiveRainRateMmPerHour = max(uRainRateMmPerHour, 0.0);
+    if (effectiveRainRateMmPerHour <= 0.01)
+        return 0.0;
+
+    float rainfallMps = effectiveRainRateMmPerHour * (0.001 / 3600.0);
+    float dischargeM3ps = rainfallMps * max(state.runoffAreaM2, 0.0);
+    // Broad catchments spread into wider films/gutters instead of becoming an
+    // infinitely deep one-texel river.
+    float effectiveWidthM = clamp(
+        0.28 + 0.080 * sqrt(max(state.runoffAreaM2, 0.0)), 0.28, 2.40);
+    float unitDischargeM2ps = dischargeM3ps / effectiveWidthM;
+    const float manningN = 0.014;
+    // The bake currently stores direction, not slope magnitude. Use a stable
+    // road/runoff slope surrogate; coherent flow gets the faster end of it.
+    float slope = mix(0.006, 0.024, clamp(state.flowStrength, 0.0, 1.0));
+    float depthM = pow(max(
+        unitDischargeM2ps * manningN / sqrt(max(slope, 0.0005)), 0.0), 0.60);
+    // LIVETRACK21K: runoff should establish soon after a coherent wet film
+    // exists instead of waiting for most of a millimetre of accumulated exposure.
+    // This changes onset timing only; the Manning discharge/depth ceiling is unchanged.
+    float connected = smoothstep(0.000010, 0.000180, uRainWettingExposureM);
+    depthM *= connected * 0.65 * (1.0 - 0.64 * state.dryLine);
+    return clamp(depthM, 0.0, 0.0030);
 }
 
 float gpuSnowDepth(vec3 positionRelative)
@@ -968,189 +1297,96 @@ float gpuMudDepth(vec3 positionRelative)
     return float(q) * 0.001;
 }
 
-vec4 dynamicSurfaceSampleHydro(
-    vec3 positionRelative,
-    out bool valid,
-    out float supportGlobalY)
+
+
+float hash12(vec2 p)
 {
-    valid = false;
-    supportGlobalY = positionRelative.y + uDynamicSurfaceCameraGlobalY;
-    if (!uDynamicSurfaceActive || uDynamicSurfacePageWorldSizeM <= 0.001)
-        return vec4(0.0);
-
-    vec2 tablePosition =
-        (positionRelative.xz - uDynamicSurfaceIndirectionOriginRelativeXZ)
-        / uDynamicSurfacePageWorldSizeM;
-    ivec2 tableCell = ivec2(floor(tablePosition));
-    if (tableCell.x < 0 || tableCell.y < 0
-        || tableCell.x >= uDynamicSurfaceIndirectionResolution
-        || tableCell.y >= uDynamicSurfaceIndirectionResolution)
-    {
-        return vec4(0.0);
-    }
-
-    // LIVETRACK03: one 100m X/Z tile = one Hydro page, exactly 256x256 RGBA4.
-    // There is no vertical Hydro-sheet lookup and no secondary water raster.
-    int packedSlot = texelFetch(uDynamicSurfacePageIndirection, tableCell, 0).r;
-    if (packedSlot <= 0)
-        return vec4(0.0);
-    int slot = packedSlot - 1;
-    vec2 pageUv = fract(tablePosition);
-    vec4 hydro = textureLod(
-        uDynamicSurfaceHydroPages,
-        vec3(pageUv, float(slot)),
-        0.0);
-    if (any(isnan(hydro)) || any(isinf(hydro)))
-        return vec4(0.0);
-
-    // Decode the filtered 4-bit water code through the same non-linear ladder
-    // used by the CPU authority. GL_LINEAR interpolates the normalized code;
-    // this piecewise decode turns that back into a continuous physical depth.
-    float level = clamp(hydro.r, 0.0, 1.0) * 15.0;
-    float depthM = 0.0;
-    if (level <= 1.0)
-        depthM = level * 0.0001;
-    else if (level <= 2.0)
-        depthM = mix(0.0001, 0.0005, level - 1.0);
-    else if (level <= 3.0)
-        depthM = mix(0.0005, 0.0010, level - 2.0);
-    else if (level <= 4.0)
-        depthM = mix(0.0010, 0.0020, level - 3.0);
-    else if (level <= 5.0)
-        depthM = mix(0.0020, 0.0030, level - 4.0);
-    else if (level <= 6.0)
-        depthM = mix(0.0030, 0.0040, level - 5.0);
-    else if (level <= 7.0)
-        depthM = mix(0.0040, 0.0060, level - 6.0);
-    else if (level <= 8.0)
-        depthM = mix(0.0060, 0.0080, level - 7.0);
-    else if (level <= 9.0)
-        depthM = mix(0.0080, 0.0100, level - 8.0);
-    else if (level <= 10.0)
-        depthM = mix(0.0100, 0.0130, level - 9.0);
-    else if (level <= 11.0)
-        depthM = mix(0.0130, 0.0160, level - 10.0);
-    else if (level <= 12.0)
-        depthM = mix(0.0160, 0.0200, level - 11.0);
-    else if (level <= 13.0)
-        depthM = mix(0.0200, 0.0240, level - 12.0);
-    else if (level <= 14.0)
-        depthM = mix(0.0240, 0.0280, level - 13.0);
-    else
-        depthM = mix(0.0280, 0.0320, level - 14.0);
-
-    float flowCodeX = clamp(hydro.b, 0.0, 1.0) * 15.0;
-    float flowCodeZ = clamp(hydro.a, 0.0, 1.0) * 15.0;
-    float flowX = flowCodeX < 7.0
-        ? -(7.0 - flowCodeX) / 7.0
-        : (flowCodeX > 8.0 ? (flowCodeX - 8.0) / 7.0 : 0.0);
-    float flowZ = flowCodeZ < 7.0
-        ? -(7.0 - flowCodeZ) / 7.0
-        : (flowCodeZ > 8.0 ? (flowCodeZ - 8.0) / 7.0 : 0.0);
-
-    valid = true;
-    return vec4(
-        clamp(depthM, 0.0, 0.032),
-        clamp(hydro.g, 0.0, 1.0),
-        clamp(flowX, -1.0, 1.0),
-        clamp(flowZ, -1.0, 1.0));
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
 }
 
-vec4 dynamicSurfaceHeadSample(vec3 positionRelative, out bool valid)
+vec2 hash22(vec2 p)
 {
-    float supportGlobalY = 0.0;
-    return dynamicSurfaceSampleHydro(positionRelative, valid, supportGlobalY);
+    float n = hash12(p);
+    float m = hash12(p + vec2(19.19, 73.73));
+    return vec2(n, m);
 }
 
-vec4 dynamicSurfaceWaterState(vec3 positionRelative)
+vec3 rainImpactRippleNormal(
+    vec2 stableWorldXZ,
+    vec2 flowDir,
+    float rainIntensity,
+    float standingDepthM,
+    float runoffDepthM,
+    float standing,
+    float runoff)
 {
-    bool centerValid = false;
-    vec4 center = dynamicSurfaceHeadSample(positionRelative, centerValid);
-    if (!centerValid)
-        return vec4(0.0, 0.0, 0.0, 0.0);
+    // Procedural rain ripples are presentation-only and are intentionally
+    // concentrated in actual free water. Mere wet film receives little or no
+    // circular ripple response; deeper standing water gets the strongest rings.
+    float puddleGate = smoothstep(0.00001, 0.00008, standingDepthM) * standing;
+    float deepPuddle = smoothstep(0.00010, 0.00035, standingDepthM) * standing;
+    float runoffGate = smoothstep(0.00005, 0.00030, runoffDepthM) * runoff * 0.10;
+    float rippleMask = clamp(puddleGate + runoffGate, 0.0, 1.0)
+        * smoothstep(0.02, 0.25, rainIntensity);
+    if (rippleMask <= 0.0001)
+        return vec3(0.0, 1.0, 0.0);
 
-    // GL_LINEAR handles the 256x256 intra-page field. This tiny edge bridge is
-    // only for continuity across adjacent 100m array layers.
-    vec2 tablePosition =
-        (positionRelative.xz - uDynamicSurfaceIndirectionOriginRelativeXZ)
-        / uDynamicSurfacePageWorldSizeM;
-    vec2 tileUv = fract(tablePosition);
-    float stateResolution = max(
-        float(textureSize(uDynamicSurfaceHydroPages, 0).x),
-        1.0);
-    float halfTexelUv = 0.5 / stateResolution;
-    float texelWorldM = uDynamicSurfacePageWorldSizeM / stateResolution;
+    // Around 30 cm cells gives a dense but not overwhelming rainfall pattern.
+    const float rippleCellPerM = 3.2;
+    vec2 p = stableWorldXZ * rippleCellPerM;
+    ivec2 baseCell = ivec2(floor(p));
+    vec2 grad = vec2(0.0);
+    float activity = 0.0;
 
-    float blendX = 0.0;
-    float directionX = 0.0;
-    if (tileUv.x < halfTexelUv)
+    for (int oy = 0; oy <= 1; ++oy)
     {
-        blendX = (halfTexelUv - tileUv.x) / (2.0 * halfTexelUv);
-        directionX = -1.0;
-    }
-    else if (tileUv.x > 1.0 - halfTexelUv)
-    {
-        blendX = (tileUv.x - (1.0 - halfTexelUv)) / (2.0 * halfTexelUv);
-        directionX = 1.0;
+        for (int ox = 0; ox <= 1; ++ox)
+        {
+            ivec2 cell = baseCell + ivec2(ox, oy);
+            vec2 cellf = vec2(cell);
+            vec2 jitter = hash22(cellf);
+            vec2 center = cellf + jitter;
+            vec2 toPoint = p - center;
+            float dist = length(toPoint);
+            if (dist > 1.25)
+                continue;
+
+            float seed = hash12(cellf + vec2(7.17, 3.41));
+            float life = fract(uSurfacePresentationTime
+                * mix(0.70, 1.30, seed)
+                * mix(0.85, 1.35, rainIntensity)
+                + seed);
+            float radius = mix(0.05, 0.95, life);
+            float width = mix(0.070, 0.030, life);
+            float ring = max(1.0 - abs(dist - radius) / max(width, 1.0e-4), 0.0);
+            ring *= (1.0 - life);
+            if (ring <= 0.0 || dist <= 1.0e-4)
+                continue;
+
+            // Advect a small part of the ring response along the flow so puddle
+            // edges/readout remain circular while moving water feels slightly
+            // stretched/broken by the current.
+            vec2 dir = toPoint / dist;
+            vec2 advectedDir = normalize(mix(dir, flowDir, runoff * 0.18));
+            float slopeSign = clamp((radius - dist) / max(width, 1.0e-4), -1.0, 1.0);
+            float amplitude = mix(0.070, 0.125, deepPuddle) * rippleMask;
+            grad += advectedDir * (slopeSign * ring * amplitude);
+            activity += ring;
+        }
     }
 
-    float blendZ = 0.0;
-    float directionZ = 0.0;
-    if (tileUv.y < halfTexelUv)
-    {
-        blendZ = (halfTexelUv - tileUv.y) / (2.0 * halfTexelUv);
-        directionZ = -1.0;
-    }
-    else if (tileUv.y > 1.0 - halfTexelUv)
-    {
-        blendZ = (tileUv.y - (1.0 - halfTexelUv)) / (2.0 * halfTexelUv);
-        directionZ = 1.0;
-    }
+    if (activity <= 1.0e-5)
+        return vec3(0.0, 1.0, 0.0);
 
-    vec4 xNeighbour = center;
-    vec4 zNeighbour = center;
-    vec4 diagonalNeighbour = center;
-    bool neighbourValid = false;
-    if (blendX > 0.0)
-    {
-        vec3 samplePosition = positionRelative;
-        samplePosition.x += directionX * (0.5 * texelWorldM);
-        xNeighbour = dynamicSurfaceHeadSample(samplePosition, neighbourValid);
-        if (!neighbourValid)
-            xNeighbour = center;
-    }
-    if (blendZ > 0.0)
-    {
-        vec3 samplePosition = positionRelative;
-        samplePosition.z += directionZ * (0.5 * texelWorldM);
-        zNeighbour = dynamicSurfaceHeadSample(samplePosition, neighbourValid);
-        if (!neighbourValid)
-            zNeighbour = center;
-    }
-    if (blendX > 0.0 && blendZ > 0.0)
-    {
-        vec3 samplePosition = positionRelative;
-        samplePosition.x += directionX * (0.5 * texelWorldM);
-        samplePosition.z += directionZ * (0.5 * texelWorldM);
-        diagonalNeighbour = dynamicSurfaceHeadSample(samplePosition, neighbourValid);
-        if (!neighbourValid)
-            diagonalNeighbour = mix(xNeighbour, zNeighbour, 0.5);
-    }
-    else if (blendX > 0.0)
-        diagonalNeighbour = xNeighbour;
-    else if (blendZ > 0.0)
-        diagonalNeighbour = zNeighbour;
-
-    vec4 row0 = mix(center, xNeighbour, blendX);
-    vec4 row1 = mix(zNeighbour, diagonalNeighbour, blendX);
-    return mix(row0, row1, blendZ);
+    return normalize(vec3(-grad.x, 1.0, -grad.y));
 }
-
 float dynamicSurfacePresentationDepth(vec3 positionRelative, float physicalDepthM)
 {
-    // LIVETRACK03 deliberately has no second Hydro resolution/shoreline authority.
-    // The 256x256 RGBA4 water texture itself owns both simulation and water
-    // presentation; ordinary material wetness remains a separate PBR response.
+    // LIVETRACK15 keeps one physical depth interpretation across both topology LODs.
+    // The near/far prebaked atlases only change spatial resolution; ordinary
+    // material wetness remains a separate PBR response.
     // GLSL permits unused parameters; do not use C/C++ `(void)x` casts here.
     return max(physicalDepthM, 0.0);
 }
@@ -1164,10 +1400,14 @@ vec3 applyDynamicSurfaceWater(
     float puddleDepthM,
     float presentationDepthM,
     float freeSurfaceMask,
+    float runoffStrength,
+    vec2 flowDirection,
     float waterSurfaceHeightRelativeY,
     float dynamicSurfaceLodDetail)
 {
-    if (filmWetness <= 0.0001 && puddleDepthM <= 0.000008)
+    if (filmWetness <= 0.0001
+        && puddleDepthM <= 0.000008
+        && presentationDepthM <= 0.000008)
         return litColor;
 
     vec2 stableWorldXZ = vWorldPosition.xz + uSurfacePatternCameraModuloXZ;
@@ -1176,21 +1416,25 @@ vec3 applyDynamicSurfaceWater(
     float stableHeadReference = waterSurfaceHeightRelativeY * 0.0;
     stableWorldXZ += vec2(stableHeadReference);
 
-    // DSURF04F3: distinguish the continuous rain-wet material film from actual
-    // free-surface puddle water. The authoritative GPU depth remains the sole
-    // physical water state; this only defines the optical regime. Treating the
-    // full millimetric rain layer as a free surface made every receiver look like
-    // a single translucent plastic sheet.
+    // Thin weather film and free-surface puddle optics are intentionally
+    // separate: the former darkens/smooths material, the latter gets water
+    // reflection/refraction behavior only where prebaked basin depth exists.
     float film = clamp(filmWetness, 0.0, 1.0);
-    // presentationDepthM has already had the continuous film baseline and the
-    // 1.5mm puddle-excess threshold removed at the authority sample site.
-    float freeSurfaceDepthM = max(presentationDepthM, 0.0);
-    // DSURF04F5: depth alone must not turn fast runoff into a plastic sheet.
-    // The authority sample supplies a mask that combines excess depth and
-    // WaterState velocity, so only locally retained/slower water receives the
-    // free-surface optical branch.
+    // LIVETRACK21I keeps the two water regimes separate. The baked ladder owns
+    // standing depth; the independent kinematic solver owns runoff depth. The
+    // old max(standing,runoff) optical depth hid ladder changes whenever runoff
+    // happened to be deeper.
+    float freeSurfaceDepthM = max(puddleDepthM, 0.0);
+    float runoffDepthM = max(presentationDepthM, 0.0);
+    // Downhill-flow direction mildly reduces the retained-water optical mask,
+    // keeping sloped runoff less mirror-like than a static basin center.
     float standing = clamp(freeSurfaceMask, 0.0, 1.0);
-    float deepPool = smoothstep(0.010, 0.032, freeSurfaceDepthM) * standing;
+    float runoff = clamp(runoffStrength, 0.0, 1.0);
+    vec2 flowDir = length(flowDirection) > 0.0
+        ? normalize(flowDirection)
+        : vec2(0.0, 1.0);
+    float deepPool = smoothstep(0.00030, kStandingWaterMaxDepthM,
+        freeSurfaceDepthM) * standing;
 
     // Wet porous material darkens appreciably because liquid fills the air gaps
     // that normally scatter light. This is the ordinary rainy-road response and
@@ -1202,29 +1446,94 @@ vec3 applyDynamicSurfaceWater(
     vec3 wetSubstrate = litColor * mix(1.0, wetDarkening, film);
     vec3 filmColor = mix(litColor, wetSubstrate, film * 0.88);
 
-    // The common case is rain film with no excess free-surface depth. PBR
-    // roughness has already been adjusted before lighting, so stop here rather
-    // than manufacturing a second reflective layer over the whole track.
-    if (standing <= 0.001)
+    // Microscopic rain film is allowed to become optically visible from 0.001mm,
+    // while full free-surface behavior is still weighted by resolved basin strength.
+    // This keeps the early wetting phase readable without inventing a horizontal
+    // puddle plane on every ordinary sloped receiver.
+    // Even before a resolved puddle exists, a connected rain film should be
+    // able to show a very thin flowing sheen on roads and a tiny splash/ripple
+    // response to the falling rain.
+    // LIVETRACK18: runoff is intentionally patchy rather than a uniform glass
+    // sheet. Stretch the world-locked breakup field along the prebaked flow
+    // direction so low wet lanes read as irregular runoff ribbons/gutters.
+    vec2 crossFlow = vec2(-flowDir.y, flowDir.x);
+    float alongFlowM = dot(stableWorldXZ, flowDir);
+    float acrossFlowM = dot(stableWorldXZ, crossFlow);
+    float runoffPatch = 1.0;
+    if (runoff > 0.001)
+    {
+        // One breakup fetch is sufficient here; the former two-sample blend was
+        // paid by nearly every rainy-road fragment before the early-out.
+        float patchA = texture(
+            uSurfaceWetnessBreakupMask,
+            vec2(alongFlowM * 0.016, acrossFlowM * 0.082)).r;
+        runoffPatch = mix(0.18, 1.0, smoothstep(0.28, 0.76, patchA));
+    }
+    float runoffDepthMask = runoff
+        * smoothstep(0.000005, 0.00060, runoffDepthM);
+    float runoffSheet = runoff * max(film, 0.12) * runoffPatch
+        * (1.0 - standing) * smoothstep(0.25, 0.90, film);
+    // Kinematic runoff is now a real water-depth regime, not a faint cosmetic
+    // sheen. Keep it less mirror-like than ponded water, but strong enough for
+    // gutter streams and broad downhill sheets to be unmistakable.
+    float opticalWaterMask = max(
+        standing,
+        max(runoffSheet * 0.18, runoffDepthMask * 0.34));
+    if (opticalWaterMask <= 0.001)
         return filmColor;
 
-    // DSURF04F7: the centimetre-scale WaterState already owns the spatial
-    // shape of the water. Do not stamp a small set of periodic sine waves over
-    // every wet receiver: those waves repeated at fixed sub-metre wavelengths
-    // and became visible as the same white/silver motif copied across roads and
-    // hillsides. Pooled water only relaxes toward gravity-up here. Future rain
-    // impacts, if reintroduced, must come from non-periodic event/state data.
     float upward = clamp(shadingNormal.y, 0.0, 1.0);
-    float flattening = standing * smoothstep(0.20, 0.85, upward)
-        * mix(0.38, 0.86, deepPool);
+    // A retained puddle flattens toward a horizontal free surface. Moving runoff
+    // remains attached to the road slope and receives only a tiny smoothing term.
+    float flattening = standing * smoothstep(0.15, 0.88, upward)
+        * mix(0.26, 0.90, deepPool)
+        + runoffDepthMask * 0.07 * upward;
     vec3 waterNormal = normalize(mix(
         shadingNormal,
         vec3(0.0, 1.0, 0.0),
         flattening));
-    float distanceDetail = (1.0 - smoothstep(95.0, 290.0, length(vWorldPosition.xz)))
+
+    // LIVETRACK21J: keep the subtle directional flow sheen, but add actual
+    // rain-impact ripple rings mainly in real standing water. This is a
+    // presentation-only effect; it does not alter the hydrology solver.
+    // Begin optical impact ripples shortly after rain creates a coherent film;
+    // standing-depth gating below still prevents circles on merely damp asphalt.
+    float rippleRain = smoothstep(0.000005, 0.000250, uRainWettingExposureM);
+    float breakupScale = mix(0.035, 0.075, 0.5 + 0.5 * runoff);
+    vec2 breakupUv = stableWorldXZ * breakupScale
+        - flowDir * (0.021 * uSurfacePresentationTime);
+    const vec2 rippleStep = vec2(0.0105, 0.0);
+    float a0 = texture(uSurfaceWetnessBreakupMask, breakupUv).r;
+    float ax = texture(uSurfaceWetnessBreakupMask, breakupUv + rippleStep.xy).r;
+    float az = texture(uSurfaceWetnessBreakupMask, breakupUv + rippleStep.yx).r;
+    vec2 rippleGrad = vec2(ax - a0, az - a0);
+    vec2 flowRipple = flowDir * dot(rippleGrad, flowDir) * (0.26 + 0.18 * runoff);
+    vec3 flowRippleNormal = normalize(vec3(
+        -(rippleGrad.x * 1.30 + flowRipple.x),
+        1.0,
+        -(rippleGrad.y * 1.30 + flowRipple.y)));
+    float flowRippleMask = rippleRain * (0.030 + 0.055 * runoff + 0.015 * standing);
+    waterNormal = normalize(mix(waterNormal, flowRippleNormal, flowRippleMask));
+
+    vec3 impactRippleNormal = rainImpactRippleNormal(
+        stableWorldXZ,
+        flowDir,
+        rippleRain,
+        freeSurfaceDepthM,
+        runoffDepthM,
+        standing,
+        runoff);
+    float puddleRippleMask = rippleRain * clamp(
+        smoothstep(0.00001, 0.00008, freeSurfaceDepthM) * (0.30 + 0.70 * standing)
+        + smoothstep(0.00005, 0.00030, runoffDepthM) * runoff * 0.06,
+        0.0,
+        1.0);
+    waterNormal = normalize(mix(waterNormal, impactRippleNormal, puddleRippleMask));
+    float distanceDetail = (1.0 - smoothstep(180.0, 500.0, length(vWorldPosition.xz)))
         * clamp(dynamicSurfaceLodDetail, 0.0, 1.0);
 
     float ndv = clamp(dot(waterNormal, viewDirection), 0.0, 1.0);
+    float deepNight = 1.0 - smoothstep(-0.10, 0.04, uSunDirection.y);
     float fresnelFull = 0.0204 + 0.9796 * pow(1.0 - ndv, 5.0);
     float fresnel = mix(0.0204, fresnelFull, distanceDetail);
 
@@ -1232,14 +1541,18 @@ vec3 applyDynamicSurfaceWater(
     if (uHasEnvironmentMap)
     {
         vec3 reflectionDirection = reflect(-viewDirection, waterNormal);
-        float lod = mix(
-            min(2.4, uEnvironmentMaxLod),
-            0.16,
-            standing);
-        reflected = textureLod(
-            uEnvironmentMap,
-            reflectionDirection,
-            lod).rgb;
+        float lod = mix(min(2.2, uEnvironmentMaxLod), 0.03, opticalWaterMask);
+        reflected = textureLod(uEnvironmentMap, reflectionDirection, lod).rgb;
+        // Slight cool-water bias without painting the environment blue.
+        reflected *= mix(vec3(1.0), vec3(0.965, 0.995, 1.060), opticalWaterMask * 0.32);
+        reflected *= mix(1.0, 0.12, deepNight);
+    }
+    else
+    {
+        float skyWeight = clamp(waterNormal.y * 0.5 + 0.5, 0.0, 1.0);
+        reflected = mix(vec3(0.008, 0.010, 0.014),
+            vec3(0.06, 0.08, 0.11), skyWeight);
+        reflected *= mix(1.0, 0.18, deepNight);
     }
 
     // Beer-Lambert transmission uses only the excess free-surface depth. The
@@ -1249,9 +1562,11 @@ vec3 applyDynamicSurfaceWater(
     vec3 transmittance = exp(-absorptionPerM * opticalPathM);
     vec3 transmitted = wetSubstrate * transmittance;
 
-    // Only genuinely deep accumulated water receives volumetric tint.
-    vec3 deepWaterTint = vec3(0.012, 0.027, 0.031);
-    transmitted = mix(transmitted, deepWaterTint, deepPool * 0.22);
+    // A restrained blue/cyan bias helps standing water separate from merely
+    // dark wet asphalt while preserving the authored material underneath.
+    transmitted *= mix(vec3(1.0), vec3(0.952, 0.982, 1.060), opticalWaterMask * 0.32);
+    vec3 deepWaterTint = vec3(0.020, 0.048, 0.070);
+    transmitted = mix(transmitted, deepWaterTint, deepPool * 0.24);
 
     // Physical dielectric Fresnel owns the inexpensive puddle reflection. At a
     // near-normal view the roughly two-percent water F0 leaves the asphalt
@@ -1260,15 +1575,17 @@ vec3 applyDynamicSurfaceWater(
     // small sub-millimetre depth response prevents a newly wet road from turning
     // into a mirror before a coherent free surface has formed.
     float opticalSurfaceFormation = mix(
-        0.72,
+        0.48,
         1.0,
-        smoothstep(0.00010, 0.0030, freeSurfaceDepthM));
-    float reflectionWeight = min(fresnel * opticalSurfaceFormation, 0.92);
+        smoothstep(0.000010, kStandingWaterMaxDepthM, freeSurfaceDepthM));
+    float reflectionWeight = min(
+        fresnel * opticalSurfaceFormation * mix(1.0, 1.34, opticalWaterMask), 0.95);
+    reflectionWeight *= mix(1.0, 0.22, deepNight);
     vec3 standingColor = mix(transmitted, reflected, reflectionWeight);
 
     // The free-surface layer grows only from depth above the retained film.
     // Everywhere else remains ordinary wet material.
-    return mix(filmColor, standingColor, standing);
+    return mix(filmColor, standingColor, opticalWaterMask);
 }
 
 void main()
@@ -1338,102 +1655,88 @@ void main()
     float dynamicSurfaceWaterSurfaceHeightRelativeY = vWorldPosition.y;
     float dynamicSurfaceFilm = 0.0;
     float dynamicSurfaceStanding = 0.0;
+    float dynamicSurfaceRunoff = 0.0;
+    vec2 dynamicSurfaceFlowDirection = vec2(0.0, 1.0);
     float dynamicSurfaceLodDetail = 1.0;
     if (uSurfaceWetnessReceiver)
     {
         if (uGpuDynamicSurfaceAuthorityActive)
         {
-            bool gpuValid = false;
             float gpuLodDetail = 0.0;
-            vec4 gpuState = gpuWaterFiltered(vWorldPosition, gpuValid, gpuLodDetail);
+            GpuWaterDecoded gpuState;
+            bool gpuValid = gpuWaterFiltered(vWorldPosition, gpuState, gpuLodDetail);
             dynamicSurfaceLodDetail = gpuLodDetail;
-            dynamicSurfaceDepthM = gpuValid ? max(gpuState.x, 0.0) : 0.0;
-            float gpuDryLineStrength = gpuValid ? clamp(gpuState.y, 0.0, 1.0) : 0.0;
-            // DSURF04F4: WaterState is the only water/wetness authority. The
-            // legacy global SurfaceWeather film is no longer subtracted from
-            // GPU depth and no longer paints every receiver uniformly.
-            // A microscopic retained layer reads as wet material; only local
-            // excess depth becomes free-surface standing water.
-            // A few millimetres of mobile rain film belong to the wet material
-            // regime. They are real WaterState mass, but not a settled optical
-            // free surface. This is intentionally much larger than the old
-            // 0.35mm cutoff: at centimetre resolution runoff must be allowed to
-            // exist without coating the entire road in mirror-like water.
-            // Retired GPU authority keeps the same puddles-only optical rule
-            // for ABI/debug consistency: sub-10mm runoff is wet material, not a
-            // translucent sheet. Only accumulated, comparatively still water
-            // may become visible puddle optics.
-            const float formedPuddleThresholdM = 0.0001;
-            dynamicSurfacePuddleDepthM = max(
-                dynamicSurfaceDepthM - formedPuddleThresholdM,
-                0.0);
+            float standingDepthM = gpuValid ? max(gpuState.depthM, 0.0) : 0.0;
+            float runningDepthM = gpuValid ? kinematicRunoffDepthM(gpuState) : 0.0;
+            dynamicSurfaceDepthM = max(standingDepthM, runningDepthM);
+            float gpuDryLineStrength = gpuValid ? clamp(gpuState.dryLine, 0.0, 1.0) : 0.0;
+            float basinStrength = gpuValid ? clamp(gpuState.basinStrength, 0.0, 1.0) : 0.0;
+            float runoffPotential = gpuValid ? clamp(gpuState.runoffPotential, 0.0, 1.0) : 0.0;
+            float flowStrength = gpuValid ? clamp(gpuState.flowStrength, 0.0, 1.0) : 0.0;
+            dynamicSurfaceFlowDirection = gpuValid && flowStrength > 0.001
+                ? gpuState.flowDirection : vec2(0.0, 1.0);
+
+            // LIVETRACK21C: 0.01 mm presentation onset. This is above the microscopic
+            // wet-film regime but low enough that shallow real road puddles no longer
+            // disappear completely behind the conservative storage model.
+            const float visibleWaterOnsetM = 0.000010;
+            dynamicSurfacePuddleDepthM = standingDepthM;
+            // The second optical depth argument is runoff only. Standing water
+            // is passed separately as dynamicSurfacePuddleDepthM so the baked
+            // 4-bit ladder cannot be masked by a deeper continuous runoff film.
             dynamicSurfaceVisualDepthM = dynamicSurfacePresentationDepth(
-                vWorldPosition, dynamicSurfacePuddleDepthM);
+                vWorldPosition, runningDepthM);
             dynamicSurfaceWaterSurfaceHeightRelativeY =
-                vWorldPosition.y + dynamicSurfaceDepthM;
-            // Ordinary weather wetness remains visible on every receiver while
-            // the local Hydro field adds spatially varying puddles and dry-line
-            // history. This is the known-good LIVETRACK04B presentation and
-            // prevents missing or warming tiles from punching dry holes into rain.
-            dynamicSurfaceFilm = clamp(uSurfaceWeatherFilmWetness, 0.0, 1.0)
+                vWorldPosition.y + standingDepthM;
+
+            // LIVETRACK21 removes the procedural rain-impact circles completely.
+            // Rain now creates one continuous microscopic material film. Visible
+            // free water comes only from the two hydrology regimes above:
+            // priority-flood standing storage or MFD kinematic runoff.
+            float weatherWetness = clamp(uSurfaceWeatherFilmWetness, 0.0, 1.0);
+            float wettingExposureM = clamp(uRainWettingExposureM, 0.0, 0.004);
+            float exposureWetness = smoothstep(0.000010, 0.00120, wettingExposureM);
+            float filmAuthority = max(weatherWetness, exposureWetness * 0.94);
+            dynamicSurfaceFilm = filmAuthority
                 * (1.0 - 0.62 * gpuDryLineStrength);
             dynamicSurfaceFilm = max(
                 dynamicSurfaceFilm,
-                smoothstep(0.00002, 0.00050, dynamicSurfaceDepthM)
+                smoothstep(0.000001, 0.00050, dynamicSurfaceDepthM)
                     * (1.0 - 0.35 * gpuDryLineStrength));
-            float flowStrength = clamp(length(gpuState.zw), 0.0, 1.0);
-            float waterPresence = smoothstep(0.00005, 0.00010, dynamicSurfaceDepthM);
+            float runningPresence = smoothstep(0.000005, 0.00035, runningDepthM);
+            float routeStrength = mix(0.50, 0.94, flowStrength)
+                * smoothstep(0.04, 0.50, runoffPotential);
+            dynamicSurfaceRunoff = runningPresence * routeStrength
+                * dynamicSurfaceLodDetail;
+
+            float waterPresence = smoothstep(
+                visibleWaterOnsetM * 0.75, visibleWaterOnsetM * 2.0,
+                standingDepthM);
             float waterBodyStrength = mix(
-                0.08,
+                0.12,
                 1.0,
-                smoothstep(0.00010, 0.0100, dynamicSurfaceDepthM));
-            dynamicSurfaceStanding = waterPresence
-                * waterBodyStrength
+                smoothstep(visibleWaterOnsetM, kStandingWaterMaxDepthM,
+                    standingDepthM));
+            // Only actual retained basin depth is standing water now. Sloped
+            // runoff has its own optical response and never masquerades as a
+            // horizontal puddle merely because the road is wet.
+            float basinWater = waterPresence * basinStrength * waterBodyStrength;
+            dynamicSurfaceStanding = basinWater
                 * dynamicSurfaceLodDetail
-                * (1.0 - 0.18 * flowStrength);
+                * (1.0 - 0.10 * flowStrength);
         }
         else
         {
-            vec4 dynamicSurfaceState = dynamicSurfaceWaterState(vWorldPosition);
-            dynamicSurfaceDepthM = max(dynamicSurfaceState.x, 0.0);
-            float dryLineStrength = clamp(dynamicSurfaceState.y, 0.0, 1.0);
-            vec2 flowDirection = dynamicSurfaceState.zw;
-            dynamicSurfaceWaterSurfaceHeightRelativeY =
-                vWorldPosition.y + dynamicSurfaceDepthM;
-
-            // Ordinary rain wetness remains a cheap material response. The G
-            // channel is persistent tire-clearing/dry-line strength, so a used
-            // racing line can stay visibly less wet after rainfall stops.
-            float weatherFilm = clamp(uSurfaceWeatherFilmWetness, 0.0, 1.0);
-            dynamicSurfaceFilm = weatherFilm * (1.0 - 0.62 * dryLineStrength);
-            dynamicSurfaceFilm = max(
-                dynamicSurfaceFilm,
-                smoothstep(0.00002, 0.00050, dynamicSurfaceDepthM)
-                    * (1.0 - 0.35 * dryLineStrength));
-
-            // First visible RGBA4 water state is 0.1mm. Puddle/water optics use
-            // the same 256x256 field and fade continuously to ordinary wet
-            // material at 100m. There is no additional water mask/page.
-            float puddleDistanceFade = 1.0 - smoothstep(
-                0.0, 120.0, length(vWorldPosition.xz));
-            float waterPresence = smoothstep(
-                0.00005, 0.00010, dynamicSurfaceDepthM);
-            float waterBodyStrength = mix(
-                0.08,
-                1.0,
-                smoothstep(0.00010, 0.0100, dynamicSurfaceDepthM));
-            dynamicSurfacePuddleDepthM = waterPresence > 0.0
-                ? dynamicSurfaceDepthM
-                : 0.0;
-            dynamicSurfaceVisualDepthM = dynamicSurfacePuddleDepthM;
-            dynamicSurfaceStanding = waterPresence
-                * waterBodyStrength
-                * puddleDistanceFade;
-
-            // Keep the packed B/A flow vector relevant to optics without
-            // inventing a second simulation: moving water is slightly less
-            // mirror-like than retained water.
-            dynamicSurfaceStanding *= 1.0 - 0.18 * clamp(length(flowDirection), 0.0, 1.0);
+            // No second/legacy Hydro renderer exists. If the prebaked GPU
+            // topology is unavailable, the scene still looks rain-wet but no
+            // detailed standing water is invented. Once .hhyd is ready the
+            // same fixed GPU path above becomes authoritative.
+            dynamicSurfaceFilm = clamp(uSurfaceWeatherFilmWetness, 0.0, 1.0);
+            dynamicSurfaceDepthM = 0.0;
+            dynamicSurfacePuddleDepthM = 0.0;
+            dynamicSurfaceVisualDepthM = 0.0;
+            dynamicSurfaceStanding = 0.0;
+            dynamicSurfaceRunoff = 0.0;
         }
     }
 
@@ -1446,7 +1749,7 @@ void main()
 
     // Thin-film roughness is driven by the smooth weather film, not
     // adaptive hydrology depth. This is also the deliberately cheap far-field
-    // fallback outside the 100m Hydro simulation: rain gradually darkens and
+    // fallback outside the 500m prebaked presentation range: rain gradually darkens and
     // smooths authored receivers, so the environment and sun produce wet-road
     // highlights without pretending that distant puddles were simulated.
     if (uSurfaceWetnessReceiver && dynamicSurfaceFilm > 0.0001)
@@ -1468,8 +1771,8 @@ void main()
     {
         roughness = mix(
             roughness,
-            0.085,
-            dynamicSurfaceStanding * 0.88);
+            0.045,
+            dynamicSurfaceStanding * 0.94);
     }
 
     float metallic = clamp(uMaterialMetallic, 0.0, 1.0);
@@ -1507,22 +1810,37 @@ void main()
 
     vec3 viewDirection = normalize(uEye - vWorldPosition);
     vec3 lightDirection = normalize(uSunDirection);
-    vec3 halfwayDirection = normalize(viewDirection + lightDirection);
     float nDotV = max(dot(normal, viewDirection), 0.0001);
     float nDotL = max(dot(normal, lightDirection), 0.0);
-    float hDotV = max(dot(halfwayDirection, viewDirection), 0.0);
-
-    float d = distributionGGX(normal, halfwayDirection, roughness);
-    float g = geometrySmith(normal, viewDirection, lightDirection, roughness);
-    vec3 f = fresnelSchlick(hDotV, f0);
-    vec3 directSpecular =
-        (d * g * f) / max(4.0 * nDotV * max(nDotL, 0.0001), 0.0001);
-    vec3 directDiffuseWeight = (vec3(1.0) - f) * (1.0 - metallic);
-    vec3 directRadiance = max(uSunRadiance, vec3(0.0));
-    float sunVisibility = sampleSunShadow(normal, lightDirection);
-    vec3 directLighting =
-        (directDiffuseWeight * baseColor / PI + directSpecular)
-        * directRadiance * nDotL * sunVisibility;
+    vec3 directLighting=vec3(0.0);
+    vec3 directRadiance=max(uSunRadiance,vec3(0.0));
+    float sunPower=max(directRadiance.r,max(directRadiance.g,directRadiance.b));
+    // CELESTIAL03: evaluate the cloud receiver once so the same optical field
+    // can attenuate both direct celestial light and a smaller physically
+    // plausible fraction of diffuse skylight. Real cloud shadows remain lit
+    // by the rest of the sky dome; they are not black projected decals.
+    vec3 celestialCloudTransmission=sunPower>0.00001
+        ?volumetricCloudSunTransmission(vWorldPosition,lightDirection):vec3(1.0);
+    float celestialCloudVisibility=clamp(
+        dot(celestialCloudTransmission,vec3(0.2126,0.7152,0.0722)),0.0,1.0);
+    // CLOUDURP15BK: do not evaluate GGX, cloud-shadow lookup or cascaded shadow
+    // filtering for back-facing fragments (or when the astronomical Sun is off).
+    // Previously those costs were paid even though nDotL multiplied the result by 0.
+    if(nDotL>0.0001 && sunPower>0.00001)
+    {
+        vec3 halfwayDirection=normalize(viewDirection+lightDirection);
+        float hDotV=max(dot(halfwayDirection,viewDirection),0.0);
+        float d=distributionGGX(normal,halfwayDirection,roughness);
+        float g=geometrySmith(normal,viewDirection,lightDirection,roughness);
+        vec3 f=fresnelSchlick(hDotV,f0);
+        vec3 directSpecular=(d*g*f)/max(4.0*nDotV*nDotL,0.0001);
+        vec3 directDiffuseWeight=(vec3(1.0)-f)*(1.0-metallic);
+        directRadiance*=celestialCloudTransmission;
+        float filteredSunPower=max(directRadiance.r,max(directRadiance.g,directRadiance.b));
+        float sunVisibility=filteredSunPower>0.00001?sampleSunShadow(normal,lightDirection):1.0;
+        directLighting=(directDiffuseWeight*baseColor/PI+directSpecular)
+            *directRadiance*nDotL*sunVisibility;
+    }
 
     vec3 ambientLighting;
     if (uHasEnvironmentMap)
@@ -1549,13 +1867,26 @@ void main()
         vec3 specularIbl = specularEnvironment * environmentFresnel
             * mix(1.0, 0.55, roughness);
         ambientLighting = (diffuseIbl + specularIbl) * ao;
+        float ambientDeepNight = 1.0 - smoothstep(-0.10, 0.04, uSunDirection.y);
+        ambientLighting *= mix(1.0, 0.12, ambientDeepNight);
     }
     else
     {
         float upFacing = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
         float hemisphere = mix(0.12, 0.30, upFacing);
         ambientLighting = baseColor * (1.0 - metallic) * hemisphere * ao;
+        float ambientDeepNight = 1.0 - smoothstep(-0.10, 0.04, uSunDirection.y);
+        ambientLighting *= mix(1.0, 0.12, ambientDeepNight);
     }
+
+    // CELESTIAL03: a cloud blocks the key light completely but only part of
+    // the hemispherical sky. Modulate diffuse/IBL modestly so the moving cloud
+    // shadow is visibly present on roads/terrain even when bright sky ambient
+    // would otherwise wash out the direct-light shadow. Dense cloud also cools
+    // the remaining ambient slightly, as observed under real overcast cells.
+    float cloudAmbientVisibility=mix(0.62,1.0,pow(celestialCloudVisibility,0.70));
+    vec3 cloudAmbientTint=mix(vec3(0.84,0.90,1.0),vec3(1.0),celestialCloudVisibility);
+    ambientLighting*=cloudAmbientVisibility*cloudAmbientTint;
 
     vec3 color = directLighting + ambientLighting + emissive;
 
@@ -1573,6 +1904,8 @@ void main()
             dynamicSurfacePuddleDepthM,
             dynamicSurfaceVisualDepthM,
             dynamicSurfaceStanding,
+            dynamicSurfaceRunoff,
+            dynamicSurfaceFlowDirection,
             dynamicSurfaceWaterSurfaceHeightRelativeY,
             dynamicSurfaceLodDetail);
 

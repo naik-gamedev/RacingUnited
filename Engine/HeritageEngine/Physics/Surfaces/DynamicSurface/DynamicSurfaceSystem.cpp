@@ -35,7 +35,6 @@ void DynamicSurfaceSystem::clear()
 {
     m_chunks.clear();
     m_pagePool.clear();
-    m_hydrology.clear();
     m_thermal.clear();
     m_sheetLinks.clear();
     m_lastStaticBakeReport = {};
@@ -186,57 +185,6 @@ void DynamicSurfaceSystem::refreshHydroResidency()
     }
 }
 
-
-void DynamicSurfaceSystem::advanceHydro(
-    const SurfaceWeatherDescription& weather,
-    const SurfaceWeatherOutput& weatherOutput,
-    double deltaTimeSeconds)
-{
-    m_hydrology.advance(*this, weather, weatherOutput, deltaTimeSeconds);
-}
-
-void DynamicSurfaceSystem::clearHydroState()
-{
-    m_hydrology.clear();
-}
-
-void DynamicSurfaceSystem::resetHydroWater()
-{
-    m_hydrology.resetWater();
-}
-
-DynamicSurfaceHydroSample DynamicSurfaceSystem::sampleHydro(
-    const heritage::math::DVec3& globalPosition) const
-{
-    return m_hydrology.sample(*this, globalPosition);
-}
-
-DynamicSurfaceHydroTireResult DynamicSurfaceSystem::applyHydroTireContact(
-    const heritage::math::DVec3& globalPosition,
-    const DynamicSurfaceHydroTireInput& input)
-{
-    return m_hydrology.applyTireContact(*this, globalPosition, input);
-}
-
-bool DynamicSurfaceSystem::rasterHydroPage(
-    const VirtualPageAddress& address,
-    std::uint32_t outputResolution,
-    std::vector<std::uint16_t>& hydroRgba4) const
-{
-    return m_hydrology.rasterPage(
-        *this, address, outputResolution, hydroRgba4);
-}
-
-std::uint64_t DynamicSurfaceSystem::hydroPageRevision(
-    const VirtualPageAddress& address) const
-{
-    return m_hydrology.pageRevision(address);
-}
-
-bool DynamicSurfaceSystem::setUniformHydroDepthForLab(double waterDepthM)
-{
-    return m_hydrology.setUniformWaterDepthForLab(*this, waterDepthM);
-}
 
 void DynamicSurfaceSystem::advanceThermal(
     const SurfaceWeatherDescription& weather,

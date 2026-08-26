@@ -24,7 +24,10 @@ struct TireFleetBenchmarkDescription
     VehicleScalar ambientTemperatureC = 18.0;
     VehicleScalar roadTemperatureC = 16.0;
     VehicleScalar windSpeedMps = 8.0;
-    bool includeSpatialHydrology = true;
+    // OPT03C: retained as a source/API compatibility flag. The tire-only CPU
+    // benchmark no longer instantiates any spatial water solver; production
+    // spatial water is GPU-owned and must be profiled in the renderer runtime.
+    bool includeSpatialHydrology = false;
 };
 
 struct TireFleetBenchmarkResult
@@ -39,6 +42,8 @@ struct TireFleetBenchmarkResult
     std::size_t thermalStateUpdates = 0;
     std::size_t wearStateUpdates = 0;
     std::size_t wetStateUpdates = 0;
+    // OPT03C compatibility telemetry. These remain zero because the CPU-only
+    // fleet benchmark no longer creates a second spatial-water authority.
     std::size_t hydrologyCellCount = 0;
     std::size_t hydrologySteps = 0;
     std::size_t hydrologyTireContacts = 0;

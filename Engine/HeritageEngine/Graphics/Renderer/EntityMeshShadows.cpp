@@ -76,9 +76,10 @@ bool EntityMeshRenderer::initializeShadowResources()
 
     GLint maximumTextureSize = 0;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maximumTextureSize);
-    const int usableMaximumTextureSize = maximumTextureSize > 0
+    m_shadowMaximumTextureSize = maximumTextureSize > 0
         ? static_cast<int>(maximumTextureSize)
         : kDefaultMapResolution;
+    const int usableMaximumTextureSize = m_shadowMaximumTextureSize;
     m_shadowResolution = std::max(
         1,
         std::min(kDefaultMapResolution, usableMaximumTextureSize));
@@ -88,7 +89,7 @@ bool EntityMeshRenderer::initializeShadowResources()
     glTexImage3D(
         GL_TEXTURE_2D_ARRAY,
         0,
-        GL_DEPTH_COMPONENT32F,
+        GL_DEPTH_COMPONENT24,
         m_shadowResolution,
         m_shadowResolution,
         kCascadeCount,
@@ -133,6 +134,19 @@ bool EntityMeshRenderer::initializeShadowResources()
     glSamplerParameterfv(m_shadowRawSampler, GL_TEXTURE_BORDER_COLOR, borderDepth);
     m_shadowFilterIndex = 2;
 
+    // SHADOW05: asynchronous timestamp ring. These queries are only read after
+    // GL_QUERY_RESULT_AVAILABLE says they are complete, so diagnostics never
+    // insert a GPU/CPU synchronization point.
+    glGenQueries(
+        static_cast<GLsizei>(kShadowGpuTimerRingSize),
+        m_shadowGpuTimerStartQueries.data());
+    glGenQueries(
+        static_cast<GLsizei>(kShadowGpuTimerRingSize),
+        m_shadowGpuTimerEndQueries.data());
+    m_shadowGpuTimerPending.fill(false);
+    m_shadowGpuTimerWriteIndex = 0;
+    m_shadowLastGpuMs = 0.0;
+
     glGenFramebuffers(1, &m_shadowFramebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, m_shadowFramebuffer);
     // SHADOW02 layered CSM: attach the entire depth-array texture once. The
@@ -169,26 +183,27 @@ bool EntityMeshRenderer::synchronizeShadowSettings(
 
     const int qualityIndex = std::clamp(videoSettings.shadowQualityIndex, 0, 3);
     const Quality quality = static_cast<Quality>(qualityIndex);
-
-    GLint maximumTextureSize = 0;
-    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maximumTextureSize);
-    const int usableMaximumTextureSize = maximumTextureSize > 0
-        ? static_cast<int>(maximumTextureSize)
+    const int usableMaximumTextureSize = m_shadowMaximumTextureSize > 0
+        ? m_shadowMaximumTextureSize
         : kDefaultMapResolution;
     const int desiredResolution = std::max(
         1,
         std::min(resolutionFor(quality), usableMaximumTextureSize));
-
     const int desiredFilterIndex = std::clamp(videoSettings.shadowFilterIndex, 0, 2);
 
-    glBindTexture(GL_TEXTURE_2D_ARRAY, m_shadowTextureArray);
-
+    // SHADOW05: the old code queried GL_MAX_TEXTURE_SIZE, rebound the live
+    // shadow array and rewrote GL_TEXTURE_COMPARE_MODE every single frame.
+    // The maximum is context-static and compare behavior lives in sampler
+    // objects, so touching the texture object while previous-frame draws may
+    // still reference it is needless driver validation/serialization. Do no GL
+    // work at all when the user has not changed shadow resolution.
     if (m_shadowResolution != desiredResolution)
     {
+        glBindTexture(GL_TEXTURE_2D_ARRAY, m_shadowTextureArray);
         glTexImage3D(
             GL_TEXTURE_2D_ARRAY,
             0,
-            GL_DEPTH_COMPONENT32F,
+            GL_DEPTH_COMPONENT24,
             desiredResolution,
             desiredResolution,
             kCascadeCount,
@@ -196,6 +211,7 @@ bool EntityMeshRenderer::synchronizeShadowSettings(
             GL_DEPTH_COMPONENT,
             GL_FLOAT,
             nullptr);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
         m_shadowResolution = desiredResolution;
 
         GLint previousFramebuffer = 0;
@@ -210,18 +226,15 @@ bool EntityMeshRenderer::synchronizeShadowSettings(
         glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFramebuffer));
         if (status != GL_FRAMEBUFFER_COMPLETE)
         {
-            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
             m_shadowResourcesValid = false;
             return false;
         }
     }
 
-    // Filter selection is a shader algorithm choice. The compare sampler always
-    // stays GL_LINEAR for Poisson PCF/PCSS and the raw sampler always stays
-    // GL_NEAREST for blocker search / diagnostic nearest comparison.
+    // Filtering is selected in the material shader and by immutable sampler
+    // objects. Updating this integer is sufficient; no texture mutation is
+    // required when switching Nearest / Poisson / PCSS.
     m_shadowFilterIndex = desiredFilterIndex;
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_COMPARE_MODE, GL_NONE);
-    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     return true;
 }
 
@@ -229,6 +242,23 @@ void EntityMeshRenderer::shutdownShadowResources()
 {
     m_shadowResourcesValid = false;
     m_shadowsActive = false;
+    if (m_shadowGpuTimerStartQueries[0] != 0)
+    {
+        glDeleteQueries(
+            static_cast<GLsizei>(kShadowGpuTimerRingSize),
+            m_shadowGpuTimerStartQueries.data());
+        m_shadowGpuTimerStartQueries.fill(0);
+    }
+    if (m_shadowGpuTimerEndQueries[0] != 0)
+    {
+        glDeleteQueries(
+            static_cast<GLsizei>(kShadowGpuTimerRingSize),
+            m_shadowGpuTimerEndQueries.data());
+        m_shadowGpuTimerEndQueries.fill(0);
+    }
+    m_shadowGpuTimerPending.fill(false);
+    m_shadowGpuTimerWriteIndex = 0;
+    m_shadowLastGpuMs = 0.0;
     if (m_shadowFramebuffer)
     {
         glDeleteFramebuffers(1, &m_shadowFramebuffer);
@@ -257,6 +287,7 @@ void EntityMeshRenderer::shutdownShadowResources()
     m_shadowUniforms = {};
     m_shadowResolution = 0;
     m_shadowFilterIndex = 2;
+    m_shadowMaximumTextureSize = 0;
     for (heritage::math::Mat4& matrix : m_shadowMatrices)
         matrix = heritage::math::identity();
 }
@@ -358,93 +389,64 @@ bool EntityMeshRenderer::buildShadowCascades(
     return true;
 }
 void EntityMeshRenderer::drawShadowMaps(
-    const std::vector<heritage::entities::MeshInstance>& instances,
-    const heritage::math::Vec3& eye,
-    float elapsedSeconds)
+    const std::vector<PreparedFrameInstance>& preparedInstances,
+    const EntityMeshRenderTargetState& renderTargetState)
 {
-    if (!m_shadowResourcesValid || !m_shadowsActive || instances.empty())
+    if (!m_shadowResourcesValid || !m_shadowsActive || preparedInstances.empty())
         return;
 
-    struct PreparedShadowInstance
-    {
-        const heritage::entities::MeshInstance* instance = nullptr;
-        const Mesh* mesh = nullptr;
-        heritage::math::Mat4 instanceModel = heritage::math::identity();
-        std::vector<heritage::math::Mat4> nodeGlobals;
-        std::vector<const heritage::entities::MeshNodeOverride*> tireVisualOverrides;
+    const bool hasDrawableInstance = std::any_of(
+        preparedInstances.begin(),
+        preparedInstances.end(),
+        [](const PreparedFrameInstance& prepared)
+        {
+            return prepared.instance != nullptr && prepared.mesh != nullptr;
+        });
+    if (!hasDrawableInstance)
+        return;
+
+    using ShadowPerfClock = std::chrono::steady_clock;
+    const auto shadowMillisecondsSince = [](ShadowPerfClock::time_point start) -> double {
+        return std::chrono::duration<double, std::milli>(
+            ShadowPerfClock::now() - start).count();
     };
 
-    // Evaluate animation/node overrides once per mesh instance. SHADOW02 then
-    // submits each accepted range once and lets the GPU fan the triangle out to
-    // all intersecting cascades. The old path repeated this range work and its
-    // OpenGL draw submission independently for all four cascades.
-    std::vector<PreparedShadowInstance> prepared;
-    prepared.reserve(instances.size());
-    for (const auto& instance : instances)
+    // Resolve any completed older GPU timestamps without waiting. This number
+    // is therefore a true GPU shadow-map generation time, not CPU wall time.
+    for (std::size_t slot = 0; slot < kShadowGpuTimerRingSize; ++slot)
     {
-        const Mesh* mesh = acquireMesh(
-            instance.assetPath,
-            instance.normalize,
-            instance.blenderCoordinates);
-        if (!mesh)
+        if (!m_shadowGpuTimerPending[slot])
             continue;
-
-        heritage::entities::MeshInstance cameraRelativeInstance = instance;
-        cameraRelativeInstance.position = {
-            instance.position.x - eye.x,
-            instance.position.y - eye.y,
-            instance.position.z - eye.z
-        };
-
-        PreparedShadowInstance value;
-        value.instance = &instance;
-        value.mesh = mesh;
-        value.instanceModel = modelMatrix(cameraRelativeInstance);
-        value.nodeGlobals = animationTransformsForInstance(
-            *mesh,
-            instance,
-            elapsedSeconds);
-        applyMeshNodeOverrides(
-            *mesh,
-            instance,
-            value.instanceModel,
-            eye,
-            value.nodeGlobals);
-
-        // Tire deformation overrides are sparse, but the old cascade loop
-        // searched the instance override list for every draw range. Resolve the
-        // node-index lookup once while preparing the instance.
-        value.tireVisualOverrides.resize(mesh->nodes.size(), nullptr);
-        for (const auto& overrideValue : instance.nodeOverrides)
-        {
-            if (!overrideValue.hasTireVisualDeformation)
-                continue;
-            for (std::size_t nodeIndex = 0; nodeIndex < mesh->nodes.size(); ++nodeIndex)
-            {
-                if (mesh->nodes[nodeIndex].name == overrideValue.nodeName)
-                {
-                    value.tireVisualOverrides[nodeIndex] = &overrideValue;
-                    break;
-                }
-            }
-        }
-        prepared.push_back(std::move(value));
+        GLint available = GL_FALSE;
+        glGetQueryObjectiv(
+            m_shadowGpuTimerEndQueries[slot],
+            GL_QUERY_RESULT_AVAILABLE,
+            &available);
+        if (available != GL_TRUE)
+            continue;
+        GLuint64 gpuStart = 0;
+        GLuint64 gpuEnd = 0;
+        glGetQueryObjectui64v(
+            m_shadowGpuTimerStartQueries[slot], GL_QUERY_RESULT, &gpuStart);
+        glGetQueryObjectui64v(
+            m_shadowGpuTimerEndQueries[slot], GL_QUERY_RESULT, &gpuEnd);
+        if (gpuEnd >= gpuStart)
+            m_shadowLastGpuMs = static_cast<double>(gpuEnd - gpuStart) * 1.0e-6;
+        m_shadowGpuTimerPending[slot] = false;
+        ++m_frameStats.shadowGpuTimerSamples;
     }
+    m_frameStats.shadowGpuMs = m_shadowLastGpuMs;
 
-    if (prepared.empty())
-        return;
+    // OPT04C: mesh acquisition, animation/node evaluation and tire-override
+    // resolution were already performed once by prepareFrameInstances(). The
+    // shadow pass consumes that shared frame cache instead of duplicating it.
 
-    GLint previousFramebuffer = 0;
-    GLint previousViewport[4] = {};
-    GLint previousScissor[4] = {};
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &previousFramebuffer);
-    glGetIntegerv(GL_VIEWPORT, previousViewport);
-    glGetIntegerv(GL_SCISSOR_BOX, previousScissor);
-
-    const GLboolean scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
-    const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
-    const GLboolean cullWasEnabled = glIsEnabled(GL_CULL_FACE);
-
+    const auto shadowStateStart = ShadowPerfClock::now();
+    // SHADOW06: the engine now passes the exact render-target state into the
+    // mesh renderer. Do not query live OpenGL state here: those glGet*/
+    // glIsEnabled calls forced the NVIDIA driver to serialize roughly 20 ms of
+    // queued work on the user's GTX 1660 Ti. The shadow pass is allowed to
+    // establish its own state and restores the explicit engine contract below.
     glBindFramebuffer(GL_FRAMEBUFFER, m_shadowFramebuffer);
     glViewport(0, 0, m_shadowResolution, m_shadowResolution);
     glDisable(GL_SCISSOR_TEST);
@@ -458,6 +460,25 @@ void EntityMeshRenderer::drawShadowMaps(
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(2.0f, 4.0f);
     glUseProgram(m_shadowProgram);
+
+    int shadowGpuQuerySlot = -1;
+    for (std::size_t attempt = 0; attempt < kShadowGpuTimerRingSize; ++attempt)
+    {
+        const std::size_t slot =
+            (m_shadowGpuTimerWriteIndex + attempt) % kShadowGpuTimerRingSize;
+        if (!m_shadowGpuTimerPending[slot])
+        {
+            shadowGpuQuerySlot = static_cast<int>(slot);
+            m_shadowGpuTimerWriteIndex = (slot + 1) % kShadowGpuTimerRingSize;
+            break;
+        }
+    }
+    if (shadowGpuQuerySlot >= 0)
+    {
+        glQueryCounter(
+            m_shadowGpuTimerStartQueries[static_cast<std::size_t>(shadowGpuQuerySlot)],
+            GL_TIMESTAMP);
+    }
 
     // The entire array is a layered depth attachment. One clear resets all four
     // cascades and the geometry shader writes each primitive to gl_Layer.
@@ -476,23 +497,40 @@ void EntityMeshRenderer::drawShadowMaps(
             heritage::math::identity());
     }
 
+    m_frameStats.shadowStateCpuMs += shadowMillisecondsSince(shadowStateStart);
+    const auto shadowDrawStart = ShadowPerfClock::now();
+
     const int allCascadeMask = (1 << kCascadeCount) - 1;
     GLenum activeFrontFace = GL_CCW;
     glFrontFace(activeFrontFace);
+    bool cullFaceEnabled = true;
+    GLuint activeVao = 0;
 
-    for (const PreparedShadowInstance& preparedInstance : prepared)
+    for (const PreparedFrameInstance& preparedInstance : preparedInstances)
     {
+        if (!preparedInstance.instance || !preparedInstance.mesh)
+            continue;
+
         const auto& instance = *preparedInstance.instance;
         const Mesh& mesh = *preparedInstance.mesh;
         const heritage::math::Mat4& instanceModel = preparedInstance.instanceModel;
         const auto& nodeGlobals = preparedInstance.nodeGlobals;
 
-        if (instance.doubleSided)
-            glDisable(GL_CULL_FACE);
-        else
-            glEnable(GL_CULL_FACE);
+        const bool requestedCullFace = !instance.doubleSided;
+        if (requestedCullFace != cullFaceEnabled)
+        {
+            if (requestedCullFace)
+                glEnable(GL_CULL_FACE);
+            else
+                glDisable(GL_CULL_FACE);
+            cullFaceEnabled = requestedCullFace;
+        }
 
-        glBindVertexArray(mesh.vao);
+        if (mesh.vao != activeVao)
+        {
+            glBindVertexArray(mesh.vao);
+            activeVao = mesh.vao;
+        }
 
         const auto nodeTireVisualState = [&](int nodeIndex)
             -> std::pair<const MeshNode*, const heritage::entities::MeshNodeOverride*>
@@ -679,33 +717,35 @@ void EntityMeshRenderer::drawShadowMaps(
                 useSkinning ? 1 : 0);
             if (useSkinning)
             {
-                std::array<float, 16 * kMaxSkinJoints> jointData{};
-                const heritage::math::Mat4 identity = heritage::math::identity();
-                for (int joint = 0; joint < kMaxSkinJoints; ++joint)
+                // OPT04C: the shader can only index joints present in this
+                // palette, so do not repack/upload 64 matrices when a skin uses
+                // fewer joints. This also removes identity-padding work.
+                std::array<float, 16 * kMaxSkinJoints> jointData;
+                for (std::size_t joint = 0; joint < palette.size(); ++joint)
                 {
-                    const heritage::math::Mat4& source =
-                        joint < static_cast<int>(palette.size())
-                        ? palette[static_cast<std::size_t>(joint)]
-                        : identity;
+                    const heritage::math::Mat4& source = palette[joint];
                     for (int value = 0; value < 16; ++value)
                     {
-                        jointData[static_cast<std::size_t>(joint) * 16
-                            + static_cast<std::size_t>(value)] = source.m[value];
+                        jointData[joint * 16 + static_cast<std::size_t>(value)] =
+                            source.m[value];
                     }
                 }
                 glUniformMatrix4fv(
                     m_shadowUniforms.jointMatrices,
-                    kMaxSkinJoints,
+                    static_cast<GLsizei>(palette.size()),
                     GL_FALSE,
                     jointData.data());
             }
 
+            const auto shadowDriverDrawStart = ShadowPerfClock::now();
             glDrawElements(
                 GL_TRIANGLES,
                 static_cast<GLsizei>(indexCount),
                 GL_UNSIGNED_INT,
                 reinterpret_cast<const void*>(
                     firstIndex * sizeof(unsigned int)));
+            m_frameStats.shadowDriverDrawCpuMs +=
+                shadowMillisecondsSince(shadowDriverDrawStart);
             ++m_frameStats.shadowDrawCalls;
 
             int cascadeCopies = 0;
@@ -804,38 +844,46 @@ void EntityMeshRenderer::drawShadowMaps(
         }
     }
 
+    m_frameStats.shadowDrawCpuMs += shadowMillisecondsSince(shadowDrawStart);
+    if (shadowGpuQuerySlot >= 0)
+    {
+        const std::size_t slot = static_cast<std::size_t>(shadowGpuQuerySlot);
+        glQueryCounter(m_shadowGpuTimerEndQueries[slot], GL_TIMESTAMP);
+        m_shadowGpuTimerPending[slot] = true;
+    }
+
+    const auto shadowRestoreStart = ShadowPerfClock::now();
     glBindVertexArray(0);
     glDisable(GL_POLYGON_OFFSET_FILL);
-    if (cullWasEnabled)
-        glEnable(GL_CULL_FACE);
-    else
-        glDisable(GL_CULL_FACE);
+
+    // Restore Heritage's explicit post-module render contract rather than
+    // querying/restoring unknown driver state. This is deliberately independent
+    // of sun direction/time-of-day: day/night continues to rebuild cascade
+    // matrices and shadow strength every frame above.
+    glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
-    if (blendWasEnabled)
-        glEnable(GL_BLEND);
-    else
-        glDisable(GL_BLEND);
-    // Heritage's main framebuffer uses reversed-Z globally. Shadow maps use
-    // ordinary GL_LESS depth only inside this pass, then restore the engine
-    // invariant before sky/material rendering resumes.
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
     glDepthFunc(GL_GREATER);
     glClearDepth(0.0);
-    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFramebuffer));
+    glBindFramebuffer(GL_FRAMEBUFFER, renderTargetState.framebuffer);
     glViewport(
-        previousViewport[0],
-        previousViewport[1],
-        previousViewport[2],
-        previousViewport[3]);
+        renderTargetState.viewportX,
+        renderTargetState.viewportY,
+        renderTargetState.viewportWidth,
+        renderTargetState.viewportHeight);
     glScissor(
-        previousScissor[0],
-        previousScissor[1],
-        previousScissor[2],
-        previousScissor[3]);
-    if (scissorWasEnabled)
+        renderTargetState.scissorX,
+        renderTargetState.scissorY,
+        renderTargetState.scissorWidth,
+        renderTargetState.scissorHeight);
+    if (renderTargetState.scissorEnabled)
         glEnable(GL_SCISSOR_TEST);
     else
         glDisable(GL_SCISSOR_TEST);
+    m_frameStats.shadowRestoreCpuMs += shadowMillisecondsSince(shadowRestoreStart);
 }
 
 } // namespace heritage::graphics

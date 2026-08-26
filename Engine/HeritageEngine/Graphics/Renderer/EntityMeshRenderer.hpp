@@ -3,7 +3,6 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
-#include <map>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -17,8 +16,7 @@
 #include "../../Core/Settings/VideoSettings.hpp"
 #include "../EnvironmentMap.hpp"
 #include "../EnvironmentSystem.hpp"
-#include "../DynamicSurface/DynamicSurfaceGpuPagePool.hpp"
-#include "../DynamicSurface/DynamicSurfaceGpuLodPrototype.hpp"
+#include "../DynamicSurface/DynamicSurfaceGpuRuntime.hpp"
 #include "SkyRenderer.hpp"
 #include "../Mesh.hpp"
 #include "../Texture2D.hpp"
@@ -30,6 +28,22 @@ namespace heritage::graphics {
 // Visual-only flexible-ring mesh deformation LOD. Tire simulation itself is
 // never distance gated.
 inline constexpr float kTireVisualDeformationMaximumDistanceM = 50.0f;
+
+
+struct EntityMeshRenderTargetState
+{
+    GLuint framebuffer = 0;
+    GLint viewportX = 0;
+    GLint viewportY = 0;
+    GLsizei viewportWidth = 1;
+    GLsizei viewportHeight = 1;
+    GLsizei samples = 1;
+    bool scissorEnabled = false;
+    GLint scissorX = 0;
+    GLint scissorY = 0;
+    GLsizei scissorWidth = 1;
+    GLsizei scissorHeight = 1;
+};
 
 struct EntityMeshRendererStats
 {
@@ -46,9 +60,88 @@ struct EntityMeshRendererStats
     // driver blocks inside a draw, that wait naturally appears in the owning
     // mesh-instance time, which is exactly what we want to diagnose.
     double instanceGatherMs = 0.0;
+    // PERF01: stage attribution inside EntityMeshRenderer::draw(). These are
+    // wall-clock timings only and intentionally introduce no GPU waits.
+    double framePreparationCpuMs = 0.0;
+    double dynamicSurfaceUpdateCpuMs = 0.0;
+    double regionalWeatherUpdateCpuMs = 0.0;
+    double weatherLightingCpuMs = 0.0;
     double environmentUpdateMs = 0.0;
     double skyDrawMs = 0.0;
+    // PERF03: fine-grained SkyRenderer::draw() wall-time attribution copied
+    // from SkyRenderer so F8 can identify the ~20 ms sky/background owner.
+    double skyBackgroundTotalCpuMs = 0.0;
+    double skyGpuTimerPollTotalCpuMs = 0.0;
+    double skyGpuTimerPollBackgroundCpuMs = 0.0;
+    double skyGpuTimerPollCloudShadowCpuMs = 0.0;
+    double skyGpuTimerPollSceneCopyCpuMs = 0.0;
+    double skyGpuTimerPollRaymarchCpuMs = 0.0;
+    double skyGpuTimerPollUpscaleCpuMs = 0.0;
+    double skyGpuTimerPollTemporalCpuMs = 0.0;
+    double skyGpuTimerPollPresentCpuMs = 0.0;
+    double skyBackgroundTimerBeginCpuMs = 0.0;
+    double skyBackgroundStateSetupCpuMs = 0.0;
+    double skyBackgroundUniformUploadCpuMs = 0.0;
+    double skyBackgroundTextureBindCpuMs = 0.0;
+    double skyBackgroundDrawCallCpuMs = 0.0;
+    double skyBackgroundTimerEndCpuMs = 0.0;
+    double skyCloudShadowUpdateCpuMs = 0.0;
+    // PERF04 cloud-shadow update attribution copied from SkyRenderer.
+    double cloudShadowInternalTotalCpuMs = 0.0;
+    double cloudShadowEligibilityCpuMs = 0.0;
+    double cloudShadowTargetEnsureCpuMs = 0.0;
+    double cloudShadowTimerBeginCpuMs = 0.0;
+    double cloudShadowStateSetupCpuMs = 0.0;
+    double cloudShadowRawAttachmentCpuMs = 0.0;
+    double cloudShadowProgramBindCpuMs = 0.0;
+    double cloudShadowUniformUploadCpuMs = 0.0;
+    double cloudShadowTextureBindCpuMs = 0.0;
+    double cloudShadowRawDrawCallCpuMs = 0.0;
+    double cloudShadowFilterSetupCpuMs = 0.0;
+    double cloudShadowFilterAttachmentCpuMs = 0.0;
+    double cloudShadowFilterTextureBindCpuMs = 0.0;
+    double cloudShadowFilterDrawCallCpuMs = 0.0;
+    double cloudShadowCopyImageCpuMs = 0.0;
+    double cloudShadowFinalizeCpuMs = 0.0;
+    double cloudShadowTimerEndCpuMs = 0.0;
+    double cloudShadowResidualCpuMs = 0.0;
+    double skyBackgroundRestoreCpuMs = 0.0;
+    double materialSetupCpuMs = 0.0;
+    // OPT00 completed asynchronous GPU samples from SkyRenderer. These are
+    // diagnostic children of the top-level mesh GPU pass.
+    double skyBackgroundGpuMs = 0.0;
+    double cloudShadowGpuMs = 0.0;
+    double cloudSceneCopyGpuMs = 0.0;
+    double cloudRaymarchGpuMs = 0.0;
+    double cloudUpscaleGpuMs = 0.0;
+    double cloudTemporalGpuMs = 0.0;
+    double cloudPresentGpuMs = 0.0;
+
+    // PERF01 cloud CPU submission attribution copied from SkyRenderer. Exact
+    // blit/draw-call timers expose driver back-pressure without glFinish.
+    double cloudAfterOpaqueCpuMs = 0.0;
+    double cloudPipelineCpuMs = 0.0;
+    double cloudTargetEnsureCpuMs = 0.0;
+    double cloudSceneCopyCpuMs = 0.0;
+    double cloudSceneColorBlitCpuMs = 0.0;
+    double cloudSceneDepthBlitCpuMs = 0.0;
+    double cloudRaymarchCpuMs = 0.0;
+    double cloudRaymarchDrawCallCpuMs = 0.0;
+    double cloudUpscaleCpuMs = 0.0;
+    double cloudUpscaleDrawCallCpuMs = 0.0;
+    double cloudTemporalCpuMs = 0.0;
+    double cloudTemporalDrawCallCpuMs = 0.0;
+    double cloudPresentCpuMs = 0.0;
+    double cloudPresentDrawCallCpuMs = 0.0;
+    double cloudDepthMergeDrawCallCpuMs = 0.0;
+    double cloudRestoreCpuMs = 0.0;
+
     double meshInstancesCpuMs = 0.0;
+    double meshVisibleInstancesCpuMs = 0.0;
+    double meshDriverDrawCpuMs = 0.0;
+    double slowestMeshDriverDrawCpuMs = 0.0;
+    double rendererRestoreCpuMs = 0.0;
+    double outerGpuTimerCpuMs = 0.0;
     double slowestMeshInstanceMs = 0.0;
     std::string slowestMeshAsset;
     std::uint64_t environmentRefreshes = 0;
@@ -60,73 +153,122 @@ struct EntityMeshRendererStats
     std::uint64_t tireDeformationActiveRanges = 0;
     std::uint64_t tireDeformationDistanceCulledRanges = 0;
 
-    // DSURF02 persistent software-virtual-texture diagnostics. This pool is
-    // camera independent; resident pages are mirrored into GPU texture arrays.
-    double dynamicSurfacePageSyncCpuMs = 0.0;
-    std::uint64_t dynamicSurfaceResidentPages = 0;
-    std::uint64_t dynamicSurfaceDirtyPages = 0;
-    std::uint64_t dynamicSurfaceCapacityPages = 0;
-    std::uint64_t dynamicSurfacePageTableGeneration = 0;
-    std::uint64_t dynamicSurfacePageTableUploads = 0;
-    std::uint64_t dynamicSurfaceInitializedPages = 0;
-    std::uint64_t dynamicSurfaceMipRegenerations = 0;
-    std::uint64_t dynamicSurfaceSupportPageUploads = 0;
-    std::uint64_t dynamicSurfaceHydroPageUploads = 0;
-    std::uint64_t dynamicSurfaceTrackPageUploads = 0;
-    double dynamicSurfaceStateUploadCpuMs = 0.0;
-    double dynamicSurfaceCommittedMiB = 0.0;
-    bool dynamicSurfaceGpuReady = false;
+    // LIVETRACK11 GPU dynamic-surface diagnostics. Water topology is prebaked;
+    // rain-to-puddle reconstruction is evaluated in the material shader. Only
+    // localized tire clearing and optional snow/mud use compute dispatches.
+    bool dynamicSurfaceGpuRuntimeReady = false;
+    bool dynamicSurfaceGpuRuntimeWaterReady = false;
+    bool dynamicSurfaceGpuRuntimeSnowReady = false;
+    bool dynamicSurfaceGpuRuntimeMudReady = false;
+    double dynamicSurfaceGpuRuntimeCpuMs = 0.0;
+    double dynamicSurfaceGpuRuntimeGpuMs = 0.0;
 
-    // DSURF04F: centimetre-scale GPU LOD authority. Water/Snow/Mud are
-    // simulated in the exact GPU fields sampled by material rendering. F8
-    // exposes dispatch, GPU time, VRAM and publication cadence.
-    bool dynamicSurfaceGpuLodPrototypeReady = false;
-    bool dynamicSurfaceGpuLodWaterReady = false;
-    bool dynamicSurfaceGpuLodSnowReady = false;
-    bool dynamicSurfaceGpuLodMudReady = false;
-    bool dynamicSurfaceGpuWaterPresentationReady = false;
-    double dynamicSurfaceGpuWaterPresentationMiB = 0.0;
-    std::uint64_t dynamicSurfaceGpuWaterPresentationDispatches = 0;
-    double dynamicSurfaceGpuLodCpuMs = 0.0;
-    double dynamicSurfaceGpuLodGpuMs = 0.0;
-    double dynamicSurfaceGpuLodCommittedMiB = 0.0;
-    std::uint64_t dynamicSurfaceGpuLodDispatches = 0;
-    std::uint64_t dynamicSurfaceGpuLodCells = 0;
-    std::uint64_t dynamicSurfaceGpuLodWaterCycles = 0;
-    std::array<std::uint64_t, 4> dynamicSurfaceGpuLodWaterDispatches{};
-    std::array<std::uint64_t, 4> dynamicSurfaceGpuLodWaterPublishedCycles{};
+    // PERF02 Dynamic Surface CPU/driver attribution. Mirrors the production
+    // GPU runtime's current-frame wall timings for the F8 overlay.
+    double dynamicSurfaceGpuBookkeepingCpuMs = 0.0;
+    double dynamicSurfaceGpuTireReadbackPollCpuMs = 0.0;
+    double dynamicSurfaceGpuResidencyCpuMs = 0.0;
+    double dynamicSurfaceGpuStateProvisionCpuMs = 0.0;
+    double dynamicSurfaceGpuGeometryBindCpuMs = 0.0;
+    double dynamicSurfaceGpuTimerWallCpuMs = 0.0;
+    double dynamicSurfaceGpuOptionalDispatchCpuMs = 0.0;
+    double dynamicSurfaceGpuTireEventCpuMs = 0.0;
+    double dynamicSurfaceGpuTireWaterDispatchCpuMs = 0.0;
+    double dynamicSurfaceGpuResidualCpuMs = 0.0;
+
+    double dynamicSurfaceNearResidencyBuildCpuMs = 0.0;
+    double dynamicSurfaceNearTopologyRasterCpuMs = 0.0;
+    double dynamicSurfaceNearTopologyUploadGlMs = 0.0;
+    double dynamicSurfaceTileIndirectionUploadGlMs = 0.0;
+    double dynamicSurfaceFarTopologyCpuMs = 0.0;
+    double dynamicSurfaceFarCandidateBuildCpuMs = 0.0;
+    double dynamicSurfaceFarCandidateSortCpuMs = 0.0;
+    double dynamicSurfaceFarMissingScanCpuMs = 0.0;
+    double dynamicSurfaceFarTileResolveCpuMs = 0.0;
+    double dynamicSurfaceFarAtlasUploadGlMs = 0.0;
+    double dynamicSurfaceFarTagUploadGlMs = 0.0;
+    std::uint32_t dynamicSurfaceFarCandidateTilesEvaluated = 0;
+    bool dynamicSurfaceResidencyPolledThisFrame = false;
+    double dynamicSurfaceLastResidencyPollCpuMs = 0.0;
+    double dynamicSurfaceLastFarTopologyCpuMs = 0.0;
+    double dynamicSurfaceLastFarCandidateBuildCpuMs = 0.0;
+    double dynamicSurfaceLastFarCandidateSortCpuMs = 0.0;
+    double dynamicSurfaceLastFarMissingScanCpuMs = 0.0;
+    double dynamicSurfaceLastFarTileResolveCpuMs = 0.0;
+    double dynamicSurfaceLastFarAtlasUploadGlMs = 0.0;
+    double dynamicSurfaceLastFarTagUploadGlMs = 0.0;
+    std::uint32_t dynamicSurfaceLastFarCandidateTilesEvaluated = 0;
+
+    double dynamicSurfaceOptionalDispatchGlMs = 0.0;
+    double dynamicSurfaceOptionalCopyGlMs = 0.0;
+    double dynamicSurfaceOptionalBarrierGlMs = 0.0;
+    double dynamicSurfaceTireEventSetupGlMs = 0.0;
+    double dynamicSurfaceTireEventUniformGlMs = 0.0;
+    double dynamicSurfaceTireEventDispatchGlMs = 0.0;
+    double dynamicSurfaceTireEventSlowestDispatchGlMs = 0.0;
+    double dynamicSurfaceTireEventBarrierGlMs = 0.0;
+    double dynamicSurfaceTireReadbackWaitGlMs = 0.0;
+    double dynamicSurfaceTireReadbackMapGlMs = 0.0;
+    double dynamicSurfaceTireReadbackUnmapGlMs = 0.0;
+    double dynamicSurfaceTireWaterUploadGlMs = 0.0;
+    double dynamicSurfaceTireWaterSetupGlMs = 0.0;
+    double dynamicSurfaceTireWaterDispatchGlMs = 0.0;
+    double dynamicSurfaceTireWaterBarrierGlMs = 0.0;
+    double dynamicSurfaceTireWaterFenceGlMs = 0.0;
+
+    double dynamicSurfaceGpuRuntimeCommittedMiB = 0.0;
+    std::uint64_t dynamicSurfaceGpuRuntimeDispatches = 0;
+    std::uint64_t dynamicSurfaceGpuRuntimeCells = 0;
     std::array<std::uint32_t, 4> dynamicSurfaceGpuGeometryValidTiles{};
     std::array<std::uint32_t, 4> dynamicSurfaceGpuActiveTiles{};
     std::uint32_t dynamicSurfaceGpuResidentTiles = 0;
+    std::uint32_t dynamicSurfaceGpuDesiredTopologyTiles = 0;
+    std::uint32_t dynamicSurfaceGpuVisibleTopologyTiles = 0;
+    std::uint32_t dynamicSurfaceGpuPrebakedTopologyTiles = 0;
+    std::uint32_t dynamicSurfaceGpuFallbackTopologyTiles = 0;
+    std::uint32_t dynamicSurfaceGpuTopologyUploadsThisFrame = 0;
+    std::uint32_t dynamicSurfaceGpuFarDesiredTopologyTiles = 0;
+    std::uint32_t dynamicSurfaceGpuFarResidentTopologyTiles = 0;
+    std::uint32_t dynamicSurfaceGpuFarTopologyUploadsThisFrame = 0;
+    std::uint32_t dynamicSurfaceGpuFarTopologyBacklogTiles = 0;
     std::uint32_t dynamicSurfaceGpuPrewarmTiles = 0;
-    std::uint32_t dynamicSurfaceGpuWorldTiles = 0;
-    std::uint64_t dynamicSurfaceGpuWorldTileDispatches = 0;
-    double dynamicSurfaceGpuWorldTileStateMiB = 0.0;
     std::uint32_t dynamicSurfaceGpuDueTiles = 0;
     std::uint32_t dynamicSurfaceGpuBacklogTiles = 0;
     double dynamicSurfaceGpuCameraSpeedMps = 0.0;
     double dynamicSurfaceGpuPrewarmDistanceM = 0.0;
     float dynamicSurfaceGpuRainMmPerHour = 0.0f;
+    float dynamicSurfaceGpuRunoffDriverMmPerHour = 0.0f;
     float dynamicSurfaceGpuDrainageMmPerHour = 0.0f;
     float dynamicSurfaceGpuEvaporationMmPerHour = 0.0f;
     float dynamicSurfaceGpuBackgroundSeedDepthM = 0.0f;
-    bool dynamicSurfaceGpuWaterProbeValid = false;
-    std::uint32_t dynamicSurfaceGpuWaterProbeWetTexels = 0u;
-    std::uint32_t dynamicSurfaceGpuWaterProbeTexels = 0u;
-    float dynamicSurfaceGpuWaterProbeMeanDepthM = 0.0f;
-    float dynamicSurfaceGpuWaterProbeMaximumDepthM = 0.0f;
-    std::uint64_t dynamicSurfaceGpuLodTireEventDispatches = 0;
-    std::uint64_t dynamicSurfaceGpuLodTireEventCells = 0;
-    std::int32_t dynamicSurfaceGpuLodCenterTileX = 0;
-    std::int32_t dynamicSurfaceGpuLodCenterTileZ = 0;
-    std::uint64_t dynamicSurfaceGpuLodCameraTileRebases = 0;
+    float dynamicSurfaceGpuSurfaceWettingExposureM = 0.0f;
+    std::uint64_t dynamicSurfaceGpuRuntimeTireEventDispatches = 0;
+    std::uint64_t dynamicSurfaceGpuRuntimeTireEventCells = 0;
+    std::uint64_t dynamicSurfaceGpuRuntimeTireWaterSampleDispatches = 0;
+    std::uint64_t dynamicSurfaceGpuRuntimeTireWaterSamplesCompleted = 0;
+    std::uint64_t dynamicSurfaceGpuRuntimeTireWaterSampleReadbackDrops = 0;
+    std::int32_t dynamicSurfaceGpuRuntimeCenterTileX = 0;
+    std::int32_t dynamicSurfaceGpuRuntimeCenterTileZ = 0;
+    std::uint64_t dynamicSurfaceGpuRuntimeCameraTileRebases = 0;
     bool dynamicSurfaceGpuExactGeometryReady = false;
     std::uint64_t dynamicSurfaceGpuGeometryTriangles = 0;
     std::uint64_t dynamicSurfaceGpuGeometryBinReferences = 0;
     double dynamicSurfaceGpuGeometryUploadMiB = 0.0;
 
-    // SHADOW01: real-time directional cascaded shadow-map diagnostics.
+    // SHADOW01/SHADOW05: real-time directional cascaded shadow-map diagnostics.
+    // The detailed CPU stages distinguish actual engine work from OpenGL-driver
+    // submission stalls. shadowGpuMs is an asynchronous timestamp result from a
+    // completed earlier frame and never blocks the current frame.
     double shadowCpuMs = 0.0;
+    double shadowSettingsCpuMs = 0.0;
+    double shadowCascadeCpuMs = 0.0;
+    double shadowPrepareCpuMs = 0.0;
+    double shadowStateCpuMs = 0.0;
+    double shadowDrawCpuMs = 0.0;
+    double shadowDriverDrawCpuMs = 0.0;
+    double shadowRestoreCpuMs = 0.0;
+    double shadowGpuMs = 0.0;
+    std::uint64_t shadowGpuTimerSamples = 0;
     std::uint64_t shadowDrawCalls = 0;
     std::uint64_t shadowTriangles = 0;
     std::uint64_t shadowCulledRanges = 0;
@@ -162,11 +304,17 @@ public:
         const heritage::settings::VideoSettings& videoSettings,
         float elapsedSeconds,
         const heritage::camera::CameraFrame& cameraFrame,
+        const EntityMeshRenderTargetState& renderTargetState,
         bool wireframeVisible = false,
         const heritage::physics::SurfaceWorld* surfaceWorld = nullptr);
 
     std::size_t loadedAssetCount() const;
     void beginFrameStats() { m_frameStats = {}; }
+    void recordOuterGpuTimerCpuMs(double milliseconds)
+    {
+        if (milliseconds > 0.0)
+            m_frameStats.outerGpuTimerCpuMs += milliseconds;
+    }
     const EntityMeshRendererStats& frameStats() const { return m_frameStats; }
     const std::string& lastError() const { return m_lastError; }
 
@@ -228,29 +376,32 @@ private:
         GLint saturation = -1;
         GLint weatherFogDensity = -1;
         GLint weatherFogColor = -1;
-        // DSURF03: the ordinary scene material samples the persistent
-        // Heritage Dynamic Surface page pool. No WATER15-18 clipmap/puddle
-        // canvas survives as a parallel presentation authority.
+        GLint regionalWeatherMap = -1;
+        GLint regionalWeatherMapValid = -1;
+        GLint regionalWeatherCameraOffsetXZ = -1;
+        GLint regionalWeatherAdvectionXZ = -1;
+        GLint regionalWeatherHalfRangeM = -1;
+        GLint weatherCloudBaseM = -1;
+        GLint volumetricCloudShadow = -1;
+        GLint hasVolumetricCloudShadow = -1;
+        GLint volumetricCloudShadowHalfRangeM = -1;
+        // Scene material wetness uses the fixed LIVETRACK11 prebaked GPU path.
+        // The legacy CPU Hydro page mirror is intentionally not bindable here.
         GLint surfaceWetnessReceiver = -1;
-        GLint dynamicSurfaceHydroPages = -1;
-        GLint dynamicSurfacePageIndirection = -1;
-        GLint dynamicSurfaceIndirectionOriginRelativeXZ = -1;
-        GLint dynamicSurfacePageWorldSizeM = -1;
-        GLint dynamicSurfaceIndirectionResolution = -1;
-        GLint dynamicSurfaceHydroBaseMip = -1;
-        GLint dynamicSurfaceCameraGlobalY = -1;
-        GLint dynamicSurfaceActive = -1;
         GLint gpuDynamicSurfaceAuthorityActive = -1;
         GLint gpuWaterAtlas = -1;
-        GLint gpuWaterPresentationAtlas = -1;
-        GLint gpuWaterPresentationReady = -1;
+        GLint gpuFarWaterAtlas = -1;
+        GLint gpuFarTileTags = -1;
         GLint gpuSnowAtlas = -1;
         GLint gpuMudAtlas = -1;
         GLint gpuTileIndirection = -1;
         GLint gpuDynamicSurfaceCenterOriginRelativeXZ = -1;
+        GLint gpuDynamicSurfaceCenterWorldTile = -1;
         GLint gpuDynamicSurfaceTileMapCenter = -1;
         GLint gpuDynamicSurfaceTileResolution = -1;
         GLint gpuDynamicSurfaceAtlasColumns = -1;
+        GLint gpuFarTileResolution = -1;
+        GLint gpuFarAtlasTilesPerAxis = -1;
         GLint gpuDynamicSurfaceSnowReady = -1;
         GLint gpuDynamicSurfaceMudReady = -1;
         GLint surfaceWetnessBreakupMask = -1;
@@ -258,7 +409,9 @@ private:
         GLint surfacePatternCameraModuloXZ = -1;
         GLint surfacePresentationTime = -1;
         GLint surfaceWeatherFilmWetness = -1;
-        GLint surfaceWeatherFilmDepthM = -1;
+        GLint prebakedWaterExposureM = -1;
+        GLint rainWettingExposureM = -1;
+        GLint rainRateMmPerHour = -1;
         GLint hasEnvironmentMap = -1;
         GLint environmentMaxLod = -1;
         GLint model = -1;
@@ -345,6 +498,20 @@ private:
         float blendElapsedSeconds = 0.0f;
     };
 
+    // OPT04C: one camera-relative mesh/node preparation is shared by the
+    // layered shadow pass and the normal material pass. Before this cache, the
+    // renderer acquired each asset and evaluated animation/node/tire overrides
+    // twice in immediate succession whenever sun shadows were active.
+    struct PreparedFrameInstance
+    {
+        const heritage::entities::MeshInstance* instance = nullptr;
+        const Mesh* mesh = nullptr;
+        heritage::math::Mat4 instanceModel = heritage::math::identity();
+        std::vector<heritage::math::Mat4> nodeGlobals;
+        std::vector<const heritage::entities::MeshNodeOverride*> tireVisualOverrides;
+        double prepareCpuMs = 0.0;
+    };
+
     bool resolveAsset(
         const std::string& relativePath,
         std::filesystem::path& resolved,
@@ -360,21 +527,28 @@ private:
     bool dependenciesChanged(const CachedAsset& asset) const;
     void rememberDependencies(CachedAsset& asset);
     void reportMaterialWarning(const std::string& warning);
-    void updateDynamicSurfaceStatePages(
+    bool updateRegionalWeatherMap(
         const heritage::physics::SurfaceWorld* surfaceWorld,
         const heritage::math::DVec3& cameraGlobal,
         float elapsedSeconds);
+    void shutdownRegionalWeatherMap();
+    EnvironmentLighting weatherAdjustedLighting(
+        EnvironmentLighting lighting,
+        const heritage::physics::SurfaceWorld* surfaceWorld,
+        const heritage::math::DVec3& cameraGlobal) const;
+    void bindRegionalWeatherMaterialState(
+        const heritage::physics::SurfaceWorld* surfaceWorld,
+        const heritage::math::DVec3& cameraGlobalForSurface,
+        const heritage::physics::weather::RegionalWeatherSample& cameraRegionalWeather,
+        bool regionalWeatherMapReady,
+        const EnvironmentLighting& lighting);
     bool initializeSurfaceWetnessMaterialBindings();
     void bindSurfaceWetnessMaterialState(
         const heritage::math::DVec3& cameraGlobal,
         float elapsedSeconds);
-    bool initializeDynamicSurfacePageResources();
-    void shutdownDynamicSurfacePageResources();
-    void synchronizeDynamicSurfacePageResources(
-        const heritage::physics::SurfaceWorld* surfaceWorld);
-    void initializeDynamicSurfaceGpuLodPrototype();
-    void shutdownDynamicSurfaceGpuLodPrototype();
-    void updateDynamicSurfaceGpuLodPrototype(
+    void initializeDynamicSurfaceGpuRuntime();
+    void shutdownDynamicSurfaceGpuRuntime();
+    void updateDynamicSurfaceGpuRuntime(
         const heritage::physics::SurfaceWorld* surfaceWorld,
         const heritage::math::DVec3& cameraGlobal,
         float elapsedSeconds);
@@ -385,6 +559,10 @@ private:
         const Mesh& mesh,
         const heritage::entities::MeshInstance& instance,
         double elapsedSeconds);
+    void prepareFrameInstances(
+        const std::vector<heritage::entities::MeshInstance>& instances,
+        const heritage::math::Vec3& eye,
+        float elapsedSeconds);
     bool initializeShadowResources();
     bool synchronizeShadowSettings(const heritage::settings::VideoSettings& videoSettings);
     void shutdownShadowResources();
@@ -393,9 +571,8 @@ private:
         const heritage::math::Mat4& view,
         const heritage::math::Vec3& sunDirection);
     void drawShadowMaps(
-        const std::vector<heritage::entities::MeshInstance>& instances,
-        const heritage::math::Vec3& eye,
-        float elapsedSeconds);
+        const std::vector<PreparedFrameInstance>& preparedInstances,
+        const EntityMeshRenderTargetState& renderTargetState);
 
     std::filesystem::path m_assetRoot;
     std::unordered_map<std::string, CachedAsset> m_cache;
@@ -409,43 +586,30 @@ private:
     std::unordered_set<std::string> m_reportedTireColliderProofNodes;
     std::unordered_map<heritage::entities::EntityHandle, AnimationRuntimeState> m_animationStates;
     Texture2DCache m_textureCache;
-    heritage::graphics::dynamicsurface::DynamicSurfaceGpuPagePool
-        m_dynamicSurfaceGpuPagePool;
-    heritage::graphics::dynamicsurface::DynamicSurfaceGpuLodPrototype
-        m_dynamicSurfaceGpuLodPrototype;
+    heritage::graphics::dynamicsurface::DynamicSurfaceGpuRuntime
+        m_dynamicSurfaceGpuRuntime;
     EnvironmentSystem* m_environmentSystem = nullptr;
     EnvironmentMap m_environmentMap;
     SkyRenderer m_skyRenderer;
+    GLuint m_regionalWeatherTexture = 0;
+    int m_regionalWeatherResolution = 512;
+    double m_regionalWeatherCenterX = 0.0;
+    double m_regionalWeatherCenterZ = 0.0;
+    double m_regionalWeatherHalfRangeM = 1000000.0;
+    double m_regionalWeatherLastUpdateSeconds = -1.0;
+    double m_regionalWeatherFieldElapsedAtUpload = 0.0;
+    double m_regionalWeatherAuthoredRainMmPerHour = -1.0;
+    double m_regionalWeatherAuthoredHumidity = -1.0;
+    double m_regionalWeatherAuthoredCloudCover = -1.0;
+    double m_regionalWeatherAuthoredWindSpeedMps = -1.0;
+    double m_regionalWeatherAuthoredWindDirectionDeg = -1.0;
+    std::vector<std::uint8_t> m_regionalWeatherPixels;
     GLuint m_program = 0;
     UniformLocations m_uniforms{};
-    // DSURF03: the shoreline texture remains artist-authored optical relief,
-    // but all spatial water/moisture state now lives in persistent Dynamic
-    // Surface pages. The indirection texture maps a camera-local lookup grid to
-    // world-anchored physical page slots; it owns no simulation state.
+    // Artist-authored shoreline breakup remains optical relief only. Water
+    // topology/indirection belongs solely to DynamicSurfaceGpuRuntime.
     GLuint m_surfaceWetnessBreakupTexture = 0;
-    GLuint m_dynamicSurfacePageIndirectionTexture = 0;
-    static constexpr int kDynamicSurfaceIndirectionResolution = 64;
-    static constexpr std::uint32_t kDynamicSurfaceHydroBaseMip = 0u; // LIVETRACK03 Hydro: RGBA4 256x256 = 0.390625m/texel.
-    heritage::math::DVec3 m_dynamicSurfaceIndirectionOriginGlobal{};
-    std::uint64_t m_dynamicSurfaceIndirectionTableGeneration = 0u;
-    std::vector<std::int32_t> m_dynamicSurfaceIndirectionScratch;
-    std::vector<std::uint16_t> m_dynamicSurfaceHydroScratch;
-    std::vector<float> m_dynamicSurfaceTrackScratch;
-    std::map<heritage::physics::dynamicsurface::VirtualPageAddress, std::uint64_t>
-        m_dynamicSurfaceHydroUploadedStep;
-    std::map<heritage::physics::dynamicsurface::VirtualPageAddress, std::uint32_t>
-        m_dynamicSurfaceHydroUploadedGeneration;
-    std::map<heritage::physics::dynamicsurface::VirtualPageAddress, std::uint64_t>
-        m_dynamicSurfaceTrackUploadedStep;
-    std::map<heritage::physics::dynamicsurface::VirtualPageAddress, std::uint32_t>
-        m_dynamicSurfaceTrackUploadedGeneration;
-    std::map<heritage::physics::dynamicsurface::VirtualPageAddress, float>
-        m_dynamicSurfaceHydroLastRefreshSeconds;
-    std::map<heritage::physics::dynamicsurface::VirtualPageAddress, float>
-        m_dynamicSurfaceTrackLastRefreshSeconds;
-    std::size_t m_dynamicSurfaceHydroRefreshCursor = 0u;
     float m_surfaceWeatherFilmWetness = 0.0f;
-    float m_surfaceWeatherFilmDepthM = 0.0f;
 
     GLuint m_shadowProgram = 0;
     GLuint m_shadowFramebuffer = 0;
@@ -460,16 +624,32 @@ private:
     bool m_tireProbeDebugVisible = false;
     int m_shadowResolution = 0;
     int m_shadowFilterIndex = 2;
+    int m_shadowMaximumTextureSize = 0;
+    static constexpr std::size_t kShadowGpuTimerRingSize = 4;
+    std::array<GLuint, kShadowGpuTimerRingSize> m_shadowGpuTimerStartQueries{};
+    std::array<GLuint, kShadowGpuTimerRingSize> m_shadowGpuTimerEndQueries{};
+    std::array<bool, kShadowGpuTimerRingSize> m_shadowGpuTimerPending{};
+    std::size_t m_shadowGpuTimerWriteIndex = 0;
+    double m_shadowLastGpuMs = 0.0;
     std::uint64_t m_hotReloadEpoch = 1;
     std::string m_lastError;
     EntityMeshRendererStats m_frameStats{};
     std::vector<heritage::entities::MeshInstance> m_instanceScratch;
+    std::vector<PreparedFrameInstance> m_preparedFrameInstanceScratch;
     // Reused every render frame so the 1000Hz->GPU contact handoff does not
     // repeatedly discard and rebuild vector capacity under large vehicle fields.
     std::vector<heritage::physics::GpuDynamicSurfaceTireEvent>
         m_dynamicSurfacePhysicsTireEventScratch;
     std::vector<heritage::graphics::dynamicsurface::DynamicSurfaceGpuTireContactEvent>
         m_dynamicSurfaceGpuTireEventScratch;
+    std::vector<heritage::physics::GpuDynamicSurfaceWaterSampleRequest>
+        m_dynamicSurfacePhysicsWaterSampleRequestScratch;
+    std::vector<heritage::graphics::dynamicsurface::DynamicSurfaceGpuTireWaterSampleRequest>
+        m_dynamicSurfaceGpuWaterSampleRequestScratch;
+    std::vector<heritage::graphics::dynamicsurface::DynamicSurfaceGpuTireWaterSample>
+        m_dynamicSurfaceGpuWaterSampleResultScratch;
+    std::vector<heritage::physics::GpuDynamicSurfaceWaterSample>
+        m_dynamicSurfacePhysicsWaterSampleResultScratch;
 };
 
 } // namespace heritage::graphics

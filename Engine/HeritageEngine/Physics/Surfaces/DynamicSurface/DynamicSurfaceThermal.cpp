@@ -1,6 +1,5 @@
 #include "DynamicSurfaceThermal.hpp"
 
-#include "DynamicSurfaceHydrology.hpp"
 #include "DynamicSurfaceSystem.hpp"
 #include "../SurfaceMaterialProperties.hpp"
 
@@ -413,11 +412,7 @@ bool DynamicSurfaceThermal::simulateEnvironment(
         return false;
 
     bool changed = false;
-
-    const DynamicSurfaceChunk* owningChunk = owner.findChunk(page.address.chunk);
-    const heritage::math::DVec3 hydroSampleOrigin = owningChunk
-        ? owningChunk->globalOrigin()
-        : heritage::math::DVec3{};
+    (void)owner;
 
     for (std::size_t i = 0; i < page.stateCells.size(); ++i)
     {
@@ -441,27 +436,10 @@ bool DynamicSurfaceThermal::simulateEnvironment(
 
         double wetness = 0.0;
         double waterDepthM = 0.0;
-        if (owningChunk)
-        {
-            const std::uint32_t trackX = static_cast<std::uint32_t>(
-                i % kTrackAuthorityResolution);
-            const std::uint32_t trackZ = static_cast<std::uint32_t>(
-                i / kTrackAuthorityResolution);
-            const heritage::math::DVec3 samplePosition{
-                hydroSampleOrigin.x
-                    + (static_cast<double>(trackX) + 0.5) * kTrackAuthorityTexelPitchM,
-                static_cast<double>(staticCell.supportHeightM),
-                hydroSampleOrigin.z
-                    + (static_cast<double>(trackZ) + 0.5) * kTrackAuthorityTexelPitchM };
-            const DynamicSurfaceHydroSample hydro = owner.m_hydrology.sample(
-                owner, samplePosition);
-            if (hydro.valid)
-            {
-                waterDepthM = std::max(hydro.waterDepthM, 0.0);
-                wetness = std::clamp(hydro.wetness, 0.0, 1.0);
-            }
-        }
-        if (wetness <= 0.0 && staticCell.skyExposed && weatherOutput.valid)
+        // OPT03B: Track thermal no longer reaches into the dormant CPU Hydro
+        // lattice. Production wet cooling follows scene weather; tire contact
+        // heat remains spatial through the Track authority itself.
+        if (staticCell.skyExposed && weatherOutput.valid)
         {
             wetness = std::clamp(weatherOutput.effectiveWetness, 0.0, 1.0);
             waterDepthM = std::max(weatherOutput.waterFilmDepthM, 0.0);

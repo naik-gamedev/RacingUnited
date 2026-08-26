@@ -108,8 +108,10 @@ bool inspectGlbMetadata(
         && defaultSceneIndex >= 0
         && static_cast<std::size_t>(defaultSceneIndex) < scenes->arrayValue.size())
     {
-        metadataMesh.rootNodeIndices = readIntArray(
-            scenes->arrayValue[static_cast<std::size_t>(defaultSceneIndex)].find("nodes"));
+        const JsonValue& activeScene = scenes->arrayValue[static_cast<std::size_t>(defaultSceneIndex)];
+        metadataMesh.rootNodeIndices = readIntArray(activeScene.find("nodes"));
+        if (const JsonValue* extras = activeScene.find("extras"); extras && extras->isObject())
+            appendExtrasMetadata(*extras, {}, document.sceneMetadata);
     }
     else
     {

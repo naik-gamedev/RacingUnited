@@ -101,7 +101,7 @@ Float3 proceduralEnvironment(
 
     const float horizon = std::exp(-std::abs(direction.y) * 11.0f);
     const Float3 horizonGlow = mix(
-        { 0.025f, 0.020f, 0.018f },
+        { 0.0010f, 0.0018f, 0.0055f },
         { 0.13f, 0.11f, 0.085f },
         lighting.daylightFactor);
     color = add(color, multiply(horizonGlow, horizon));
@@ -160,7 +160,9 @@ float environmentLightingDifference(
         difference3(a.groundHorizon, b.groundHorizon),
         difference3(a.groundNadir, b.groundNadir),
         std::abs(a.starIntensity - b.starIntensity),
-        std::abs(a.daylightFactor - b.daylightFactor) });
+        std::abs(a.daylightFactor - b.daylightFactor),
+        std::abs(a.moonIntensity - b.moonIntensity),
+        std::abs(a.moonPhase - b.moonPhase) });
 }
 
 } // namespace
@@ -229,23 +231,32 @@ bool EnvironmentMap::updateProcedural(
         return uploadProcedural(lighting);
     }
 
-    // Start a new staged refresh only when the environment changed enough and
-    // at most five times per second. Once started, one cubemap face is filled
-    // per rendered frame. The renderer keeps sampling the old complete map
-    // until all six new faces and mip levels are ready, so there are no seams.
-    constexpr float kRefreshThresholdHours = 0.01f;
-    constexpr auto kMinimumWallInterval = std::chrono::milliseconds(200);
+    // Start a new staged refresh only when the environment changed enough.
+    // CLOUDURP15N keeps the cheap one-face-per-frame staging, but refreshes
+    // more aggressively specifically during dawn/dusk. At the default 240x
+    // clock the old 200 ms gate meant the active IBL could jump almost a
+    // simulated minute at each atomic cubemap swap, which read as mysterious
+    // scene lights appearing/disappearing even though the astronomical values
+    // themselves were continuous. Full day and deep night keep the cheaper
+    // cadence; twilight gets a denser sequence of much smaller IBL changes.
+    const bool transitionLighting =
+        (lighting.daylightFactor > 0.002f && lighting.daylightFactor < 0.998f)
+        || (lighting.starIntensity > 0.002f && lighting.starIntensity < 0.998f);
+    const float refreshThresholdHours = transitionLighting ? 0.0030f : 0.010f;
+    const auto minimumWallInterval = transitionLighting
+        ? std::chrono::milliseconds(55)
+        : std::chrono::milliseconds(200);
     if (!m_refreshInProgress)
     {
         const bool timeChanged = wrappedHourDistance(
             lighting.timeOfDayHours,
-            m_lastGeneratedTimeHours) >= kRefreshThresholdHours;
+            m_lastGeneratedTimeHours) >= refreshThresholdHours;
         const bool lightingChanged = environmentLightingDifference(
-            lighting, m_pendingLighting) >= 0.015f;
+            lighting, m_pendingLighting) >= (transitionLighting ? 0.006f : 0.015f);
         if (!timeChanged && !lightingChanged)
             return true;
         if (m_hasUploadWallTime
-            && now - m_lastUploadWallTime < kMinimumWallInterval)
+            && now - m_lastUploadWallTime < minimumWallInterval)
         {
             return true;
         }

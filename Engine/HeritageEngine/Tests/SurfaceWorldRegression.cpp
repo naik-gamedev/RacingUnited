@@ -2,8 +2,11 @@
 
 #include "../Physics/Surfaces/SurfaceField.hpp"
 #include "../Physics/Surfaces/SurfaceWorld.hpp"
+#include "Reference/DynamicSurfaceHydrologyReference.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstddef>
 #include <vector>
 
@@ -167,6 +170,404 @@ bool surfaceWorldGlobalAddressingAndChunkCacheBehave()
     {
         return false;
     }
+    heritage::tests::reference::DynamicSurfaceHydrologyReference hydrologyReference;
+
+    // LIVETRACK08/LIVETRACK21I production regression: the static .hhyd
+    // response must see a broad shallow bowl whose spill rim is metres away.
+    // The retired GPU initializer looked only about 8 cm around each detailed
+    // texel, so the middle of a parking-lot-scale depression appeared locally
+    // flat and got no standing-puddle capacity. Keep this synthetic bowl inside
+    // LIVETRACK21I's deliberate 0..0.70 mm 4-bit standing-depth ladder so the
+    // packed regression can still verify center > shoulder > edge. Deeper
+    // geometric basins intentionally saturate at code 15 and are tested by the
+    // topology itself rather than by demanding nonexistent >0.70 mm code detail.
+    SurfaceWorld prebakedBasinWorld;
+    std::vector<heritage::physics::StaticSceneTriangle> prebakedBasinTriangles;
+    const auto prebakedBasinHeight = [](float x, float z) {
+        const float dx = x - 5.0f;
+        const float dz = z - 5.0f;
+        const float radiusM = std::sqrt(dx * dx + dz * dz);
+        const float normalizedRadius = std::min(radiusM / 4.0f, 1.0f);
+        return 0.00060f * normalizedRadius * normalizedRadius;
+    };
+    for (int z = 0; z < 10; ++z)
+    {
+        for (int x = 0; x < 10; ++x)
+        {
+            const float x0 = static_cast<float>(x);
+            const float x1 = x0 + 1.0f;
+            const float z0 = static_cast<float>(z);
+            const float z1 = z0 + 1.0f;
+            heritage::physics::StaticSceneTriangle first;
+            first.a = { x0, prebakedBasinHeight(x0, z0), z0 };
+            first.b = { x1, prebakedBasinHeight(x1, z0), z0 };
+            first.c = { x1, prebakedBasinHeight(x1, z1), z1 };
+            first.normal = { 0.0f, 1.0f, 0.0f };
+            first.surfaceMaterial = SurfaceMaterial::Asphalt;
+            first.surfaceProperties = asphaltDefaults;
+            heritage::physics::StaticSceneTriangle second = first;
+            second.a = { x0, prebakedBasinHeight(x0, z0), z0 };
+            second.b = { x1, prebakedBasinHeight(x1, z1), z1 };
+            second.c = { x0, prebakedBasinHeight(x0, z1), z1 };
+            prebakedBasinTriangles.push_back(first);
+            prebakedBasinTriangles.push_back(second);
+        }
+    }
+    heritage::physics::water::SurfaceHydrologyBakeReport prebakedBasinBake;
+    if (!prebakedBasinWorld.loadOrBakeHydrology(
+            prebakedBasinTriangles, {}, prebakedBasinBake)
+        || !prebakedBasinBake.valid)
+    {
+        return false;
+    }
+    std::vector<std::uint8_t> prebakedPuddleTile;
+    constexpr std::uint32_t kPrebakedRegressionResolution = 256u;
+    if (!prebakedBasinWorld.hydrology().rasterPrebakedPuddleResponseTile(
+            0, 0, kPrebakedRegressionResolution, prebakedPuddleTile)
+        || prebakedPuddleTile.size()
+            != static_cast<std::size_t>(kPrebakedRegressionResolution)
+                * kPrebakedRegressionResolution * 3u)
+    {
+        return false;
+    }
+    const auto prebakedCapacityAt = [&](double worldX, double worldZ) {
+        constexpr double tileSizeM = 10.0;
+        const auto x = static_cast<std::uint32_t>(std::clamp(
+            static_cast<int>(worldX / tileSizeM
+                * kPrebakedRegressionResolution),
+            0, static_cast<int>(kPrebakedRegressionResolution) - 1));
+        const auto z = static_cast<std::uint32_t>(std::clamp(
+            static_cast<int>(worldZ / tileSizeM
+                * kPrebakedRegressionResolution),
+            0, static_cast<int>(kPrebakedRegressionResolution) - 1));
+        const std::size_t offset = (static_cast<std::size_t>(z)
+            * kPrebakedRegressionResolution + x) * 3u;
+        return prebakedPuddleTile[offset + 1u];
+    };
+    const std::uint8_t bowlEdgeCapacity = prebakedCapacityAt(0.25, 5.0);
+    const std::uint8_t bowlShoulderCapacity = prebakedCapacityAt(3.0, 5.0);
+    const std::uint8_t bowlCenterCapacity = prebakedCapacityAt(5.0, 5.0);
+    // 0.60 mm is code 13 in the authoritative ladder, stored as 13*17 = 221.
+    // This exact assertion prevents the bake from silently reverting to a
+    // different depth curve while still passing a mere center>shoulder test.
+    if (bowlCenterCapacity != 221u
+        || bowlCenterCapacity <= bowlShoulderCapacity
+        || bowlShoulderCapacity <= bowlEdgeCapacity)
+    {
+        return false;
+    }
+
+    // LIVETRACK15 regression: sub-millimetre authored depressions must survive
+    // the mesh bake. The old 1 mm plateau tolerance could arbitrarily drain
+    // these shallow minima by triangle index, which made the scene prebake too
+    // sparse even though the 0.001 mm renderer could display them.
+    SurfaceWorld shallowBasinWorld;
+    std::vector<heritage::physics::StaticSceneTriangle> shallowBasinTriangles;
+    const auto shallowHeight = [](float x, float z) {
+        const float dx = x - 5.0f;
+        const float dz = z - 5.0f;
+        const float radiusSquared = dx * dx + dz * dz;
+        return radiusSquared < 16.0f
+            ? -0.00035f * (1.0f - radiusSquared / 16.0f)
+            : 0.0f;
+    };
+    for (int z = 0; z < 10; ++z)
+    {
+        for (int x = 0; x < 10; ++x)
+        {
+            const float x0 = static_cast<float>(x);
+            const float x1 = x0 + 1.0f;
+            const float z0 = static_cast<float>(z);
+            const float z1 = z0 + 1.0f;
+            heritage::physics::StaticSceneTriangle first;
+            first.a = { x0, shallowHeight(x0, z0), z0 };
+            first.b = { x1, shallowHeight(x1, z0), z0 };
+            first.c = { x1, shallowHeight(x1, z1), z1 };
+            first.normal = { 0.0f, 1.0f, 0.0f };
+            first.surfaceMaterial = SurfaceMaterial::Asphalt;
+            first.surfaceProperties = asphaltDefaults;
+            heritage::physics::StaticSceneTriangle second = first;
+            second.a = { x0, shallowHeight(x0, z0), z0 };
+            second.b = { x1, shallowHeight(x1, z1), z1 };
+            second.c = { x0, shallowHeight(x0, z1), z1 };
+            shallowBasinTriangles.push_back(first);
+            shallowBasinTriangles.push_back(second);
+        }
+    }
+    heritage::physics::water::SurfaceHydrologyBakeReport shallowBasinBake;
+    if (!shallowBasinWorld.loadOrBakeHydrology(
+            shallowBasinTriangles, {}, shallowBasinBake)
+        || !shallowBasinBake.valid)
+    {
+        return false;
+    }
+    std::vector<std::uint8_t> shallowPuddleTile;
+    if (!shallowBasinWorld.hydrology().rasterPrebakedPuddleResponseTile(
+            0, 0, kPrebakedRegressionResolution, shallowPuddleTile))
+    {
+        return false;
+    }
+    const auto shallowCapacityAt = [&](double worldX, double worldZ) {
+        const auto x = static_cast<std::uint32_t>(std::clamp(
+            static_cast<int>(worldX / 10.0 * kPrebakedRegressionResolution),
+            0, static_cast<int>(kPrebakedRegressionResolution) - 1));
+        const auto z = static_cast<std::uint32_t>(std::clamp(
+            static_cast<int>(worldZ / 10.0 * kPrebakedRegressionResolution),
+            0, static_cast<int>(kPrebakedRegressionResolution) - 1));
+        return shallowPuddleTile[(static_cast<std::size_t>(z)
+            * kPrebakedRegressionResolution + x) * 3u + 1u];
+    };
+    if (shallowCapacityAt(5.0, 5.0) == 0u
+        || shallowCapacityAt(5.0, 5.0) <= shallowCapacityAt(0.2, 5.0))
+    {
+        return false;
+    }
+
+    // LIVETRACK19 regression: the whole-scene bake also owns a compact 32x32
+    // runoff-accumulation/capacity/flow payload for every authored 10 m tile. The 500 m renderer
+    // consumes this cached payload directly; it must not raster collision
+    // triangles progressively while driving.
+    std::vector<std::uint8_t> prebakedFarPuddleTile;
+    if (!prebakedBasinWorld.hydrology().prebakedFarPuddleResponseTile(
+            0, 0, prebakedFarPuddleTile)
+        || prebakedFarPuddleTile.size() != 32u * 32u * 3u
+        || prebakedBasinWorld.hydrology().stats().prebakedWorldTileCount == 0u
+        || prebakedBasinWorld.hydrology().stats().prebakedFarPayloadBytes == 0u
+        || prebakedBasinWorld.hydrology().stats().prebakedFarPayloadBytes
+            > prebakedBasinWorld.hydrology().stats().prebakedWorldTileCount * 1536ull)
+    {
+        return false;
+    }
+
+    // LIVETRACK11 regression: microscopic/depression storage on an ordinary
+    // draining slope is rasterized directly from authored collision triangles.
+    // The retired 0.5 m expansion produced a repeating 34/85/119/... capacity
+    // ramp on this simple plane, visible in-game as tiled stripes and diamonds.
+    // A non-basin slope must remain zero FREE-WATER capacity even across
+    // triangle seams and 10 m tile ownership boundaries. The 0.1 mm material
+    // film is now a separate runtime wetting state.
+    SurfaceWorld slopedPrebakeWorld;
+    std::vector<heritage::physics::StaticSceneTriangle> slopedPrebakeTriangles;
+    constexpr float kSlopeRisePerMetre = 0.020f;
+    const float slopeNormalInvLength = 1.0f / std::sqrt(
+        1.0f + kSlopeRisePerMetre * kSlopeRisePerMetre);
+    const heritage::math::Vec3 slopeNormal{
+        -kSlopeRisePerMetre * slopeNormalInvLength,
+        slopeNormalInvLength,
+        0.0f };
+    for (int z = 0; z < 10; ++z)
+    {
+        for (int x = 0; x < 20; ++x)
+        {
+            const float x0 = static_cast<float>(x);
+            const float x1 = x0 + 1.0f;
+            const float z0 = static_cast<float>(z);
+            const float z1 = z0 + 1.0f;
+            const float y0 = kSlopeRisePerMetre * x0;
+            const float y1 = kSlopeRisePerMetre * x1;
+            heritage::physics::StaticSceneTriangle first;
+            first.a = { x0, y0, z0 };
+            first.b = { x1, y1, z0 };
+            first.c = { x1, y1, z1 };
+            first.normal = slopeNormal;
+            first.surfaceMaterial = SurfaceMaterial::Asphalt;
+            first.surfaceProperties = asphaltDefaults;
+            heritage::physics::StaticSceneTriangle second = first;
+            second.a = { x0, y0, z0 };
+            second.b = { x1, y1, z1 };
+            second.c = { x0, y0, z1 };
+            slopedPrebakeTriangles.push_back(first);
+            slopedPrebakeTriangles.push_back(second);
+        }
+    }
+    heritage::physics::water::SurfaceHydrologyBakeReport slopedPrebakeReport;
+    if (!slopedPrebakeWorld.loadOrBakeHydrology(
+            slopedPrebakeTriangles, {}, slopedPrebakeReport)
+        || !slopedPrebakeReport.valid)
+    {
+        return false;
+    }
+    std::vector<std::uint8_t> slopedPuddleTile;
+    if (!slopedPrebakeWorld.hydrology().rasterPrebakedPuddleResponseTile(
+            0, 0, kPrebakedRegressionResolution, slopedPuddleTile))
+    {
+        return false;
+    }
+    std::uint8_t slopedMinimumCapacity = 255u;
+    std::uint8_t slopedMaximumCapacity = 0u;
+    for (std::size_t texel = 0;
+         texel < slopedPuddleTile.size() / 3u; ++texel)
+    {
+        const std::uint8_t capacity = slopedPuddleTile[texel * 3u + 1u];
+        slopedMinimumCapacity = std::min(slopedMinimumCapacity, capacity);
+        slopedMaximumCapacity = std::max(slopedMaximumCapacity, capacity);
+    }
+    if (slopedMinimumCapacity != 0u
+        || slopedMaximumCapacity != 0u)
+    {
+        return false;
+    }
+
+    // LIVETRACK19: a draining surface may have zero standing-water capacity but
+    // still carry runoff. The new first topology byte is logarithmic upstream
+    // flow accumulation; at least part of this long slope must collect more
+    // upstream area than the source edge.
+    std::uint8_t slopedMinimumRunoff = 255u;
+    std::uint8_t slopedMaximumRunoff = 0u;
+    for (std::size_t texel = 0; texel < slopedPuddleTile.size() / 3u; ++texel)
+    {
+        const std::uint8_t runoff = slopedPuddleTile[texel * 3u];
+        slopedMinimumRunoff = std::min(slopedMinimumRunoff, runoff);
+        slopedMaximumRunoff = std::max(slopedMaximumRunoff, runoff);
+    }
+    // Every genuinely sloped authored texel receives rainfall on itself, so
+    // the baked runoff route must be nonzero even at the source side. Downstream
+    // catchment accumulation must still increase above that local contribution.
+    if (slopedMinimumRunoff == 0u || slopedMaximumRunoff <= slopedMinimumRunoff)
+        return false;
+
+    // LIVETRACK19 regression: the deterministic plateau links used internally
+    // to make the basin graph acyclic are not physical flow. A perfectly flat
+    // surface must therefore bake zero visible runoff accumulation and zero flow
+    // direction everywhere; otherwise triangle order becomes a fake river.
+    SurfaceWorld flatRunoffWorld;
+    std::vector<heritage::physics::StaticSceneTriangle> flatRunoffTriangles(2u);
+    flatRunoffTriangles[0].a = { 0.0f, 0.0f, 0.0f };
+    flatRunoffTriangles[0].b = { 10.0f, 0.0f, 0.0f };
+    flatRunoffTriangles[0].c = { 10.0f, 0.0f, 10.0f };
+    flatRunoffTriangles[0].normal = { 0.0f, 1.0f, 0.0f };
+    flatRunoffTriangles[0].surfaceMaterial = SurfaceMaterial::Asphalt;
+    flatRunoffTriangles[0].surfaceProperties = asphaltDefaults;
+    flatRunoffTriangles[1] = flatRunoffTriangles[0];
+    flatRunoffTriangles[1].a = { 0.0f, 0.0f, 0.0f };
+    flatRunoffTriangles[1].b = { 10.0f, 0.0f, 10.0f };
+    flatRunoffTriangles[1].c = { 0.0f, 0.0f, 10.0f };
+    heritage::physics::water::SurfaceHydrologyBakeReport flatRunoffBake;
+    if (!flatRunoffWorld.loadOrBakeHydrology(
+            flatRunoffTriangles, {}, flatRunoffBake)
+        || !flatRunoffBake.valid)
+    {
+        return false;
+    }
+    std::vector<std::uint8_t> flatRunoffTile;
+    if (!flatRunoffWorld.hydrology().rasterPrebakedPuddleResponseTile(
+            0, 0, 32u, flatRunoffTile)
+        || flatRunoffTile.size() != 32u * 32u * 3u)
+    {
+        return false;
+    }
+    for (std::size_t texel = 0; texel < flatRunoffTile.size() / 3u; ++texel)
+    {
+        if (flatRunoffTile[texel * 3u] != 0u
+            || flatRunoffTile[texel * 3u + 2u] != 0u)
+        {
+            return false;
+        }
+    }
+
+    std::vector<std::uint8_t> slopedPuddleTileNext;
+    if (!slopedPrebakeWorld.hydrology().rasterPrebakedPuddleResponseTile(
+            1, 0, kPrebakedRegressionResolution, slopedPuddleTileNext)
+        || slopedPuddleTileNext.size() != slopedPuddleTile.size())
+    {
+        return false;
+    }
+    for (std::size_t texel = 0; texel < slopedPuddleTile.size() / 3u; ++texel)
+    {
+        if (slopedPuddleTile[texel * 3u + 1u]
+            != slopedPuddleTileNext[texel * 3u + 1u])
+        {
+            return false;
+        }
+    }
+
+
+    // LIVETRACK19 regression: runoff potential is not merely a yes/no flow
+    // direction. A cambered draining road should accumulate progressively more
+    // upstream catchment in its gutter/low channel than on the crown. This is
+    // the static quantity the renderer uses to make curb-side runoff stronger
+    // without inventing a second runtime water solver.
+    SurfaceWorld gutterPrebakeWorld;
+    std::vector<heritage::physics::StaticSceneTriangle> gutterTriangles;
+    const auto gutterHeight = [](float x, float z) {
+        return 0.015f * x + 0.004f * std::abs(z - 1.0f);
+    };
+    for (int z = 0; z < 10; ++z)
+    {
+        for (int x = 0; x < 20; ++x)
+        {
+            const float x0 = static_cast<float>(x);
+            const float x1 = x0 + 1.0f;
+            const float z0 = static_cast<float>(z);
+            const float z1 = z0 + 1.0f;
+            heritage::physics::StaticSceneTriangle first;
+            first.a = { x0, gutterHeight(x0, z0), z0 };
+            first.b = { x1, gutterHeight(x1, z0), z0 };
+            first.c = { x1, gutterHeight(x1, z1), z1 };
+            first.normal = { 0.0f, 1.0f, 0.0f };
+            first.surfaceMaterial = SurfaceMaterial::Asphalt;
+            first.surfaceProperties = asphaltDefaults;
+            heritage::physics::StaticSceneTriangle second = first;
+            second.a = { x0, gutterHeight(x0, z0), z0 };
+            second.b = { x1, gutterHeight(x1, z1), z1 };
+            second.c = { x0, gutterHeight(x0, z1), z1 };
+            gutterTriangles.push_back(first);
+            gutterTriangles.push_back(second);
+        }
+    }
+    heritage::physics::water::SurfaceHydrologyBakeReport gutterBake;
+    if (!gutterPrebakeWorld.loadOrBakeHydrology(gutterTriangles, {}, gutterBake)
+        || !gutterBake.valid)
+    {
+        return false;
+    }
+    std::vector<std::uint8_t> gutterTile;
+    if (!gutterPrebakeWorld.hydrology().rasterPrebakedPuddleResponseTile(
+            0, 0, kPrebakedRegressionResolution, gutterTile)
+        || gutterTile.size() != static_cast<std::size_t>(kPrebakedRegressionResolution)
+            * kPrebakedRegressionResolution * 3u)
+    {
+        return false;
+    }
+    const auto gutterRunoffAt = [&](double worldX, double worldZ) {
+        const auto sx = static_cast<std::uint32_t>(std::clamp(
+            static_cast<int>(worldX / 10.0 * kPrebakedRegressionResolution),
+            0, static_cast<int>(kPrebakedRegressionResolution) - 1));
+        const auto sz = static_cast<std::uint32_t>(std::clamp(
+            static_cast<int>(worldZ / 10.0 * kPrebakedRegressionResolution),
+            0, static_cast<int>(kPrebakedRegressionResolution) - 1));
+        return gutterTile[(static_cast<std::size_t>(sz)
+            * kPrebakedRegressionResolution + sx) * 3u];
+    };
+    if (gutterRunoffAt(7.8, 1.0) <= gutterRunoffAt(7.8, 5.0))
+        return false;
+
+    // The production topology may change triangles at arbitrary authored mesh
+    // edges, but a continuous plane must not reveal those edges in water depth.
+    // Sample both sides of several diagonal splits and demand identical packed
+    // capacity. This catches accidental return of per-cell or per-triangle
+    // local water ceilings while still allowing exact mesh-shaped basins.
+    for (int seam = 1; seam < 9; ++seam)
+    {
+        const double x = static_cast<double>(seam) + 0.48;
+        const double zA = 4.48;
+        const double zB = 4.52;
+        if (prebakedCapacityAt(5.0, 5.0) == 0u) // keep basin lambda live above
+            return false;
+        const auto slopeCapacityAt = [&](double worldX, double worldZ) {
+            const auto sx = static_cast<std::uint32_t>(std::clamp(
+                static_cast<int>(worldX / 10.0 * kPrebakedRegressionResolution),
+                0, static_cast<int>(kPrebakedRegressionResolution) - 1));
+            const auto sz = static_cast<std::uint32_t>(std::clamp(
+                static_cast<int>(worldZ / 10.0 * kPrebakedRegressionResolution),
+                0, static_cast<int>(kPrebakedRegressionResolution) - 1));
+            return slopedPuddleTile[(static_cast<std::size_t>(sz)
+                * kPrebakedRegressionResolution + sx) * 3u + 1u];
+        };
+        if (slopeCapacityAt(x, zA) != slopeCapacityAt(x, zB))
+            return false;
+    }
+
     hydrologyWorld.setHydrologyInterestSource({ 9.375, 0.0, 0.25 });
     SurfaceWeatherDescription spatialRain;
     spatialRain.enabled = true;
@@ -179,18 +580,27 @@ bool surfaceWorldGlobalAddressingAndChunkCacheBehave()
     if (!hydrologyWorld.setWeather(spatialRain))
         return false;
     for (int step = 0; step < 120; ++step)
+    {
         hydrologyWorld.advancePresentation(0.5f);
+        hydrologyReference.advance(
+            hydrologyWorld.dynamicSurface(), spatialRain,
+            hydrologyWorld.weatherOutput(), 0.5);
+    }
 
-    const auto leftWater = hydrologyWorld.dynamicSurface().sampleHydro(
-        { 3.125, 0.05, 0.25 });
-    const auto pooledWater = hydrologyWorld.dynamicSurface().sampleHydro(
-        { 9.375, 0.00, 0.25 });
+    const auto leftWater = hydrologyReference.sample(
+        hydrologyWorld.dynamicSurface(), { 3.125, 0.05, 0.25 });
+    const auto pooledWater = hydrologyReference.sample(
+        hydrologyWorld.dynamicSurface(), { 9.375, 0.00, 0.25 });
+    hydrologyWorld.setGpuDynamicSurfaceAuthorityEnabled(true);
+    hydrologyWorld.publishGpuDynamicSurfaceWaterSamples({
+        { { 9.375, 0.00, 0.25 }, pooledWater.waterDepthM, 0.0, pooledWater.valid }
+    });
     const auto spatialConditions = hydrologyWorld.localConditions(
         { 9.375f, 0.0f, 0.25f }, SurfaceMaterial::Asphalt, 0.0,
         asphaltDefaults);
     const auto spatialThermal = hydrologyWorld.dynamicSurface().sampleThermal(
         { 9.375, 0.0, 0.25 });
-    const auto dynamicHydroStats = hydrologyWorld.dynamicSurface().hydroStats();
+    const auto dynamicHydroStats = hydrologyReference.stats();
     if (!leftWater.valid || !pooledWater.valid
         || leftWater.waterDepthM <= 0.0
         || pooledWater.waterDepthM <= 0.0
@@ -206,505 +616,10 @@ bool surfaceWorldGlobalAddressingAndChunkCacheBehave()
         return false;
     }
 
-    // WATER14: microscopic film remains authoritative and is available to the
-    // wetness atlas through collectVisualCells(), while the explicit 3D water
-    // renderer requests its own depth threshold directly from the same adaptive
-    // simulation volumes. There is no separate legacy puddle collector anymore.
-    std::vector<heritage::physics::water::SurfaceHydrologyVisualCell>
-        visibleWater;
-    hydrologyWorld.hydrology().collectVisualCellsBand(
-        { 9.375, 1.0, 0.25 },
-        0.0,
-        10.0,
-        64u,
-        visibleWater,
-        false,
-        0.0080);
-    if (hydrologyWorld.hydrology().debugVisualizationEnabled()
-        || pooledWater.waterDepthM >= 0.0080
-        || !visibleWater.empty())
-    {
-        return false;
-    }
-
-    // WATER14: authoritative water simulation topology itself is adaptive.
-    // A broad planar 32x32 m surface should collapse from thousands of immutable
-    // 0.5 m support samples into a much smaller set of large simulation control
-    // volumes. This is no longer a presentation-only merge.
-    SurfaceWorld adaptiveWaterWorld;
-    std::vector<heritage::physics::StaticSceneTriangle> adaptiveWaterTriangles;
-    heritage::physics::StaticSceneTriangle adaptiveFirst;
-    adaptiveFirst.a = { 0.0f, 0.0f, 0.0f };
-    adaptiveFirst.b = { 32.0f, 0.0f, 0.0f };
-    adaptiveFirst.c = { 32.0f, 0.0f, 32.0f };
-    adaptiveFirst.normal = { 0.0f, 1.0f, 0.0f };
-    adaptiveFirst.surfaceMaterial = SurfaceMaterial::Asphalt;
-    adaptiveFirst.surfaceProperties = asphaltDefaults;
-    heritage::physics::StaticSceneTriangle adaptiveSecond = adaptiveFirst;
-    adaptiveSecond.a = { 0.0f, 0.0f, 0.0f };
-    adaptiveSecond.b = { 32.0f, 0.0f, 32.0f };
-    adaptiveSecond.c = { 0.0f, 0.0f, 32.0f };
-    adaptiveWaterTriangles.push_back(adaptiveFirst);
-    adaptiveWaterTriangles.push_back(adaptiveSecond);
-    heritage::physics::water::SurfaceHydrologyBakeReport adaptiveWaterBake;
-    if (!adaptiveWaterWorld.loadOrBakeHydrology(
-            adaptiveWaterTriangles, {}, adaptiveWaterBake)
-        || !adaptiveWaterBake.valid)
-    {
-        return false;
-    }
-    const auto adaptiveFlatStats = adaptiveWaterWorld.hydrology().stats();
-    if (adaptiveFlatStats.supportCellCount <= adaptiveFlatStats.cellCount
-        || adaptiveFlatStats.adaptiveMaximumCellSizeM < 8.0
-        || adaptiveFlatStats.adaptiveMaximumCellSizeM > 20.0001
-        || adaptiveFlatStats.adaptiveMinimumCellSizeM < 0.0999)
-    {
-        return false;
-    }
-
-    // WATER14F: a uniformly sloped plane must remain aggressively coarse even
-    // when source-triangle normals contain modest tessellation noise. The
-    // support elevations are exactly planar; alternating normals intentionally
-    // disagree by ~11 degrees so the retired anchor-normal gate would fragment
-    // this surface despite there being no geometric curvature.
-    SurfaceWorld planarSlopeWaterWorld;
-    std::vector<heritage::physics::StaticSceneTriangle> planarSlopeTriangles;
-    const auto normalizeTestNormal = [](float x, float y, float z) {
-        const float length = std::sqrt(x * x + y * y + z * z);
-        return heritage::math::Vec3{ x / length, y / length, z / length };
-    };
-    const heritage::math::Vec3 shallowNormal = normalizeTestNormal(-0.05f, 1.0f, 0.0f);
-    const heritage::math::Vec3 steepNormal = normalizeTestNormal(-0.25f, 1.0f, 0.0f);
-    for (int z = 0; z < 16; ++z)
-    {
-        for (int x = 0; x < 16; ++x)
-        {
-            const float x0 = static_cast<float>(x) * 0.5f;
-            const float x1 = x0 + 0.5f;
-            const float z0 = static_cast<float>(z) * 0.5f;
-            const float z1 = z0 + 0.5f;
-            const float y0 = x0 * 0.15f;
-            const float y1 = x1 * 0.15f;
-            const heritage::math::Vec3 noisyNormal = ((x + z) & 1) == 0
-                ? shallowNormal : steepNormal;
-            heritage::physics::StaticSceneTriangle first;
-            first.a = { x0, y0, z0 };
-            first.b = { x1, y1, z0 };
-            first.c = { x1, y1, z1 };
-            first.normal = noisyNormal;
-            first.surfaceMaterial = SurfaceMaterial::Asphalt;
-            first.surfaceProperties = asphaltDefaults;
-            heritage::physics::StaticSceneTriangle second = first;
-            second.a = { x0, y0, z0 };
-            second.b = { x1, y1, z1 };
-            second.c = { x0, y0, z1 };
-            planarSlopeTriangles.push_back(first);
-            planarSlopeTriangles.push_back(second);
-        }
-    }
-    heritage::physics::water::SurfaceHydrologyBakeReport planarSlopeBake;
-    if (!planarSlopeWaterWorld.loadOrBakeHydrology(
-            planarSlopeTriangles, {}, planarSlopeBake)
-        || !planarSlopeBake.valid)
-    {
-        return false;
-    }
-    const auto planarSlopeStats = planarSlopeWaterWorld.hydrology().stats();
-    if (planarSlopeStats.supportCellCount <= planarSlopeStats.cellCount
-        || planarSlopeStats.adaptiveMaximumCellSizeM < 7.9)
-    {
-        return false;
-    }
-
-    // WATER14F/I curb-local packing: a 15 cm step must reject candidates that
-    // cross it, but WATER14I must NOT explode every adjacent 0.50 m support cell
-    // into 25 authoritative 0.10 m cells. Instead, every half-metre section of
-    // the curb carries a directional fine-boundary hint for one presentation
-    // strip, while farther planar asphalt still recovers large control volumes.
-    SurfaceWorld curbLocalWaterWorld;
-    std::vector<heritage::physics::StaticSceneTriangle> curbLocalTriangles;
-    const auto appendPlanarRegion = [&](float x0, float x1, float elevation) {
-        heritage::physics::StaticSceneTriangle first;
-        first.a = { x0, elevation, 0.0f };
-        first.b = { x1, elevation, 0.0f };
-        first.c = { x1, elevation, 4.0f };
-        first.normal = { 0.0f, 1.0f, 0.0f };
-        first.surfaceMaterial = SurfaceMaterial::Asphalt;
-        first.surfaceProperties = asphaltDefaults;
-        heritage::physics::StaticSceneTriangle second = first;
-        second.a = { x0, elevation, 0.0f };
-        second.b = { x1, elevation, 4.0f };
-        second.c = { x0, elevation, 4.0f };
-        curbLocalTriangles.push_back(first);
-        curbLocalTriangles.push_back(second);
-    };
-    appendPlanarRegion(0.0f, 1.5f, 0.0f);
-    appendPlanarRegion(1.5f, 14.0f, 0.15f);
-    heritage::physics::water::SurfaceHydrologyBakeReport curbLocalBake;
-    if (!curbLocalWaterWorld.loadOrBakeHydrology(
-            curbLocalTriangles, {}, curbLocalBake)
-        || !curbLocalBake.valid)
-    {
-        return false;
-    }
-    const auto curbLocalStats = curbLocalWaterWorld.hydrology().stats();
-    if (curbLocalStats.adaptiveMaximumCellSizeM < 1.9
-        || curbLocalStats.adaptiveMinimumCellSizeM < 0.4999
-        || curbLocalStats.adaptiveSubDecimetreCellCount != 0u)
-    {
-        return false;
-    }
-    if (!curbLocalWaterWorld.hydrology().setUniformWaterDepthForLab(0.010))
-        return false;
-    std::vector<heritage::physics::water::SurfaceHydrologyVisualCell>
-        curbLocalVolumes;
-    curbLocalWaterWorld.hydrology().collectVisualCellsBand(
-        { 1.5, 1.0, 2.0 },
-        0.0,
-        30.0,
-        100000u,
-        curbLocalVolumes,
-        false,
-        0.0);
-    std::array<bool, 8> curbFineBandCovered{};
-    std::size_t curbBoundaryCellCount = 0u;
-    std::size_t curbUnexpectedTinyCellCount = 0u;
-    bool water15fRoadHeadStayedBelowCurb = true;
-    bool water15fSidewalkHeadStayedAboveRoad = true;
-    for (const auto& volume : curbLocalVolumes)
-    {
-        // WATER15F hydraulic-head reconstruction must never average the 15 cm
-        // road/sidewalk discontinuity into one presentation surface. With a
-        // uniform 10 mm lab film the road-side corner head stays near 10 mm,
-        // while the raised side stays near 160 mm. This protects the exact
-        // fragment-height subtraction used by the material shader.
-        if (volume.surfaceElevationM < 0.05)
-        {
-            for (const double headY : volume.cornerWaterSurfaceElevationM)
-                water15fRoadHeadStayedBelowCurb &= headY < 0.04;
-        }
-        else if (volume.surfaceElevationM > 0.10)
-        {
-            for (const double headY : volume.cornerWaterSurfaceElevationM)
-                water15fSidewalkHeadStayedAboveRoad &= headY > 0.12;
-        }
-        if (volume.cellSizeM < 0.20)
-            ++curbUnexpectedTinyCellCount;
-        if (volume.fineBoundaryMask == 0u
-            || std::abs(volume.globalPosition.x - 1.5) > 0.55)
-        {
-            continue;
-        }
-        const int zBand = static_cast<int>(std::floor(
-            volume.globalPosition.z / 0.5));
-        if (zBand >= 0 && zBand < static_cast<int>(curbFineBandCovered.size()))
-            curbFineBandCovered[static_cast<std::size_t>(zBand)] = true;
-        ++curbBoundaryCellCount;
-    }
-    if (curbBoundaryCellCount == 0u
-        || curbUnexpectedTinyCellCount != 0u
-        || !water15fRoadHeadStayedBelowCurb
-        || !water15fSidewalkHeadStayedAboveRoad
-        || !std::all_of(curbFineBandCovered.begin(), curbFineBandCovered.end(),
-            [](bool covered) { return covered; }))
-    {
-        return false;
-    }
-
-
-    // WATER16 LiveSurface regression: presentation heads are solved per drainage
-    // catchment, not per adaptive control volume. The 15 cm curb must create
-    // separate road/sidewalk catchments, while every visible tile on one flat
-    // side shares one basin head. This is the source-level guarantee that a
-    // renderer cannot rediscover the adaptive chessboard from hydraulic head.
-    std::vector<heritage::physics::water::SurfaceHydrologyVisualCell>
-        water16BasinVolumes;
-    curbLocalWaterWorld.hydrology().collectPresentationBasinCellsBand(
-        { 1.5, 1.0, 2.0 },
-        0.0,
-        30.0,
-        100000u,
-        water16BasinVolumes,
-        0.05);
-    if (water16BasinVolumes.empty())
-        return false;
-    double water16RoadMinimumHead = std::numeric_limits<double>::max();
-    double water16RoadMaximumHead = -std::numeric_limits<double>::max();
-    double water16SidewalkMinimumHead = std::numeric_limits<double>::max();
-    std::size_t water16RoadTileCount = 0u;
-    std::size_t water16SidewalkTileCount = 0u;
-    bool water17UsesImmutableSupportParameterization = true;
-    bool water17EveryTileHasStableBasinIdentity = true;
-    for (const auto& volume : water16BasinVolumes)
-    {
-        // WATER17 optical topology must be independent from the adaptive solver.
-        // The visible basin atlas is seeded exclusively by immutable 0.50 m
-        // support samples, then converted to organic overlapping radial bases on
-        // the GPU. A 2/8/20 m adaptive control volume must never become an
-        // equally shaped presentation primitive again.
-        water17UsesImmutableSupportParameterization &=
-            std::abs(volume.cellSizeM - 0.50) <= 1.0e-9;
-        water17EveryTileHasStableBasinIdentity &=
-            volume.presentationBasinId >= 0;
-        if (volume.surfaceElevationM < 0.05)
-        {
-            ++water16RoadTileCount;
-            water16RoadMinimumHead = std::min(
-                water16RoadMinimumHead,
-                volume.cornerWaterSurfaceElevationM[0]);
-            water16RoadMaximumHead = std::max(
-                water16RoadMaximumHead,
-                volume.cornerWaterSurfaceElevationM[0]);
-        }
-        else if (volume.surfaceElevationM > 0.10)
-        {
-            ++water16SidewalkTileCount;
-            water16SidewalkMinimumHead = std::min(
-                water16SidewalkMinimumHead,
-                volume.cornerWaterSurfaceElevationM[0]);
-        }
-    }
-    const auto water16Stats = curbLocalWaterWorld.hydrology().stats();
-    if (water16RoadTileCount < 2u
-        || water16SidewalkTileCount < 2u
-        || water16Stats.presentationBasinCount < 2u
-        || water16Stats.activePresentationBasinCount < 2u
-        || !water17UsesImmutableSupportParameterization
-        || !water17EveryTileHasStableBasinIdentity
-        || water16RoadMaximumHead - water16RoadMinimumHead > 1.0e-8
-        || water16RoadMaximumHead >= 0.04
-        || water16SidewalkMinimumHead <= 0.12)
-    {
-        return false;
-    }
-
-    // WATER14J restricted-quadtree regression: every actual shared face in the
-    // 0.50 m+ curb topology must obey a 2:1 size ratio. This specifically
-    // catches an unaligned orphan 0.50 m leaf sitting directly beside a 4/8 m
-    // greedy patch, which was the source of the visually bunched transition.
-    for (std::size_t aIndex = 0u; aIndex < curbLocalVolumes.size(); ++aIndex)
-    {
-        const auto& a = curbLocalVolumes[aIndex];
-        if (a.cellSizeM < 0.4999)
-            continue;
-        const double aHalf = a.cellSizeM * 0.5;
-        const double aMinX = a.globalPosition.x - aHalf;
-        const double aMaxX = a.globalPosition.x + aHalf;
-        const double aMinZ = a.globalPosition.z - aHalf;
-        const double aMaxZ = a.globalPosition.z + aHalf;
-        for (std::size_t bIndex = aIndex + 1u;
-             bIndex < curbLocalVolumes.size(); ++bIndex)
-        {
-            const auto& b = curbLocalVolumes[bIndex];
-            if (b.cellSizeM < 0.4999
-                || a.presentationLayer != b.presentationLayer)
-            {
-                continue;
-            }
-            const double bHalf = b.cellSizeM * 0.5;
-            const double bMinX = b.globalPosition.x - bHalf;
-            const double bMaxX = b.globalPosition.x + bHalf;
-            const double bMinZ = b.globalPosition.z - bHalf;
-            const double bMaxZ = b.globalPosition.z + bHalf;
-            const double overlapX = std::min(aMaxX, bMaxX)
-                - std::max(aMinX, bMinX);
-            const double overlapZ = std::min(aMaxZ, bMaxZ)
-                - std::max(aMinZ, bMinZ);
-            const bool touchesVerticalFace = overlapZ > 1.0e-6
-                && (std::abs(aMaxX - bMinX) <= 1.0e-6
-                    || std::abs(bMaxX - aMinX) <= 1.0e-6);
-            const bool touchesHorizontalFace = overlapX > 1.0e-6
-                && (std::abs(aMaxZ - bMinZ) <= 1.0e-6
-                    || std::abs(bMaxZ - aMinZ) <= 1.0e-6);
-            if (!touchesVerticalFace && !touchesHorizontalFace)
-                continue;
-            const double larger = std::max(a.cellSizeM, b.cellSizeM);
-            const double smaller = std::min(a.cellSizeM, b.cellSizeM);
-            if (larger > smaller * 2.0 + 1.0e-6)
-                return false;
-        }
-    }
-
-    // WATER14G/J graded transition regression: a narrow aggressive-normal strip
-    // still earns the 0.10 m tier, but nearby planar supports are prevented from
-    // jumping immediately to multi-metre cells. Farther planar asphalt must
-    // recover coarse 4 m control volumes so the detail halo stays local.
-    SurfaceWorld gradedWaterWorld;
-    std::vector<heritage::physics::StaticSceneTriangle> gradedTriangles;
-    const heritage::math::Vec3 gradingAggressiveNormal = normalizeTestNormal(
-        0.85f, 0.5268f, 0.0f);
-    for (int z = 0; z < 8; ++z)
-    {
-        for (int x = 0; x < 32; ++x)
-        {
-            const float x0 = static_cast<float>(x) * 0.5f;
-            const float x1 = x0 + 0.5f;
-            const float z0 = static_cast<float>(z) * 0.5f;
-            const float z1 = z0 + 0.5f;
-            const heritage::math::Vec3 normal = x == 16
-                ? gradingAggressiveNormal : heritage::math::Vec3{ 0.0f, 1.0f, 0.0f };
-            heritage::physics::StaticSceneTriangle first;
-            first.a = { x0, 0.0f, z0 };
-            first.b = { x1, 0.0f, z0 };
-            first.c = { x1, 0.0f, z1 };
-            first.normal = normal;
-            first.surfaceMaterial = SurfaceMaterial::Asphalt;
-            first.surfaceProperties = asphaltDefaults;
-            heritage::physics::StaticSceneTriangle second = first;
-            second.a = { x0, 0.0f, z0 };
-            second.b = { x1, 0.0f, z1 };
-            second.c = { x0, 0.0f, z1 };
-            gradedTriangles.push_back(first);
-            gradedTriangles.push_back(second);
-        }
-    }
-    heritage::physics::water::SurfaceHydrologyBakeReport gradedBake;
-    if (!gradedWaterWorld.loadOrBakeHydrology(
-            gradedTriangles, {}, gradedBake)
-        || !gradedBake.valid
-        || !gradedWaterWorld.hydrology().setUniformWaterDepthForLab(0.010))
-    {
-        return false;
-    }
-    std::vector<heritage::physics::water::SurfaceHydrologyVisualCell>
-        gradedVolumes;
-    gradedWaterWorld.hydrology().collectVisualCellsBand(
-        { 8.0, 1.0, 2.0 },
-        0.0,
-        30.0,
-        100000u,
-        gradedVolumes,
-        false,
-        0.0);
-    double largestNearFineM = 0.0;
-    double largestFarFromFineM = 0.0;
-    std::size_t fineVolumeCount = 0u;
-    for (const auto& volume : gradedVolumes)
-    {
-        const double distanceX = std::abs(volume.globalPosition.x - 8.25);
-        if (distanceX < 1.5)
-            largestNearFineM = std::max(largestNearFineM, volume.cellSizeM);
-        if (distanceX > 4.0)
-            largestFarFromFineM = std::max(
-                largestFarFromFineM, volume.cellSizeM);
-        if (volume.cellSizeM < 0.20)
-            ++fineVolumeCount;
-    }
-    if (fineVolumeCount == 0u
-        || largestNearFineM > 1.0001
-        || largestFarFromFineM < 3.9)
-    {
-        return false;
-    }
-
-    std::vector<heritage::physics::water::SurfaceHydrologyVisualCell>
-        adaptiveWaterVolumes;
-    if (!adaptiveWaterWorld.hydrology().setUniformWaterDepthForLab(0.001))
-        return false;
-    adaptiveWaterWorld.hydrology().collectVisualCellsBand(
-        { 16.0, 1.0, 16.0 },
-        0.0,
-        20.0,
-        10000u,
-        adaptiveWaterVolumes,
-        false,
-        0.0080);
-    // One millimetre remains authoritative water but does not become explicit
-    // 3D surface geometry when the renderer asks for an 8 mm hand-off.
-    if (!adaptiveWaterVolumes.empty())
-        return false;
-
-    if (!adaptiveWaterWorld.hydrology().setUniformWaterDepthForLab(0.020))
-        return false;
-    adaptiveWaterWorld.hydrology().collectVisualCellsBand(
-        { 16.0, 1.0, 16.0 },
-        0.0,
-        20.0,
-        10000u,
-        adaptiveWaterVolumes,
-        false,
-        0.0080);
-    double largestAdaptiveSimulationCellM = 0.0;
-    for (const auto& volume : adaptiveWaterVolumes)
-        largestAdaptiveSimulationCellM = std::max(
-            largestAdaptiveSimulationCellM, volume.cellSizeM);
-    if (adaptiveWaterVolumes.empty()
-        || largestAdaptiveSimulationCellM < 8.0
-        || largestAdaptiveSimulationCellM > 20.0001)
-    {
-        return false;
-    }
-
-    // WATER14A: a material boundary may prevent coarse merging, but it must
-    // NOT spend the 0.10 m authoritative tier by itself. Those tiny cells are
-    // reserved for genuinely aggressive terrain angles.
-    SurfaceWorld materialBoundaryWaterWorld;
-    std::vector<heritage::physics::StaticSceneTriangle> materialBoundaryTriangles;
-    const auto appendMaterialBoundaryTile = [&](float x0, SurfaceMaterial material) {
-        heritage::physics::StaticSceneTriangle first;
-        first.a = { x0, 0.0f, 0.0f };
-        first.b = { x0 + 0.5f, 0.0f, 0.0f };
-        first.c = { x0 + 0.5f, 0.0f, 0.5f };
-        first.normal = { 0.0f, 1.0f, 0.0f };
-        first.surfaceMaterial = material;
-        first.surfaceProperties = asphaltDefaults;
-        heritage::physics::StaticSceneTriangle second = first;
-        second.a = { x0, 0.0f, 0.0f };
-        second.b = { x0 + 0.5f, 0.0f, 0.5f };
-        second.c = { x0, 0.0f, 0.5f };
-        materialBoundaryTriangles.push_back(first);
-        materialBoundaryTriangles.push_back(second);
-    };
-    appendMaterialBoundaryTile(0.0f, SurfaceMaterial::Asphalt);
-    appendMaterialBoundaryTile(0.5f, SurfaceMaterial::Gravel);
-    heritage::physics::water::SurfaceHydrologyBakeReport materialBoundaryBake;
-    if (!materialBoundaryWaterWorld.loadOrBakeHydrology(
-            materialBoundaryTriangles, {}, materialBoundaryBake)
-        || !materialBoundaryBake.valid)
-    {
-        return false;
-    }
-    const auto materialBoundaryStats =
-        materialBoundaryWaterWorld.hydrology().stats();
-    if (materialBoundaryStats.adaptiveMinimumCellSizeM < 0.4999
-        || materialBoundaryStats.adaptiveSubDecimetreCellCount != 0u)
-    {
-        return false;
-    }
-
-    // A genuinely aggressive ~60 degree support slope DOES qualify for the
-    // 0.10 m tier. This protects the intended use case without carpeting
-    // ordinary road camber and broad hillsides in tiny control volumes.
-    SurfaceWorld aggressiveSlopeWaterWorld;
-    std::vector<heritage::physics::StaticSceneTriangle> aggressiveSlopeTriangles;
-    constexpr float aggressiveRise = 0.8660254f; // tan(60deg) * 0.5m
-    const heritage::math::Vec3 aggressiveNormal{ -0.8660254f, 0.5f, 0.0f };
-    heritage::physics::StaticSceneTriangle aggressiveFirst;
-    aggressiveFirst.a = { 0.0f, 0.0f, 0.0f };
-    aggressiveFirst.b = { 0.5f, aggressiveRise, 0.0f };
-    aggressiveFirst.c = { 0.5f, aggressiveRise, 0.5f };
-    aggressiveFirst.normal = aggressiveNormal;
-    aggressiveFirst.surfaceMaterial = SurfaceMaterial::Asphalt;
-    aggressiveFirst.surfaceProperties = asphaltDefaults;
-    heritage::physics::StaticSceneTriangle aggressiveSecond = aggressiveFirst;
-    aggressiveSecond.a = { 0.0f, 0.0f, 0.0f };
-    aggressiveSecond.b = { 0.5f, aggressiveRise, 0.5f };
-    aggressiveSecond.c = { 0.0f, 0.0f, 0.5f };
-    aggressiveSlopeTriangles.push_back(aggressiveFirst);
-    aggressiveSlopeTriangles.push_back(aggressiveSecond);
-    heritage::physics::water::SurfaceHydrologyBakeReport aggressiveSlopeBake;
-    if (!aggressiveSlopeWaterWorld.loadOrBakeHydrology(
-            aggressiveSlopeTriangles, {}, aggressiveSlopeBake)
-        || !aggressiveSlopeBake.valid)
-    {
-        return false;
-    }
-    const auto aggressiveSlopeStats = aggressiveSlopeWaterWorld.hydrology().stats();
-    if (aggressiveSlopeStats.adaptiveMinimumCellSizeM > 0.1001
-        || aggressiveSlopeStats.adaptiveSubDecimetreCellCount == 0u)
-    {
-        return false;
-    }
+    // OPT02: the retired WATER14-WATER17 adaptive SurfaceHydrology solver and
+    // its presentation-cell regressions are intentionally gone. Runtime water
+    // behavior is validated through DynamicSurface below; immutable .hhyd v15
+    // topology is validated by the prebaked basin/runoff tests above.
 
     heritage::physics::water::SurfaceHydrologyTireInput tireWater;
     tireWater.deltaTimeSeconds = 0.01;
@@ -716,22 +631,46 @@ bool surfaceWorldGlobalAddressingAndChunkCacheBehave()
     tireWater.forwardSpeedMps = 30.0;
     tireWater.treadVoidRatio = 0.30;
     const double depthBeforeTire = pooledWater.waterDepthM;
+    const auto gpuContactResult = hydrologyWorld.applyHydrologyTireContact(
+        { 9.375f, 0.0f, 0.25f }, tireWater);
+    std::vector<heritage::physics::GpuDynamicSurfaceTireEvent> gpuTireEvents;
+    hydrologyWorld.consumeGpuDynamicSurfaceTireEvents(gpuTireEvents);
+    if (!gpuContactResult.valid
+        || std::abs(gpuContactResult.initialWaterDepthM - depthBeforeTire) > 1.0e-9
+        || gpuTireEvents.empty())
+    {
+        return false;
+    }
+
+    heritage::physics::dynamicsurface::DynamicSurfaceHydroTireInput referenceTire;
+    referenceTire.deltaTimeSeconds = tireWater.deltaTimeSeconds;
+    referenceTire.contactPatchLengthM = tireWater.contactPatchLengthM;
+    referenceTire.contactPatchWidthM = tireWater.contactPatchWidthM;
+    referenceTire.contactPatchAreaM2 = tireWater.contactPatchAreaM2;
+    referenceTire.normalLoadN = tireWater.normalLoadN;
+    referenceTire.nominalLoadN = tireWater.nominalLoadN;
+    referenceTire.forwardSpeedMps = tireWater.forwardSpeedMps;
+    referenceTire.lateralSpeedMps = tireWater.lateralSpeedMps;
+    referenceTire.treadVoidRatio = tireWater.treadVoidRatio;
+    referenceTire.slipDissipationWatts = tireWater.slipDissipationWatts;
+    referenceTire.forward = tireWater.forward;
+    referenceTire.right = tireWater.right;
     for (int contact = 0; contact < 800; ++contact)
     {
-        hydrologyWorld.applyHydrologyTireContact(
-            { 9.375f, 0.0f, 0.25f }, tireWater);
+        hydrologyReference.applyTireContact(
+            hydrologyWorld.dynamicSurface(), { 9.375, 0.0, 0.25 }, referenceTire);
     }
-    const auto clearedWater = hydrologyWorld.dynamicSurface().sampleHydro(
-        { 9.375, 0.00, 0.25 });
+    const auto clearedWater = hydrologyReference.sample(
+        hydrologyWorld.dynamicSurface(), { 9.375, 0.00, 0.25 });
     if (!clearedWater.valid || clearedWater.waterDepthM >= depthBeforeTire
-        || hydrologyWorld.dynamicSurface().hydroStats().tireContactCount != 800u
-        || hydrologyWorld.dynamicSurface().hydroStats().cumulativeTireClearedVolumeM3 <= 0.0)
+        || hydrologyReference.stats().tireContactCount != 800u
+        || hydrologyReference.stats().cumulativeTireClearedVolumeM3 <= 0.0)
     {
         return false;
     }
-    hydrologyWorld.resetHydrologyWater();
-    if (hydrologyWorld.dynamicSurface().hydroStats().waterVolumeM3 != 0.0)
-        return false;
+    // Production water strategy is fixed in LIVETRACK10. Runtime strategy
+    // mutation/reset tests were removed with the Water Laboratory API; the
+    // hydrology conservation and tire-clearing regressions above remain.
 
     // LIVETRACK03 precipitation exposure at the packed 4-bit water threshold:
     // the top bridge deck and an adjacent open road receive direct rain, while
@@ -768,6 +707,7 @@ bool surfaceWorldGlobalAddressingAndChunkCacheBehave()
     {
         return false;
     }
+    heritage::tests::reference::DynamicSurfaceHydrologyReference coverHydroReference;
     coverWorld.setHydrologyInterestSource({ 3.125, 5.0, 0.25 });
     // WEATHER06H presentation shelter query must distinguish a true same-column
     // bridge/roof from adjacent open terrain. This is the exact query consumed
@@ -785,13 +725,18 @@ bool surfaceWorldGlobalAddressingAndChunkCacheBehave()
     if (!coverWorld.setWeather(spatialRain))
         return false;
     for (int step = 0; step < 24; ++step)
+    {
         coverWorld.advancePresentation(0.25f);
-    const auto coveredLower = coverWorld.dynamicSurface().sampleHydro(
-        { 3.125, 0.0, 0.25 });
-    const auto exposedUpper = coverWorld.dynamicSurface().sampleHydro(
-        { 3.125, 5.0, 0.25 });
-    const auto exposedOpen = coverWorld.dynamicSurface().sampleHydro(
-        { 21.875, 0.0, 0.25 });
+        coverHydroReference.advance(
+            coverWorld.dynamicSurface(), spatialRain,
+            coverWorld.weatherOutput(), 0.25);
+    }
+    const auto coveredLower = coverHydroReference.sample(
+        coverWorld.dynamicSurface(), { 3.125, 0.0, 0.25 });
+    const auto exposedUpper = coverHydroReference.sample(
+        coverWorld.dynamicSurface(), { 3.125, 5.0, 0.25 });
+    const auto exposedOpen = coverHydroReference.sample(
+        coverWorld.dynamicSurface(), { 21.875, 0.0, 0.25 });
     if (!coveredLower.valid || !exposedUpper.valid || !exposedOpen.valid
         || exposedUpper.waterDepthM <= 0.0
         || exposedOpen.waterDepthM <= 0.0
@@ -803,30 +748,8 @@ bool surfaceWorldGlobalAddressingAndChunkCacheBehave()
         return false;
     }
 
-    // WATER05C stability recovery keeps every discrete hydrology presentation
-    // record at the known-good fixed 6 mm separation from dense authored
-    // collision geometry. Dry-cell gathering remains available for future
-    // isolated wetness reconstruction, but it must obey the same stable lift.
-    std::vector<heritage::physics::water::SurfaceHydrologyVisualCell>
-        dryWetnessReceiverCells;
-    hydrologyWorld.hydrology().collectVisualCells(
-        { 0.75, 1.0, 0.25 },
-        10.0,
-        64u,
-        dryWetnessReceiverCells,
-        10.0,
-        true);
-    if (dryWetnessReceiverCells.empty())
-        return false;
-    for (const auto& cell : dryWetnessReceiverCells)
-    {
-        if (cell.waterDepthM != 0.0
-            || std::abs(cell.globalPosition.y
-                - (cell.surfaceElevationM + 0.000000001)) > 1.0e-7)
-        {
-            return false;
-        }
-    }
+    // OPT02 removed the old CPU hydrology presentation-cell gather. Water
+    // presentation is GPU/material reconstruction from immutable .hhyd topology.
 
     SurfaceFieldDescription worldFieldDescription;
     worldFieldDescription.cellSizeM = 0.25f;
@@ -976,6 +899,7 @@ bool surfaceWorldGlobalAddressingAndChunkCacheBehave()
     {
         return false;
     }
+    heritage::tests::reference::DynamicSurfaceHydrologyReference multiHydroReference;
     multiSourceHydrologyWorld.setHydrologyInterestSources({
         { 0.0, 0.0, 0.25 },
         { 3000.0, 0.0, 0.25 }
@@ -989,29 +913,32 @@ bool surfaceWorldGlobalAddressingAndChunkCacheBehave()
     multiSourceRain.referenceEvaporationRateMmPerHour = 0.0;
     if (!multiSourceHydrologyWorld.setWeather(multiSourceRain))
         return false;
-    // LIVETRACK03 near pages tick at 6Hz while distant materialized pages tick
-    // once per minute. Run just beyond one distant cadence interval so the unseen
-    // midpoint proves that its water history advances without presentation residency.
+    // LIVETRACK10B multi-source bounded fallback: the two <=100m interest
+    // regions are a union, not a midpoint average. Detailed CPU Hydro exists
+    // only around those sources; the unseen point 1.5 km between them must not
+    // materialize a 256x256 page or accumulate hidden background water.
     for (int step = 0; step < 122; ++step)
+    {
         multiSourceHydrologyWorld.advancePresentation(0.5f);
-    const auto multiNearA = multiSourceHydrologyWorld.dynamicSurface().sampleHydro(
-        { 0.25, 0.0, 0.25 });
-    const auto multiMidpoint = multiSourceHydrologyWorld.dynamicSurface().sampleHydro(
-        { 1500.25, 0.0, 0.25 });
-    const auto multiNearB = multiSourceHydrologyWorld.dynamicSurface().sampleHydro(
-        { 2999.75, 0.0, 0.25 });
-    const auto multiStats = multiSourceHydrologyWorld.dynamicSurface().hydroStats();
-    if (!multiNearA.valid || !multiMidpoint.valid || !multiNearB.valid
+        multiHydroReference.advance(
+            multiSourceHydrologyWorld.dynamicSurface(), multiSourceRain,
+            multiSourceHydrologyWorld.weatherOutput(), 0.5);
+    }
+    const auto multiNearA = multiHydroReference.sample(
+        multiSourceHydrologyWorld.dynamicSurface(), { 0.25, 0.0, 0.25 });
+    const auto multiMidpoint = multiHydroReference.sample(
+        multiSourceHydrologyWorld.dynamicSurface(), { 1500.25, 0.0, 0.25 });
+    const auto multiNearB = multiHydroReference.sample(
+        multiSourceHydrologyWorld.dynamicSurface(), { 2999.75, 0.0, 0.25 });
+    const auto multiStats = multiHydroReference.stats();
+    if (!multiNearA.valid || multiMidpoint.valid || !multiNearB.valid
         || multiNearA.waterDepthM <= 0.0
-        || multiMidpoint.waterDepthM <= 0.0
         || multiNearB.waterDepthM <= 0.0
-        // LIVETRACK03 keeps whole-scene water persistent: near pages run at
-        // 6Hz, while unseen materialized pages advance at 1/60Hz.
         || multiSourceHydrologyWorld.dynamicSurface().interestSources().size() != 2u
         || multiStats.cadence30HzPages != 0u
         || multiStats.cadence20HzPages != 0u
         || multiStats.cadence6HzPages == 0u
-        || multiStats.cadenceDistantPages == 0u
+        || multiStats.cadenceDistantPages != 0u
         || multiStats.cadence2HzPages != 0u)
     {
         return false;

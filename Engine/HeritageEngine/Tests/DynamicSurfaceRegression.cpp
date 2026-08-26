@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../Physics/Surfaces/DynamicSurface/DynamicSurfaceSystem.hpp"
+#include "Reference/DynamicSurfaceHydrologyReference.hpp"
 #include "../Physics/Surfaces/SurfaceMaterialProperties.hpp"
 
 namespace heritage::tests {
@@ -384,10 +385,11 @@ bool dynamicSurfaceHydroResidencyUsesRealSurfacePagesAndNearestSources()
     weather.enabled = true;
     heritage::physics::SurfaceWeatherOutput output;
     output.valid = true;
-    system.advanceHydro(weather, output, 1.0 / 30.0);
+    heritage::tests::reference::DynamicSurfaceHydrologyReference hydroReference;
+    hydroReference.advance(system, weather, output, 1.0 / 30.0);
     system.advanceThermal(weather, output, 20.0, false, 20.0, 1.0 / 30.0);
-    if (system.hydroStats().authorityPages <= resident.size()
-        || system.hydroStats().activePages != system.hydroStats().authorityPages
+    if (hydroReference.stats().authorityPages <= resident.size()
+        || hydroReference.stats().activePages != hydroReference.stats().authorityPages
         || system.thermalStats().authorityPages > resident.size()
         || system.thermalStats().activePages > resident.size())
     {
@@ -428,6 +430,7 @@ bool dynamicSurfaceHydrologyConservesCappedVolume()
     if (!system.bakeStaticScene(scene, { 0.0, 0.0, 0.0 }, report))
         return false;
     system.setInterestSources({ { 6.0, 0.5, 6.0 } });
+    heritage::tests::reference::DynamicSurfaceHydrologyReference hydroReference;
 
     heritage::physics::SurfaceWeatherDescription weather;
     weather.enabled = true;
@@ -435,16 +438,16 @@ bool dynamicSurfaceHydrologyConservesCappedVolume()
     dry.valid = true;
 
     // Materialize the authoritative pages before the lab fill.
-    system.advanceHydro(weather, dry, 0.5);
-    if (!system.setUniformHydroDepthForLab(0.0305))
+    hydroReference.advance(system, weather, dry, 0.5);
+    if (!hydroReference.setUniformWaterDepthForLab(system, 0.0305))
         return false;
-    const double beforeFlowM3 = system.hydroStats().waterVolumeM3;
+    const double beforeFlowM3 = hydroReference.stats().waterVolumeM3;
     if (!(beforeFlowM3 > 0.0))
         return false;
 
     for (int i = 0; i < 4; ++i)
-        system.advanceHydro(weather, dry, 0.5);
-    const auto& afterFlowStats = system.hydroStats();
+        hydroReference.advance(system, weather, dry, 0.5);
+    const auto& afterFlowStats = hydroReference.stats();
     const double afterFlowM3 = afterFlowStats.waterVolumeM3;
     const double flowToleranceM3 = std::max(1.0e-7, beforeFlowM3 * 2.0e-6);
     if (std::abs(afterFlowM3 - beforeFlowM3) > flowToleranceM3
@@ -455,13 +458,13 @@ bool dynamicSurfaceHydrologyConservesCappedVolume()
 
     // Saturating rainfall must account only for water that actually fits. A
     // clamp may not silently report/request more mass than entered the field.
-    const double beforeRainM3 = system.hydroStats().waterVolumeM3;
+    const double beforeRainM3 = hydroReference.stats().waterVolumeM3;
     const double cumulativeRainBeforeM3 =
-        system.hydroStats().cumulativeRainVolumeM3;
+        hydroReference.stats().cumulativeRainVolumeM3;
     heritage::physics::SurfaceWeatherOutput storm = dry;
     storm.precipitationRateMmPerHour = 360000.0;
-    system.advanceHydro(weather, storm, 0.5);
-    const auto& stats = system.hydroStats();
+    hydroReference.advance(system, weather, storm, 0.5);
+    const auto& stats = hydroReference.stats();
     const double actualRainGainM3 = stats.waterVolumeM3 - beforeRainM3;
     const double accountedRainGainM3 =
         stats.cumulativeRainVolumeM3 - cumulativeRainBeforeM3;
@@ -497,6 +500,7 @@ bool dynamicSurfaceHydrologyOwnsRainCoverAndTireClearing()
         return false;
 
     system.setInterestSources({ { 6.0, 5.0, 6.0 } });
+    heritage::tests::reference::DynamicSurfaceHydrologyReference hydroReference;
 
     heritage::physics::SurfaceWeatherDescription weather;
     weather.enabled = true;
@@ -513,19 +517,19 @@ bool dynamicSurfaceHydrologyOwnsRainCoverAndTireClearing()
     output.waterFilmDepthM = 0.0;
 
     for (int i = 0; i < 4; ++i)
-        system.advanceHydro(weather, output, 0.5);
+        hydroReference.advance(system, weather, output, 0.5);
 
     const DynamicSurfaceHydroSample lower =
-        system.sampleHydro({ 6.0, 0.0, 6.0 });
+        hydroReference.sample(system, { 6.0, 0.0, 6.0 });
     const DynamicSurfaceHydroSample upper =
-        system.sampleHydro({ 6.0, 5.0, 6.0 });
+        hydroReference.sample(system, { 6.0, 5.0, 6.0 });
     if (!lower.valid || !upper.valid
         || lower.waterDepthM <= 2.0e-5
         || upper.waterDepthM <= 2.0e-5
         || std::abs(lower.waterDepthM - upper.waterDepthM) > 1.0e-9
         || lower.surfaceSheetId != 0u
         || upper.surfaceSheetId != 0u
-        || system.hydroStats().simulationStepCount == 0u)
+        || hydroReference.stats().simulationStepCount == 0u)
     {
         return false;
     }
@@ -543,15 +547,15 @@ bool dynamicSurfaceHydrologyOwnsRainCoverAndTireClearing()
     double firstPublicDepthM = -1.0;
     for (int pass = 0; pass < 800; ++pass)
     {
-        tireResult = system.applyHydroTireContact({ 6.0, 5.0, 6.0 }, tire);
+        tireResult = hydroReference.applyTireContact(system, { 6.0, 5.0, 6.0 }, tire);
         if (!tireResult.valid)
             return false;
         if (pass == 0)
             firstPublicDepthM = tireResult.initialWaterDepthM;
         totalRemovedVolumeM3 += tireResult.removedVolumeM3;
     }
-    const auto tireClearedUpper = system.sampleHydro({ 6.0, 5.0, 6.0 });
-    const auto tireClearedLower = system.sampleHydro({ 6.0, 0.0, 6.0 });
+    const auto tireClearedUpper = hydroReference.sample(system, { 6.0, 5.0, 6.0 });
+    const auto tireClearedLower = hydroReference.sample(system, { 6.0, 0.0, 6.0 });
     if (!(firstPublicDepthM > 0.0)
         || totalRemovedVolumeM3 <= 0.0
         || !tireClearedUpper.valid
@@ -571,8 +575,8 @@ bool dynamicSurfaceHydrologyOwnsRainCoverAndTireClearing()
     const VirtualPageAddress hydroPage{ { 0, 0 }, { 0u, 0u, 0u } };
 
     std::vector<std::uint16_t> hydroRgba4;
-    if (!system.rasterHydroPage(
-            hydroPage, kHydroAuthorityResolution, hydroRgba4)
+    if (!hydroReference.rasterPage(
+            system, hydroPage, kHydroAuthorityResolution, hydroRgba4)
         || hydroRgba4.size() != static_cast<std::size_t>(kHydroAuthorityResolution)
             * kHydroAuthorityResolution)
     {
@@ -582,7 +586,7 @@ bool dynamicSurfaceHydrologyOwnsRainCoverAndTireClearing()
     // authority; a lower-resolution request must not silently create another
     // Hydro representation.
     std::vector<std::uint16_t> wrongResolutionHydro;
-    if (system.rasterHydroPage(hydroPage, 64u, wrongResolutionHydro))
+    if (hydroReference.rasterPage(system, hydroPage, 64u, wrongResolutionHydro))
         return false;
 
 

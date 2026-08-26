@@ -125,6 +125,14 @@ function OnUpdate(deltaTime)
         showPrototypeControls = not showPrototypeControls
     end
 
+    -- CAM10: a visible module control panel temporarily borrows the mouse from
+    -- free-flight navigation. Hiding it gives the pointer straight back to the
+    -- fly camera without changing/destroying the detached camera itself.
+    if Camera.IsAvailable() then
+        Camera.SetUiInteractionActive(
+            Scene.GetCurrent() == "prototype" and showPrototypeControls)
+    end
+
     if Input.Pressed("Confirm") then
         PlayUiConfirmation()
         inputMessage = "Confirm action pressed"

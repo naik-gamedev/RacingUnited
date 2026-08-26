@@ -679,7 +679,9 @@ void WeatherPresentationRenderer::draw(
     const heritage::math::Mat4& projection,
     const heritage::camera::CameraFrame& cameraFrame,
     float elapsedSeconds,
-    const heritage::graphics::EnvironmentMap& environmentMap)
+    const heritage::graphics::EnvironmentMap& environmentMap,
+    GLsizei viewportWidth,
+    GLsizei viewportHeight)
 {
     (void)elapsedSeconds;
     m_frameStats.rendererReady =
@@ -691,11 +693,10 @@ void WeatherPresentationRenderer::draw(
     m_frameStats.opticalTextureWidth = m_rainTextureWidth;
     m_frameStats.opticalTextureHeight = m_rainTextureHeight;
     const auto& weather = surfaces.weather();
-    m_frameStats.precipitationRateMmPerHour =
-        weather.enabled ? weather.precipitationRateMmPerHour : 0.0;
+    m_frameStats.precipitationRateMmPerHour = 0.0;
     if (!m_frameStats.rendererReady)
         return;
-    if (!weather.enabled || weather.precipitationRateMmPerHour <= 0.01)
+    if (!weather.enabled)
         return;
 
     const auto started = std::chrono::steady_clock::now();
@@ -712,6 +713,14 @@ void WeatherPresentationRenderer::draw(
     const heritage::math::Mat4 view = lookAt(
         { 0.0f, 0.0f, 0.0f }, relativeTarget, up);
     const heritage::math::DVec3 cameraGlobal = surfaces.localToGlobal(eyeLocal);
+    const auto regionalWeather = surfaces.precipitation().regionalWeatherSample(
+        cameraGlobal.x, cameraGlobal.z);
+    const double localRainRateMmPerHour = regionalWeather.valid
+        ? regionalWeather.currentRateMmPerHour
+        : weather.precipitationRateMmPerHour;
+    m_frameStats.precipitationRateMmPerHour = localRainRateMmPerHour;
+    if (localRainRateMmPerHour <= 0.01)
+        return;
     const heritage::math::Vec3 cameraForward = normalize(
         relativeTarget,
         heritage::math::Vec3{ 0.0f, 0.0f, -1.0f });
@@ -744,7 +753,7 @@ void WeatherPresentationRenderer::draw(
     m_frameStats.suppressedByCover = cameraUnderPrecipitationCover;
 
     const float rainStrength = std::clamp(
-        static_cast<float>(weather.precipitationRateMmPerHour / 80.0),
+        static_cast<float>(localRainRateMmPerHour / 80.0),
         0.0f,
         1.0f);
 
@@ -760,15 +769,9 @@ void WeatherPresentationRenderer::draw(
     const float precipitationTime = static_cast<float>(
         precipitation.elapsedSeconds());
 
-    const GLboolean depthWasEnabled = glIsEnabled(GL_DEPTH_TEST);
-    const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
-    const GLboolean cullWasEnabled = glIsEnabled(GL_CULL_FACE);
-    GLboolean oldDepthMask = GL_TRUE;
-    GLint oldActiveTexture = GL_TEXTURE0;
-    GLint viewport[4] = { 0, 0, 1, 1 };
-    glGetBooleanv(GL_DEPTH_WRITEMASK, &oldDepthMask);
-    glGetIntegerv(GL_ACTIVE_TEXTURE, &oldActiveTexture);
-    glGetIntegerv(GL_VIEWPORT, viewport);
+    // OPT04B: EngineRendering owns the pass viewport and the presentation
+    // pipeline uses a deterministic canonical GL state between passes. Avoid
+    // synchronous driver state queries on this per-frame precipitation path.
 
     // WEATHER06D proved that enabling fixed-function reversed-Z depth testing
     // here can make every transparent rain streak disappear on the live MSAA
@@ -924,8 +927,8 @@ void WeatherPresentationRenderer::draw(
     if (m_uniformViewportSize >= 0)
         glUniform2f(
             m_uniformViewportSize,
-            static_cast<float>(std::max(viewport[2], 1)),
-            static_cast<float>(std::max(viewport[3], 1)));
+            static_cast<float>(std::max<GLsizei>(viewportWidth, 1)),
+            static_cast<float>(std::max<GLsizei>(viewportHeight, 1)));
     glUniform1i(
         m_uniformHasOpticalTextures,
         m_rainOpticalTexturesReady ? GL_TRUE : GL_FALSE);
@@ -948,17 +951,16 @@ void WeatherPresentationRenderer::draw(
         glActiveTexture(GL_TEXTURE11);
         glBindTexture(GL_TEXTURE_CUBE_MAP, environmentMap.textureId());
     }
-    glActiveTexture(static_cast<GLenum>(oldActiveTexture));
+    glActiveTexture(GL_TEXTURE0);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_rainComputeSsbo);
 
-    // Only compacted, in-frustum representatives reach the graphics pipeline.
-    // The draw count lives entirely on the GPU; no sync-inducing readback.
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_GREATER);
+    // WEATHER09A: fixed-function depth remains disabled THROUGH the indirect
+    // rain draw. Re-enabling reversed-Z depth at this exact point makes the
+    // transparent streaks disappear on the live MSAA path. Shelter rejection
+    // is handled by the precipitation/world-space logic rather than this pass.
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, m_rainIndirectBuffer);
     glDrawArraysIndirect(GL_TRIANGLES, nullptr);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
-    glDisable(GL_DEPTH_TEST);
     ++m_frameStats.rainDrawCalls;
     m_frameStats.rainComputeInstances += totalGpuCandidates;
     // Exact compacted visibility intentionally stays GPU-side to avoid a stall.
@@ -968,17 +970,15 @@ void WeatherPresentationRenderer::draw(
 
     glBindVertexArray(0);
     glUseProgram(0);
-    glActiveTexture(static_cast<GLenum>(oldActiveTexture));
+    glActiveTexture(GL_TEXTURE0);
 
-    glDepthMask(oldDepthMask);
-    if (depthWasEnabled)
-        glEnable(GL_DEPTH_TEST);
-    else
-        glDisable(GL_DEPTH_TEST);
-    if (!blendWasEnabled)
-        glDisable(GL_BLEND);
-    if (cullWasEnabled)
-        glEnable(GL_CULL_FACE);
+    // Canonical state for the following debug/UI presentation owners. Each
+    // renderer owns the states it changes; no readback is needed to restore a
+    // previous driver's state snapshot.
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    glEnable(GL_CULL_FACE);
 
     m_frameStats.rainCpuMs += std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started).count();

@@ -11,6 +11,7 @@ namespace heritage::ui {
 // view of current regional rain intensity and accumulated precipitation.
 void drawWeatherRadarOverlay(
     const heritage::physics::SurfaceWorld& surfaces,
-    const heritage::math::DVec3& cameraGlobal);
+    const heritage::math::DVec3& cameraGlobal,
+    double cameraHeadingRadians);
 
 } // namespace heritage::ui

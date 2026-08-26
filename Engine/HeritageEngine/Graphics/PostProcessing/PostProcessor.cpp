@@ -95,6 +95,18 @@ bool PostProcessor::initialize()
     m_blitProgram = buildShaderProgram(QUAD_VS, BLIT_FS);
     glGenVertexArrays(1, &m_fullscreenVao);
 
+    if (m_fxaaProgram)
+    {
+        m_fxaaUniformScene = glGetUniformLocation(m_fxaaProgram, "uScene");
+        m_fxaaUniformTexelSize = glGetUniformLocation(m_fxaaProgram, "uTexelSize");
+    }
+    if (m_blitProgram)
+    {
+        m_blitUniformScene = glGetUniformLocation(m_blitProgram, "uScene");
+        m_blitUniformNearestNeighbour =
+            glGetUniformLocation(m_blitProgram, "uNearestNeighbour");
+    }
+
     return m_fxaaProgram != 0 && m_blitProgram != 0 && m_fullscreenVao != 0;
 }
 
@@ -112,6 +124,10 @@ void PostProcessor::shutdown()
         glDeleteProgram(m_blitProgram);
         m_blitProgram = 0;
     }
+    m_fxaaUniformScene = -1;
+    m_fxaaUniformTexelSize = -1;
+    m_blitUniformScene = -1;
+    m_blitUniformNearestNeighbour = -1;
 }
 
 void PostProcessor::applyFxaa(GLuint sceneTexture, int sourceWidth, int sourceHeight,
@@ -123,8 +139,8 @@ void PostProcessor::applyFxaa(GLuint sceneTexture, int sourceWidth, int sourceHe
     glUseProgram(m_fxaaProgram);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, sceneTexture);
-    glUniform1i(glGetUniformLocation(m_fxaaProgram, "uScene"), 0);
-    glUniform2f(glGetUniformLocation(m_fxaaProgram, "uTexelSize"),
+    glUniform1i(m_fxaaUniformScene, 0);
+    glUniform2f(m_fxaaUniformTexelSize,
                 1.0f / static_cast<float>(sourceWidth),
                 1.0f / static_cast<float>(sourceHeight));
     glBindVertexArray(m_fullscreenVao);
@@ -145,8 +161,8 @@ void PostProcessor::blit(GLuint sceneTexture, GLuint destinationFramebuffer,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 
-    glUniform1i(glGetUniformLocation(m_blitProgram, "uScene"), 0);
-    glUniform1i(glGetUniformLocation(m_blitProgram, "uNearestNeighbour"), nearestNeighbour ? 1 : 0);
+    glUniform1i(m_blitUniformScene, 0);
+    glUniform1i(m_blitUniformNearestNeighbour, nearestNeighbour ? 1 : 0);
     glBindVertexArray(m_fullscreenVao);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 }

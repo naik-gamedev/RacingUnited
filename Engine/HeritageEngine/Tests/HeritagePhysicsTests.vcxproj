@@ -103,12 +103,16 @@
     <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceChunk.cpp" />
     <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceBake.cpp" />
     <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfacePagePool.cpp" />
-    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.cpp" />
+    <ClCompile Include="Reference\DynamicSurfaceHydrologyReference.cpp" />
     <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceThermal.cpp" />
     <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceSystem.cpp" />
     <ClCompile Include="..\Physics\Weather\RainMicrophysics.cpp" />
     <ClCompile Include="..\Physics\Weather\PrecipitationField.cpp" />
     <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrology.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrologyTopology.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrologyTiles.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrologyCover.cpp" />
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrologyCache.cpp" />
     <ClCompile Include="..\Physics\Surfaces\Presentation\SurfacePresentation.cpp" />
     <ClCompile Include="..\Physics\Surfaces\Rubber\TrackRubberState.cpp" />
     <ClCompile Include="..\Physics\StaticTriangleBvh.cpp" />
@@ -187,6 +191,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PhysicsRegressionCommon.hpp" />
+    <ClInclude Include="Reference\DynamicSurfaceHydrologyReference.hpp" />
     <ClInclude Include="..\Core\Jobs\JobSystem.hpp" />
     <ClInclude Include="..\Core\Entities\EntityRegistry.hpp" />
     <ClInclude Include="..\Core\Math\Math.hpp" />
@@ -204,7 +209,6 @@
     <ClInclude Include="..\Physics\Weather\RainMicrophysics.hpp" />
     <ClInclude Include="..\Physics\Weather\PrecipitationField.hpp" />
     <ClInclude Include="..\Physics\Surfaces\Water\SurfaceHydrology.hpp" />
-    <ClInclude Include="..\Physics\Surfaces\Water\VirtualPipeFlow.hpp" />
     <ClInclude Include="..\Physics\Surfaces\Presentation\SurfacePresentation.hpp" />
     <ClInclude Include="..\Physics\Surfaces\Rubber\TrackRubberState.hpp" />
     <ClInclude Include="..\Physics\StaticTriangleBvh.hpp" />

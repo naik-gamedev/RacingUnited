@@ -22,6 +22,7 @@ struct Texture2D
     int width = 0;
     int height = 0;
     TextureColorSpace colorSpace = TextureColorSpace::Linear;
+    bool hasMipmaps = true;
 };
 
 class Texture2DCache

@@ -24,6 +24,7 @@
 #include "../Vehicles/Tires/TireShallowGranularInteraction.hpp"
 #include "../Vehicles/Tires/TireDeformableTerrainInteraction.hpp"
 #include "../Physics/SurfaceField.hpp"
+#include "../Physics/Surfaces/DynamicSurface/DynamicSurfaceTypes.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -494,8 +495,9 @@ bool tireFleetBenchmarkExecutesBoundedWork()
     heritage::vehicles::tires::TireFleetBenchmarkDescription description;
     description.vehicleCount = 150;
     description.tiresPerVehicle = 4;
-    // Long enough to execute at least one 30 Hz spatial-water flow step in
-    // addition to the 1000 Hz tire contacts.
+    // Keep this fleet benchmark short: it measures the 1000 Hz CPU tire stack.
+    // OPT03C removed the fake CPU spatial-water workload; GPU water is profiled
+    // by the renderer runtime rather than by a second hydrology implementation.
     description.simulatedDurationSeconds = 0.050;
     description.tireRateHz = 1000.0;
     description.physicalStateRateHz = 100.0;
@@ -531,13 +533,9 @@ bool tireFleetBenchmarkExecutesBoundedWork()
         && dry.wetStateUpdates == expectedStateUpdates
         && dry.hydrologyCellCount == 0u
         && dry.hydrologyTireContacts == 0u
-        // WATER14: this count is now the authoritative adaptive control-volume
-        // count, not the immutable 0.5 m support raster. The benchmark terrain
-        // should compress below the old >1000-cell fixed-grid expectation.
-        && wet.hydrologyCellCount > 0u
-        && wet.hydrologyCellCount < 1000u
-        && wet.hydrologySteps >= 1u
-        && wet.hydrologyTireContacts == expectedTires * expectedSteps
+        && wet.hydrologyCellCount == 0u
+        && wet.hydrologySteps == 0u
+        && wet.hydrologyTireContacts == 0u
         && dry.wallClockMilliseconds > 0.0
         && wet.wallClockMilliseconds > 0.0
         && dry.tireEvaluationsPerSecond > 0.0

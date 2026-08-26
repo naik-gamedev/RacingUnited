@@ -2,6 +2,15 @@
 
 ## Goal
 
+> **Implementation status correction (2026-08-22):** This document records the
+> intended WEATHER08 architecture and an earlier prototype, not a fully
+> integrated current feature. `WeatherRadarOverlay.cpp` exists, but it targets
+> regional snapshot/query APIs that are not presently exposed by the compiled
+> `PrecipitationField`. The complete regional authority, 24-hour evolution and
+> production radar integration remain planned work. Continue from
+> `WEATHER09_DYNAMIC_FORECAST_AND_RADAR_ROADMAP.md` and verify every claim
+> against the current build before marking it complete.
+
 Heritage weather must remain world-space across large free-roam maps. A location that has been outside the expensive centimetre Dynamic Surface working set for twenty minutes must still know how much rain fell there while the player was elsewhere.
 
 ## Regional authority

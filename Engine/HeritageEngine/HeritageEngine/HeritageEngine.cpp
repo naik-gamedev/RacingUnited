@@ -69,6 +69,7 @@
 #include "../Core/Modules/ModuleRuntimeManager.hpp"
 #include "../Core/Modules/ModuleRuntimeServices.hpp"
 #include "../UI/PauseMenu.hpp"
+#include "../UI/WeatherRadarOverlay.hpp"
 
 namespace fs = std::filesystem;
 using heritage::math::Mat4;
@@ -750,20 +751,43 @@ int HeritageEngine::run(int argc, char** argv)
             chaseCameraInput.pointerDeltaY = state.input.mouseDeltaY();
         }
 
-        // CAMLAB01 Blender-like fly navigation. Shift+Grave toggles capture
-        // only while a named vehicle view is active. Once captured, mouse look
-        // plus WASD/QE edits the camera in vehicle-local space; Shift accelerates
-        // and Ctrl slows movement. The normal vehicle input layer suppresses
-        // driving actions while Camera.IsFlyEnabled() is true.
-        const bool cameraFlyHotkey = state.input.keyPressed("Grave")
+        // CAMLAB01 keeps its legacy Shift+Grave authoring shortcut for named
+        // vehicle-mounted cameras. CAM07 adds a module-owned, rebindable
+        // "Toggle Free Camera" action for the ordinary detached world camera.
+        // Activation copies the CURRENT render frame, so the camera simply
+        // lets go of the car instead of teleporting to another view.
+        const bool cameraFlyAuthoringHotkey = state.input.keyPressed("Grave")
             && (state.input.keyDown("LeftShift")
                 || state.input.keyDown("RightShift"));
-        if (cameraFlyHotkey && vehicleCamera.active())
-            vehicleCamera.setFlyEnabled(!vehicleCamera.flyEnabled());
-
-        if (vehicleCamera.flyEnabled() != vehicleCameraCursorCaptured)
+        if (cameraFlyAuthoringHotkey && vehicleCamera.active())
         {
-            vehicleCameraCursorCaptured = vehicleCamera.flyEnabled();
+            vehicleCamera.setFlyEnabled(!vehicleCamera.flyEnabled());
+        }
+        else if (state.input.actionPressed("Toggle Free Camera"))
+        {
+            if (vehicleCamera.detachedActive())
+            {
+                vehicleCamera.deactivateDetached();
+            }
+            else
+            {
+                vehicleCamera.activateDetachedFromFrame(
+                    entityCameraFrame,
+                    state.physics.globalOrigin());
+            }
+        }
+
+        // CAM10: ESC/pause and a visible module control panel temporarily own
+        // the pointer without deactivating detached free flight. Closing the UI
+        // restores GLFW_CURSOR_DISABLED and the same camera continues moving.
+        const bool vehicleCameraNavigationActive = vehicleCamera.flyEnabled()
+            && !hotkeyState.menuOpen
+            && !vehicleCamera.uiInteractionActive();
+        bool vehicleCameraCursorCaptureChanged = false;
+        if (vehicleCameraNavigationActive != vehicleCameraCursorCaptured)
+        {
+            vehicleCameraCursorCaptured = vehicleCameraNavigationActive;
+            vehicleCameraCursorCaptureChanged = true;
             glfwSetInputMode(
                 window,
                 GLFW_CURSOR,
@@ -773,20 +797,35 @@ int HeritageEngine::run(int argc, char** argv)
         }
 
         VehicleCameraFlyInput vehicleCameraFlyInput{};
-        if (vehicleCamera.flyEnabled())
+        if (vehicleCameraNavigationActive)
         {
-            vehicleCameraFlyInput.moveForward = state.input.keyDown("W");
-            vehicleCameraFlyInput.moveBackward = state.input.keyDown("S");
-            vehicleCameraFlyInput.moveLeft = state.input.keyDown("A");
-            vehicleCameraFlyInput.moveRight = state.input.keyDown("D");
-            vehicleCameraFlyInput.moveDown = state.input.keyDown("Q");
-            vehicleCameraFlyInput.moveUp = state.input.keyDown("E");
-            vehicleCameraFlyInput.fast = state.input.keyDown("LeftShift")
-                || state.input.keyDown("RightShift");
-            vehicleCameraFlyInput.slow = state.input.keyDown("LeftCtrl")
-                || state.input.keyDown("RightCtrl");
-            vehicleCameraFlyInput.pointerDeltaX = state.input.mouseDeltaX();
-            vehicleCameraFlyInput.pointerDeltaY = state.input.mouseDeltaY();
+            // These are normal InputSystem actions, so every navigation key is
+            // visible and rebindable in Settings > Input > Camera. While fly
+            // navigation owns input, Racing United suppresses vehicle controls.
+            vehicleCameraFlyInput.moveForward =
+                state.input.actionDown("Camera Forward");
+            vehicleCameraFlyInput.moveBackward =
+                state.input.actionDown("Camera Backward");
+            vehicleCameraFlyInput.moveLeft =
+                state.input.actionDown("Camera Left");
+            vehicleCameraFlyInput.moveRight =
+                state.input.actionDown("Camera Right");
+            vehicleCameraFlyInput.moveDown =
+                state.input.actionDown("Camera Down");
+            vehicleCameraFlyInput.moveUp =
+                state.input.actionDown("Camera Up");
+            vehicleCameraFlyInput.fast =
+                state.input.actionDown("Camera Fast");
+            vehicleCameraFlyInput.slow =
+                state.input.actionDown("Camera Slow");
+            // GLFW may warp/renormalize its virtual pointer when switching
+            // NORMAL <-> DISABLED. Ignore that one transition delta so closing
+            // a GUI cannot snap the free camera by a large angle.
+            if (!vehicleCameraCursorCaptureChanged)
+            {
+                vehicleCameraFlyInput.pointerDeltaX = state.input.mouseDeltaX();
+                vehicleCameraFlyInput.pointerDeltaY = state.input.mouseDeltaY();
+            }
             chaseCameraInput.orbitDragActive = false;
         }
 
@@ -883,6 +922,24 @@ int HeritageEngine::run(int argc, char** argv)
             {
                 displayModeController.initiateChange(window, newMode, desiredW, desiredH, desiredRefresh);
             });
+
+        if (hotkeyState.weatherRadarVisible)
+        {
+            const heritage::math::Vec3 radarEyeLocal = entityCameraFrame.valid
+                ? entityCameraFrame.eyeLocal
+                : heritage::math::Vec3{ 0.0f, 3.4f, 8.5f };
+            const double radarForwardX = entityCameraFrame.valid
+                ? static_cast<double>(entityCameraFrame.targetLocal.x - entityCameraFrame.eyeLocal.x)
+                : 0.0;
+            const double radarForwardZ = entityCameraFrame.valid
+                ? static_cast<double>(entityCameraFrame.targetLocal.z - entityCameraFrame.eyeLocal.z)
+                : -1.0;
+            const double radarHeadingRadians = std::atan2(radarForwardX, radarForwardZ);
+            heritage::ui::drawWeatherRadarOverlay(
+                state.physics.surfaces(),
+                state.physics.surfaces().localToGlobal(radarEyeLocal),
+                radarHeadingRadians);
+        }
 
         if (hotkeyState.performanceOverlayVisible)
         {

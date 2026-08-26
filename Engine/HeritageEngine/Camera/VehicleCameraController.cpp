@@ -2,22 +2,38 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace heritage::camera {
 namespace {
 
 constexpr double kPi = 3.1415926535897932384626433832795;
 constexpr double kDegreesToRadians = kPi / 180.0;
+constexpr double kRadiansToDegrees = 180.0 / kPi;
 constexpr double kMinimumFlySpeed = 0.05;
 constexpr double kMaximumFlySpeed = 100.0;
+// CAM08: Shift is deliberately a *travel* gear for the detached camera, not
+// merely a small authoring nudge. 8 m/s * 50 = 400 m/s, so the 1.2-3.2 km
+// volumetric cloud layer can be reached in seconds. Vehicle-local camera
+// authoring keeps its old precision-oriented x4 multiplier.
+constexpr double kDetachedFastMultiplier = 50.0;
+constexpr double kAuthoredFastMultiplier = 4.0;
 constexpr double kMouseDegreesPerPixel = 0.12;
 constexpr double kMaximumPitchDegrees = 89.0;
+constexpr double kLookDistanceMeters = 10.0;
 
 heritage::math::Vec3 add(
     const heritage::math::Vec3& a,
     const heritage::math::Vec3& b)
 {
     return { a.x + b.x, a.y + b.y, a.z + b.z };
+}
+
+heritage::math::Vec3 subtract(
+    const heritage::math::Vec3& a,
+    const heritage::math::Vec3& b)
+{
+    return { a.x - b.x, a.y - b.y, a.z - b.z };
 }
 
 heritage::math::Vec3 scale(
@@ -66,6 +82,13 @@ bool finite(const VehicleCameraPose& pose)
         && std::isfinite(pose.rollDegrees);
 }
 
+bool finite(const heritage::math::DVec3& value)
+{
+    return std::isfinite(value.x)
+        && std::isfinite(value.y)
+        && std::isfinite(value.z);
+}
+
 heritage::math::Vec3 transformVehicleLocal(
     const heritage::math::Vec3& local,
     const heritage::math::Vec3& vehicleRight,
@@ -79,14 +102,51 @@ heritage::math::Vec3 transformVehicleLocal(
     };
 }
 
+bool fitsFloat(const heritage::math::DVec3& value)
+{
+    constexpr double kFloatMax =
+        static_cast<double>((std::numeric_limits<float>::max)());
+    return std::abs(value.x) <= kFloatMax
+        && std::abs(value.y) <= kFloatMax
+        && std::abs(value.z) <= kFloatMax;
+}
+
 } // namespace
 
 void VehicleCameraController::reset()
 {
     m_active = false;
     m_flyEnabled = false;
+    m_detachedActive = false;
+    m_uiInteractionActive = false;
     m_pose = {};
+    m_detachedGlobalPosition = { 0.0, 0.0, 0.0 };
+    m_detachedPitchDegrees = 0.0;
+    m_detachedYawDegrees = 0.0;
+    m_detachedRollDegrees = 0.0;
+    m_detachedFlySpeedMetersPerSecond = 8.0;
     m_flySpeedMetersPerSecond = 1.5;
+}
+
+void VehicleCameraController::setActive(bool active)
+{
+    if (active)
+    {
+        // A named vehicle view and a detached world camera are mutually
+        // exclusive authorities. Re-applying the already-active authored pose
+        // must not cancel its fly-edit session, but switching FROM detached
+        // camera authority deliberately ends detached capture.
+        const bool wasDetached = m_detachedActive;
+        m_detachedActive = false;
+        if (wasDetached)
+            m_flyEnabled = false;
+        m_active = true;
+        return;
+    }
+
+    m_active = false;
+    if (!m_detachedActive)
+        m_flyEnabled = false;
 }
 
 void VehicleCameraController::setPose(const VehicleCameraPose& pose)
@@ -103,6 +163,71 @@ void VehicleCameraController::setPose(const VehicleCameraPose& pose)
     m_pose.rollDegrees = wrapDegrees(m_pose.rollDegrees);
 }
 
+void VehicleCameraController::setFlyEnabled(bool enabled)
+{
+    if (m_detachedActive)
+    {
+        // Detached mode is itself a fly-navigation mode. Disabling fly exits
+        // it; enabling keeps it captured.
+        if (!enabled)
+            deactivateDetached();
+        else
+            m_flyEnabled = true;
+        return;
+    }
+
+    m_flyEnabled = enabled && m_active;
+}
+
+bool VehicleCameraController::activateDetachedFromFrame(
+    const CameraFrame& sourceFrame,
+    const heritage::math::DVec3& globalOrigin)
+{
+    if (!sourceFrame.valid || !finite(globalOrigin))
+        return false;
+
+    const heritage::math::Vec3 forwardLocal = subtract(
+        sourceFrame.targetLocal,
+        sourceFrame.eyeLocal);
+    const heritage::math::Vec3 forward = normalizeSafe(
+        forwardLocal, { 0.0f, 0.0f, 1.0f });
+
+    const double clampedY = std::clamp(
+        static_cast<double>(forward.y), -1.0, 1.0);
+    const double pitch = std::asin(clampedY) * kRadiansToDegrees;
+    const double yaw = std::atan2(
+        static_cast<double>(forward.x),
+        static_cast<double>(forward.z)) * kRadiansToDegrees;
+    if (!std::isfinite(pitch) || !std::isfinite(yaw))
+        return false;
+
+    m_detachedGlobalPosition = {
+        globalOrigin.x + static_cast<double>(sourceFrame.eyeLocal.x),
+        globalOrigin.y + static_cast<double>(sourceFrame.eyeLocal.y),
+        globalOrigin.z + static_cast<double>(sourceFrame.eyeLocal.z)
+    };
+    if (!finite(m_detachedGlobalPosition))
+        return false;
+
+    m_detachedPitchDegrees = std::clamp(
+        pitch, -kMaximumPitchDegrees, kMaximumPitchDegrees);
+    m_detachedYawDegrees = wrapDegrees(yaw);
+    // Free-flight intentionally starts level in roll. Mouse-look has no roll
+    // control, so preserving a banked chase/up vector would strand the user at
+    // an arbitrary tilt.
+    m_detachedRollDegrees = 0.0;
+    m_active = false;
+    m_detachedActive = true;
+    m_flyEnabled = true;
+    return true;
+}
+
+void VehicleCameraController::deactivateDetached()
+{
+    m_detachedActive = false;
+    m_flyEnabled = false;
+}
+
 void VehicleCameraController::setFlySpeedMetersPerSecond(double speed)
 {
     if (!std::isfinite(speed))
@@ -115,23 +240,42 @@ void VehicleCameraController::updateFly(
     const VehicleCameraFlyInput& input,
     float deltaSeconds)
 {
-    if (!m_active || !m_flyEnabled
+    if (!m_flyEnabled
+        || (!m_active && !m_detachedActive)
         || !std::isfinite(deltaSeconds) || deltaSeconds <= 0.0f)
     {
         return;
     }
 
-    m_pose.yawDegrees = wrapDegrees(
-        m_pose.yawDegrees + input.pointerDeltaX * kMouseDegreesPerPixel);
-    m_pose.pitchDegrees = std::clamp(
-        m_pose.pitchDegrees - input.pointerDeltaY * kMouseDegreesPerPixel,
+    double* yawDegrees = m_detachedActive
+        ? &m_detachedYawDegrees
+        : &m_pose.yawDegrees;
+    double* pitchDegrees = m_detachedActive
+        ? &m_detachedPitchDegrees
+        : &m_pose.pitchDegrees;
+
+    // CAM09: Heritage's render-facing lookAt() defines screen-right with
+    // cross(forward, up). The detached camera originally inherited the
+    // opposite yaw sign from vehicle-local authoring, so mouse-left/right
+    // felt reversed even though pitch behaved normally. Detached free flight
+    // now follows the rendered screen convention; authored vehicle-camera
+    // editing deliberately keeps its established controls unchanged.
+    const double yawInputSign = m_detachedActive ? -1.0 : 1.0;
+    *yawDegrees = wrapDegrees(
+        *yawDegrees
+        + input.pointerDeltaX * kMouseDegreesPerPixel * yawInputSign);
+    *pitchDegrees = std::clamp(
+        *pitchDegrees - input.pointerDeltaY * kMouseDegreesPerPixel,
         -kMaximumPitchDegrees,
         kMaximumPitchDegrees);
 
     heritage::math::Vec3 cameraRight{};
     heritage::math::Vec3 cameraUp{};
     heritage::math::Vec3 cameraForward{};
-    localCameraBasis(m_pose, cameraRight, cameraUp, cameraForward);
+    if (m_detachedActive)
+        detachedCameraBasis(cameraRight, cameraUp, cameraForward);
+    else
+        localCameraBasis(m_pose, cameraRight, cameraUp, cameraForward);
 
     heritage::math::Vec3 movement{};
     if (input.moveForward) movement = add(movement, cameraForward);
@@ -142,17 +286,29 @@ void VehicleCameraController::updateFly(
     if (input.moveDown) movement = add(movement, scale(cameraUp, -1.0f));
 
     movement = normalizeSafe(movement, { 0.0f, 0.0f, 0.0f });
-    double speed = m_flySpeedMetersPerSecond;
+    double speed = m_detachedActive
+        ? m_detachedFlySpeedMetersPerSecond
+        : m_flySpeedMetersPerSecond;
     if (input.fast)
-        speed *= 4.0;
+        speed *= m_detachedActive
+            ? kDetachedFastMultiplier
+            : kAuthoredFastMultiplier;
     if (input.slow)
         speed *= 0.25;
 
-    const float distance = static_cast<float>(
-        speed * static_cast<double>(deltaSeconds));
-    m_pose.positionMeters = add(
-        m_pose.positionMeters,
-        scale(movement, distance));
+    const double distance = speed * static_cast<double>(deltaSeconds);
+    if (m_detachedActive)
+    {
+        m_detachedGlobalPosition.x += static_cast<double>(movement.x) * distance;
+        m_detachedGlobalPosition.y += static_cast<double>(movement.y) * distance;
+        m_detachedGlobalPosition.z += static_cast<double>(movement.z) * distance;
+    }
+    else
+    {
+        m_pose.positionMeters = add(
+            m_pose.positionMeters,
+            scale(movement, static_cast<float>(distance)));
+    }
 }
 
 bool VehicleCameraController::buildLocalFrame(
@@ -164,6 +320,37 @@ bool VehicleCameraController::buildLocalFrame(
     CameraFrame& frame) const
 {
     frame = {};
+
+    if (m_detachedActive)
+    {
+        if (!finite(m_detachedGlobalPosition) || !finite(globalOrigin))
+            return false;
+
+        heritage::math::Vec3 cameraRight{};
+        heritage::math::Vec3 cameraUp{};
+        heritage::math::Vec3 cameraForward{};
+        detachedCameraBasis(cameraRight, cameraUp, cameraForward);
+
+        const heritage::math::DVec3 localEye{
+            m_detachedGlobalPosition.x - globalOrigin.x,
+            m_detachedGlobalPosition.y - globalOrigin.y,
+            m_detachedGlobalPosition.z - globalOrigin.z
+        };
+        const heritage::math::DVec3 localTarget{
+            localEye.x + static_cast<double>(cameraForward.x) * kLookDistanceMeters,
+            localEye.y + static_cast<double>(cameraForward.y) * kLookDistanceMeters,
+            localEye.z + static_cast<double>(cameraForward.z) * kLookDistanceMeters
+        };
+        if (!fitsFloat(localEye) || !fitsFloat(localTarget))
+            return false;
+
+        frame.eyeLocal = heritage::math::toFloat(localEye);
+        frame.targetLocal = heritage::math::toFloat(localTarget);
+        frame.up = cameraUp;
+        frame.valid = true;
+        return true;
+    }
+
     if (!m_active || !finite(m_pose))
         return false;
 
@@ -194,21 +381,26 @@ bool VehicleCameraController::buildLocalFrame(
         chassisGlobalPosition.z + static_cast<double>(positionWorldOffset.z)
     };
     const heritage::math::DVec3 targetGlobal{
-        eyeGlobal.x + static_cast<double>(cameraForwardWorld.x) * 10.0,
-        eyeGlobal.y + static_cast<double>(cameraForwardWorld.y) * 10.0,
-        eyeGlobal.z + static_cast<double>(cameraForwardWorld.z) * 10.0
+        eyeGlobal.x + static_cast<double>(cameraForwardWorld.x) * kLookDistanceMeters,
+        eyeGlobal.y + static_cast<double>(cameraForwardWorld.y) * kLookDistanceMeters,
+        eyeGlobal.z + static_cast<double>(cameraForwardWorld.z) * kLookDistanceMeters
     };
 
-    frame.eyeLocal = {
-        static_cast<float>(eyeGlobal.x - globalOrigin.x),
-        static_cast<float>(eyeGlobal.y - globalOrigin.y),
-        static_cast<float>(eyeGlobal.z - globalOrigin.z)
+    const heritage::math::DVec3 localEye{
+        eyeGlobal.x - globalOrigin.x,
+        eyeGlobal.y - globalOrigin.y,
+        eyeGlobal.z - globalOrigin.z
     };
-    frame.targetLocal = {
-        static_cast<float>(targetGlobal.x - globalOrigin.x),
-        static_cast<float>(targetGlobal.y - globalOrigin.y),
-        static_cast<float>(targetGlobal.z - globalOrigin.z)
+    const heritage::math::DVec3 localTarget{
+        targetGlobal.x - globalOrigin.x,
+        targetGlobal.y - globalOrigin.y,
+        targetGlobal.z - globalOrigin.z
     };
+    if (!fitsFloat(localEye) || !fitsFloat(localTarget))
+        return false;
+
+    frame.eyeLocal = heritage::math::toFloat(localEye);
+    frame.targetLocal = heritage::math::toFloat(localTarget);
     frame.up = cameraUpWorld;
     frame.valid = true;
     return true;
@@ -255,6 +447,26 @@ void VehicleCameraController::localCameraBasis(
     up = normalizeSafe(
         add(scale(unrolledUp, cosRoll), scale(unrolledRight, -sinRoll)),
         unrolledUp);
+}
+
+void VehicleCameraController::detachedCameraBasis(
+    heritage::math::Vec3& right,
+    heritage::math::Vec3& up,
+    heritage::math::Vec3& forward) const
+{
+    VehicleCameraPose pose{};
+    pose.pitchDegrees = m_detachedPitchDegrees;
+    pose.yawDegrees = m_detachedYawDegrees;
+    pose.rollDegrees = m_detachedRollDegrees;
+    localCameraBasis(pose, right, up, forward);
+
+    // CAM09: Entity/scene lookAt() uses cross(forward, up) as the rendered
+    // screen-right vector. localCameraBasis() predates detached navigation and
+    // uses the vehicle-local +X convention (cross(up, forward)), which is the
+    // exact opposite direction. Only detached translation needs the
+    // render-facing basis, so flip its right vector here without changing any
+    // existing authored vehicle-camera pose/roll semantics.
+    right = scale(right, -1.0f);
 }
 
 } // namespace heritage::camera

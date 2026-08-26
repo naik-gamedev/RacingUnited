@@ -120,4 +120,17 @@ heritage::math::Mat4 orthographic(
     float nearPlane,
     float farPlane);
 
+// PERF01A: instrumentation helpers live outside the draw orchestrator so the
+// profiling pass does not undo CLEAN05 renderer ownership.
+void copySkyPerformanceStats(
+    EntityMeshRendererStats& destination,
+    const SkyRendererGpuStats& gpuStats,
+    const SkyRendererCpuStats& cpuStats);
+void drawElementsProfiled(
+    EntityMeshRendererStats& stats,
+    GLenum mode,
+    GLsizei count,
+    GLenum type,
+    const void* indices);
+
 } // namespace heritage::graphics::entity_mesh_internal

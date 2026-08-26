@@ -296,15 +296,17 @@ struct SurfaceImpulse
 
 struct UpdateCadence
 {
-    // LIVETRACK03: Hydro intersecting the 120m presentation radius runs at
-    // 6Hz. Every other materialized 100m tile still advances once per minute
-    // (1/60Hz) so distant rain/drain/dry-line state is never frozen.
-    static constexpr double hydroNearHz = 6.0;
-    static constexpr double hydroDistantHz = 1.0 / 60.0;
+    // LIVETRACK10B: these Hydro values exist only for the bounded CPU fallback
+    // and regression oracle. Production rain/puddles use the .hhyd prebake and
+    // shader reconstruction instead of this cadence. CPU fallback detailed Hydro
+    // is also clipped to the <=100m union; there is no distant update cadence.
+    // Track thermal state keeps its independent 2Hz / 350m working set.
+    static constexpr double hydroNearHz = 2.0;
+    static constexpr double hydroDistantHz = 0.0;
     static constexpr double hydroTileHz = hydroNearHz; // compatibility alias
     static constexpr double trackTileHz = 2.0;
     static constexpr double trackActiveRadiusM = 350.0;
-    static constexpr double puddleVisualRangeM = 120.0;
+    static constexpr double puddleVisualRangeM = 100.0;
 };
 
 } // namespace heritage::physics::dynamicsurface

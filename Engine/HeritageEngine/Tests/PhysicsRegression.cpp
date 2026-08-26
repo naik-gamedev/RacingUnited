@@ -131,6 +131,18 @@ int main()
         << " vehicle-camera local pose and fly authoring\n";
     failed += vehicleCameraPassed ? 0 : 1;
 
+    const bool detachedCameraPassed =
+        detachedFreeCameraCopiesCurrentFrameAndMovesInWorldSpace();
+    std::cout << (detachedCameraPassed ? "PASS" : "FAIL")
+        << " detached FP64 free camera world-space flight\n";
+    failed += detachedCameraPassed ? 0 : 1;
+
+    const bool dynamicChaseCameraPassed =
+        chaseCameraDynamicOffsetsAreDampedAndBounded();
+    std::cout << (dynamicChaseCameraPassed ? "PASS" : "FAIL")
+        << " damped dynamic chase-camera motion offsets\n";
+    failed += dynamicChaseCameraPassed ? 0 : 1;
+
     const bool rainMicrophysicsPassed =
         physicalRainPopulationAndWorldFieldAreDeterministic();
     std::cout << (rainMicrophysicsPassed ? "PASS" : "FAIL")

@@ -120,6 +120,27 @@ int LuaCoreBindingHandlers::luaCameraGetFlySpeed(lua_State* state)
     return 1;
 }
 
+int LuaCoreBindingHandlers::luaCameraSetUiInteractionActive(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_vehicleCamera)
+        return 0;
+    runtime->m_vehicleCamera->setUiInteractionActive(
+        LuaModuleRuntime::booleanArgument(*runtime, state, 1, false));
+    runtime->m_api.lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaCameraIsUiInteractionActive(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_vehicleCamera)
+        return 0;
+    runtime->m_api.lua_pushboolean(
+        state, runtime->m_vehicleCamera->uiInteractionActive() ? 1 : 0);
+    return 1;
+}
+
 void LuaModuleRuntime::registerCameraBindings()
 {
     registerFunction("Camera", "IsAvailable", &LuaCoreBindingHandlers::luaCameraIsAvailable);
@@ -131,6 +152,8 @@ void LuaModuleRuntime::registerCameraBindings()
     registerFunction("Camera", "IsFlyEnabled", &LuaCoreBindingHandlers::luaCameraIsFlyEnabled);
     registerFunction("Camera", "SetFlySpeed", &LuaCoreBindingHandlers::luaCameraSetFlySpeed);
     registerFunction("Camera", "GetFlySpeed", &LuaCoreBindingHandlers::luaCameraGetFlySpeed);
+    registerFunction("Camera", "SetUiInteractionActive", &LuaCoreBindingHandlers::luaCameraSetUiInteractionActive);
+    registerFunction("Camera", "IsUiInteractionActive", &LuaCoreBindingHandlers::luaCameraIsUiInteractionActive);
 }
 
 } // namespace heritage::modules

@@ -16,9 +16,9 @@ enum class Quality
 
 inline constexpr int kCascadeCount = 4;
 inline constexpr int kLowResolution = 1024;
-inline constexpr int kMediumResolution = 2048;
-inline constexpr int kHighResolution = 3072;
-inline constexpr int kUltraResolution = 4096;
+inline constexpr int kMediumResolution = 1536;
+inline constexpr int kHighResolution = 2048;
+inline constexpr int kUltraResolution = 3072;
 inline constexpr Quality kDefaultQuality = Quality::Ultra;
 
 constexpr int resolutionFor(Quality quality)

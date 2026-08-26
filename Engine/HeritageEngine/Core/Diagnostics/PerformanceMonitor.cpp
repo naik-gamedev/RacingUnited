@@ -33,6 +33,8 @@ void PerformanceMonitor::reset()
         value.reset();
     for (SmoothedValue& value : m_renderSections)
         value.reset();
+    for (SmoothedValue& value : m_gpuSections)
+        value.reset();
     m_frameMs.reset();
     m_gpuMs.reset();
     m_frameTimeGraph.fill(0.0f);
@@ -143,6 +145,16 @@ void PerformanceMonitor::recordRenderSection(
     m_renderSections[index].push(milliseconds, kSmoothingAlpha);
 }
 
+void PerformanceMonitor::recordGpuSection(
+    GpuPerformanceSection section,
+    double milliseconds)
+{
+    const std::size_t index = static_cast<std::size_t>(section);
+    if (index >= m_gpuSections.size())
+        return;
+    m_gpuSections[index].push(milliseconds, kSmoothingAlpha);
+}
+
 void PerformanceMonitor::recordGpuFrame(double milliseconds)
 {
     m_gpuMs.push(milliseconds, kSmoothingAlpha);
@@ -236,6 +248,26 @@ PerformanceSnapshot PerformanceMonitor::snapshot() const
         + result.renderPostProcessMs
         + result.renderSpanCompositeMs;
     result.residualRenderCpuMs = (std::max)(0.0, result.renderCpuMs - namedRenderMs);
+
+    const auto gpuAverage = [&](GpuPerformanceSection section) {
+        return m_gpuSections[static_cast<std::size_t>(section)].average;
+    };
+    result.gpuModuleMs = gpuAverage(GpuPerformanceSection::ModuleRender);
+    result.gpuMeshMs = gpuAverage(GpuPerformanceSection::MeshRenderer);
+    result.gpuSurfaceMs = gpuAverage(GpuPerformanceSection::SurfacePresentation);
+    result.gpuWeatherMs = gpuAverage(GpuPerformanceSection::WeatherPresentation);
+    result.gpuDebugMs = gpuAverage(GpuPerformanceSection::DebugRenderer);
+    result.gpuMsaaResolveMs = gpuAverage(GpuPerformanceSection::MsaaResolve);
+    result.gpuPostProcessMs = gpuAverage(GpuPerformanceSection::PostProcess);
+    result.gpuNamedMs =
+        result.gpuModuleMs
+        + result.gpuMeshMs
+        + result.gpuSurfaceMs
+        + result.gpuWeatherMs
+        + result.gpuDebugMs
+        + result.gpuMsaaResolveMs
+        + result.gpuPostProcessMs;
+    result.gpuResidualMs = (std::max)(0.0, result.gpuFrameMs - result.gpuNamedMs);
 
     result.onePercentLowFps = m_onePercentLowFps;
     result.pointOnePercentLowFps = m_pointOnePercentLowFps;

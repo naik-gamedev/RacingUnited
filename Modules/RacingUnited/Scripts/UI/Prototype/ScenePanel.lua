@@ -101,6 +101,9 @@ function DrawPrototypeDebugScenePanel()
     UI.Separator()
     if UI.Button("HIDE CONTROL PANEL - VIEW 3D (TAB)") then
         showPrototypeControls = false
+        if Camera.IsAvailable() then
+            Camera.SetUiInteractionActive(false)
+        end
     end
     if UI.Button("RELOAD THIS HSCENE") then
         if not Scene.Reload() then
@@ -116,6 +119,14 @@ function DrawPrototypeScenePanel()
     if UI.BeginTabBar("PrototypeSceneTabs") then
         if UI.BeginTabItem("WORLD") then
             DrawPlayerWorldPanel()
+            UI.EndTabItem()
+        end
+        if UI.BeginTabItem("ENVIRONMENT") then
+            DrawSceneEnvironmentPanel()
+            UI.EndTabItem()
+        end
+        if UI.BeginTabItem("WEATHER") then
+            DrawSceneWeatherPanel()
             UI.EndTabItem()
         end
         if UI.BeginTabItem("VEGETATION") then

@@ -12,6 +12,20 @@ for gear = 1, 24 do
     Input.RegisterAction("Gear " .. tostring(gear), "", "Gears")
 end
 Input.RegisterAction("Handbrake", "Key:LeftShift", "Car")
+Input.RegisterAction("Handbrake Toggle", "Key:B", "Car")
+
+-- CAM07 camera actions are also declared in Data/InputActions.ini so they are
+-- visible in Settings before gameplay Lua runs. Registering here keeps the
+-- module API declaration self-contained for alternate startup paths/tests.
+Input.RegisterAction("Toggle Free Camera", "Key:Grave", "Camera")
+Input.RegisterAction("Camera Forward", "Key:W", "Camera")
+Input.RegisterAction("Camera Backward", "Key:S", "Camera")
+Input.RegisterAction("Camera Left", "Key:A", "Camera")
+Input.RegisterAction("Camera Right", "Key:D", "Camera")
+Input.RegisterAction("Camera Up", "Key:E", "Camera")
+Input.RegisterAction("Camera Down", "Key:Q", "Camera")
+Input.RegisterAction("Camera Fast", "Key:LeftShift", "Camera")
+Input.RegisterAction("Camera Slow", "Key:LeftCtrl", "Camera")
 
 -- INPUT01B: the live diagnostic capture exposed the actual failure mode: the
 -- Throttle and Brake ACTION values can both be saturated at 1.0 by another
@@ -22,6 +36,33 @@ Input.RegisterAction("Handbrake", "Key:LeftShift", "Car")
 -- keyboard pedal is physically down, that pair explicitly owns BOTH pedal
 -- values for that update. This keeps arbitrary user key rebinding authoritative
 -- and prevents a stale/saturated gamepad trigger from cancelling keyboard drive.
+
+local handbrakeToggleLatched = false
+local handbrakeTogglePressConsumed = false
+
+function UpdateVehicleInputToggles()
+    local pressed = Input.Pressed("Handbrake Toggle")
+    if not pressed then
+        handbrakeTogglePressConsumed = false
+        return
+    end
+    if handbrakeTogglePressConsumed or VehicleCameraOwnsNavigationInput() then
+        return
+    end
+
+    -- FixedUpdate may run several substeps during one rendered input frame.
+    -- Consume the edge exactly once so a single key press cannot toggle ON,
+    -- OFF, ON again merely because the physics accumulator ran three steps.
+    handbrakeTogglePressConsumed = true
+    handbrakeToggleLatched = not handbrakeToggleLatched
+    vehicleMessage = handbrakeToggleLatched
+        and "Handbrake toggle: LOCKED"
+        or "Handbrake toggle: RELEASED"
+end
+
+function VehicleHandbrakeToggleLatched()
+    return handbrakeToggleLatched
+end
 
 function VehicleCameraOwnsNavigationInput()
     return Camera.IsAvailable() and Camera.IsFlyEnabled()
@@ -81,8 +122,18 @@ function ReadVehicleBrakeInput()
 end
 
 function ReadVehicleHandbrakeInput()
-    if VehicleCameraOwnsNavigationInput() then return 0.0 end
-    return ReadActionWithConfiguredKeyboardFallback("Handbrake")
+    -- CAM10: detached/authoring flight suppresses live driving controls, but a
+    -- latched parking brake is persistent vehicle state, not a navigation key.
+    -- Keep feeding the latch to physics while the camera owns WASD/QE so the
+    -- parked car cannot silently roll away as soon as free flight begins.
+    if VehicleCameraOwnsNavigationInput() then
+        return handbrakeToggleLatched and 1.0 or 0.0
+    end
+    local held = ReadActionWithConfiguredKeyboardFallback("Handbrake")
+    if handbrakeToggleLatched then
+        return math.max(held, 1.0)
+    end
+    return held
 end
 
 function ReadVehicleSteeringInput()

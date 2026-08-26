@@ -244,7 +244,11 @@ world-space volumetric precipitation, not another fullscreen moving texture.
    presentation.
 4. **WEATHER07:** precipitation occlusion/exposure for bridges, roofs and tunnels.
 5. **WEATHER08:** multi-view/split-screen budgets, mirrors and replay validation.
-6. **WEATHER09:** richer world-space splash/runoff/drip presentation and final
+6. **WEATHER09:** deterministic 24-hour forecast director, sparse regional
+   atmosphere, wind field, surface drying and complete radar GUI. The detailed
+   continuation contract is
+   `WEATHER09_DYNAMIC_FORECAST_AND_RADAR_ROADMAP.md`.
+7. **WEATHER10:** richer world-space splash/runoff/drip presentation and final
    low-end/large-scene optimization.
 
 Milestone numbering is a roadmap label only; implementation may reorder a step

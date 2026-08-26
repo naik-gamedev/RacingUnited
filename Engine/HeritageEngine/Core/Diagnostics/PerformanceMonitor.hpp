@@ -38,6 +38,22 @@ enum class RenderPerformanceSection : std::size_t
     Count
 };
 
+// OPT00: asynchronous timestamp children of the frame-wide GPU timer. These
+// represent durable render passes and are diagnostic children only; they are
+// not added to gpuFrameMs a second time. Multi-monitor spanning keeps the
+// frame-wide timer authoritative and temporarily omits these per-pass values.
+enum class GpuPerformanceSection : std::size_t
+{
+    ModuleRender = 0,
+    MeshRenderer,
+    SurfacePresentation,
+    WeatherPresentation,
+    DebugRenderer,
+    MsaaResolve,
+    PostProcess,
+    Count
+};
+
 struct PerformanceSnapshot
 {
     static constexpr std::size_t kFrameTimeGraphCapacity = 360;
@@ -68,6 +84,19 @@ struct PerformanceSnapshot
     double renderPostProcessMs = 0.0;
     double renderSpanCompositeMs = 0.0;
     double residualRenderCpuMs = 0.0;
+
+    // OPT00 rolling asynchronous GPU pass timings. gpuFrameMs remains the
+    // authoritative total. gpuResidualMs is the portion not represented by
+    // the named top-level passes (driver work, clears, copies, etc.).
+    double gpuModuleMs = 0.0;
+    double gpuMeshMs = 0.0;
+    double gpuSurfaceMs = 0.0;
+    double gpuWeatherMs = 0.0;
+    double gpuDebugMs = 0.0;
+    double gpuMsaaResolveMs = 0.0;
+    double gpuPostProcessMs = 0.0;
+    double gpuNamedMs = 0.0;
+    double gpuResidualMs = 0.0;
 
     // PERF04 rolling frame-pacing statistics. "1% low" / "0.1% low" are
     // reported from the 99th / 99.9th frame-time percentiles respectively.
@@ -122,6 +151,7 @@ public:
     void beginFrame(double frameDeltaSeconds);
     void recordSection(PerformanceSection section, double milliseconds);
     void recordRenderSection(RenderPerformanceSection section, double milliseconds);
+    void recordGpuSection(GpuPerformanceSection section, double milliseconds);
     void recordGpuFrame(double milliseconds);
     void endFrame(double activeMilliseconds);
 
@@ -149,6 +179,7 @@ private:
 
     std::array<SmoothedValue, static_cast<std::size_t>(PerformanceSection::Count)> m_sections{};
     std::array<SmoothedValue, static_cast<std::size_t>(RenderPerformanceSection::Count)> m_renderSections{};
+    std::array<SmoothedValue, static_cast<std::size_t>(GpuPerformanceSection::Count)> m_gpuSections{};
     SmoothedValue m_frameMs{};
     SmoothedValue m_gpuMs{};
 

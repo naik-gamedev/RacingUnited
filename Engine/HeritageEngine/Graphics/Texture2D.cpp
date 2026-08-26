@@ -17,6 +17,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <limits>
 #include <sstream>
 #include <vector>
@@ -24,6 +25,9 @@
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "ole32.lib")
 
+#ifndef GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT
+#define GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT 0x8E8F
+#endif
 #ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
 #endif
@@ -128,6 +132,146 @@ std::size_t hashBytes(const std::vector<std::uint8_t>& bytes)
         hash *= 1099511628211ull;
     }
     return hash;
+}
+
+std::uint32_t readU32Le(const std::uint8_t* data)
+{
+    return static_cast<std::uint32_t>(data[0])
+        | (static_cast<std::uint32_t>(data[1]) << 8u)
+        | (static_cast<std::uint32_t>(data[2]) << 16u)
+        | (static_cast<std::uint32_t>(data[3]) << 24u);
+}
+
+std::uint64_t readU64Le(const std::uint8_t* data)
+{
+    return static_cast<std::uint64_t>(readU32Le(data))
+        | (static_cast<std::uint64_t>(readU32Le(data + 4)) << 32u);
+}
+
+bool uploadKtx2Bc6h(
+    const std::filesystem::path& path,
+    Texture2D& texture,
+    std::string& errorMessage)
+{
+    constexpr std::uint8_t kIdentifier[12] = {
+        0xAB, 0x4B, 0x54, 0x58, 0x20, 0x32,
+        0x30, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A
+    };
+    constexpr std::uint32_t kVkFormatBc6hUfloatBlock = 143u;
+    constexpr std::size_t kHeaderBytes = 80u;
+    constexpr std::size_t kLevelIndexBytes = 24u;
+
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input)
+    {
+        errorMessage = "Could not open KTX2 texture '" + path.string() + "'.";
+        return false;
+    }
+    const std::streamoff length = input.tellg();
+    if (length < static_cast<std::streamoff>(kHeaderBytes + kLevelIndexBytes))
+    {
+        errorMessage = "KTX2 texture is truncated: " + path.string();
+        return false;
+    }
+    input.seekg(0, std::ios::beg);
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(length));
+    input.read(reinterpret_cast<char*>(bytes.data()), length);
+    if (!input)
+    {
+        errorMessage = "Could not read KTX2 texture '" + path.string() + "'.";
+        return false;
+    }
+    if (std::memcmp(bytes.data(), kIdentifier, sizeof(kIdentifier)) != 0)
+    {
+        errorMessage = "KTX2 identifier is invalid: " + path.string();
+        return false;
+    }
+
+    const std::uint32_t vkFormat = readU32Le(bytes.data() + 12u);
+    const std::uint32_t width = readU32Le(bytes.data() + 20u);
+    const std::uint32_t height = readU32Le(bytes.data() + 24u);
+    const std::uint32_t depth = readU32Le(bytes.data() + 28u);
+    const std::uint32_t layerCount = readU32Le(bytes.data() + 32u);
+    const std::uint32_t faceCount = readU32Le(bytes.data() + 36u);
+    const std::uint32_t levelCount = readU32Le(bytes.data() + 40u);
+    const std::uint32_t supercompression = readU32Le(bytes.data() + 44u);
+
+    if (vkFormat != kVkFormatBc6hUfloatBlock)
+    {
+        errorMessage = "Heritage KTX2 loader currently expects BC6H_UFLOAT_BLOCK (VK format 143): "
+            + path.string();
+        return false;
+    }
+    if (width == 0u || height == 0u || depth != 0u
+        || layerCount > 1u || faceCount != 1u || levelCount != 1u
+        || supercompression != 0u)
+    {
+        errorMessage = "Heritage KTX2 sky path expects one uncompressed-container 2D BC6H level with no array/cubemap/mips: "
+            + path.string();
+        return false;
+    }
+
+    const std::uint64_t levelOffset = readU64Le(bytes.data() + kHeaderBytes);
+    const std::uint64_t levelLength = readU64Le(bytes.data() + kHeaderBytes + 8u);
+    const std::uint64_t expectedBlocksX = (static_cast<std::uint64_t>(width) + 3ull) / 4ull;
+    const std::uint64_t expectedBlocksY = (static_cast<std::uint64_t>(height) + 3ull) / 4ull;
+    const std::uint64_t expectedLength = expectedBlocksX * expectedBlocksY * 16ull;
+    if (levelLength != expectedLength
+        || levelOffset > bytes.size()
+        || levelLength > static_cast<std::uint64_t>(bytes.size()) - levelOffset)
+    {
+        errorMessage = "KTX2 BC6H level layout is invalid: " + path.string();
+        return false;
+    }
+    if (width > static_cast<std::uint32_t>((std::numeric_limits<GLsizei>::max)())
+        || height > static_cast<std::uint32_t>((std::numeric_limits<GLsizei>::max)())
+        || levelLength > static_cast<std::uint64_t>((std::numeric_limits<GLsizei>::max)()))
+    {
+        errorMessage = "KTX2 texture is too large for OpenGL upload: " + path.string();
+        return false;
+    }
+
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    if (id == 0)
+    {
+        errorMessage = "OpenGL could not allocate KTX2 texture '" + path.string() + "'.";
+        return false;
+    }
+
+    GLint previousTexture = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture);
+    while (glGetError() != GL_NO_ERROR) {}
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glCompressedTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT,
+        static_cast<GLsizei>(width),
+        static_cast<GLsizei>(height),
+        0,
+        static_cast<GLsizei>(levelLength),
+        bytes.data() + static_cast<std::size_t>(levelOffset));
+    const GLenum uploadError = glGetError();
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
+    if (uploadError != GL_NO_ERROR)
+    {
+        glDeleteTextures(1, &id);
+        errorMessage = "OpenGL rejected BC6H KTX2 texture '" + path.string()
+            + "' (error " + std::to_string(uploadError) + ").";
+        return false;
+    }
+
+    texture.id = id;
+    texture.width = static_cast<int>(width);
+    texture.height = static_cast<int>(height);
+    texture.colorSpace = TextureColorSpace::Linear;
+    texture.hasMipmaps = false;
+    return true;
 }
 
 bool decodeFrameAndUpload(
@@ -291,6 +435,7 @@ bool decodeFrameAndUpload(
     texture.width = static_cast<int>(width);
     texture.height = static_cast<int>(height);
     texture.colorSpace = colorSpace;
+    texture.hasMipmaps = true;
     return true;
 }
 
@@ -522,6 +667,19 @@ bool Texture2DCache::decodeAndUpload(
     texture = {};
     errorMessage.clear();
 
+    std::string extension = path.extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (extension == ".ktx2")
+    {
+        if (flipVerticalOnDecode)
+        {
+            errorMessage = "KTX2 runtime textures cannot be row-flipped during GPU upload: " + path.string();
+            return false;
+        }
+        return uploadKtx2Bc6h(path, texture, errorMessage);
+    }
+
     ComApartment apartment;
     if (!apartment.available())
     {
@@ -657,7 +815,7 @@ void Texture2DCache::applySampling(
         return;
 
     const int filter = std::clamp(textureFilterIndex, 0, 6);
-    GLint minFilter = GL_LINEAR_MIPMAP_LINEAR;
+    GLint minFilter = texture.hasMipmaps ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR;
     GLint magFilter = GL_LINEAR;
 
     if (filter == 0)
@@ -665,7 +823,7 @@ void Texture2DCache::applySampling(
         minFilter = GL_NEAREST;
         magFilter = GL_NEAREST;
     }
-    else if (filter == 1)
+    else if (filter == 1 && texture.hasMipmaps)
     {
         minFilter = GL_LINEAR_MIPMAP_NEAREST;
         magFilter = GL_LINEAR;

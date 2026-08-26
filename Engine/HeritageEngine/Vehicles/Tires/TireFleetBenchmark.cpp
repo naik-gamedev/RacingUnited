@@ -4,8 +4,6 @@
 #include "TireThermal.hpp"
 #include "TireWear.hpp"
 #include "TireWetSurfaceInteraction.hpp"
-#include "../../Physics/Surfaces/Water/SurfaceHydrology.hpp"
-#include "../../Physics/Surfaces/SurfaceMaterialProperties.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -77,66 +75,10 @@ TireFleetBenchmarkResult runTireFleetBenchmark(
 
     std::vector<FleetTireState> states(result.tireCount);
     TireModelDescription tire = fittedTire;
-    heritage::physics::water::SurfaceHydrology hydrology;
-    heritage::physics::SurfaceWeatherDescription hydrologyWeather;
-    heritage::physics::SurfaceWeatherOutput hydrologyWeatherOutput;
-    if (d.wetWeather && d.includeSpatialHydrology)
-    {
-        // A compact synthetic multi-lane road lets the fleet diagnostic time
-        // real water-cell sampling, tire clearing and 30 Hz runoff without
-        // depending on whichever module scene happens to be loaded.
-        std::vector<heritage::physics::StaticSceneTriangle> road;
-        constexpr int longitudinalTiles = 80;
-        constexpr int lateralTiles = 6;
-        constexpr float tileM = 2.0f;
-        road.reserve(longitudinalTiles * lateralTiles * 2u);
-        const auto asphalt = heritage::physics::defaultSurfaceMaterialProperties(
-            heritage::physics::SurfaceMaterial::Asphalt);
-        for (int x = 0; x < longitudinalTiles; ++x)
-        {
-            for (int z = 0; z < lateralTiles; ++z)
-            {
-                const float x0 = static_cast<float>(x) * tileM;
-                const float x1 = x0 + tileM;
-                const float z0 = static_cast<float>(z) * tileM;
-                const float z1 = z0 + tileM;
-                const auto height = [](float px, float pz) {
-                    const float crown = 0.025f
-                        * std::abs(pz - 6.0f) / 6.0f;
-                    return 0.010f * std::sin(px * 0.035f) + crown;
-                };
-                const heritage::math::Vec3 a{ x0, height(x0, z0), z0 };
-                const heritage::math::Vec3 b{ x1, height(x1, z0), z0 };
-                const heritage::math::Vec3 c{ x1, height(x1, z1), z1 };
-                const heritage::math::Vec3 e{ x0, height(x0, z1), z1 };
-                heritage::physics::StaticSceneTriangle first;
-                first.a = a; first.b = b; first.c = c;
-                first.normal = { 0.0f, 1.0f, 0.0f };
-                first.surfaceMaterial = heritage::physics::SurfaceMaterial::Asphalt;
-                first.surfaceProperties = asphalt;
-                heritage::physics::StaticSceneTriangle second = first;
-                second.a = a; second.b = c; second.c = e;
-                road.push_back(first);
-                road.push_back(second);
-            }
-        }
-        heritage::physics::water::SurfaceHydrologyBakeReport bake;
-        if (!hydrology.bake(road, { 0.0, 0.0, 0.0 }, bake)
-            || !hydrology.setUniformWaterDepthForLab(d.roadWaterDepthM))
-        {
-            result.error = "Fleet benchmark could not initialize spatial hydrology.";
-            return result;
-        }
-        result.hydrologyCellCount = bake.cellCount;
-        hydrologyWeather.enabled = true;
-        hydrologyWeather.precipitationRateMmPerHour = 12.0;
-        hydrologyWeather.relativeHumidity = 0.90;
-        hydrologyWeather.windSpeedMps = d.windSpeedMps;
-        hydrologyWeather.cloudCover = 1.0;
-        hydrologyWeatherOutput.valid = true;
-        hydrologyWeatherOutput.windSpeedMps = d.windSpeedMps;
-        hydrologyWeatherOutput.evaporationRateMmPerHour = 0.05;
-    }
+    // OPT03C: this is deliberately a CPU tire-stack benchmark only. Spatial
+    // water is renderer/GPU authority and cannot be represented faithfully by
+    // spinning up a second CPU Hydro model inside this diagnostic.
+    (void)d.includeSpatialHydrology;
     // The benchmark consumes the fitted provider configuration. Wet weather
     // remains a no-op when the fitted tire deliberately disables that layer.
     const auto start = std::chrono::steady_clock::now();
@@ -145,8 +87,6 @@ TireFleetBenchmarkResult runTireFleetBenchmark(
     for (std::size_t step = 0; step < result.tireSteps; ++step)
     {
         const VehicleScalar time = static_cast<VehicleScalar>(step) * tireDt;
-        if (d.wetWeather && d.includeSpatialHydrology)
-            hydrology.advance(hydrologyWeather, hydrologyWeatherOutput, tireDt);
         for (std::size_t tireIndex = 0; tireIndex < result.tireCount; ++tireIndex)
         {
             FleetTireState& state = states[tireIndex];
@@ -248,33 +188,6 @@ TireFleetBenchmarkResult runTireFleetBenchmark(
             }
             ++result.wholeTireForceEvaluations;
 
-            if (d.wetWeather && d.includeSpatialHydrology)
-            {
-                heritage::physics::water::SurfaceHydrologyTireInput waterContact;
-                waterContact.deltaTimeSeconds = tireDt;
-                waterContact.contactPatchLengthM = wetInput.contactPatchLengthM;
-                waterContact.contactPatchWidthM = wetInput.contactPatchWidthM;
-                waterContact.contactPatchAreaM2 = wetInput.contactPatchAreaM2;
-                waterContact.normalLoadN = normalLoadN;
-                waterContact.nominalLoadN = tire.nominalLoad;
-                waterContact.forwardSpeedMps = speedMps;
-                waterContact.lateralSpeedMps = wetInput.lateralSlipVelocityMps;
-                waterContact.treadVoidRatio = tire.wetSurface.treadVoidRatio;
-                waterContact.slipDissipationWatts = std::abs(
-                    state.previousForce.longitudinalForce
-                        * wetInput.longitudinalSlipVelocityMps)
-                    + std::abs(state.previousForce.lateralForce
-                        * wetInput.lateralSlipVelocityMps);
-                const double roadX = std::fmod(
-                    static_cast<double>(vehicleIndex) * 3.7
-                        + static_cast<double>(time * speedMps),
-                    158.0) + 1.0;
-                const double roadZ = 1.0
-                    + static_cast<double>((vehicleIndex + cornerIndex) % 6) * 2.0;
-                hydrology.applyTireContact({ roadX, 0.0, roadZ }, waterContact);
-                ++result.hydrologyTireContacts;
-            }
-
             if (step % stateStride == 0)
             {
                 TireThermalInput thermalInput;
@@ -341,15 +254,10 @@ TireFleetBenchmarkResult runTireFleetBenchmark(
             / static_cast<double>(result.tireSteps * result.vehicleCount)
         : 0.0;
     result.checksum = checksum;
-    if (d.wetWeather && d.includeSpatialHydrology)
-        result.hydrologySteps = static_cast<std::size_t>(
-            hydrology.stats().simulationStepCount);
     result.valid = std::isfinite(checksum)
         && result.wholeTireForceEvaluations
             == result.tireCount * result.tireSteps
-        && (!d.wetWeather || !d.includeSpatialHydrology
-            || result.hydrologyTireContacts
-                == result.tireCount * result.tireSteps);
+        ;
     if (!result.valid)
         result.error = "Fleet tire workload produced an invalid result.";
     return result;

@@ -8,6 +8,7 @@
 #include "../../Graphics/Framebuffer/PostFramebuffer.hpp"
 #include "../../Graphics/PostProcessing/PostProcessor.hpp"
 #include "../../Graphics/RenderScaler.hpp"
+#include "../../Graphics/Renderer/AsyncGpuTimer.hpp"
 
 namespace heritage::camera { struct CameraFrame; }
 namespace heritage::diagnostics { class PerformanceMonitor; }
@@ -34,6 +35,16 @@ struct EngineRenderingState final
     std::array<GLuint, 3> gpuTimerQueries{ 0, 0, 0 };
     std::array<bool, 3> gpuTimerIssued{ false, false, false };
     std::size_t gpuTimerCursor = 0;
+
+    // OPT00 durable pass timestamps. These are only used for the normal
+    // single-viewport path; frame-wide timing remains authoritative for span.
+    heritage::graphics::AsyncGpuTimer moduleGpuTimer;
+    heritage::graphics::AsyncGpuTimer meshGpuTimer;
+    heritage::graphics::AsyncGpuTimer surfaceGpuTimer;
+    heritage::graphics::AsyncGpuTimer weatherGpuTimer;
+    heritage::graphics::AsyncGpuTimer debugGpuTimer;
+    heritage::graphics::AsyncGpuTimer msaaResolveGpuTimer;
+    heritage::graphics::AsyncGpuTimer postProcessGpuTimer;
 
     int previousFramebufferWidth = 0;
     int previousFramebufferHeight = 0;

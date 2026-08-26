@@ -1,5 +1,7 @@
 # Heritage Engine Code Modularization Roadmap
 
+> **2026-08-25 current cleanup authority:** the CLEAN01–CLEAN13 program below is retained as historical architecture context. A fresh full-project audit found concrete new blockers (retired hydrology generations, a 1,568-line uncompiled TireCarcass implementation, fake source scaffolds, new renderer/runtime gravity wells). The active continuation is `CODE_HEALTH_OPTIMIZATION_ROADMAP_2026_08_25.md`. The old post-CLEAN13 stop rule is therefore not being ignored; its “concrete blocker” exception has been met.
+
 ## Purpose
 
 This cleanup program is the architecture gate after the user-validated TIRE15 runtime and before
@@ -299,7 +301,7 @@ features should go to their owning unit rather than returning to the root coordi
 ```text
 Graphics/
     GltfBinary.hpp              stable public include/API
-    GltfBinary.cpp              non-compiled migration signpost
+    GltfBinary.cpp              retired by OPT01; implementation lives in Graphics/Gltf/
     Gltf/
         GltfBinary.cpp          public facade implementations
         GltfJson.cpp            JSON parser

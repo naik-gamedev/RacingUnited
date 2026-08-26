@@ -383,4 +383,24 @@ const Mesh* EntityMeshRenderer::acquireMesh(
     return asset.loaded ? &asset.mesh : nullptr;
 }
 
+void EntityMeshRenderer::requestHotReloadPoll()
+{
+    ++m_hotReloadEpoch;
+    if (m_hotReloadEpoch == 0)
+        m_hotReloadEpoch = 1;
+    m_textureCache.setHotReloadEpoch(m_hotReloadEpoch);
+}
+
+std::size_t EntityMeshRenderer::loadedAssetCount() const
+{
+    return static_cast<std::size_t>(
+        std::count_if(
+            m_cache.begin(),
+            m_cache.end(),
+            [](const auto& item)
+            {
+                return item.second.loaded;
+            }));
+}
+
 } // namespace heritage::graphics

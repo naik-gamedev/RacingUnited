@@ -780,7 +780,6 @@ bool DynamicSurfaceSystem::bakeStaticScene(
     const auto started = std::chrono::steady_clock::now();
     m_chunks.clear();
     m_pagePool.clear();
-    m_hydrology.clear();
     m_sheetLinks.clear();
     report = {};
     report.sourceTriangleCount = localTriangles.size();
@@ -1287,7 +1286,6 @@ bool DynamicSurfaceSystem::loadStaticBakeCache(
         return false;
 
     m_pagePool.clear();
-    m_hydrology.clear();
     m_chunks = std::move(loadedChunks);
     m_sheetLinks = std::move(loadedLinks);
     report = {};

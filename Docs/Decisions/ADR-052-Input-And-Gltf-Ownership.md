@@ -43,3 +43,7 @@ This is used by Racing United's `Gears` category for direct Gear 1 through Gear 
 selection. Neutral, reverse and sequential shift actions keep normal defaults.
 The public `InputSystem` facade remains unchanged; only registration semantics now
 permit an empty default-binding list.
+
+## OPT01 retirement
+
+The migration is complete. OPT01 removes the noncompiled root `Graphics/GltfBinary.cpp` signpost; the stable public header remains and all implementation ownership stays under `Graphics/Gltf/`. The architecture validator now guards the real compiled ownership rather than requiring a dead source file.

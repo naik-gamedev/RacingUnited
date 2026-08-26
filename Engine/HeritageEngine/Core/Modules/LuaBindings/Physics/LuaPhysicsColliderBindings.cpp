@@ -362,10 +362,11 @@ int LuaPhysicsBindingHandlers::luaPhysicsLoadStaticTriangleScene(lua_State* stat
     runtime->m_physics->surfaces().loadOrBakeDynamicSurface(
         triangles, dynamicSurfaceCache, dynamicSurfaceReport);
 
-    // Compatibility-only legacy hydrology bake: Dynamic Surface owns runtime
-    // water/moisture/flow as of DSURF03B. This old index remains temporarily
-    // for static precipitation-cover queries and historical regression paths
-    // until those final non-state responsibilities migrate.
+    // LIVETRACK08 immutable scene hydrology bake. Dynamic Surface still owns
+    // runtime water/dry-line state, but .hhyd now also caches the expensive
+    // static drainage answer: broad basin spill elevation + downhill direction.
+    // The production GPU puddle response samples this topology instead of
+    // probing collision triangles or solving neighbour flow while driving.
     const std::filesystem::path hydrologyCache =
         runtime->m_context->settingsRoot()
         / "Hydrology"

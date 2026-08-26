@@ -54,7 +54,9 @@ public:
         const heritage::math::Mat4& projection,
         const heritage::camera::CameraFrame& cameraFrame,
         float elapsedSeconds,
-        const heritage::graphics::EnvironmentMap& environmentMap);
+        const heritage::graphics::EnvironmentMap& environmentMap,
+        GLsizei viewportWidth,
+        GLsizei viewportHeight);
 
 private:
     bool loadRainOpticalMaterial(const std::filesystem::path& moduleAssetRoot);

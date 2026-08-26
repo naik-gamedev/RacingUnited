@@ -17,7 +17,9 @@ if (-not (Test-Path -LiteralPath $cacheDir)) {
 # These are the inputs whose content can affect native object files or project
 # composition. ZIP extraction preserves archived timestamps; content hashing
 # prevents a changed file with an older timestamp from being skipped by
-# MSBuild's otherwise-correct incremental build logic.
+# MSBuild's otherwise-correct incremental build logic. The v2 marker also
+# prevents an overlay ZIP from importing a foreign hash cache that does not
+# describe the object files already present on the destination machine.
 $trackedExtensions = @(
     '.c', '.cc', '.cpp', '.cxx',
     '.h', '.hh', '.hpp', '.hxx', '.inl', '.ipp',
@@ -26,18 +28,28 @@ $trackedExtensions = @(
 
 $excludedDirectoryNames = @('.git', '.vs', 'x64', 'Debug', 'Release')
 
+$cacheFormatMarker = '# heritage-incremental-source-hashes-v2'
 $previousHashes = @{}
+$cacheCompatible = $false
 if (Test-Path -LiteralPath $cachePath) {
-    foreach ($line in Get-Content -LiteralPath $cachePath) {
-        if ([string]::IsNullOrWhiteSpace($line)) { continue }
-        $tab = $line.IndexOf("`t")
-        if ($tab -le 0) { continue }
-        $hash = $line.Substring(0, $tab)
-        $relative = $line.Substring($tab + 1)
-        if ($hash -and $relative) {
-            $previousHashes[$relative] = $hash
+    $cacheLines = @(Get-Content -LiteralPath $cachePath)
+    if ($cacheLines.Count -gt 0 -and $cacheLines[0] -eq $cacheFormatMarker) {
+        $cacheCompatible = $true
+        foreach ($line in $cacheLines | Select-Object -Skip 1) {
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            $tab = $line.IndexOf("`t")
+            if ($tab -le 0) { continue }
+            $hash = $line.Substring(0, $tab)
+            $relative = $line.Substring($tab + 1)
+            if ($hash -and $relative) {
+                $previousHashes[$relative] = $hash
+            }
         }
     }
+}
+
+if (-not $cacheCompatible -and (Test-Path -LiteralPath $cachePath)) {
+    Write-Host 'Incremental freshness: legacy/foreign cache detected; invalidating once to reconcile native objects with current sources.'
 }
 
 $trackedFiles = Get-ChildItem -LiteralPath $rootPath -Recurse -File | Where-Object {
@@ -72,8 +84,10 @@ foreach ($file in $trackedFiles) {
 }
 
 $tempPath = "$cachePath.tmp"
-$lines = foreach ($relative in ($currentHashes.Keys | Sort-Object)) {
-    "$($currentHashes[$relative])`t$relative"
+$lines = New-Object System.Collections.Generic.List[string]
+$lines.Add($cacheFormatMarker)
+foreach ($relative in ($currentHashes.Keys | Sort-Object)) {
+    $lines.Add("$($currentHashes[$relative])`t$relative")
 }
 [System.IO.File]::WriteAllLines($tempPath, $lines, (New-Object System.Text.UTF8Encoding($false)))
 Move-Item -LiteralPath $tempPath -Destination $cachePath -Force

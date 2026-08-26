@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+﻿<?xml version='1.0' encoding='utf-8'?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <Filter Include="Source Files">
@@ -84,10 +84,31 @@
     <ClCompile Include="..\Graphics\Texture2D.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.cpp">
+<ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuRuntime.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.cpp">
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuProfiling.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuResources.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuResidency.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuTopology.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuGeometry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuDispatch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuTireEvents.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuTimers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Graphics\Gltf\GltfBinary.cpp">
@@ -148,6 +169,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\UI\UiImageCache.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\UI\WeatherRadarOverlay.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\UI\PauseMenu.cpp">
@@ -249,9 +273,6 @@
     <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceThermal.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -262,6 +283,18 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrology.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrologyTopology.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrologyTiles.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrologyCover.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Physics\Surfaces\Water\SurfaceHydrologyCache.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Physics\Surfaces\Presentation\SurfacePresentation.cpp">
@@ -456,6 +489,15 @@
     <ClCompile Include="..\Graphics\Renderer\SurfacePresentationRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\SurfacePresentationTireMarks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\SurfacePresentationRubber.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\SurfacePresentationShaders.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Graphics\Renderer\WeatherPresentationRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -480,7 +522,22 @@
     <ClCompile Include="..\Graphics\Renderer\EntityMeshRenderMath.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\EntityMeshProfiling.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\Graphics\Renderer\SkyRenderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\SkyRendererAtmosphereShaders.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\SkyRendererPbrAtmosphere.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\SkyRendererPbrAtmosphereShaders.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Graphics\Renderer\SkyRendererCloudShaders.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\Graphics\RenderScaler.cpp">
@@ -657,6 +714,9 @@
     <ClCompile Include="..\Core\Diagnostics\PerformanceOverlay.cpp">
       <Filter>Engine Runtime\Diagnostics</Filter>
     </ClCompile>
+    <ClCompile Include="..\Core\Diagnostics\RuntimeCrashCapture.cpp">
+      <Filter>Engine Runtime\Diagnostics</Filter>
+    </ClCompile>
     <ClCompile Include="..\Platform\Windows\BackbufferClipboard.cpp">
       <Filter>Engine Runtime\Platform</Filter>
     </ClCompile>
@@ -704,10 +764,10 @@
     <ClInclude Include="..\Graphics\Texture2D.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuPagePool.hpp">
+<ClInclude Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuRuntime.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuLodPrototype.hpp">
+    <ClInclude Include="..\Graphics\DynamicSurface\DynamicSurfaceGpuShaders.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Graphics\GltfBinary.hpp">
@@ -737,6 +797,12 @@
     <ClInclude Include="..\Graphics\Renderer\SkyRenderer.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\SkyRendererShaders.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\AsyncGpuTimer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Graphics\ShaderProgram.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -753,6 +819,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\UI\UiImageCache.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\UI\WeatherRadarOverlay.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\UI\PauseMenu.hpp">
@@ -825,9 +894,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceSystem.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceHydrology.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\Physics\Surfaces\DynamicSurface\DynamicSurfaceThermal.hpp">
@@ -1031,6 +1097,12 @@
     <ClInclude Include="..\Graphics\Renderer\SurfacePresentationRenderer.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\SurfacePresentationRendererInternal.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Graphics\Renderer\SurfacePresentationShaders.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Graphics\Renderer\WeatherPresentationRenderer.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -1216,32 +1288,11 @@
     <Filter Include="Vehicle Architecture\Suspension\Geometry\MacPherson">
       <UniqueIdentifier>{89664730-9366-5371-BDDF-4CCB0F31E522}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Vehicle Architecture\Suspension\Geometry\DoubleWishbone">
-      <UniqueIdentifier>{21519861-7AE5-5362-A5B7-7C0533407155}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Vehicle Architecture\Suspension\Geometry\TrailingArm">
       <UniqueIdentifier>{4EE0C8DD-4E0A-56D1-8E1B-08AAD8FEAE88}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Vehicle Architecture\Suspension\Geometry\SemiTrailingArm">
-      <UniqueIdentifier>{6B4A403B-5160-521F-93F2-7D54E3F05711}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Suspension\Geometry\MultiLink">
-      <UniqueIdentifier>{B681ACFD-FA5B-538D-94B3-5398CED0496C}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Suspension\Axles">
-      <UniqueIdentifier>{69D97DE6-30AB-5019-AA8D-5D689314983B}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Suspension\Axles\SolidAxle">
-      <UniqueIdentifier>{FACF77A7-D23A-5D3D-909E-09D145A11EA7}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Suspension\Axles\TorsionBeam">
-      <UniqueIdentifier>{0A6A2FAF-6843-59EF-B097-3E52662460E2}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Vehicle Architecture\Suspension\Springs">
       <UniqueIdentifier>{220AC72B-9387-581C-BA1B-C26921BEA4AE}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Suspension\Motorcycle">
-      <UniqueIdentifier>{89356417-381A-53A4-A499-8597DC98F892}</UniqueIdentifier>
     </Filter>
     <Filter Include="Vehicle Architecture\Wheels">
       <UniqueIdentifier>{9C5622A7-2CAB-5377-9095-01A5ED351903}</UniqueIdentifier>
@@ -1261,35 +1312,14 @@
     <Filter Include="Vehicle Architecture\Simulation\Wheel Substep">
       <UniqueIdentifier>{D39CBFE9-59B7-4C1A-9FDE-F80C31082084}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Vehicle Architecture\Topology">
-      <UniqueIdentifier>{0e3d1b8e-6c50-4e40-8f6d-b053da19a7cd}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Topology\Common">
-      <UniqueIdentifier>{94494d9f-91ce-485c-b834-852585fc9bbf}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Topology\Two Wheel">
-      <UniqueIdentifier>{8c412701-7b2b-4622-afd8-a87ca1ce8214}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Topology\Three Wheel">
-      <UniqueIdentifier>{ee5df1d5-1d4a-4f3c-b98b-ff5f9618940b}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Topology\Four Plus Wheel">
-      <UniqueIdentifier>{ba9b3c82-644c-420d-88cd-0c2e5745987c}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Vehicle Architecture\Tires">
       <UniqueIdentifier>{C5D86C92-DFA3-5B6F-8D38-9371939C7853}</UniqueIdentifier>
     </Filter>
     <Filter Include="Vehicle Architecture\Drivetrain">
       <UniqueIdentifier>{DFF15572-69AC-5284-AC7F-E283C32724B2}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Vehicle Architecture\Drivetrain\Differentials">
-      <UniqueIdentifier>{2C7935A0-9672-51FC-9E70-65A5B47C6E34}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Vehicle Architecture\Brakes">
       <UniqueIdentifier>{25CA998D-2E8B-5AA3-9228-490B14C5A20A}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Vehicle Architecture\Aerodynamics">
-      <UniqueIdentifier>{C3FFE277-9C2E-5E4A-A0CF-C47719163129}</UniqueIdentifier>
     </Filter>
     <Filter Include="Vehicle Architecture\Dynamics">
       <UniqueIdentifier>{6E0E652F-DF7B-50AC-BB4D-E60C1230BAB4}</UniqueIdentifier>
@@ -1300,113 +1330,20 @@
     <Filter Include="Vehicle Architecture\Dynamics\Mass Properties">
       <UniqueIdentifier>{9A4C4E72-D3D8-4D9B-8E0F-8FB39BB7CC41}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Vehicle Architecture\Articulation">
-      <UniqueIdentifier>{27F5797A-B32B-5E9C-8700-A46652A1FCE0}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Vehicles\Simulation\WheelSubstep\README.md">
       <Filter>Vehicle Architecture\Simulation\Wheel Substep</Filter>
     </None>
-    <None Include="..\Vehicles\VehicleConfiguration.cpp">
-      <Filter>Vehicle Architecture\Core</Filter>
-    </None>
-    <None Include="..\Vehicles\Topology\Common\VehicleTopologyCoordinator.cpp">
-      <Filter>Vehicle Architecture\Topology\Common</Filter>
-    </None>
-    <None Include="..\Vehicles\Topology\TwoWheel\TwoWheelVehicleDynamics.cpp">
-      <Filter>Vehicle Architecture\Topology\Two Wheel</Filter>
-    </None>
-    <None Include="..\Vehicles\Topology\ThreeWheel\ThreeWheelVehicleDynamics.cpp">
-      <Filter>Vehicle Architecture\Topology\Three Wheel</Filter>
-    </None>
-    <None Include="..\Vehicles\Topology\FourPlusWheel\FourPlusWheelVehicleDynamics.cpp">
-      <Filter>Vehicle Architecture\Topology\Four Plus Wheel</Filter>
-    </None>
-    <None Include="..\Vehicles\Core\VehicleAssembly.cpp">
-      <Filter>Vehicle Architecture\Core</Filter>
-    </None>
-    <None Include="..\Vehicles\Core\VehicleSimulationScheduler.cpp">
-      <Filter>Vehicle Architecture\Core</Filter>
-    </None>
-    <None Include="..\Vehicles\Steering\SteeringSystem.cpp">
-      <Filter>Vehicle Architecture\Steering</Filter>
-    </None>
-    <None Include="..\Vehicles\Steering\AckermannGeometry.cpp">
-      <Filter>Vehicle Architecture\Steering</Filter>
-    </None>
-    <None Include="..\Vehicles\Steering\PowerSteering.cpp">
-      <Filter>Vehicle Architecture\Steering</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Common\SuspensionSpringDamper.cpp">
-      <Filter>Vehicle Architecture\Suspension\Common</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Common\SuspensionBumpStop.cpp">
-      <Filter>Vehicle Architecture\Suspension\Common</Filter>
-    </None>
     <ClCompile Include="..\Vehicles\Suspension\Common\SuspensionAntiRollBar.cpp">
       <Filter>Vehicle Architecture\Suspension\Common</Filter>
     </ClCompile>
-    <None Include="..\Vehicles\Suspension\Common\SuspensionHeaveSpring.cpp">
-      <Filter>Vehicle Architecture\Suspension\Common</Filter>
-    </None>
     <ClCompile Include="..\Vehicles\Suspension\Geometry\MacPherson\MacPhersonKinematics.cpp">
       <Filter>Vehicle Architecture\Suspension\Geometry\MacPherson</Filter>
     </ClCompile>
     <ClCompile Include="..\Vehicles\Suspension\Authoring\MacPhersonHardpointEstimator.cpp">
       <Filter>Vehicle Architecture\Suspension\Authoring</Filter>
     </ClCompile>
-    <None Include="..\Vehicles\Suspension\Geometry\DoubleWishbone\DoubleWishboneKinematics.cpp">
-      <Filter>Vehicle Architecture\Suspension\Geometry\DoubleWishbone</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Geometry\SemiTrailingArm\SemiTrailingArmKinematics.cpp">
-      <Filter>Vehicle Architecture\Suspension\Geometry\SemiTrailingArm</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Geometry\MultiLink\MultiLinkKinematics.cpp">
-      <Filter>Vehicle Architecture\Suspension\Geometry\MultiLink</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Axles\SolidAxle\SolidAxleKinematics.cpp">
-      <Filter>Vehicle Architecture\Suspension\Axles\SolidAxle</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Axles\TorsionBeam\TorsionBeamKinematics.cpp">
-      <Filter>Vehicle Architecture\Suspension\Axles\TorsionBeam</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Springs\CoilSpring.cpp">
-      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Springs\LeafSpring.cpp">
-      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Springs\AirSpring.cpp">
-      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Springs\HydropneumaticSpring.cpp">
-      <Filter>Vehicle Architecture\Suspension\Springs</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Motorcycle\TelescopicFork.cpp">
-      <Filter>Vehicle Architecture\Suspension\Motorcycle</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Motorcycle\Telelever.cpp">
-      <Filter>Vehicle Architecture\Suspension\Motorcycle</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Motorcycle\RearSwingarm.cpp">
-      <Filter>Vehicle Architecture\Suspension\Motorcycle</Filter>
-    </None>
-    <None Include="..\Vehicles\Suspension\Motorcycle\RearLinkage.cpp">
-      <Filter>Vehicle Architecture\Suspension\Motorcycle</Filter>
-    </None>
-    <None Include="..\Vehicles\Wheels\WheelDynamics.cpp">
-      <Filter>Vehicle Architecture\Wheels</Filter>
-    </None>
-    <None Include="..\Vehicles\Wheels\WheelHub.cpp">
-      <Filter>Vehicle Architecture\Wheels</Filter>
-    </None>
-    <None Include="..\Vehicles\Wheels\Fitment\WheelClearance.cpp">
-      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
-    </None>
-    <None Include="..\Vehicles\Wheels\Fitment\InstalledWheelMassProperties.cpp">
-      <Filter>Vehicle Architecture\Wheels\Fitment</Filter>
-    </None>
     <ClCompile Include="..\Vehicles\Tires\TireContactPatch.cpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
@@ -1443,9 +1380,9 @@
     <ClCompile Include="..\Vehicles\Tires\TireFailure.cpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
-    <None Include="..\Vehicles\Tires\TireWear.cpp">
+    <ClCompile Include="..\Vehicles\Tires\TireWear.cpp">
       <Filter>Vehicle Architecture\Tires</Filter>
-    </None>
+    </ClCompile>
     <ClCompile Include="..\Vehicles\Tires\TireSurfaceInteraction.cpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
@@ -1461,60 +1398,6 @@
     <ClCompile Include="..\Vehicles\Tires\TireDeformableTerrainInteraction.cpp">
       <Filter>Vehicle Architecture\Tires</Filter>
     </ClCompile>
-    <None Include="..\Vehicles\Tires\LowPressureTireModel.cpp">
-      <Filter>Vehicle Architecture\Tires</Filter>
-    </None>
-    <None Include="..\Vehicles\Drivetrain\PowerUnit.cpp">
-      <Filter>Vehicle Architecture\Drivetrain</Filter>
-    </None>
-    <None Include="..\Vehicles\Drivetrain\Clutch.cpp">
-      <Filter>Vehicle Architecture\Drivetrain</Filter>
-    </None>
-    <None Include="..\Vehicles\Drivetrain\Gearbox.cpp">
-      <Filter>Vehicle Architecture\Drivetrain</Filter>
-    </None>
-    <None Include="..\Vehicles\Drivetrain\TransferCase.cpp">
-      <Filter>Vehicle Architecture\Drivetrain</Filter>
-    </None>
-    <None Include="..\Vehicles\Drivetrain\ChainFinalDrive.cpp">
-      <Filter>Vehicle Architecture\Drivetrain</Filter>
-    </None>
-    <None Include="..\Vehicles\Drivetrain\Differentials\OpenDifferential.cpp">
-      <Filter>Vehicle Architecture\Drivetrain\Differentials</Filter>
-    </None>
-    <None Include="..\Vehicles\Drivetrain\Differentials\LimitedSlipDifferential.cpp">
-      <Filter>Vehicle Architecture\Drivetrain\Differentials</Filter>
-    </None>
-    <None Include="..\Vehicles\Drivetrain\Differentials\LockedDifferential.cpp">
-      <Filter>Vehicle Architecture\Drivetrain\Differentials</Filter>
-    </None>
-    <None Include="..\Vehicles\Drivetrain\Differentials\ActiveDifferential.cpp">
-      <Filter>Vehicle Architecture\Drivetrain\Differentials</Filter>
-    </None>
-    <None Include="..\Vehicles\Brakes\BrakeSystem.cpp">
-      <Filter>Vehicle Architecture\Brakes</Filter>
-    </None>
-    <None Include="..\Vehicles\Brakes\BrakeThermal.cpp">
-      <Filter>Vehicle Architecture\Brakes</Filter>
-    </None>
-    <None Include="..\Vehicles\Brakes\ABSController.cpp">
-      <Filter>Vehicle Architecture\Brakes</Filter>
-    </None>
-    <None Include="..\Vehicles\Aerodynamics\AerodynamicsSystem.cpp">
-      <Filter>Vehicle Architecture\Aerodynamics</Filter>
-    </None>
-    <None Include="..\Vehicles\Aerodynamics\AeroSurface.cpp">
-      <Filter>Vehicle Architecture\Aerodynamics</Filter>
-    </None>
-    <None Include="..\Vehicles\Aerodynamics\GroundEffect.cpp">
-      <Filter>Vehicle Architecture\Aerodynamics</Filter>
-    </None>
-    <None Include="..\Vehicles\Dynamics\MotorcycleLeanDynamics.cpp">
-      <Filter>Vehicle Architecture\Dynamics</Filter>
-    </None>
-    <None Include="..\Vehicles\Dynamics\KartChassisFlex.cpp">
-      <Filter>Vehicle Architecture\Dynamics</Filter>
-    </None>
     <ClCompile Include="..\Vehicles\Dynamics\ChassisFlex\ChassisTorsionalCompliance.cpp">
       <Filter>Vehicle Architecture\Dynamics\Chassis Flex</Filter>
     </ClCompile>
@@ -1548,15 +1431,6 @@
     <ClInclude Include="..\Vehicles\Dynamics\MassProperties\VehicleMassPropertiesAccumulator.hpp">
       <Filter>Vehicle Architecture\Dynamics\Mass Properties</Filter>
     </ClInclude>
-    <None Include="..\Vehicles\Articulation\ArticulatedVehicle.cpp">
-      <Filter>Vehicle Architecture\Articulation</Filter>
-    </None>
-    <None Include="..\Vehicles\Articulation\FifthWheel.cpp">
-      <Filter>Vehicle Architecture\Articulation</Filter>
-    </None>
-    <None Include="..\Vehicles\Articulation\TrailerCoupling.cpp">
-      <Filter>Vehicle Architecture\Articulation</Filter>
-    </None>
     <ClCompile Include="..\Physics\Collision\Queries\CollisionQueries.cpp">
       <Filter>Collision Architecture\Queries</Filter>
     </ClCompile>

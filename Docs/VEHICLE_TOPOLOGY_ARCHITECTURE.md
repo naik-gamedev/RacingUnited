@@ -111,3 +111,6 @@ Its named phases under `Vehicles/Simulation/WheelSubstep/` operate on one wheel 
 must remain independent of an exactly-four-wheel assumption. Whole-vehicle topology layers may
 coordinate lean, balance, axle grouping, steering strategy or other category-specific coupling, but
 should reuse the common wheel/suspension/tire providers whenever the underlying physics is shared.
+## OPT01 source-hygiene note
+
+The earlier empty C++/Lua topology scaffold files have been retired. Their architectural intent remains here and in `VEHICLE_SUBSYSTEM_ARCHITECTURE_MANIFEST.md`. Source files are created only when they contain a real implementation, contract or testable behavior.

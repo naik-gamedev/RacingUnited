@@ -174,14 +174,42 @@ void updateEngineSimulation(
                         * static_cast<double>(cameraForwardWorld.y)
                     + static_cast<double>(cameraLinearVelocity.z)
                         * static_cast<double>(cameraForwardWorld.z);
+                frameCameraInput.lateralSpeedMetersPerSecond =
+                    static_cast<double>(cameraLinearVelocity.x)
+                        * static_cast<double>(cameraRightWorld.x)
+                    + static_cast<double>(cameraLinearVelocity.y)
+                        * static_cast<double>(cameraRightWorld.y)
+                    + static_cast<double>(cameraLinearVelocity.z)
+                        * static_cast<double>(cameraRightWorld.z);
             }
             // CAM06 paused inspection: a car paused while moving retains its
             // physical velocity state. Do not let that frozen velocity trigger
             // the chase camera's automatic return-to-rear while the ESC menu
             // is open; the player's paused orbit should stay where they put it.
             if (menuOpen)
+            {
                 frameCameraInput.forwardSpeedMetersPerSecond = 0.0;
-            if (vehicleCamera.active())
+                frameCameraInput.lateralSpeedMetersPerSecond = 0.0;
+                frameCameraInput.dynamicMotionResponseActive = false;
+            }
+
+            if (vehicleCamera.detachedActive())
+            {
+                // CAM07 detached free flight is world-space FP64 authority. It
+                // still uses the player pose only because this frame block is
+                // also where the normal chase camera is selected; buildLocalFrame
+                // ignores the chassis basis while detached.
+                vehicleCamera.updateFly(vehicleCameraFlyInput, dt);
+                vehicleCamera.buildLocalFrame(
+                    globalPlayerPosition,
+                    cameraRightWorld,
+                    cameraUpWorld,
+                    cameraForwardWorld,
+                    physics.globalOrigin(),
+                    entityCameraFrame);
+                chaseCamera.reset();
+            }
+            else if (vehicleCamera.active())
             {
                 // CAMLAB01 fixed/authoring views are rigidly vehicle-local and
                 // consume the full interpolated chassis basis. This is what

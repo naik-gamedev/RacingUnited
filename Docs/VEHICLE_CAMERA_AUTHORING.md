@@ -76,3 +76,22 @@ The resulting pose remains in the selected preset and can then be saved.
 - `UI/Vehicle/CameraLabPanel.lua` owns creator controls.
 
 The engine does not hard-code Racing United's camera names or save keys.
+
+## Detached free-flight UI handoff (CAM10)
+
+The ordinary detached world camera is toggled with the bindable `Toggle Free Camera`
+action (default Grave). It keeps an FP64 world-space eye, uses the rebindable
+Camera Forward/Backward/Left/Right/Up/Down actions, and uses Shift as the 400 m/s
+travel gear added for cloud-volume inspection.
+
+A visible Racing United prototype control panel now temporarily borrows the mouse
+from fly navigation. `Tab` therefore has symmetric behavior while detached:
+show controls -> cursor becomes normal/clickable and fly motion pauses; hide
+controls -> cursor is recaptured and the same detached camera immediately resumes.
+The ESC pause/settings menu uses the same temporary handoff. The camera is not
+exited or rebuilt in either case, and the first mouse delta after re-capture is
+discarded so GLFW cursor-mode changes cannot snap the view.
+
+The vehicle handbrake toggle is persistent across this camera ownership change.
+Live driving inputs remain suppressed while fly navigation owns the controls, but
+a previously latched handbrake continues to feed full handbrake input to physics.

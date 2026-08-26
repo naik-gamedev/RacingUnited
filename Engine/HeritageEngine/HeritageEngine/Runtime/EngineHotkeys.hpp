@@ -18,6 +18,7 @@ struct EngineHotkeyState final
     bool f7Prev = false;
     bool f8Prev = false;
     bool f9Prev = false;
+    bool f10Prev = false;
     bool f11Prev = false;
     bool insertPrev = false;
     bool printScreenPrev = false;
@@ -28,6 +29,7 @@ struct EngineHotkeyState final
     bool menuOpen = false;
     bool menuShowSettings = false;
     bool performanceOverlayVisible = true;
+    bool weatherRadarVisible = false;
     bool wireframeVisible = false;
     bool tireProbeDebugVisible = false;
 };

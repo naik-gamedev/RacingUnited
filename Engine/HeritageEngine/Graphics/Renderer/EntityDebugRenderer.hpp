@@ -45,6 +45,19 @@ private:
     Mesh m_cylinder;
     Mesh m_sphere;
     GLuint m_program = 0;
+
+    // OPT06: debug primitives are still part of the live renderer, so cache
+    // every uniform location once instead of resolving names per draw/instance.
+    GLint m_uniformModel = -1;
+    GLint m_uniformView = -1;
+    GLint m_uniformProjection = -1;
+    GLint m_uniformColor = -1;
+    GLint m_uniformEye = -1;
+    GLint m_uniformGamma = -1;
+    GLint m_uniformBrightness = -1;
+    GLint m_uniformContrast = -1;
+    GLint m_uniformSaturation = -1;
+
     mutable EntityDebugRendererStats m_frameStats{};
 };
 

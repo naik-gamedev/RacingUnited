@@ -173,6 +173,13 @@ function LoadPlayerWorld()
     playerWorld.visualAsset = playerWorld.sceneAsset
     playerWorld.collisionAsset = playerWorld.sceneAsset
 
+    -- Scene geography is authored with the same GLB. If metadata is absent,
+    -- Racing United keeps its module-level Ivarcko Jezero fallback instead of
+    -- inventing location data from geometry.
+    if Environment ~= nil and Environment.ApplySceneMetadata ~= nil then
+        Environment.ApplySceneMetadata(playerWorld.sceneAsset)
+    end
+
     -- Remove laboratory surfaces/probes while the creator world owns the scene.
     DestroyPhysicsDemo()
     Physics.UnloadStaticBoxScene()

@@ -24,6 +24,17 @@ Build/
 # Local project archives
 /*.zip
 
+# Optional local texture-conversion toolchains and generated previews
+/Tools/HeritageKTX2Converter/compressonatorcli-*/
+/Tools/HeritageKTX2Converter/*.exe
+/Scene_NightSky.ktx2
+
+# Loose local tuning notes (the authored documentation lives under Docs/)
+/Tools/1
+/Tools/12
+/Tools/20m
+/Tools/30deg
+
 # OS junk
 Thumbs.db
 Desktop.ini

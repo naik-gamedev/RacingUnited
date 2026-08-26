@@ -33,6 +33,16 @@ bool initializeEngineRendering(EngineRenderingState& state)
     glGenQueries(
         static_cast<GLsizei>(state.gpuTimerQueries.size()),
         state.gpuTimerQueries.data());
+
+    // OPT00 pass timers are diagnostic only. Failure to allocate a timestamp
+    // ring must never make the renderer unavailable.
+    state.moduleGpuTimer.initialize();
+    state.meshGpuTimer.initialize();
+    state.surfaceGpuTimer.initialize();
+    state.weatherGpuTimer.initialize();
+    state.debugGpuTimer.initialize();
+    state.msaaResolveGpuTimer.initialize();
+    state.postProcessGpuTimer.initialize();
     return true;
 }
 
@@ -50,6 +60,13 @@ void shutdownEngineRendering(EngineRenderingState& state)
     state.gpuTimerQueries = { 0, 0, 0 };
     state.gpuTimerIssued = { false, false, false };
     state.gpuTimerCursor = 0;
+    state.moduleGpuTimer.shutdown();
+    state.meshGpuTimer.shutdown();
+    state.surfaceGpuTimer.shutdown();
+    state.weatherGpuTimer.shutdown();
+    state.debugGpuTimer.shutdown();
+    state.msaaResolveGpuTimer.shutdown();
+    state.postProcessGpuTimer.shutdown();
 }
 
 EngineRenderFrame prepareEngineRendering(
@@ -119,6 +136,7 @@ bool renderEngineScene(
 {
     using heritage::diagnostics::PerformanceSection;
     using heritage::diagnostics::RenderPerformanceSection;
+    using heritage::diagnostics::GpuPerformanceSection;
     using heritage::graphics::AntiAliasingSettings;
     using heritage::graphics::RenderScaler;
     using heritage::graphics::kDefaultFarClipMeters;
@@ -194,6 +212,28 @@ bool renderEngineScene(
     const Vec3 sceneClearColor = moduleRuntime.clearColor();
     const bool spanning = display.isSpanning() && display.spanFBO() != 0;
 
+    // OPT00: retrieve only completed older timestamp pairs. No query result is
+    // read until GL_QUERY_RESULT_AVAILABLE says it is ready, so profiling adds
+    // no GPU/CPU synchronization point to the current frame. Per-pass timings
+    // are intentionally omitted in spanning mode because its passes interleave
+    // per monitor; the frame-wide GPU timer remains valid there.
+    if (!spanning)
+    {
+        const auto pollGpuPass = [&](heritage::graphics::AsyncGpuTimer& timer,
+                                     GpuPerformanceSection section) {
+            double milliseconds = 0.0;
+            if (timer.poll(milliseconds))
+                performanceMonitor.recordGpuSection(section, milliseconds);
+        };
+        pollGpuPass(state.moduleGpuTimer, GpuPerformanceSection::ModuleRender);
+        pollGpuPass(state.meshGpuTimer, GpuPerformanceSection::MeshRenderer);
+        pollGpuPass(state.surfaceGpuTimer, GpuPerformanceSection::SurfacePresentation);
+        pollGpuPass(state.weatherGpuTimer, GpuPerformanceSection::WeatherPresentation);
+        pollGpuPass(state.debugGpuTimer, GpuPerformanceSection::DebugRenderer);
+        pollGpuPass(state.msaaResolveGpuTimer, GpuPerformanceSection::MsaaResolve);
+        pollGpuPass(state.postProcessGpuTimer, GpuPerformanceSection::PostProcess);
+    }
+
     if (spanning)
     {
         {
@@ -254,12 +294,20 @@ bool renderEngineScene(
             }
             {
                 const double sectionStart = glfwGetTime();
+                const heritage::graphics::EntityMeshRenderTargetState meshTarget{
+                    display.spanFBO(),
+                    fboX, fboY, fboW, fboH,
+                    1,
+                    true,
+                    fboX, fboY, fboW, fboH
+                };
                 entityMeshRenderer.draw(
                     entityRegistry,
                     projOff,
                     videoSettings,
                     static_cast<float>(now),
                     entityCameraFrame,
+                    meshTarget,
                     wireframeVisible,
                     &surfaces);
                 renderMeshMs += (glfwGetTime() - sectionStart) * 1000.0;
@@ -281,7 +329,9 @@ bool renderEngineScene(
                     projOff,
                     entityCameraFrame,
                     static_cast<float>(now),
-                    entityMeshRenderer.environmentMap());
+                    entityMeshRenderer.environmentMap(),
+                    fboW,
+                    fboH);
                 renderWeatherMs += (glfwGetTime() - sectionStart) * 1000.0;
             }
             {
@@ -318,6 +368,7 @@ bool renderEngineScene(
                 glBindFramebuffer(GL_FRAMEBUFFER, state.resolveFBO.fbo);
 
             glViewport(0, 0, rW, rH);
+            glDisable(GL_SCISSOR_TEST);
             glClearColor(sceneClearColor.x, sceneClearColor.y, sceneClearColor.z, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
             glEnable(GL_DEPTH_TEST);
@@ -332,59 +383,89 @@ bool renderEngineScene(
 
         {
             const double sectionStart = glfwGetTime();
+            const bool gpuPassActive = state.moduleGpuTimer.begin();
             if (wireframeVisible)
                 glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             moduleRuntime.render(proj, videoSettings);
             if (wireframeVisible)
                 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            state.moduleGpuTimer.end(gpuPassActive);
             renderModuleMs += (glfwGetTime() - sectionStart) * 1000.0;
         }
         {
             const double sectionStart = glfwGetTime();
+            const double meshGpuTimerBeginStart = glfwGetTime();
+            const bool gpuPassActive = state.meshGpuTimer.begin();
+            entityMeshRenderer.recordOuterGpuTimerCpuMs(
+                (glfwGetTime() - meshGpuTimerBeginStart) * 1000.0);
+            const GLuint sceneFramebuffer = needMSAA && state.msaaFBO.fbo
+                ? state.msaaFBO.fbo
+                : state.resolveFBO.fbo;
+            const heritage::graphics::EntityMeshRenderTargetState meshTarget{
+                sceneFramebuffer,
+                0, 0, rW, rH,
+                needMSAA ? antiAliasing.msaaSamples : 1,
+                false,
+                0, 0, rW, rH
+            };
             entityMeshRenderer.draw(
                 entityRegistry,
                 proj,
                 videoSettings,
                 static_cast<float>(now),
                 entityCameraFrame,
+                meshTarget,
                 wireframeVisible,
                 &surfaces);
+            const double meshGpuTimerEndStart = glfwGetTime();
+            state.meshGpuTimer.end(gpuPassActive);
+            entityMeshRenderer.recordOuterGpuTimerCpuMs(
+                (glfwGetTime() - meshGpuTimerEndStart) * 1000.0);
             renderMeshMs += (glfwGetTime() - sectionStart) * 1000.0;
         }
         {
             const double sectionStart = glfwGetTime();
+            const bool gpuPassActive = state.surfaceGpuTimer.begin();
             surfacePresentationRenderer.draw(
                 surfaces,
                 proj,
                 videoSettings,
                 entityCameraFrame,
                 entityMeshRenderer.environmentMap());
+            state.surfaceGpuTimer.end(gpuPassActive);
             renderSurfaceMs += (glfwGetTime() - sectionStart) * 1000.0;
         }
         {
             const double sectionStart = glfwGetTime();
+            const bool gpuPassActive = state.weatherGpuTimer.begin();
             weatherPresentationRenderer.draw(
                 surfaces,
                 proj,
                 entityCameraFrame,
                 static_cast<float>(now),
-                entityMeshRenderer.environmentMap());
+                entityMeshRenderer.environmentMap(),
+                rW,
+                rH);
+            state.weatherGpuTimer.end(gpuPassActive);
             renderWeatherMs += (glfwGetTime() - sectionStart) * 1000.0;
         }
         {
             const double sectionStart = glfwGetTime();
+            const bool gpuPassActive = state.debugGpuTimer.begin();
             entityDebugRenderer.draw(
                 entityRegistry,
                 proj,
                 videoSettings,
                 static_cast<float>(now),
                 entityCameraFrame);
+            state.debugGpuTimer.end(gpuPassActive);
             renderDebugMs += (glfwGetTime() - sectionStart) * 1000.0;
         }
 
         if (needMSAA && state.msaaFBO.fbo && state.resolveFBO.fbo)
         {
             const double sectionStart = glfwGetTime();
+            const bool gpuPassActive = state.msaaResolveGpuTimer.begin();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, state.msaaFBO.fbo);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, state.resolveFBO.fbo);
             glBlitFramebuffer(
@@ -392,12 +473,14 @@ bool renderEngineScene(
                 0, 0, rW, rH,
                 GL_COLOR_BUFFER_BIT,
                 GL_NEAREST);
+            state.msaaResolveGpuTimer.end(gpuPassActive);
             renderMsaaResolveMs += (glfwGetTime() - sectionStart) * 1000.0;
         }
 
         if (state.resolveFBO.fbo)
         {
             const double sectionStart = glfwGetTime();
+            const bool gpuPassActive = state.postProcessGpuTimer.begin();
             if (needFXAA)
             {
                 // FXAA samples the internal-resolution scene texture and
@@ -424,6 +507,7 @@ bool renderEngineScene(
                     fbH,
                     !needScale || nearestUp);
             }
+            state.postProcessGpuTimer.end(gpuPassActive);
             renderPostProcessMs += (glfwGetTime() - sectionStart) * 1000.0;
         }
     }

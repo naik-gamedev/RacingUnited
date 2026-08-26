@@ -30,7 +30,7 @@ A 0.35 mm mobile film is treated primarily as wet material response. Water above
 
 ## Retired path
 
-`DynamicSurfaceGpuLodPrototype` remains compiled temporarily to minimize project/ABI risk, but LIVETRACK01 never initializes or updates it and hard-disables GPU Dynamic Surface authority every frame. Therefore the former 10 m / 512 x 512 atlas is not allocated and its CFD compute shaders are not dispatched.
+`DynamicSurfaceGpuRuntime` remains compiled temporarily to minimize project/ABI risk, but LIVETRACK01 never initializes or updates it and hard-disables GPU Dynamic Surface authority every frame. Therefore the former 10 m / 512 x 512 atlas is not allocated and its CFD compute shaders are not dispatched.
 
 The retired configuration reserved a 32768 x 24576 R32UI water atlas (3.0 GiB) plus a same-size R8 presentation atlas (0.75 GiB), before optional snow/mud state and other resources. LIVETRACK01 removes that runtime requirement.
 

@@ -28,6 +28,16 @@ public:
 private:
     GLuint m_program = 0;
     Mesh m_logo;
+    GLint m_uniformModel = -1;
+    GLint m_uniformView = -1;
+    GLint m_uniformProjection = -1;
+    GLint m_uniformLightPosition = -1;
+    GLint m_uniformViewPosition = -1;
+    GLint m_uniformColor = -1;
+    GLint m_uniformGamma = -1;
+    GLint m_uniformBrightness = -1;
+    GLint m_uniformContrast = -1;
+    GLint m_uniformSaturation = -1;
 };
 
 } // namespace heritage::graphics

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <iostream>
 #include <unordered_map>
 #include <vector>
@@ -700,6 +701,87 @@ std::vector<heritage::math::Mat4> EntityMeshRenderer::animationTransformsForInst
         runtime.previousTimeSeconds,
         instance.animationLoop,
         blendAlpha);
+}
+
+void EntityMeshRenderer::prepareFrameInstances(
+    const std::vector<heritage::entities::MeshInstance>& instances,
+    const heritage::math::Vec3& eye,
+    float elapsedSeconds)
+{
+    using PrepareClock = std::chrono::steady_clock;
+
+    // Keep one slot per registry instance so the visible pass can index this
+    // cache without a hash lookup. Existing nested-vector capacity survives
+    // across frames when the instance count is stable.
+    if (m_preparedFrameInstanceScratch.size() < instances.size())
+        m_preparedFrameInstanceScratch.resize(instances.size());
+
+    for (std::size_t instanceIndex = 0; instanceIndex < instances.size(); ++instanceIndex)
+    {
+        const auto prepareStart = PrepareClock::now();
+        const auto& instance = instances[instanceIndex];
+        PreparedFrameInstance& prepared =
+            m_preparedFrameInstanceScratch[instanceIndex];
+
+        prepared.instance = &instance;
+        prepared.mesh = acquireMesh(
+            instance.assetPath,
+            instance.normalize,
+            instance.blenderCoordinates);
+        prepared.nodeGlobals.clear();
+        prepared.tireVisualOverrides.clear();
+
+        if (prepared.mesh)
+        {
+            heritage::entities::MeshInstance cameraRelativeInstance = instance;
+            cameraRelativeInstance.position = {
+                instance.position.x - eye.x,
+                instance.position.y - eye.y,
+                instance.position.z - eye.z
+            };
+            prepared.instanceModel = modelMatrix(cameraRelativeInstance);
+            prepared.nodeGlobals = animationTransformsForInstance(
+                *prepared.mesh,
+                instance,
+                elapsedSeconds);
+            applyMeshNodeOverrides(
+                *prepared.mesh,
+                instance,
+                prepared.instanceModel,
+                eye,
+                prepared.nodeGlobals);
+
+            // Resolve the sparse tire-deformation overrides once per instance.
+            // Both the shadow and material passes used to repeat string scans.
+            prepared.tireVisualOverrides.assign(
+                prepared.mesh->nodes.size(), nullptr);
+            for (const auto& overrideValue : instance.nodeOverrides)
+            {
+                if (!overrideValue.hasTireVisualDeformation)
+                    continue;
+                for (std::size_t nodeIndex = 0;
+                     nodeIndex < prepared.mesh->nodes.size();
+                     ++nodeIndex)
+                {
+                    if (prepared.mesh->nodes[nodeIndex].name == overrideValue.nodeName)
+                    {
+                        prepared.tireVisualOverrides[nodeIndex] = &overrideValue;
+                        break;
+                    }
+                }
+            }
+        }
+        else
+        {
+            prepared.instanceModel = heritage::math::identity();
+        }
+
+        prepared.prepareCpuMs = std::chrono::duration<double, std::milli>(
+            PrepareClock::now() - prepareStart).count();
+    }
+
+    if (m_preparedFrameInstanceScratch.size() > instances.size())
+        m_preparedFrameInstanceScratch.resize(instances.size());
 }
 
 } // namespace heritage::graphics

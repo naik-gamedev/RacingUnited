@@ -56,6 +56,17 @@ bool SceneRenderer::initialize(const std::string& logoMeshPath)
     if (!m_program)
         return false;
 
+    m_uniformModel = glGetUniformLocation(m_program, "uModel");
+    m_uniformView = glGetUniformLocation(m_program, "uView");
+    m_uniformProjection = glGetUniformLocation(m_program, "uProj");
+    m_uniformLightPosition = glGetUniformLocation(m_program, "uLightPos");
+    m_uniformViewPosition = glGetUniformLocation(m_program, "uViewPos");
+    m_uniformColor = glGetUniformLocation(m_program, "uColor");
+    m_uniformGamma = glGetUniformLocation(m_program, "uGamma");
+    m_uniformBrightness = glGetUniformLocation(m_program, "uBrightness");
+    m_uniformContrast = glGetUniformLocation(m_program, "uContrast");
+    m_uniformSaturation = glGetUniformLocation(m_program, "uSaturation");
+
     m_logo = loadObjMesh(logoMeshPath);
     uploadMesh(m_logo);
     return m_logo.vao != 0 && !m_logo.indices.empty();
@@ -72,6 +83,16 @@ void SceneRenderer::shutdown()
         glDeleteProgram(m_program);
         m_program = 0;
     }
+    m_uniformModel = -1;
+    m_uniformView = -1;
+    m_uniformProjection = -1;
+    m_uniformLightPosition = -1;
+    m_uniformViewPosition = -1;
+    m_uniformColor = -1;
+    m_uniformGamma = -1;
+    m_uniformBrightness = -1;
+    m_uniformContrast = -1;
+    m_uniformSaturation = -1;
 }
 
 void SceneRenderer::draw(const heritage::math::Mat4& model,
@@ -84,16 +105,16 @@ void SceneRenderer::draw(const heritage::math::Mat4& model,
                          float saturation) const
 {
     glUseProgram(m_program);
-    glUniformMatrix4fv(glGetUniformLocation(m_program, "uModel"), 1, GL_FALSE, model.m);
-    glUniformMatrix4fv(glGetUniformLocation(m_program, "uView"), 1, GL_FALSE, view.m);
-    glUniformMatrix4fv(glGetUniformLocation(m_program, "uProj"), 1, GL_FALSE, projection.m);
-    glUniform3f(glGetUniformLocation(m_program, "uLightPos"), 4.0f, 6.0f, 5.0f);
-    glUniform3f(glGetUniformLocation(m_program, "uViewPos"), eyePosition.x, eyePosition.y, eyePosition.z);
-    glUniform3f(glGetUniformLocation(m_program, "uColor"), 1.0f, 1.0f, 1.0f);
-    glUniform1f(glGetUniformLocation(m_program, "uGamma"), gamma);
-    glUniform1f(glGetUniformLocation(m_program, "uBrightness"), brightness);
-    glUniform1f(glGetUniformLocation(m_program, "uContrast"), contrast);
-    glUniform1f(glGetUniformLocation(m_program, "uSaturation"), saturation);
+    glUniformMatrix4fv(m_uniformModel, 1, GL_FALSE, model.m);
+    glUniformMatrix4fv(m_uniformView, 1, GL_FALSE, view.m);
+    glUniformMatrix4fv(m_uniformProjection, 1, GL_FALSE, projection.m);
+    glUniform3f(m_uniformLightPosition, 4.0f, 6.0f, 5.0f);
+    glUniform3f(m_uniformViewPosition, eyePosition.x, eyePosition.y, eyePosition.z);
+    glUniform3f(m_uniformColor, 1.0f, 1.0f, 1.0f);
+    glUniform1f(m_uniformGamma, gamma);
+    glUniform1f(m_uniformBrightness, brightness);
+    glUniform1f(m_uniformContrast, contrast);
+    glUniform1f(m_uniformSaturation, saturation);
 
     glBindVertexArray(m_logo.vao);
     glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_logo.indices.size()), GL_UNSIGNED_INT, nullptr);

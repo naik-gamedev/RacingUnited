@@ -90,6 +90,15 @@ void ChaseCamera::reset()
     m_orbitReturnActive = false;
     m_verticalLagMeters = 0.0;
     m_verticalLagVelocity = 0.0;
+    m_longitudinalDynamicOffsetMeters = 0.0;
+    m_longitudinalDynamicOffsetVelocity = 0.0;
+    m_lateralDynamicOffsetMeters = 0.0;
+    m_lateralDynamicOffsetVelocity = 0.0;
+    m_lateralFollowLagMeters = 0.0;
+    m_lateralFollowLagVelocity = 0.0;
+    m_previousForwardSpeedMetersPerSecond = 0.0;
+    m_previousLateralSpeedMetersPerSecond = 0.0;
+    m_haveDynamicMotionSample = false;
     m_collisionRayDistanceMeters = 0.0;
     m_collisionRayDistanceVelocity = 0.0;
 }
@@ -168,6 +177,15 @@ void ChaseCamera::snap(
     m_headingLagDegrees = 0.0;
     m_verticalLagMeters = 0.0;
     m_verticalLagVelocity = 0.0;
+    m_longitudinalDynamicOffsetMeters = 0.0;
+    m_longitudinalDynamicOffsetVelocity = 0.0;
+    m_lateralDynamicOffsetMeters = 0.0;
+    m_lateralDynamicOffsetVelocity = 0.0;
+    m_lateralFollowLagMeters = 0.0;
+    m_lateralFollowLagVelocity = 0.0;
+    m_previousForwardSpeedMetersPerSecond = 0.0;
+    m_previousLateralSpeedMetersPerSecond = 0.0;
+    m_haveDynamicMotionSample = false;
     m_collisionRayDistanceMeters = 0.0;
     m_collisionRayDistanceVelocity = 0.0;
     m_initialized = true;
@@ -201,19 +219,39 @@ void ChaseCamera::rebuildDesiredPose(
         m_tuning.distanceMeters);
     const double elevationRadians = baseElevationRadians
         + m_orbitPitchDegrees * (kPi / 180.0);
-    const double horizontalDistance =
-        std::cos(elevationRadians) * orbitRadius;
+    const double horizontalDistance = std::max(
+        0.25,
+        std::cos(elevationRadians) * orbitRadius
+            + m_longitudinalDynamicOffsetMeters);
     const double eyeHeight = m_tuning.targetHeightMeters
         + std::sin(elevationRadians) * orbitRadius;
+    const double cameraRightX = std::cos(cameraYawRadians);
+    const double cameraRightZ = -std::sin(cameraYawRadians);
+    const double chassisRightX = static_cast<double>(horizontalForward.z);
+    const double chassisRightZ = -static_cast<double>(horizontalForward.x);
+
+    // CAM09 keeps the whole chase rig from inheriting lateral chassis
+    // translation instantaneously. The follow-lag offset is applied equally
+    // to eye and target (below), while the smaller acceleration sway remains
+    // eye-only. The result is a real side-to-side positional damper rather
+    // than merely a softened camera rotation.
+    const double rigLateralOffsetX =
+        chassisRightX * m_lateralFollowLagMeters;
+    const double rigLateralOffsetZ =
+        chassisRightZ * m_lateralFollowLagMeters;
 
     m_desiredEyeGlobal = {
         chassisGlobalPosition.x
-            - cameraForwardX * horizontalDistance,
+            + rigLateralOffsetX
+            - cameraForwardX * horizontalDistance
+            + cameraRightX * m_lateralDynamicOffsetMeters,
         chassisGlobalPosition.y
             + eyeHeight
             + m_verticalLagMeters,
         chassisGlobalPosition.z
+            + rigLateralOffsetZ
             - cameraForwardZ * horizontalDistance
+            + cameraRightZ * m_lateralDynamicOffsetMeters
     };
 
     // A manually orbited view should look at the car rather than a point two
@@ -230,12 +268,14 @@ void ChaseCamera::rebuildDesiredPose(
 
     m_targetGlobal = {
         chassisGlobalPosition.x
+            + rigLateralOffsetX
             + static_cast<double>(horizontalForward.x)
                 * lookAhead,
         chassisGlobalPosition.y
             + m_tuning.targetHeightMeters
             + m_verticalLagMeters * m_tuning.targetVerticalResponse,
         chassisGlobalPosition.z
+            + rigLateralOffsetZ
             + static_cast<double>(horizontalForward.z)
                 * lookAhead
     };
@@ -332,6 +372,95 @@ void ChaseCamera::updateOrbit(
     }
 }
 
+void ChaseCamera::updateDynamicMotion(
+    const ChaseCameraInput& input,
+    double deltaSeconds)
+{
+    double targetLongitudinalOffset = 0.0;
+    double targetLateralOffset = 0.0;
+
+    const bool validMotion = input.dynamicMotionResponseActive
+        && std::isfinite(input.forwardSpeedMetersPerSecond)
+        && std::isfinite(input.lateralSpeedMetersPerSecond)
+        && std::isfinite(deltaSeconds)
+        && deltaSeconds > 0.0;
+
+    if (validMotion)
+    {
+        const double forwardSpeed = input.forwardSpeedMetersPerSecond;
+        const double lateralSpeed = input.lateralSpeedMetersPerSecond;
+        const double speedPullback = std::clamp(
+            std::abs(forwardSpeed)
+                * m_tuning.speedPullbackMetersPerMeterPerSecond,
+            0.0,
+            m_tuning.maximumSpeedPullbackMeters);
+        targetLongitudinalOffset = speedPullback;
+
+        if (m_haveDynamicMotionSample)
+        {
+            const double accelerationLimit = std::max(
+                0.0,
+                m_tuning.maximumSampleAccelerationMetersPerSecondSquared);
+            const double forwardAcceleration = std::clamp(
+                (forwardSpeed - m_previousForwardSpeedMetersPerSecond)
+                    / deltaSeconds,
+                -accelerationLimit,
+                accelerationLimit);
+            const double lateralAcceleration = std::clamp(
+                (lateralSpeed - m_previousLateralSpeedMetersPerSecond)
+                    / deltaSeconds,
+                -accelerationLimit,
+                accelerationLimit);
+
+            const double accelerationOffset = std::clamp(
+                forwardAcceleration * m_tuning.longitudinalAccelerationGain,
+                -m_tuning.maximumBrakingPushForwardMeters,
+                m_tuning.maximumAccelerationPullbackMeters);
+            targetLongitudinalOffset += accelerationOffset;
+            targetLateralOffset = std::clamp(
+                -lateralAcceleration * m_tuning.lateralAccelerationGain,
+                -m_tuning.maximumLateralSwayMeters,
+                m_tuning.maximumLateralSwayMeters);
+        }
+
+        m_previousForwardSpeedMetersPerSecond = forwardSpeed;
+        m_previousLateralSpeedMetersPerSecond = lateralSpeed;
+        m_haveDynamicMotionSample = true;
+    }
+    else
+    {
+        // Do not manufacture a huge acceleration when simulation resumes from
+        // pause or after camera authority changes. The existing offsets simply
+        // settle back to neutral through the same camera damper.
+        m_haveDynamicMotionSample = false;
+    }
+
+    stepSpring(
+        m_longitudinalDynamicOffsetMeters,
+        m_longitudinalDynamicOffsetVelocity,
+        targetLongitudinalOffset,
+        m_tuning.motionSpringFrequencyHz,
+        m_tuning.motionDampingRatio,
+        deltaSeconds);
+    stepSpring(
+        m_lateralDynamicOffsetMeters,
+        m_lateralDynamicOffsetVelocity,
+        targetLateralOffset,
+        m_tuning.motionSpringFrequencyHz,
+        m_tuning.motionDampingRatio,
+        deltaSeconds);
+
+    m_longitudinalDynamicOffsetMeters = std::clamp(
+        m_longitudinalDynamicOffsetMeters,
+        -m_tuning.maximumBrakingPushForwardMeters,
+        m_tuning.maximumSpeedPullbackMeters
+            + m_tuning.maximumAccelerationPullbackMeters);
+    m_lateralDynamicOffsetMeters = std::clamp(
+        m_lateralDynamicOffsetMeters,
+        -m_tuning.maximumLateralSwayMeters,
+        m_tuning.maximumLateralSwayMeters);
+}
+
 void ChaseCamera::rebuildCollisionResolvedEye()
 {
     const heritage::math::DVec3 ray = subtract(
@@ -386,6 +515,7 @@ void ChaseCamera::update(
         0.0,
         0.13333333333333333);
     updateOrbit(input, dt);
+    updateDynamicMotion(input, dt);
 
     if (!m_initialized
         || dt <= 0.0
@@ -401,9 +531,43 @@ void ChaseCamera::update(
         return;
     }
 
-    // Camera heave is world-up inertia only. Horizontal placement is rebuilt
-    // directly from the chassis each frame, so racing speed never leaves the
-    // camera metres behind the vehicle.
+    // CAM09: horizontal forward travel still follows directly, but lateral
+    // chassis translation feeds a bounded positional lag. This is the missing
+    // side-to-side damper: when the car changes lane/turns, the camera rig
+    // eases into its new horizontal position instead of moving with the car
+    // one-for-one and then stopping abruptly.
+    const double chassisDeltaX =
+        chassisGlobalPosition.x - m_previousChassisGlobalPosition.x;
+    const double chassisDeltaZ =
+        chassisGlobalPosition.z - m_previousChassisGlobalPosition.z;
+    const double chassisRightX = static_cast<double>(horizontalForward.z);
+    const double chassisRightZ = -static_cast<double>(horizontalForward.x);
+    const double lateralChassisDelta =
+        chassisDeltaX * chassisRightX + chassisDeltaZ * chassisRightZ;
+    if (std::isfinite(lateralChassisDelta))
+    {
+        m_lateralFollowLagMeters -=
+            lateralChassisDelta * m_tuning.lateralFollowInertia;
+        m_lateralFollowLagMeters = std::clamp(
+            m_lateralFollowLagMeters,
+            -m_tuning.maximumLateralFollowLagMeters,
+            m_tuning.maximumLateralFollowLagMeters);
+    }
+    stepSpring(
+        m_lateralFollowLagMeters,
+        m_lateralFollowLagVelocity,
+        0.0,
+        m_tuning.lateralFollowSpringFrequencyHz,
+        m_tuning.lateralFollowDampingRatio,
+        dt);
+    m_lateralFollowLagMeters = std::clamp(
+        m_lateralFollowLagMeters,
+        -m_tuning.maximumLateralFollowLagMeters,
+        m_tuning.maximumLateralFollowLagMeters);
+
+    // Camera heave is world-up inertia only. Forward horizontal placement is
+    // still rebuilt directly from the chassis, so racing speed never leaves
+    // the camera metres behind the vehicle.
     const double chassisDeltaY =
         chassisGlobalPosition.y - m_previousChassisGlobalPosition.y;
     if (std::isfinite(chassisDeltaY))

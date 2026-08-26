@@ -1,0 +1,5 @@
+Heritage KTX2 Workbench v2.6
+
+Fixes a PowerShell automatic-variable collision. The previous script used $input as a normal variable/parameter. $input is reserved by PowerShell for pipeline input, which could become empty inside nested conversion functions even while the GUI showed the correct file path.
+
+All internal source/destination variables are now explicitly named $sourcePath and $destinationPath.

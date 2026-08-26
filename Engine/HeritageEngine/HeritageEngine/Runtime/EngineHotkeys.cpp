@@ -85,6 +85,16 @@ void processEngineHotkeys(
     }
     state.f9Prev = f9Now;
 
+    const bool f10Now = (glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS);
+    if (f10Now && !state.f10Prev)
+    {
+        state.weatherRadarVisible = !state.weatherRadarVisible;
+        std::cout << "Weather radar: "
+            << (state.weatherRadarVisible ? "enabled" : "disabled")
+            << " (F10)\n";
+    }
+    state.f10Prev = f10Now;
+
     // TIRE27/VIS20: INSERT toggles the tire-local dense 21x13 probe diagnostic
     // directly on the visible rubber. This intentionally avoids a buried UI
     // setting while tire deformation is under active development.

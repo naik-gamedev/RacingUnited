@@ -353,6 +353,16 @@ bool EntityDebugRenderer::initialize()
     if (!m_program)
         return false;
 
+    m_uniformModel = glGetUniformLocation(m_program, "uModel");
+    m_uniformView = glGetUniformLocation(m_program, "uView");
+    m_uniformProjection = glGetUniformLocation(m_program, "uProjection");
+    m_uniformColor = glGetUniformLocation(m_program, "uColor");
+    m_uniformEye = glGetUniformLocation(m_program, "uEye");
+    m_uniformGamma = glGetUniformLocation(m_program, "uGamma");
+    m_uniformBrightness = glGetUniformLocation(m_program, "uBrightness");
+    m_uniformContrast = glGetUniformLocation(m_program, "uContrast");
+    m_uniformSaturation = glGetUniformLocation(m_program, "uSaturation");
+
     m_box = makeBox();
     m_cylinder = makeCylinder(32);
     m_sphere = makeSphere(24, 16);
@@ -373,6 +383,15 @@ void EntityDebugRenderer::shutdown()
         glDeleteProgram(m_program);
         m_program = 0;
     }
+    m_uniformModel = -1;
+    m_uniformView = -1;
+    m_uniformProjection = -1;
+    m_uniformColor = -1;
+    m_uniformEye = -1;
+    m_uniformGamma = -1;
+    m_uniformBrightness = -1;
+    m_uniformContrast = -1;
+    m_uniformSaturation = -1;
 }
 
 void EntityDebugRenderer::draw(
@@ -412,17 +431,13 @@ void EntityDebugRenderer::draw(
         cameraUp);
 
     glUseProgram(m_program);
-    glUniformMatrix4fv(
-        glGetUniformLocation(m_program, "uView"),
-        1, GL_FALSE, view.m);
-    glUniformMatrix4fv(
-        glGetUniformLocation(m_program, "uProjection"),
-        1, GL_FALSE, projection.m);
-    glUniform3f(glGetUniformLocation(m_program, "uEye"), 0.0f, 0.0f, 0.0f);
-    glUniform1f(glGetUniformLocation(m_program, "uGamma"), videoSettings.gamma);
-    glUniform1f(glGetUniformLocation(m_program, "uBrightness"), videoSettings.brightness);
-    glUniform1f(glGetUniformLocation(m_program, "uContrast"), videoSettings.contrast);
-    glUniform1f(glGetUniformLocation(m_program, "uSaturation"), videoSettings.saturation);
+    glUniformMatrix4fv(m_uniformView, 1, GL_FALSE, view.m);
+    glUniformMatrix4fv(m_uniformProjection, 1, GL_FALSE, projection.m);
+    glUniform3f(m_uniformEye, 0.0f, 0.0f, 0.0f);
+    glUniform1f(m_uniformGamma, videoSettings.gamma);
+    glUniform1f(m_uniformBrightness, videoSettings.brightness);
+    glUniform1f(m_uniformContrast, videoSettings.contrast);
+    glUniform1f(m_uniformSaturation, videoSettings.saturation);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -435,9 +450,10 @@ void EntityDebugRenderer::draw(
     floor.scale = { 13.0f, 0.12f, 13.0f };
     floor.color = { 0.055f, 0.065f, 0.080f };
     const heritage::math::Mat4 floorModel = modelMatrix(floor);
-    glUniformMatrix4fv(glGetUniformLocation(m_program, "uModel"), 1, GL_FALSE, floorModel.m);
-    glUniform3f(glGetUniformLocation(m_program, "uColor"), floor.color.x, floor.color.y, floor.color.z);
-    glBindVertexArray(m_box.vao);
+    glUniformMatrix4fv(m_uniformModel, 1, GL_FALSE, floorModel.m);
+    glUniform3f(m_uniformColor, floor.color.x, floor.color.y, floor.color.z);
+    GLuint activeVao = m_box.vao;
+    glBindVertexArray(activeVao);
     glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_box.indices.size()), GL_UNSIGNED_INT, nullptr);
     ++m_frameStats.drawCalls;
     m_frameStats.triangles += static_cast<std::uint64_t>(m_box.indices.size() / 3);
@@ -452,15 +468,17 @@ void EntityDebugRenderer::draw(
             instance.position.z - eye.z
         };
         const heritage::math::Mat4 model = modelMatrix(cameraRelativeInstance);
-        glUniformMatrix4fv(
-            glGetUniformLocation(m_program, "uModel"),
-            1, GL_FALSE, model.m);
+        glUniformMatrix4fv(m_uniformModel, 1, GL_FALSE, model.m);
         glUniform3f(
-            glGetUniformLocation(m_program, "uColor"),
+            m_uniformColor,
             instance.color.x,
             instance.color.y,
             instance.color.z);
-        glBindVertexArray(mesh.vao);
+        if (mesh.vao != activeVao)
+        {
+            activeVao = mesh.vao;
+            glBindVertexArray(activeVao);
+        }
         glDrawElements(
             GL_TRIANGLES,
             static_cast<GLsizei>(mesh.indices.size()),

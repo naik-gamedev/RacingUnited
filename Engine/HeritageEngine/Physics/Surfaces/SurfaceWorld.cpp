@@ -5,6 +5,18 @@
 
 namespace heritage::physics {
 
+namespace {
+
+std::uint64_t gpuWaterSampleCellKey(const heritage::math::DVec3& position)
+{
+    const std::int32_t qx = static_cast<std::int32_t>(std::floor(position.x * 10.0));
+    const std::int32_t qz = static_cast<std::int32_t>(std::floor(position.z * 10.0));
+    return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(qx)) << 32u)
+        | static_cast<std::uint32_t>(qz);
+}
+
+} // namespace
+
 void SurfaceWorld::setJobSystem(heritage::jobs::JobSystem* jobs)
 {
     m_jobSystem = jobs;
@@ -20,8 +32,12 @@ void SurfaceWorld::clear()
     m_hydrology.clear();
     m_dynamicSurface.clear();
     m_gpuDynamicSurfaceAuthorityEnabled = false;
+    ++m_hydrologyResetSerial;
     m_gpuDynamicSurfaceTireEvents.clear();
     m_gpuDynamicSurfaceTireEventByCell.clear();
+    m_gpuDynamicSurfaceWaterSampleRequests.clear();
+    m_gpuDynamicSurfaceWaterSampleRequestByCell.clear();
+    m_gpuDynamicSurfaceWaterSamples.clear();
     m_developmentControls = {};
     m_deformableTerrain.clear();
     m_trackRubber.clear();
@@ -73,8 +89,10 @@ bool SurfaceWorld::setWeather(const SurfaceWeatherDescription& weather)
     if (!validSurfaceWeatherDescription(weather))
         return false;
     m_weather = weather;
-    m_precipitation.configureRain(
+    m_precipitation.configureWeather(
         weather.enabled ? weather.precipitationRateMmPerHour : 0.0,
+        weather.relativeHumidity,
+        weather.cloudCover,
         weather.windSpeedMps,
         weather.windDirectionDegrees);
     return true;
@@ -85,14 +103,32 @@ SurfaceWeatherOutput SurfaceWorld::weatherOutput() const
     return evaluateSurfaceWeather(m_weather, m_weatherState);
 }
 
+SurfaceWeatherOutput SurfaceWorld::regionalWeatherOutputAt(
+    const heritage::math::DVec3& globalPosition) const
+{
+    SurfaceWeatherOutput output = evaluateSurfaceWeather(m_weather, m_weatherState);
+    if (!output.valid || !m_weather.enabled)
+        return output;
+
+    const auto regional = m_precipitation.regionalWeatherSample(
+        globalPosition.x, globalPosition.z);
+    if (regional.valid)
+        output.precipitationRateMmPerHour = regional.currentRateMmPerHour;
+    return output;
+}
+
 void SurfaceWorld::resetWeatherState()
 {
     m_weatherState = {};
     // Resetting accumulated road water must not rewind the world precipitation
     // field or make every visible drop jump back to its t=0 phase.
-    m_hydrology.resetWater();
-    m_dynamicSurface.resetHydroWater();
     m_dynamicSurface.resetThermalState();
+    m_gpuDynamicSurfaceWaterSamples.clear();
+    m_gpuDynamicSurfaceWaterSampleRequests.clear();
+    m_gpuDynamicSurfaceWaterSampleRequestByCell.clear();
+    m_gpuDynamicSurfaceTireEvents.clear();
+    m_gpuDynamicSurfaceTireEventByCell.clear();
+    ++m_hydrologyResetSerial;
 }
 
 bool SurfaceWorld::loadOrBakeHydrology(
@@ -117,16 +153,18 @@ water::SurfaceHydrologyTireResult SurfaceWorld::applyHydrologyTireContact(
     const heritage::math::Vec3& localPosition,
     const water::SurfaceHydrologyTireInput& input)
 {
-    // DSURF04F: when GPU authority is live, do not mutate the retired CPU Hydro
-    // lattice. Tire physics temporarily consumes the smooth weather-film depth
-    // until the tiny asynchronous GPU contact-sample bridge is promoted; this
-    // preserves the one-water-authority rule instead of running two solvers.
+    const heritage::math::DVec3 globalPosition = localToGlobal(localPosition);
+
+    // OPT03C: GPU Dynamic Surface is the sole production spatial-water
+    // authority. Contact mutation/sample requests are emitted only while that
+    // authority is live. GPU-unavailable startup/headless operation uses the
+    // scalar weather film as a conservative compatibility fallback; it never
+    // spins up the retired CPU Hydro lattice.
     if (m_gpuDynamicSurfaceAuthorityEnabled)
     {
-        const heritage::math::DVec3 globalPosition = localToGlobal(localPosition);
-        // Aggregate 1000Hz tire contacts into 10cm world cells until the render
-        // thread consumes them. This keeps the GPU contact path bounded while
-        // preserving exact world anchoring and accumulated contact time.
+        // Aggregate high-rate tire contacts into 10cm world cells until the
+        // render thread consumes them. This keeps the GPU contact path bounded
+        // while preserving exact world anchoring and accumulated contact time.
         const std::int32_t qx = static_cast<std::int32_t>(std::floor(globalPosition.x * 10.0));
         const std::int32_t qz = static_cast<std::int32_t>(std::floor(globalPosition.z * 10.0));
         const std::uint64_t eventKey =
@@ -173,57 +211,38 @@ water::SurfaceHydrologyTireResult SurfaceWorld::applyHydrologyTireContact(
                 || input.surfaceMaterial == SurfaceMaterial::SoftSoil;
         }
 
-        const auto weather = weatherOutput();
-        water::SurfaceHydrologyTireResult result;
-        result.valid = weather.valid;
-        result.initialWaterDepthM = weather.valid
-            ? std::max(weather.waterFilmDepthM, 0.0) : 0.0;
-        result.finalWaterDepthM = result.initialWaterDepthM;
-
-        dynamicsurface::DynamicSurfaceThermalTireInput thermalInput;
-        thermalInput.deltaTimeSeconds = input.deltaTimeSeconds;
-        thermalInput.contactPatchAreaM2 = input.contactPatchAreaM2;
-        thermalInput.slipDissipationWatts = input.slipDissipationWatts;
-        m_dynamicSurface.applyThermalTireContact(
-            localToGlobal(localPosition), thermalInput);
-        return result;
+        const std::uint64_t sampleKey = gpuWaterSampleCellKey(globalPosition);
+        if (m_gpuDynamicSurfaceWaterSampleRequestByCell.find(sampleKey)
+            == m_gpuDynamicSurfaceWaterSampleRequestByCell.end()
+            && m_gpuDynamicSurfaceWaterSampleRequests.size() < 2048u)
+        {
+            const std::size_t requestIndex = m_gpuDynamicSurfaceWaterSampleRequests.size();
+            m_gpuDynamicSurfaceWaterSampleRequests.push_back({ globalPosition });
+            m_gpuDynamicSurfaceWaterSampleRequestByCell.emplace(sampleKey, requestIndex);
+        }
     }
 
-    dynamicsurface::DynamicSurfaceHydroTireInput migrated;
-    migrated.deltaTimeSeconds = input.deltaTimeSeconds;
-    migrated.contactPatchLengthM = input.contactPatchLengthM;
-    migrated.contactPatchWidthM = input.contactPatchWidthM;
-    migrated.contactPatchAreaM2 = input.contactPatchAreaM2;
-    migrated.normalLoadN = input.normalLoadN;
-    migrated.nominalLoadN = input.nominalLoadN;
-    migrated.forwardSpeedMps = input.forwardSpeedMps;
-    migrated.lateralSpeedMps = input.lateralSpeedMps;
-    migrated.treadVoidRatio = input.treadVoidRatio;
-    migrated.slipDissipationWatts = input.slipDissipationWatts;
-    migrated.forward = input.forward;
-    migrated.right = input.right;
-
-    const auto dynamicResult = m_dynamicSurface.applyHydroTireContact(
-        localToGlobal(localPosition), migrated);
+    const SurfaceWeatherOutput weather = weatherOutput();
+    water::SurfaceHydrologyTireResult result;
+    const std::uint64_t sampleKey = gpuWaterSampleCellKey(globalPosition);
+    const auto sampled = m_gpuDynamicSurfaceAuthorityEnabled
+        ? m_gpuDynamicSurfaceWaterSamples.find(sampleKey)
+        : m_gpuDynamicSurfaceWaterSamples.end();
+    const bool sampledValid = sampled != m_gpuDynamicSurfaceWaterSamples.end()
+        && sampled->second.valid;
+    result.valid = sampledValid || weather.valid;
+    result.initialWaterDepthM = sampledValid
+        ? std::max(sampled->second.waterDepthM, 0.0)
+        : (weather.valid ? std::max(weather.waterFilmDepthM, 0.0) : 0.0);
+    result.finalWaterDepthM = result.initialWaterDepthM;
 
     dynamicsurface::DynamicSurfaceThermalTireInput thermalInput;
     thermalInput.deltaTimeSeconds = input.deltaTimeSeconds;
     thermalInput.contactPatchAreaM2 = input.contactPatchAreaM2;
     thermalInput.slipDissipationWatts = input.slipDissipationWatts;
-    m_dynamicSurface.applyThermalTireContact(
-        localToGlobal(localPosition), thermalInput);
-
-    water::SurfaceHydrologyTireResult result;
-    result.valid = dynamicResult.valid;
-    result.initialWaterDepthM = dynamicResult.initialWaterDepthM;
-    result.finalWaterDepthM = dynamicResult.finalWaterDepthM;
-    result.removedVolumeM3 = dynamicResult.removedVolumeM3;
-    result.redistributedVolumeM3 = dynamicResult.redistributedVolumeM3;
-    result.sprayVolumeM3 = dynamicResult.sprayVolumeM3;
-    result.frictionEvaporatedVolumeM3 = dynamicResult.frictionEvaporatedVolumeM3;
+    m_dynamicSurface.applyThermalTireContact(globalPosition, thermalInput);
     return result;
 }
-
 
 void SurfaceWorld::consumeGpuDynamicSurfaceTireEvents(
     std::vector<GpuDynamicSurfaceTireEvent>& outEvents)
@@ -231,6 +250,23 @@ void SurfaceWorld::consumeGpuDynamicSurfaceTireEvents(
     outEvents.clear();
     outEvents.swap(m_gpuDynamicSurfaceTireEvents);
     m_gpuDynamicSurfaceTireEventByCell.clear();
+}
+
+void SurfaceWorld::consumeGpuDynamicSurfaceWaterSampleRequests(
+    std::vector<GpuDynamicSurfaceWaterSampleRequest>& outRequests)
+{
+    outRequests.clear();
+    outRequests.swap(m_gpuDynamicSurfaceWaterSampleRequests);
+    m_gpuDynamicSurfaceWaterSampleRequestByCell.clear();
+}
+
+void SurfaceWorld::publishGpuDynamicSurfaceWaterSamples(
+    const std::vector<GpuDynamicSurfaceWaterSample>& samples)
+{
+    if (m_gpuDynamicSurfaceWaterSamples.size() > 16384u)
+        m_gpuDynamicSurfaceWaterSamples.clear();
+    for (const auto& sample : samples)
+        m_gpuDynamicSurfaceWaterSamples[gpuWaterSampleCellKey(sample.globalPosition)] = sample;
 }
 
 bool SurfaceWorld::setDevelopmentControls(
@@ -261,13 +297,36 @@ SurfaceLocalConditions SurfaceWorld::localConditions(
         0.0,
         1.0);
     const SurfaceWeatherOutput dynamicWeather = weatherOutput();
-    const dynamicsurface::DynamicSurfaceHydroSample hydrology =
-        m_gpuDynamicSurfaceAuthorityEnabled
-            ? dynamicsurface::DynamicSurfaceHydroSample{}
-            : m_dynamicSurface.sampleHydro(localToGlobal(localPosition));
+    const heritage::math::DVec3 globalPosition = localToGlobal(localPosition);
+    dynamicsurface::DynamicSurfaceHydroSample hydrology;
+    if (m_gpuDynamicSurfaceAuthorityEnabled)
+    {
+        const std::uint64_t key = gpuWaterSampleCellKey(globalPosition);
+        const auto found = m_gpuDynamicSurfaceWaterSamples.find(key);
+        if (found != m_gpuDynamicSurfaceWaterSamples.end() && found->second.valid)
+        {
+            hydrology.valid = true;
+            hydrology.waterDepthM = std::max(found->second.waterDepthM, 0.0);
+            hydrology.wetness = dynamicWeather.valid
+                ? std::clamp(dynamicWeather.effectiveWetness, 0.0, 1.0) : 0.0;
+        }
+        if (m_gpuDynamicSurfaceWaterSampleRequestByCell.find(key)
+            == m_gpuDynamicSurfaceWaterSampleRequestByCell.end()
+            && m_gpuDynamicSurfaceWaterSampleRequests.size() < 2048u)
+        {
+            const std::size_t index = m_gpuDynamicSurfaceWaterSampleRequests.size();
+            m_gpuDynamicSurfaceWaterSampleRequests.push_back({ globalPosition });
+            m_gpuDynamicSurfaceWaterSampleRequestByCell.emplace(key, index);
+        }
+    }
+    else
+    {
+        // OPT03C: no CPU spatial-water fallback. weatherOutput() below supplies
+        // the startup/headless scalar film until GPU authority becomes live.
+    }
     const dynamicsurface::DynamicSurfaceThermalSample thermal =
         m_dynamicSurface.sampleThermal(localToGlobal(localPosition));
-    const bool spatialWaterValid = hydrology.valid && dynamicWeather.valid;
+    const bool spatialWaterValid = hydrology.valid;
     const double dynamicWetness = spatialWaterValid
         ? hydrology.wetness
         : (dynamicWeather.valid ? dynamicWeather.effectiveWetness : 0.0);
@@ -278,7 +337,7 @@ SurfaceLocalConditions SurfaceWorld::localConditions(
     // global rain can wet an otherwise dry scene surface.
     result.wetness = 1.0 - (1.0 - baseWetness) * (1.0 - weatherWetness);
     result.weatherWetness = dynamicWetness;
-    result.waterFilmDepthValid = dynamicWeather.valid;
+    result.waterFilmDepthValid = spatialWaterValid || dynamicWeather.valid;
     result.ambientAirSpeedMps = dynamicWeather.valid
         ? dynamicWeather.windSpeedMps : 0.0;
     switch (material)
@@ -367,15 +426,8 @@ void SurfaceWorld::advancePresentation(float deltaTimeSeconds)
     // advancing Hydro/Track. Simulation therefore follows residency instead
     // of materializing every covered page inside a broad distance band.
     m_dynamicSurface.refreshHydroResidency();
-    // DSURF03B: Heritage Dynamic Surface is now the authoritative runtime
-    // water/moisture/flow state. The old SurfaceHydrology object is retained
-    // temporarily only for static precipitation-cover queries and historical
-    // diagnostics while its remaining non-state responsibilities are migrated.
-    if (!m_gpuDynamicSurfaceAuthorityEnabled)
-    {
-        m_dynamicSurface.advanceHydro(
-            m_weather, dynamicWeather, static_cast<double>(deltaTimeSeconds));
-    }
+    // OPT03C: water has no CPU advancement path. The renderer-owned GPU runtime
+    // consumes immutable .hhyd v15 topology and live weather/tire inputs.
     // DSURF04: persistent Track-plane temperature is advanced from the same
     // real simulation-interest sources and surface sheets as Hydro. The
     // weather scalar remains compatibility telemetry/fallback only.

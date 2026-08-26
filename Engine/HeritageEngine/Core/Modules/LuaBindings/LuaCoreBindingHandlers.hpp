@@ -45,10 +45,17 @@ struct LuaCoreBindingHandlers
     static int luaCameraIsFlyEnabled(lua_State* state);
     static int luaCameraSetFlySpeed(lua_State* state);
     static int luaCameraGetFlySpeed(lua_State* state);
+    static int luaCameraSetUiInteractionActive(lua_State* state);
+    static int luaCameraIsUiInteractionActive(lua_State* state);
     static int luaEngineRunSafetySmokeTests(lua_State* state);
     static int luaEngineGetLastSafetyReport(lua_State* state);
     static int luaEnvironmentGetTimeOfDay(lua_State* state);
     static int luaEnvironmentSetTimeOfDay(lua_State* state);
+    static int luaEnvironmentGetDate(lua_State* state);
+    static int luaEnvironmentSetDate(lua_State* state);
+    static int luaEnvironmentGetLocation(lua_State* state);
+    static int luaEnvironmentSetLocation(lua_State* state);
+    static int luaEnvironmentApplySceneMetadata(lua_State* state);
     static int luaEnvironmentIsCycleEnabled(lua_State* state);
     static int luaEnvironmentSetCycleEnabled(lua_State* state);
     static int luaEnvironmentGetTimeScale(lua_State* state);
@@ -136,6 +143,7 @@ struct LuaCoreBindingHandlers
     static int luaUiTextDisabled(lua_State* state);
     static int luaUiGetAvailableWidth(lua_State* state);
     static int luaUiButton(lua_State* state);
+    static int luaUiCombo(lua_State* state);
     static int luaUiSliderFloat(lua_State* state);
     static int luaUiInputFloat(lua_State* state);
     static int luaUiCheckbox(lua_State* state);

@@ -250,14 +250,14 @@ int LuaPhysicsBindingHandlers::luaPhysicsGetSurfaceHydrology(lua_State* state)
     if (!runtime)
         return 0;
 
-    const heritage::physics::dynamicsurface::DynamicSurfaceHydroStats stats =
+    const heritage::physics::water::SurfaceHydrologyStats stats =
         runtime->m_physics
-            ? runtime->m_physics->surfaces().dynamicSurface().hydroStats()
-            : heritage::physics::dynamicsurface::DynamicSurfaceHydroStats{};
-    const heritage::physics::dynamicsurface::DynamicSurfaceStaticBakeReport bake =
+            ? runtime->m_physics->surfaces().hydrology().stats()
+            : heritage::physics::water::SurfaceHydrologyStats{};
+    const heritage::physics::water::SurfaceHydrologyBakeReport bake =
         runtime->m_physics
-            ? runtime->m_physics->surfaces().dynamicSurface().lastStaticBakeReport()
-            : heritage::physics::dynamicsurface::DynamicSurfaceStaticBakeReport{};
+            ? runtime->m_physics->surfaces().hydrology().lastBakeReport()
+            : heritage::physics::water::SurfaceHydrologyBakeReport{};
     runtime->m_api.lua_createtable(state, 0, 32);
     const auto setNumber = [&](const char* name, double value) {
         runtime->m_api.lua_pushnumber(state, static_cast<LuaNumber>(value));
@@ -272,37 +272,35 @@ int LuaPhysicsBindingHandlers::luaPhysicsGetSurfaceHydrology(lua_State* state)
         runtime->m_api.lua_setfield(state, -2, name);
     };
     setBoolean("available", stats.available);
-    setBoolean("loaded_from_cache", bake.loadedFromCache);
-    setBoolean("debug_visualization", false);
-    setNumber("source_triangles", static_cast<double>(bake.sourceTriangleCount));
-    setNumber("cells", static_cast<double>(stats.validTexels));
-    setNumber("support_cells", static_cast<double>(stats.validTexels));
-    setNumber("connected_cells", static_cast<double>(stats.validTexels));
-    setNumber("adaptive_minimum_cell_m", heritage::physics::dynamicsurface::kHydroAuthorityTexelPitchM);
-    setNumber("adaptive_maximum_cell_m", heritage::physics::dynamicsurface::kHydroAuthorityTexelPitchM);
-    setNumber("adaptive_0_1m_cells",
-        0.0);
-    setNumber("adaptive_large_cells",
-        0.0);
-    setNumber("wet_cells", static_cast<double>(stats.wetTexels));
-    setNumber("simulation_steps", static_cast<double>(stats.simulationStepCount));
-    setNumber("tire_contacts", static_cast<double>(stats.tireContactCount));
-    setNumber("update_rate_hz", stats.activePages > 0u ? heritage::physics::dynamicsurface::UpdateCadence::hydroTileHz : 0.0);
-    setNumber("water_volume_m3", stats.waterVolumeM3);
-    setNumber("maximum_water_depth_mm", stats.maximumWaterDepthM * 1000.0);
-    setNumber("rain_volume_m3", stats.cumulativeRainVolumeM3);
-    setNumber("infiltration_volume_m3", stats.cumulativeInfiltrationVolumeM3);
-    setNumber("drainage_volume_m3", stats.cumulativeDrainageVolumeM3);
-    setNumber("evaporation_volume_m3", stats.cumulativeEvaporationVolumeM3);
-    setNumber("runoff_volume_m3", stats.cumulativeRunoffVolumeM3);
-    setNumber("tire_cleared_volume_l", stats.cumulativeTireClearedVolumeM3 * 1000.0);
-    setNumber("tire_spray_volume_l", stats.cumulativeTireSprayVolumeM3 * 1000.0);
-    setNumber("last_step_ms", stats.lastStepMilliseconds);
-    setString("solver", "heritage_dynamic_surface_persistent_hydro");
-    setNumber("active_virtual_pipes",
-        0.0);
-    setNumber("maximum_virtual_pipe_flux_lps",
-        0.0);
+    setBoolean("loaded_from_cache", stats.loadedFromCache);
+    setBoolean("debug_visualization", stats.debugVisualizationEnabled);
+    setNumber("source_triangles", static_cast<double>(stats.sourceTriangleCount));
+    setNumber("cells", static_cast<double>(stats.supportCellCount));
+    setNumber("support_cells", static_cast<double>(stats.supportCellCount));
+    setNumber("connected_cells", 0.0);
+    setNumber("prebaked_world_tiles", static_cast<double>(stats.prebakedWorldTileCount));
+    setNumber("prebaked_far_payload_bytes", static_cast<double>(stats.prebakedFarPayloadBytes));
+    setNumber("adaptive_minimum_cell_m", 0.0);
+    setNumber("adaptive_maximum_cell_m", 0.0);
+    setNumber("adaptive_0_1m_cells", 0.0);
+    setNumber("adaptive_large_cells", 0.0);
+    setNumber("wet_cells", 0.0);
+    setNumber("simulation_steps", 0.0);
+    setNumber("tire_contacts", 0.0);
+    setNumber("update_rate_hz", 0.0);
+    setNumber("water_volume_m3", 0.0);
+    setNumber("maximum_water_depth_mm", 0.0);
+    setNumber("rain_volume_m3", 0.0);
+    setNumber("infiltration_volume_m3", 0.0);
+    setNumber("drainage_volume_m3", 0.0);
+    setNumber("evaporation_volume_m3", 0.0);
+    setNumber("runoff_volume_m3", 0.0);
+    setNumber("tire_cleared_volume_l", 0.0);
+    setNumber("tire_spray_volume_l", 0.0);
+    setNumber("last_step_ms", 0.0);
+    setString("solver", "gpu_prebaked_hhyd_v15");
+    setNumber("active_virtual_pipes", 0.0);
+    setNumber("maximum_virtual_pipe_flux_lps", 0.0);
     setNumber("bake_ms", bake.elapsedMilliseconds);
     setString("bake_message", bake.message);
     setString("cache_path", bake.cachePath.string());
