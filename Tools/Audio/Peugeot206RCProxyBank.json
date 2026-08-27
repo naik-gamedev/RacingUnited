@@ -1,0 +1,30 @@
+{
+  "sourceWav": "Build/AudioSourceCache/Freesound/669618_mini_cooper_s_engine_contact_hq.wav",
+  "sourceChannelMix": [0.68, 0.32],
+  "outputDirectory": "Modules/RacingUnited/Assets/Audio/ThirdParty/Freesound/MiniCooperSContactBank",
+  "targetRmsDbfs": -15.5,
+  "crossfadeSeconds": 0.08,
+  "equalization": {
+    "lowShelfDb": -3.0,
+    "lowShelfEndHz": 180.0,
+    "highShelfDb": 4.0,
+    "highShelfStartHz": 1600.0,
+    "highShelfEndHz": 6200.0
+  },
+  "loops": [
+    { "rpm": 900,  "startSeconds": 0.00,  "endSeconds": 1.70 },
+    { "rpm": 1650, "startSeconds": 106.55, "endSeconds": 107.80 },
+    { "rpm": 3000, "startSeconds": 9.20,  "endSeconds": 11.80 },
+    { "rpm": 3700, "startSeconds": 54.00, "endSeconds": 60.00 },
+    { "rpm": 4300, "startSeconds": 30.00, "endSeconds": 37.00 },
+    { "rpm": 5500, "startSeconds": 40.00, "endSeconds": 42.50 },
+    { "rpm": 7200, "startSeconds": 80.00, "endSeconds": 82.50 }
+  ],
+  "startup": {
+    "sourceWav": "Build/AudioSourceCache/Freesound/425158_fiat_punto_petrol_start_run_off_hq.wav",
+    "sourceChannel": 0,
+    "startSeconds": 0.0,
+    "endSeconds": 5.5,
+    "targetRmsDbfs": -19.0
+  }
+}

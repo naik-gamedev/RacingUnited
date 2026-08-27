@@ -1,0 +1,110 @@
+PEUGEOT 206 RC / GTI 180 — EW10J4S (RFK)
+FINAL ENGINE-SIM COMMUNITY EDITION CALIBRATION NOTES
+===================================================
+
+TARGET APPLICATION
+------------------
+Engine-Simulator / engine-sim-community-edition
+Community Edition v0.1.14a direct-load .mr workflow.
+
+FINAL HERITAGE VIRTUAL-DYNO ENGINE
+---------------------------------
+File: Peugeot_206_RC_EW10J4S_FINAL_STOCK.mr
+Calibration lineage: v16 FINAL CURVE CAL10
+
+FINAL USER-VERIFIED DYNO RESULT
+-------------------------------
+173 hp @ 6790 rpm
+148 lb-ft @ 4798 rpm
+
+REFERENCE STOCK TARGETS
+-----------------------
+Factory rated power: 130 kW / 177 PS @ approximately 7000 rpm
+177 PS = approximately 174.6 mechanical hp
+Factory rated torque: 202 Nm @ approximately 4750 rpm
+202 Nm = approximately 149.0 lb-ft
+
+FINAL ERROR VS NOMINAL FACTORY PEAKS
+------------------------------------
+Peak power magnitude: about -1%
+Peak power speed: about -210 rpm
+Peak torque magnitude: about -0.7%
+Peak torque speed: about +48 rpm
+
+This is close enough that further tuning solely to force the displayed peak
+numbers would risk making the underlying simulated engine less representative.
+
+HIGH-CONFIDENCE / HARD ENGINE ANCHORS USED
+------------------------------------------
+Engine family / code: PSA EW10J4S / RFK
+Layout: naturally aspirated inline four
+Displacement: 1997 cc
+Bore x stroke: 85 mm x 88 mm
+Compression ratio: 11.0:1
+Cylinder head: DOHC 16-valve
+Firing order: 1-3-4-2
+Factory output: 130 kW / 177 PS
+Factory peak torque: 202 Nm
+Production application: Peugeot 206 RC / GTi 180
+
+KNOWN REAL-ENGINE FEATURES REPRESENTED APPROXIMATELY
+----------------------------------------------------
+- Intake variable valve timing
+- Dual/variable intake tract behavior
+- Production 4-into-1 exhaust character
+- Stock road-car breathing and torque delivery
+
+IMPORTANT SIMULATOR LIMITATION
+------------------------------
+Engine Simulator Community Edition does not reproduce the complete stock PSA
+ECU, continuously controlled intake VVT, complete dual-mode intake system,
+temperature-dependent idle controller, catalyst/muffler acoustics, or full
+vehicle-body acoustic transmission.
+
+Therefore some cam timing, flow tables, ignition timing, intake dimensions,
+exhaust dimensions, friction, rotating masses, and combustion parameters in
+the .mr are CALIBRATION PROXIES rather than claimed factory measurements.
+
+CAMSHAFT RESEARCH WARNING
+-------------------------
+The previously supplied CAT CAMS 4901902 data (285/274 deg advertised,
+251/240 deg @ 1 mm, 12.50/11.75 mm lift) describes a TARMAC RALLY / RACE
+camshaft set and is NOT the stock Peugeot 206 RC camshaft specification.
+It was not used as the stock cam specification.
+
+DYNO PROCEDURE USED FOR COMPARABLE RESULTS
+------------------------------------------
+1. Load engine.
+2. Start and allow it to stabilize.
+3. Keep transmission in NEUTRAL.
+4. Enable dyno.
+5. Run the dyno sweep.
+6. Read the completed peak line in Engine Simulator.
+
+FINAL RESULT SCREEN (user test)
+-------------------------------
+173 hp @ 6790 rpm
+148 lb-ft @ 4798 rpm
+
+POST-DYNO STALL NOTE
+--------------------
+The engine stopped after the final dyno run. This appears consistent with a
+known Engine Simulator behavior/issue where an engine may fail to recover idle
+after being run to the rev limit/dyno endpoint. This does not alter the measured
+peak calibration. The Heritage audio-capture workflow should primarily use
+steady RPM-hold captures below the limiter rather than repeated limiter sweeps.
+
+NEXT DEVELOPMENT PHASE
+----------------------
+1. Acoustic/source tuning of the EW10J4S in Engine Simulator.
+2. Heritage Vehicle Sound Laboratory / WASAPI loopback capture workflow.
+3. RPM x load sound-bank capture.
+4. Runtime interpolation and spatial engine/intake/exhaust emitters.
+5. Interior/exterior filtering, cabin transmission loss, occlusion,
+   distance/air absorption, Doppler and shared environmental reverb.
+
+STATUS
+------
+PERFORMANCE CURVE: FINAL / ACCEPTED
+ACOUSTIC CHARACTER: NOT YET FINAL
+HERITAGE SOUND BANK: NOT YET CAPTURED

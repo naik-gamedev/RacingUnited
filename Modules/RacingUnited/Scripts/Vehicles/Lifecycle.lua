@@ -10,9 +10,11 @@ end
 function VehicleOnPrototypeEnter()
     CreateNativeVehicleDemo()
     VehicleVisualOnPrototypeEnter()
+    VehicleAudioOnPrototypeEnter()
 end
 
 function VehicleOnPrototypeExit()
+    VehicleAudioOnPrototypeExit()
     DestroyVehicleDemo()
 end
 

@@ -1,6 +1,8 @@
 #include "LuaModuleRuntime.hpp"
 #include "LuaBindings/LuaBindingInternals.hpp"
 #include "../../Audio/AudioSystem.hpp"
+#include "../../Audio/Vehicles/VehicleAudioRuntime.hpp"
+#include "../../Audio/Weather/WeatherAudioRuntime.hpp"
 #include "../Entities/EntityRegistry.hpp"
 #include "../../Input/InputSystem.hpp"
 #include "../../Physics/PhysicsWorld.hpp"
@@ -60,6 +62,9 @@ std::string jsonEscape(const std::string& value)
 
 } // namespace
 
+LuaModuleRuntime::LuaModuleRuntime() = default;
+LuaModuleRuntime::~LuaModuleRuntime() = default;
+
 bool LuaModuleRuntime::onLoad(
     GLFWwindow* window,
     const ModuleContext& context,
@@ -76,6 +81,13 @@ bool LuaModuleRuntime::onLoad(
     m_physics = services.physics;
     m_environment = services.environment;
     m_vegetation = services.vegetation;
+    if (m_audio && m_physics)
+    {
+        m_vehicleAudio = std::make_unique<heritage::audio::vehicles::VehicleAudioRuntime>(
+            *m_audio, *m_physics);
+        m_weatherAudio = std::make_unique<heritage::audio::weather::WeatherAudioRuntime>(
+            *m_audio, *m_physics);
+    }
     m_context.emplace(context);
     m_assetRegistry.reset(context.assetRoot());
     // AS01A: do not walk the filesystem during module startup. The registry
@@ -195,6 +207,11 @@ void LuaModuleRuntime::onUpdate(float deltaTime, bool allowInteraction)
     if (m_started && m_state && m_scriptError.empty())
         callOptionalNumber("OnUpdate", static_cast<LuaNumber>(deltaTime));
 
+    if (m_vehicleAudio)
+        m_vehicleAudio->update(deltaTime);
+    if (m_weatherAudio)
+        m_weatherAudio->update(deltaTime);
+
     // Scene.Load() is queued. Applying it here prevents a script callback from
     // destroying the active scene while that scene is updating or drawing.
     processPendingSceneTransition();
@@ -268,6 +285,8 @@ void LuaModuleRuntime::onDrawUI(
 void LuaModuleRuntime::onShutdown()
 {
     destroyState(true);
+    m_vehicleAudio.reset();
+    m_weatherAudio.reset();
     clearImportedStaticBoxScene();
     if (m_physics)
         m_physics->collisions().clearStaticSceneTriangles();
@@ -462,6 +481,10 @@ bool LuaModuleRuntime::reloadScript(std::string& errorMessage)
             m_audio->stop(handle);
     }
     m_audioHandles.clear();
+    if (m_vehicleAudio)
+        m_vehicleAudio->clear();
+    if (m_weatherAudio)
+        m_weatherAudio->clear();
     m_uiImages.clear();
     m_lastUiError.clear();
 

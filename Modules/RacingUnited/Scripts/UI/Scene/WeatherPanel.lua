@@ -96,6 +96,30 @@ function DrawSceneWeatherPanel()
                 weather.rain_drop_mean_diameter_mm or 0.0,
                 weather.rain_drop_flux_terminal_mps or 0.0))
         end
+
+        UI.Spacing()
+        local audioEnabled, audioChanged = UI.Checkbox(
+            "Native rain + wind audio", weatherAudioEnabled == true)
+        if audioChanged then
+            SetWeatherAudioEnabled(audioEnabled)
+        end
+        local audioState = GetWeatherAudioState()
+        if audioState ~= nil then
+            UI.TextDisabled(string.format(
+                "Audio rain %.1f mm/h | wind %.1f m/s | %d native voices",
+                audioState.rainMmPerHour or 0.0,
+                audioState.windMetersPerSecond or 0.0,
+                audioState.activeVoiceCount or 0))
+            UI.TextDisabled(string.format(
+                "Mix light %.2f | medium %.2f | heavy %.2f | storm %.2f | wind %.2f",
+                audioState.lightRainGain or 0.0,
+                audioState.mediumRainGain or 0.0,
+                audioState.heavyRainGain or 0.0,
+                audioState.stormRainGain or 0.0,
+                audioState.windGain or 0.0))
+        else
+            UI.TextDisabled(weatherAudioMessage)
+        end
     else
         UI.TextDisabled("Native surface weather is unavailable.")
     end

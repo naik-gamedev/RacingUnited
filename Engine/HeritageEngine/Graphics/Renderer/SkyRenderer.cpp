@@ -60,6 +60,46 @@ void setupDepthTexture(int w,int h,int samples,GLuint& tex,GLenum& target)
     glBindTexture(target,0);
 }
 float hermite(float a,float b,float x){float t=std::clamp((x-a)/(b-a),0.0f,1.0f);return t*t*(3-2*t);}
+
+struct ScreenDirection
+{
+    float u = 0.5f;
+    float v = 0.5f;
+    bool visible = false;
+};
+
+ScreenDirection projectSkyDirection(
+    const heritage::math::Mat4& view,
+    const heritage::math::Mat4& projection,
+    const heritage::math::Vec3& direction)
+{
+    // Sky directions have no translation. Project the rotation-only view-space
+    // vector exactly as the skybox vertex shader does so the post-cloud Sun
+    // presentation remains registered with the astronomical Sun disc.
+    const float viewX = view.m[0] * direction.x
+        + view.m[4] * direction.y + view.m[8] * direction.z;
+    const float viewY = view.m[1] * direction.x
+        + view.m[5] * direction.y + view.m[9] * direction.z;
+    const float viewZ = view.m[2] * direction.x
+        + view.m[6] * direction.y + view.m[10] * direction.z;
+
+    const float clipX = projection.m[0] * viewX
+        + projection.m[4] * viewY + projection.m[8] * viewZ;
+    const float clipY = projection.m[1] * viewX
+        + projection.m[5] * viewY + projection.m[9] * viewZ;
+    const float clipW = projection.m[3] * viewX
+        + projection.m[7] * viewY + projection.m[11] * viewZ;
+    if (clipW <= 1.0e-5f)
+        return {};
+
+    ScreenDirection result;
+    result.u = clipX / clipW * 0.5f + 0.5f;
+    result.v = clipY / clipW * 0.5f + 0.5f;
+    // Keep a small guard band so rays leave smoothly as the Sun crosses an edge.
+    result.visible = result.u >= -0.08f && result.u <= 1.08f
+        && result.v >= -0.08f && result.v <= 1.08f;
+    return result;
+}
 } // namespace
 
 bool SkyRenderer::volumetricCloudsValid() const{return m_volumetricCloudProgramsLinked&&m_cloudShapeTexture&&m_cloudErosionTexture&&m_cloudLutTexture;}
@@ -731,7 +771,22 @@ void SkyRenderer::drawVolumetricCloudsAfterOpaque(
     if(t.scissorEnabled){glEnable(GL_SCISSOR_TEST);glScissor(t.scissorX,t.scissorY,t.scissorWidth,t.scissorHeight);}else glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);glDepthMask(GL_FALSE);glDisable(GL_CULL_FACE);glEnable(GL_BLEND);glBlendEquation(GL_FUNC_ADD);
     glBlendFuncSeparate(GL_ONE,GL_ZERO,GL_ZERO,GL_ONE);glUseProgram(m_cloudPresentProgram);
-    glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,m_cloudTemporalTexture);const auto presentDrawStart=PerfClock::now();glDrawArrays(GL_TRIANGLES,0,3);m_cpuStats.cloudPresentDrawCallMs=millisecondsSince(presentDrawStart);
+    const ScreenDirection sunScreen = projectSkyDirection(
+        view, projection, lighting.sunDirection);
+    glUniform1i(m_present.sceneDepthSamples,sceneDepthSamples);
+    glUniform2f(m_present.sunScreenUv,sunScreen.u,sunScreen.v);
+    glUniform3f(m_present.sunColor,
+        lighting.sunColor.x,lighting.sunColor.y,lighting.sunColor.z);
+    glUniform1f(m_present.sunIntensity,lighting.sunIntensity);
+    glUniform1f(m_present.sunElevation,lighting.sunDirection.y);
+    glUniform1i(m_present.sunScreenVisible,sunScreen.visible?1:0);
+    glUniform1f(m_present.cloudCover,w.authoredCloudCover);
+    glUniform1f(m_present.humidity,w.relativeHumidity);
+    glUniform1f(m_present.precipitation,w.precipitationRateMmPerHour);
+    glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,m_cloudTemporalTexture);
+    glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,m_cloudSceneDepthTarget==GL_TEXTURE_2D?m_cloudSceneDepthTexture:0);
+    glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,m_cloudSceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?m_cloudSceneDepthTexture:0);
+    const auto presentDrawStart=PerfClock::now();glDrawArrays(GL_TRIANGLES,0,3);m_cpuStats.cloudPresentDrawCallMs=millisecondsSince(presentDrawStart);
 
     // CELESTIAL04 remains a separate opaque-receiver multiplier. Apply it after
     // the resolved camera colour is restored; sky pixels have zero reversed-Z

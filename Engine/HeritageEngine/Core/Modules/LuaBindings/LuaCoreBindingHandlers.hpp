@@ -13,6 +13,7 @@ struct LuaCoreBindingHandlers
 
     static int luaAudioIsAvailable(lua_State* state);
     static int luaAudioGetBackend(lua_State* state);
+    static int luaAudioGetRuntimeStats(lua_State* state);
     static int luaAudioPlaySound(lua_State* state);
     static int luaAudioPlayLoop(lua_State* state);
     static int luaAudioStop(lua_State* state);
@@ -25,6 +26,14 @@ struct LuaCoreBindingHandlers
     static int luaAudioSetBusVolume(lua_State* state);
     static int luaAudioGetBusVolume(lua_State* state);
     static int luaAudioGetLastError(lua_State* state);
+    static int luaAudioCreateVehicleSound(lua_State* state);
+    static int luaAudioDestroyVehicleSound(lua_State* state);
+    static int luaAudioSetVehicleSoundEnabled(lua_State* state);
+    static int luaAudioGetVehicleSoundState(lua_State* state);
+    static int luaAudioCreateWeatherSound(lua_State* state);
+    static int luaAudioDestroyWeatherSound(lua_State* state);
+    static int luaAudioSetWeatherSoundEnabled(lua_State* state);
+    static int luaAudioGetWeatherSoundState(lua_State* state);
     static int luaEngineOpenSettings(lua_State* state);
     static int luaEngineExit(lua_State* state);
     static int luaEngineSetClearColor(lua_State* state);

@@ -418,6 +418,16 @@ int main()
         << " TIRE17C reusable tire parts resolve and assign with per-wheel cold pressure\n";
     failed += tirePartRuntimePassed ? 0 : 1;
 
+    const bool vehicleAudioPassed = vehicleAudioSynthesisAndMixAreBounded();
+    std::cout << (vehicleAudioPassed ? "PASS" : "FAIL")
+        << " layered vehicle audio synthesis, response and bounds\n";
+    failed += vehicleAudioPassed ? 0 : 1;
+
+    const bool weatherAudioPassed = weatherAudioMixIsPhysicalSmoothAndBounded();
+    std::cout << (weatherAudioPassed ? "PASS" : "FAIL")
+        << " native weather audio crossfade and smoothing\n";
+    failed += weatherAudioPassed ? 0 : 1;
+
     std::cout << (failed == 0 ? "ALL TESTS PASSED" : "TESTS FAILED")
         << " count=" << failed << '\n';
     return failed == 0 ? 0 : 1;

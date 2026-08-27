@@ -647,6 +647,8 @@ int HeritageEngine::run(int argc, char** argv)
     ChaseCamera chaseCamera;
     CameraFrame entityCameraFrame;
     bool vehicleCameraCursorCaptured = false;
+    Vec3 previousAudioListenerPosition{};
+    bool audioListenerPositionValid = false;
 
     std::cout << "Active runtime: " << moduleRuntime.runtimeId() << "\n";
     std::cout << "Active content: " << moduleRuntime.activeContentId() << "\n";
@@ -843,6 +845,50 @@ int HeritageEngine::run(int argc, char** argv)
             vehicleCameraFlyInput,
             entityCameraFrame,
             performanceMonitor);
+
+        if (entityCameraFrame.valid)
+        {
+            const Vec3 direction{
+                entityCameraFrame.targetLocal.x - entityCameraFrame.eyeLocal.x,
+                entityCameraFrame.targetLocal.y - entityCameraFrame.eyeLocal.y,
+                entityCameraFrame.targetLocal.z - entityCameraFrame.eyeLocal.z
+            };
+            const float directionLength = std::sqrt(
+                direction.x * direction.x
+                + direction.y * direction.y
+                + direction.z * direction.z);
+            heritage::audio::AudioListenerState listener;
+            listener.position = {
+                entityCameraFrame.eyeLocal.x,
+                entityCameraFrame.eyeLocal.y,
+                entityCameraFrame.eyeLocal.z
+            };
+            if (directionLength > 1.0e-5f)
+            {
+                listener.forward = {
+                    direction.x / directionLength,
+                    direction.y / directionLength,
+                    direction.z / directionLength
+                };
+            }
+            listener.up = {
+                entityCameraFrame.up.x,
+                entityCameraFrame.up.y,
+                entityCameraFrame.up.z
+            };
+            if (audioListenerPositionValid && dt > 1.0e-4f)
+            {
+                const float inverseDelta = 1.0f / dt;
+                listener.velocity = {
+                    (entityCameraFrame.eyeLocal.x - previousAudioListenerPosition.x) * inverseDelta,
+                    (entityCameraFrame.eyeLocal.y - previousAudioListenerPosition.y) * inverseDelta,
+                    (entityCameraFrame.eyeLocal.z - previousAudioListenerPosition.z) * inverseDelta
+                };
+            }
+            previousAudioListenerPosition = entityCameraFrame.eyeLocal;
+            audioListenerPositionValid = true;
+            state.audio.setListener(listener);
+        }
 
         const bool gpuTimerActiveThisFrame = renderEngineScene(
             renderingState,

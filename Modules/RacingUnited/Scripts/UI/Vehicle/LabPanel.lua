@@ -10,6 +10,10 @@ function DrawVehicleLabPanel()
             DrawVehicleCameraLabPanel()
             UI.EndTabItem()
         end
+        if UI.BeginTabItem("AUDIO") then
+            DrawVehicleAudioLabPanel()
+            UI.EndTabItem()
+        end
         UI.EndTabBar()
     end
 end

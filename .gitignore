@@ -38,3 +38,9 @@ Build/
 # OS junk
 Thumbs.db
 Desktop.ini
+
+# Generated tool/runtime caches
+__pycache__/
+*.py[cod]
+*.log
+*.tmp

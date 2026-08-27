@@ -354,14 +354,40 @@ void main()
         color=mix(horizon,vec3(0.018,0.022,0.030),smoothstep(0.0,0.18,-direction.y));
     }
 
-    // Resolved solar disk. Scattering/corona already comes from the sky-view LUT.
+    // Resolved solar disk plus the authored local optical presentation preserved
+    // by CLOUDURP15AC..15AH. The physical sky-view LUT still owns atmospheric
+    // scattering; these compact lobes restore the deliberately luminous body,
+    // tight halo and softened procedural starburst that cleanup removed.
     vec3 sunDir=normalize(uSunDirection);
     float sunDot=dot(direction,sunDir);
     const float sunAngularRadius=0.00465;
     float disk=smoothstep(cos(sunAngularRadius*1.10),cos(sunAngularRadius*0.82),sunDot);
     float sunVisibility=smoothstep(-0.02,0.012,sunDir.y);
     vec3 sunTransmission=atmosphereTransmission(sunDir);
-    color+=sunTransmission*max(uSunIntensity,0.0)*25.0*disk*sunVisibility;
+    float sunAngle=sqrt(max(2.0*(1.0-max(sunDot,0.0)),0.0));
+    float lowSun=1.0-smoothstep(0.055,0.34,max(sunDir.y,0.0));
+    vec3 sunPresentationTint=mix(vec3(1.035,1.015,0.975),
+        vec3(1.30,0.33,0.055),lowSun);
+    vec3 sunPresentationColor=sunTransmission*sunPresentationTint;
+    float sunPower=max(uSunIntensity,0.0)*sunVisibility;
+    float tightHalo=exp(-pow(sunAngle/0.0092,1.55));
+    float softShoulder=exp(-pow(sunAngle/0.0165,2.0));
+
+    vec3 sunReferenceUp=abs(sunDir.y)>0.98?vec3(1,0,0):vec3(0,1,0);
+    vec3 sunRight=normalize(cross(sunReferenceUp,sunDir));
+    vec3 sunUp=normalize(cross(sunDir,sunRight));
+    vec2 sunLocal=vec2(dot(direction,sunRight),dot(direction,sunUp));
+    vec2 sunDiagonal=vec2(sunLocal.x+sunLocal.y,sunLocal.x-sunLocal.y)*0.70710678;
+    float axialSpikes=
+        exp(-abs(sunLocal.y)/0.00062)*exp(-abs(sunLocal.x)/0.030)
+        +exp(-abs(sunLocal.x)/0.00062)*exp(-abs(sunLocal.y)/0.030);
+    float diagonalSpikes=
+        exp(-abs(sunDiagonal.y)/0.00082)*exp(-abs(sunDiagonal.x)/0.020)
+        +exp(-abs(sunDiagonal.x)/0.00082)*exp(-abs(sunDiagonal.y)/0.020);
+    float starburst=(axialSpikes+0.62*diagonalSpikes)
+        *exp(-sunAngle/0.034);
+    color+=sunPresentationColor*sunPower
+        *(25.0*disk+2.55*tightHalo+0.72*softShoulder+0.085*starburst);
 
     // Preserve Heritage's astronomically oriented HDR star map. PBSKY01A keeps
     // CLOUDURP15P's useful peak-only stellar micro-bloom, but extinction is now
@@ -401,15 +427,29 @@ void main()
         color+=(emissiveStarRadiance+stellarBloom)*uStarIntensity*horizonVisibility*starTransmission;
     }
 
-    // Keep the existing authored Moon texture, but let altitude/weather control
-    // a physically plausible extinction envelope instead of treating it as a decal.
+    // Keep the authored Moon texture and restore CLOUDURP15O's three persistent
+    // optical halo lobes. The final 15Y..15AB tuning made the middle lobe tight,
+    // tied the outer radius to ten times that middle radius, and left the outer
+    // veil broad but very faint. Humidity, precipitation and low altitude make
+    // all three more apparent without turning this into a whole-scene bloom.
     vec3 moonDir=normalize(uMoonDirection);
     float moonDot=max(dot(direction,moonDir),0.0);
     float moonVisibility=sat(uMoonIntensity/0.54);
     vec3 moonTransmission=atmosphereTransmission(moonDir);
     float moonTrans=dot(moonTransmission,vec3(0.2126,0.7152,0.0722));
     float moonAngle=sqrt(max(2.0*(1.0-moonDot),0.0));
-    color+=moonTransmission*vec3(0.82,0.86,0.94)*exp(-pow(moonAngle/0.055,2.0))*0.070*moonVisibility;
+    float moonLowAltitude=1.0-smoothstep(0.07,0.42,max(moonDir.y,0.0));
+    float moonWeatherHalo=clamp(0.18+uWeatherHumidity*0.58
+        +clamp(uWeatherPrecipitationMmPerHour/80.0,0.0,1.0)*0.34
+        +moonLowAltitude*0.30,0.12,1.25);
+    float moonNear=exp(-pow(moonAngle/0.0135,2.0))*0.105;
+    const float moonMiddleRadius=0.021;
+    float moonMiddle=exp(-pow(moonAngle/moonMiddleRadius,2.0))*0.043;
+    float moonOuter=exp(-pow(moonAngle/(moonMiddleRadius*10.0),2.0))*0.0042;
+    vec3 moonHaloColor=mix(vec3(0.90,0.94,1.00),vec3(1.00,0.78,0.56),
+        moonLowAltitude*0.48);
+    color+=moonTransmission*moonHaloColor
+        *(moonNear+moonMiddle+moonOuter)*moonVisibility*moonWeatherHalo;
     vec3 refUp=abs(moonDir.y)>0.98?vec3(1,0,0):vec3(0,1,0);
     vec3 moonRight=normalize(cross(refUp,moonDir));
     vec3 moonUp=normalize(cross(moonDir,moonRight));

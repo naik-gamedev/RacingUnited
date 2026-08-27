@@ -1,0 +1,32 @@
+{
+  "loops": [
+    {
+      "path": "engine_0900_rpm.wav",
+      "rpm": 900
+    },
+    {
+      "path": "engine_1650_rpm.wav",
+      "rpm": 1650
+    },
+    {
+      "path": "engine_3000_rpm.wav",
+      "rpm": 3000
+    },
+    {
+      "path": "engine_3700_rpm.wav",
+      "rpm": 3700
+    },
+    {
+      "path": "engine_4300_rpm.wav",
+      "rpm": 4300
+    },
+    {
+      "path": "engine_5500_rpm.wav",
+      "rpm": 5500
+    },
+    {
+      "path": "engine_7200_rpm.wav",
+      "rpm": 7200
+    }
+  ]
+}

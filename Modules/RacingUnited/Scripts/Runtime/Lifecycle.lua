@@ -11,6 +11,7 @@ end
 
 function OnStart()
     Engine.Log("Racing United Lua runtime started")
+    WeatherAudioStart()
 
     -- VEG01: module reloads restart the vegetation registry cleanly. With no
     -- registered species/instances this has effectively zero runtime cost.

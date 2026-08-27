@@ -5,8 +5,10 @@
 #include <cstddef>
 #include <array>
 #include <cstring>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <unordered_map>
 #include <utility>
@@ -21,6 +23,8 @@
 #endif
 #include <windows.h>
 #include <xaudio2.h>
+#include <xaudio2fx.h>
+#include "../../../ThirdParty/stb/stb_vorbis.c"
 #endif
 
 namespace heritage::audio {
@@ -48,7 +52,39 @@ std::string lowerCopy(std::string value)
 
 float clampPitch(float value)
 {
-    return std::clamp(value, 0.25f, 4.0f);
+    return std::clamp(value, 0.125f, 8.0f);
+}
+
+float dot(const AudioVector3& left, const AudioVector3& right)
+{
+    return left.x * right.x + left.y * right.y + left.z * right.z;
+}
+
+AudioVector3 subtract(const AudioVector3& left, const AudioVector3& right)
+{
+    return { left.x - right.x, left.y - right.y, left.z - right.z };
+}
+
+float length(const AudioVector3& value)
+{
+    return std::sqrt((std::max)(dot(value, value), 0.0f));
+}
+
+AudioVector3 normalized(const AudioVector3& value)
+{
+    const float magnitude = length(value);
+    return magnitude > 1.0e-5f
+        ? AudioVector3{ value.x / magnitude, value.y / magnitude, value.z / magnitude }
+        : AudioVector3{ 0.0f, 0.0f, 1.0f };
+}
+
+AudioVector3 cross(const AudioVector3& left, const AudioVector3& right)
+{
+    return {
+        left.y * right.z - left.z * right.y,
+        left.z * right.x - left.x * right.z,
+        left.x * right.y - left.y * right.x
+    };
 }
 
 std::uint16_t readU16(const std::uint8_t* data)
@@ -189,6 +225,79 @@ bool loadWavFile(
     return true;
 }
 
+bool loadOggFile(
+    const std::filesystem::path& path,
+    LoadedWav& output,
+    std::string& error)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file)
+    {
+        error = "Audio file was not found: " + path.string();
+        return false;
+    }
+    file.seekg(0, std::ios::end);
+    const std::streamoff length = file.tellg();
+    file.seekg(0, std::ios::beg);
+    if (length <= 0 || length > static_cast<std::streamoff>((std::numeric_limits<int>::max)()))
+    {
+        error = "OGG file length is invalid: " + path.string();
+        return false;
+    }
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(length));
+    file.read(reinterpret_cast<char*>(bytes.data()), length);
+    if (!file)
+    {
+        error = "Could not read OGG file: " + path.string();
+        return false;
+    }
+
+    int channels = 0;
+    int sampleRate = 0;
+    short* decoded = nullptr;
+    const int samplesPerChannel = stb_vorbis_decode_memory(
+        bytes.data(), static_cast<int>(bytes.size()),
+        &channels, &sampleRate, &decoded);
+    if (samplesPerChannel <= 0 || !decoded || channels <= 0
+        || channels > XAUDIO2_MAX_AUDIO_CHANNELS || sampleRate <= 0)
+    {
+        std::free(decoded);
+        error = "Could not decode OGG/Vorbis audio file: " + path.string();
+        return false;
+    }
+
+    const std::size_t sampleCount = static_cast<std::size_t>(samplesPerChannel)
+        * static_cast<std::size_t>(channels);
+    output.format = {};
+    output.format.wFormatTag = WAVE_FORMAT_PCM;
+    output.format.nChannels = static_cast<WORD>(channels);
+    output.format.nSamplesPerSec = static_cast<DWORD>(sampleRate);
+    output.format.wBitsPerSample = 16;
+    output.format.nBlockAlign = static_cast<WORD>(channels * sizeof(short));
+    output.format.nAvgBytesPerSec = output.format.nSamplesPerSec
+        * output.format.nBlockAlign;
+    output.pcm.resize(sampleCount * sizeof(short));
+    std::memcpy(output.pcm.data(), decoded, output.pcm.size());
+    std::free(decoded);
+    error.clear();
+    return true;
+}
+
+bool loadAudioFile(
+    const std::filesystem::path& path,
+    LoadedWav& output,
+    std::string& error)
+{
+    const std::string extension = lowerCopy(path.extension().string());
+    if (extension == ".wav" || extension == ".wave")
+        return loadWavFile(path, output, error);
+    if (extension == ".ogg" || extension == ".oga")
+        return loadOggFile(path, output, error);
+    error = "Unsupported audio file extension (use WAV or OGG/Vorbis): "
+        + path.string();
+    return false;
+}
+
 #endif
 
 } // namespace
@@ -224,6 +333,7 @@ struct AudioSystem::Impl
     bool initialized = false;
     std::string error;
     AudioHandle nextHandle = 1;
+    AudioListenerState listener;
 
 #ifdef _WIN32
     struct Clip
@@ -239,12 +349,29 @@ struct AudioSystem::Impl
         AudioBus bus = AudioBus::Effects;
         float localVolume = 1.0f;
         float pitch = 1.0f;
+        float lowPassOpenness = 1.0f;
         bool looping = false;
+        bool spatial = false;
+        bool acousticRouting = false;
+        AudioEmitterState emitter;
+        AcousticPropagationState acoustics;
+    };
+
+    struct CachedClip
+    {
+        std::shared_ptr<Clip> clip;
+        std::uint64_t lastUse = 0;
     };
 
     IXAudio2* engine = nullptr;
     IXAudio2MasteringVoice* masteringVoice = nullptr;
-    std::unordered_map<std::string, std::weak_ptr<Clip>> clipCache;
+    static constexpr std::size_t reverbBusCount = 3;
+    std::array<IXAudio2SubmixVoice*, reverbBusCount> reverbBuses{};
+    std::uint32_t outputChannels = 2;
+    std::uint32_t outputSampleRate = 48000;
+    std::unordered_map<std::string, CachedClip> clipCache;
+    std::size_t clipCacheBytes = 0;
+    std::uint64_t clipCacheClock = 0;
     std::unordered_map<AudioHandle, Voice> voices;
 #endif
 
@@ -262,6 +389,43 @@ struct AudioSystem::Impl
     }
 
 #ifdef _WIN32
+    void trimClipCache()
+    {
+        constexpr std::size_t maximumBytes = 256U * 1024U * 1024U;
+        while (clipCacheBytes > maximumBytes)
+        {
+            auto oldest = clipCache.end();
+            for (auto candidate = clipCache.begin(); candidate != clipCache.end(); ++candidate)
+            {
+                if (!candidate->second.clip
+                    || candidate->second.clip.use_count() != 1)
+                    continue;
+                if (oldest == clipCache.end()
+                    || candidate->second.lastUse < oldest->second.lastUse)
+                    oldest = candidate;
+            }
+            if (oldest == clipCache.end())
+                break;
+            clipCacheBytes -= oldest->second.clip->pcm.size();
+            clipCache.erase(oldest);
+        }
+    }
+
+    void cacheClip(const std::string& key, const std::shared_ptr<Clip>& clip)
+    {
+        if (!clip)
+            return;
+        if (const auto existing = clipCache.find(key); existing != clipCache.end())
+        {
+            if (existing->second.clip)
+                clipCacheBytes -= existing->second.clip->pcm.size();
+            clipCache.erase(existing);
+        }
+        clipCacheBytes += clip->pcm.size();
+        clipCache.emplace(key, CachedClip{ clip, ++clipCacheClock });
+        trimClipCache();
+    }
+
     float effectiveVolume(const Voice& voice) const
     {
         if (settings.muteWhenUnfocused && !applicationFocused)
@@ -287,6 +451,123 @@ struct AudioSystem::Impl
         }
     }
 
+    void destroyReverbBuses()
+    {
+        for (IXAudio2SubmixVoice*& bus : reverbBuses)
+        {
+            if (bus)
+                bus->DestroyVoice();
+            bus = nullptr;
+        }
+    }
+
+    bool createReverbBuses()
+    {
+        if (!engine || !masteringVoice)
+            return false;
+
+        const std::array<float, reverbBusCount> reflectionDelays{
+            0.008f, 0.032f, 0.074f
+        };
+        const std::array<float, reverbBusCount> decayTimes{
+            0.42f, 1.05f, 2.10f
+        };
+        const UINT32 effectRate = std::clamp<std::uint32_t>(
+            outputSampleRate, XAUDIO2FX_REVERB_MIN_FRAMERATE,
+            XAUDIO2FX_REVERB_MAX_FRAMERATE);
+
+        for (std::size_t index = 0; index < reverbBusCount; ++index)
+        {
+            IUnknown* reverb = nullptr;
+            HRESULT result = XAudio2CreateReverb(&reverb, 0);
+            if (FAILED(result) || !reverb)
+            {
+                destroyReverbBuses();
+                return false;
+            }
+
+            XAUDIO2_EFFECT_DESCRIPTOR descriptor{};
+            descriptor.InitialState = TRUE;
+            descriptor.OutputChannels = 2;
+            descriptor.pEffect = reverb;
+            XAUDIO2_EFFECT_CHAIN chain{};
+            chain.EffectCount = 1;
+            chain.pEffectDescriptors = &descriptor;
+            result = engine->CreateSubmixVoice(
+                &reverbBuses[index], 2, effectRate, 0, 0, nullptr, &chain);
+            reverb->Release();
+            if (FAILED(result) || !reverbBuses[index])
+            {
+                destroyReverbBuses();
+                return false;
+            }
+
+            XAUDIO2FX_REVERB_I3DL2_PARAMETERS authored{};
+            authored.WetDryMix = 100.0f;
+            authored.Room = index == 0 ? -2200 : (index == 1 ? -1700 : -1400);
+            authored.RoomHF = index == 0 ? -3000 : (index == 1 ? -2500 : -2100);
+            authored.RoomRolloffFactor = 0.0f;
+            authored.DecayTime = decayTimes[index];
+            authored.DecayHFRatio = 0.62f;
+            authored.Reflections = index == 0 ? -500 : -800;
+            authored.ReflectionsDelay = reflectionDelays[index];
+            authored.Reverb = index == 0 ? -1100 : -650;
+            authored.ReverbDelay = index == 0 ? 0.004f : 0.012f;
+            authored.Diffusion = index == 0 ? 45.0f : 78.0f;
+            authored.Density = index == 0 ? 58.0f : 92.0f;
+            authored.HFReference = 6200.0f;
+            XAUDIO2FX_REVERB_PARAMETERS native{};
+            ReverbConvertI3DL2ToNative(&authored, &native, FALSE);
+            result = reverbBuses[index]->SetEffectParameters(
+                0, &native, sizeof(native), XAUDIO2_COMMIT_NOW);
+            if (FAILED(result))
+            {
+                destroyReverbBuses();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool ensureAcousticRouting(Voice& voice)
+    {
+        if (voice.acousticRouting)
+            return true;
+        if (!voice.source || !voice.clip
+            || voice.clip->format.nChannels != 1
+            || !masteringVoice
+            || std::any_of(
+                reverbBuses.begin(), reverbBuses.end(),
+                [](IXAudio2SubmixVoice* value) { return value == nullptr; }))
+        {
+            return false;
+        }
+
+        std::array<XAUDIO2_SEND_DESCRIPTOR, 1 + reverbBusCount> descriptors{};
+        descriptors[0] = { 0, masteringVoice };
+        for (std::size_t index = 0; index < reverbBusCount; ++index)
+            descriptors[index + 1] = { 0, reverbBuses[index] };
+        XAUDIO2_VOICE_SENDS sends{};
+        sends.SendCount = static_cast<UINT32>(descriptors.size());
+        sends.pSends = descriptors.data();
+        if (FAILED(voice.source->SetOutputVoices(&sends)))
+            return false;
+        voice.acousticRouting = true;
+        return true;
+    }
+
+    void releaseAcousticRouting(Voice& voice)
+    {
+        if (!voice.acousticRouting || !voice.source)
+            return;
+        // A null send list restores XAudio2's default mastering-voice route.
+        // This removes three inactive reverb sends when a vehicle leaves the
+        // 20-source geometry budget instead of making the full field pay for
+        // zero-valued matrices forever.
+        if (SUCCEEDED(voice.source->SetOutputVoices(nullptr)))
+            voice.acousticRouting = false;
+    }
+
     std::shared_ptr<Clip> loadClip(const std::filesystem::path& requestedPath)
     {
         std::error_code pathError;
@@ -297,23 +578,71 @@ struct AudioSystem::Impl
 
         if (const auto found = clipCache.find(cacheKey); found != clipCache.end())
         {
-            if (auto cached = found->second.lock())
-                return cached;
+            found->second.lastUse = ++clipCacheClock;
+            return found->second.clip;
         }
 
         LoadedWav loaded;
-        if (!loadWavFile(pathError ? requestedPath : absolutePath, loaded, error))
+        if (!loadAudioFile(pathError ? requestedPath : absolutePath, loaded, error))
             return {};
 
         auto clip = std::make_shared<Clip>();
         clip->format = loaded.format;
         clip->pcm = std::move(loaded.pcm);
-        clipCache[cacheKey] = clip;
+        cacheClip(cacheKey, clip);
         return clip;
     }
 
-    AudioHandle play(
-        const std::filesystem::path& path,
+    std::shared_ptr<Clip> generatedClip(
+        const std::string& cacheKey,
+        const GeneratedMonoAudio& generated)
+    {
+        const std::string key = "generated:" + cacheKey;
+        if (const auto found = clipCache.find(key); found != clipCache.end())
+        {
+            found->second.lastUse = ++clipCacheClock;
+            return found->second.clip;
+        }
+
+        if (generated.sampleRate < 8000
+            || generated.sampleRate > 192000
+            || generated.samples.size() < 64)
+        {
+            error = "Generated audio must contain at least 64 mono samples at 8-192 kHz.";
+            return {};
+        }
+
+        auto clip = std::make_shared<Clip>();
+        clip->format.wFormatTag = WAVE_FORMAT_IEEE_FLOAT;
+        clip->format.nChannels = 1;
+        clip->format.nSamplesPerSec = generated.sampleRate;
+        clip->format.wBitsPerSample = 32;
+        clip->format.nBlockAlign = sizeof(float);
+        clip->format.nAvgBytesPerSec = generated.sampleRate * sizeof(float);
+        clip->pcm.resize(generated.samples.size() * sizeof(float));
+        std::memcpy(
+            clip->pcm.data(),
+            generated.samples.data(),
+            clip->pcm.size());
+        cacheClip(key, clip);
+        return clip;
+    }
+
+    std::shared_ptr<Clip> generatedClip(
+        const std::string& cacheKey,
+        const std::function<GeneratedMonoAudio()>& factory)
+    {
+        const std::string key = "generated:" + cacheKey;
+        if (const auto found = clipCache.find(key); found != clipCache.end())
+        {
+            found->second.lastUse = ++clipCacheClock;
+            return found->second.clip;
+        }
+        return generatedClip(cacheKey, factory());
+    }
+
+    AudioHandle playClip(
+        std::shared_ptr<Clip> clip,
         AudioBus bus,
         float volume,
         float pitch,
@@ -324,8 +653,6 @@ struct AudioSystem::Impl
             error = "Audio system is not initialized.";
             return kInvalidAudioHandle;
         }
-
-        std::shared_ptr<Clip> clip = loadClip(path);
         if (!clip)
             return kInvalidAudioHandle;
 
@@ -333,8 +660,8 @@ struct AudioSystem::Impl
         HRESULT result = engine->CreateSourceVoice(
             &source,
             &clip->format,
-            0,
-            4.0f,
+            XAUDIO2_VOICE_USEFILTER,
+            8.0f,
             nullptr,
             nullptr,
             nullptr);
@@ -385,6 +712,114 @@ struct AudioSystem::Impl
 
         error.clear();
         return handle;
+    }
+
+    AudioHandle play(
+        const std::filesystem::path& path,
+        AudioBus bus,
+        float volume,
+        float pitch,
+        bool loop)
+    {
+        std::shared_ptr<Clip> clip = loadClip(path);
+        return playClip(std::move(clip), bus, volume, pitch, loop);
+    }
+
+    void updateSpatialVoice(Voice& voice)
+    {
+        if (!voice.source || !voice.spatial)
+            return;
+
+        const AudioVector3 delta = subtract(voice.emitter.position, listener.position);
+        const float distance = length(delta);
+        const AudioVector3 direction = normalized(delta);
+        const float minimum = (std::max)(voice.emitter.minimumDistanceMeters, 0.1f);
+        const float maximum = (std::max)(voice.emitter.maximumDistanceMeters, minimum + 0.1f);
+        const float normalizedDistance = std::clamp(
+            (distance - minimum) / (maximum - minimum), 0.0f, 1.0f);
+        const float attenuation = (1.0f - normalizedDistance)
+            * (1.0f - normalizedDistance);
+
+        const AudioVector3 listenerRight = normalized(cross(listener.up, listener.forward));
+        const float pan = std::clamp(dot(direction, listenerRight), -1.0f, 1.0f);
+        if (voice.clip && voice.clip->format.nChannels == 1 && outputChannels == 2)
+        {
+            const float direct = attenuation * std::clamp(
+                voice.acoustics.directGain, 0.0f, 1.0f);
+            const float left = direct * std::sqrt(0.5f * (1.0f - pan));
+            const float right = direct * std::sqrt(0.5f * (1.0f + pan));
+            const float matrix[2]{ left, right };
+            voice.source->SetOutputMatrix(
+                masteringVoice, 1, 2, matrix, XAUDIO2_COMMIT_NOW);
+
+            if (voice.acousticRouting)
+            {
+                constexpr std::array<float, reverbBusCount> delayCenters{
+                    0.008f, 0.032f, 0.074f
+                };
+                std::array<float, reverbBusCount> delayWeights{};
+                const float delay = std::clamp(
+                    voice.acoustics.earlyReflectionDelaySeconds,
+                    delayCenters.front(), delayCenters.back());
+                if (delay <= delayCenters[1])
+                {
+                    const float blend = (delay - delayCenters[0])
+                        / (delayCenters[1] - delayCenters[0]);
+                    delayWeights[0] = std::sqrt(std::max(1.0f - blend, 0.0f));
+                    delayWeights[1] = std::sqrt(std::max(blend, 0.0f));
+                }
+                else
+                {
+                    const float blend = (delay - delayCenters[1])
+                        / (delayCenters[2] - delayCenters[1]);
+                    delayWeights[1] = std::sqrt(std::max(1.0f - blend, 0.0f));
+                    delayWeights[2] = std::sqrt(std::max(blend, 0.0f));
+                }
+
+                const float early = std::clamp(
+                    voice.acoustics.earlyReflectionGain, 0.0f, 0.75f);
+                const float late = std::clamp(
+                    voice.acoustics.lateReverbGain, 0.0f, 0.50f);
+                for (std::size_t index = 0; index < reverbBusCount; ++index)
+                {
+                    const float earlySend = early * delayWeights[index];
+                    const float lateSend = late * (0.16f + 0.24f * index);
+                    const float wet = attenuation * std::clamp(
+                        earlySend + lateSend, 0.0f, 0.72f);
+                    // Reflections are deliberately wider than the direct ray;
+                    // the reverb APO diffuses this stereo seed further.
+                    const float wetLeft = wet * (0.82f - 0.18f * pan);
+                    const float wetRight = wet * (0.82f + 0.18f * pan);
+                    const float wetMatrix[2]{ wetLeft, wetRight };
+                    voice.source->SetOutputMatrix(
+                        reverbBuses[index], 1, 2,
+                        wetMatrix, XAUDIO2_COMMIT_NOW);
+                }
+            }
+        }
+        else
+        {
+            voice.source->SetVolume(effectiveVolume(voice) * attenuation, XAUDIO2_COMMIT_NOW);
+        }
+
+        constexpr float speedOfSound = 343.0f;
+        const float listenerRadial = dot(listener.velocity, direction);
+        const float emitterRadial = dot(voice.emitter.velocity, direction);
+        const float doppler = std::clamp(
+            (speedOfSound + listenerRadial) / (speedOfSound + emitterRadial),
+            0.5f,
+            2.0f);
+        voice.source->SetFrequencyRatio(
+            clampPitch(voice.pitch * doppler), XAUDIO2_COMMIT_NOW);
+
+        XAUDIO2_FILTER_PARAMETERS filter{};
+        filter.Type = LowPassFilter;
+        const float openness = std::clamp(
+            voice.lowPassOpenness * voice.acoustics.directOpenness,
+            0.0f, 1.0f);
+        filter.Frequency = 0.035f + 0.965f * openness * openness;
+        filter.OneOverQ = 1.0f;
+        voice.source->SetFilterParameters(&filter, XAUDIO2_COMMIT_NOW);
     }
 
     bool stopVoice(AudioHandle handle)
@@ -450,6 +885,15 @@ bool AudioSystem::initialize(std::string& message)
         return false;
     }
 
+    XAUDIO2_VOICE_DETAILS masteringDetails{};
+    m_impl->masteringVoice->GetVoiceDetails(&masteringDetails);
+    m_impl->outputChannels = masteringDetails.InputChannels;
+    m_impl->outputSampleRate = masteringDetails.InputSampleRate;
+    // Reverb is optional: basic playback remains available on devices which
+    // reject an effect format. Geometry tracing then still supplies direct
+    // occlusion and low-pass filtering.
+    m_impl->createReverbBuses();
+
     m_impl->initialized = true;
     m_impl->error.clear();
     message.clear();
@@ -479,6 +923,10 @@ void AudioSystem::shutdown()
     }
     m_impl->voices.clear();
     m_impl->clipCache.clear();
+    m_impl->clipCacheBytes = 0;
+    m_impl->clipCacheClock = 0;
+
+    m_impl->destroyReverbBuses();
 
     if (m_impl->masteringVoice)
     {
@@ -513,8 +961,9 @@ void AudioSystem::update(bool applicationFocused)
 
 #ifdef _WIN32
     std::vector<AudioHandle> completed;
-    for (const auto& [handle, voice] : m_impl->voices)
+    for (auto& [handle, voice] : m_impl->voices)
     {
+        m_impl->updateSpatialVoice(voice);
         if (!voice.source || voice.looping)
             continue;
 
@@ -578,6 +1027,79 @@ AudioHandle AudioSystem::playLoop(
 #endif
 }
 
+AudioHandle AudioSystem::playGeneratedLoop(
+    const std::string& cacheKey,
+    const GeneratedMonoAudio& audio,
+    AudioBus bus,
+    float volume,
+    float pitch)
+{
+#ifdef _WIN32
+    return m_impl->playClip(
+        m_impl->generatedClip(cacheKey, audio),
+        bus,
+        volume,
+        pitch,
+        true);
+#else
+    (void)cacheKey; (void)audio; (void)bus; (void)volume; (void)pitch;
+    m_impl->error = "Generated audio playback is unavailable on this platform.";
+    return kInvalidAudioHandle;
+#endif
+}
+
+AudioHandle AudioSystem::playGeneratedLoopCached(
+    const std::string& cacheKey,
+    const std::function<GeneratedMonoAudio()>& factory,
+    AudioBus bus,
+    float volume,
+    float pitch)
+{
+#ifdef _WIN32
+    if (!factory)
+    {
+        m_impl->error = "Generated audio factory is missing.";
+        return kInvalidAudioHandle;
+    }
+    return m_impl->playClip(
+        m_impl->generatedClip(cacheKey, factory),
+        bus,
+        volume,
+        pitch,
+        true);
+#else
+    (void)cacheKey; (void)factory; (void)bus; (void)volume; (void)pitch;
+    m_impl->error = "Generated audio playback is unavailable on this platform.";
+    return kInvalidAudioHandle;
+#endif
+}
+
+AudioHandle AudioSystem::playGeneratedOneShotCached(
+    const std::string& cacheKey,
+    const std::function<GeneratedMonoAudio()>& factory,
+    AudioBus bus,
+    float volume,
+    float pitch)
+{
+#ifdef _WIN32
+    if (!factory)
+    {
+        m_impl->error = "Generated audio factory is missing.";
+        return kInvalidAudioHandle;
+    }
+    return m_impl->playClip(
+        m_impl->generatedClip(cacheKey, factory),
+        bus,
+        volume,
+        pitch,
+        false);
+#else
+    (void)cacheKey; (void)factory; (void)bus; (void)volume; (void)pitch;
+    m_impl->error = "Generated audio playback is unavailable on this platform.";
+    return kInvalidAudioHandle;
+#endif
+}
+
 bool AudioSystem::stop(AudioHandle handle)
 {
 #ifdef _WIN32
@@ -635,6 +1157,24 @@ bool AudioSystem::isPlaying(AudioHandle handle) const
 #endif
 }
 
+std::size_t AudioSystem::activeVoiceCount() const
+{
+#ifdef _WIN32
+    return m_impl ? m_impl->voices.size() : 0;
+#else
+    return 0;
+#endif
+}
+
+std::size_t AudioSystem::cachedAudioBytes() const
+{
+#ifdef _WIN32
+    return m_impl ? m_impl->clipCacheBytes : 0;
+#else
+    return 0;
+#endif
+}
+
 bool AudioSystem::setHandleVolume(AudioHandle handle, float volume)
 {
 #ifdef _WIN32
@@ -666,6 +1206,90 @@ bool AudioSystem::setHandlePitch(AudioHandle handle, float pitch)
     (void)handle; (void)pitch;
     return false;
 #endif
+}
+
+bool AudioSystem::setHandleSpatial(
+    AudioHandle handle,
+    const AudioEmitterState& emitter)
+{
+#ifdef _WIN32
+    const auto found = m_impl->voices.find(handle);
+    if (found == m_impl->voices.end() || !found->second.source)
+        return false;
+
+    found->second.spatial = true;
+    found->second.emitter = emitter;
+    m_impl->updateSpatialVoice(found->second);
+    return true;
+#else
+    (void)handle; (void)emitter;
+    return false;
+#endif
+}
+
+bool AudioSystem::setHandleLowPass(AudioHandle handle, float openness)
+{
+#ifdef _WIN32
+    const auto found = m_impl->voices.find(handle);
+    if (found == m_impl->voices.end() || !found->second.source)
+        return false;
+
+    found->second.lowPassOpenness = std::clamp(openness, 0.0f, 1.0f);
+    m_impl->updateSpatialVoice(found->second);
+    return true;
+#else
+    (void)handle; (void)openness;
+    return false;
+#endif
+}
+
+bool AudioSystem::setHandleAcoustics(
+    AudioHandle handle,
+    const AcousticPropagationState& acoustics)
+{
+#ifdef _WIN32
+    const auto found = m_impl->voices.find(handle);
+    if (found == m_impl->voices.end() || !found->second.source)
+        return false;
+
+    auto& voice = found->second;
+    voice.acoustics.directGain = std::clamp(acoustics.directGain, 0.0f, 1.0f);
+    voice.acoustics.directOpenness = std::clamp(
+        acoustics.directOpenness, 0.0f, 1.0f);
+    voice.acoustics.earlyReflectionGain = std::clamp(
+        acoustics.earlyReflectionGain, 0.0f, 0.75f);
+    voice.acoustics.earlyReflectionDelaySeconds = std::clamp(
+        acoustics.earlyReflectionDelaySeconds, 0.0f, 0.150f);
+    voice.acoustics.lateReverbGain = std::clamp(
+        acoustics.lateReverbGain, 0.0f, 0.50f);
+    const bool needsAcousticRoute = voice.acoustics.directGain < 0.999f
+        || voice.acoustics.directOpenness < 0.999f
+        || voice.acoustics.earlyReflectionGain > 0.001f
+        || voice.acoustics.lateReverbGain > 0.001f;
+    if (needsAcousticRoute)
+        m_impl->ensureAcousticRouting(voice);
+    else
+        m_impl->releaseAcousticRouting(voice);
+    m_impl->updateSpatialVoice(voice);
+    return true;
+#else
+    (void)handle; (void)acoustics;
+    return false;
+#endif
+}
+
+void AudioSystem::setListener(const AudioListenerState& listener)
+{
+    m_impl->listener = listener;
+#ifdef _WIN32
+    m_impl->listener.forward = normalized(listener.forward);
+    m_impl->listener.up = normalized(listener.up);
+#endif
+}
+
+const AudioListenerState& AudioSystem::listener() const
+{
+    return m_impl->listener;
 }
 
 void AudioSystem::applySettings(

@@ -16,7 +16,11 @@ function FlushSave(message)
 end
 
 function PlayUiConfirmation()
-    local handle = Audio.PlaySound("Audio/ui_confirm.wav", "UI", 0.90, 1.0)
+    local handle = Audio.PlaySound(
+        "Audio/ThirdParty/Kenney/InterfaceSounds/Audio/confirmation_002.ogg",
+        "UI",
+        0.90,
+        1.0)
     if handle == 0 then
         audioMessage = "AUDIO ERROR: " .. Audio.GetLastError()
     else

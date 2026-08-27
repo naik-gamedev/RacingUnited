@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -17,6 +18,8 @@
 #include "../../UI/UiImageCache.hpp"
 
 namespace heritage::camera { class VehicleCameraController; }
+namespace heritage::audio::vehicles { class VehicleAudioRuntime; }
+namespace heritage::audio::weather { class WeatherAudioRuntime; }
 
 namespace heritage::modules {
 
@@ -33,6 +36,9 @@ struct LuaEntityBindingHandlers;
 class LuaModuleRuntime final : public ModuleRuntime
 {
 public:
+    LuaModuleRuntime();
+    ~LuaModuleRuntime() override;
+
     bool onLoad(
         GLFWwindow* window,
         const ModuleContext& context,
@@ -172,6 +178,8 @@ private:
     lua_State* m_state = nullptr;
     GLFWwindow* m_window = nullptr;
     heritage::audio::AudioSystem* m_audio = nullptr;
+    std::unique_ptr<heritage::audio::vehicles::VehicleAudioRuntime> m_vehicleAudio;
+    std::unique_ptr<heritage::audio::weather::WeatherAudioRuntime> m_weatherAudio;
     heritage::input::InputSystem* m_input = nullptr;
     heritage::camera::VehicleCameraController* m_vehicleCamera = nullptr;
     heritage::entities::EntityRegistry* m_entities = nullptr;

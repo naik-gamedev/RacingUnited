@@ -213,6 +213,19 @@
     <ClCompile Include="..\Audio\AudioSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Audio\Acoustics\AcousticPathTracer.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Weather\WeatherAudioRuntime.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Weather\Models\WeatherAudioModel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\VehicleAudioSynthesis.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\VehicleAudioRuntime.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\Models\EngineAudioModel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\Models\EngineSampleBankModel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\Models\VehicleAudioEventModel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\Models\VehicleAudioFleetBudgetModel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\Models\DrivetrainAudioModel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\Models\TireAudioModel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\Models\AerodynamicAudioModel.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Vehicles\Models\ChassisAudioModel.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="$(ProjectDir)..\Input\InputSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -854,6 +867,21 @@
     <ClInclude Include="..\Audio\AudioSystem.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Audio\Acoustics\AcousticPathTracer.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Weather\WeatherAudioTypes.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Weather\WeatherAudioRuntime.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Weather\Models\WeatherAudioModel.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\VehicleAudioTypes.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\VehicleAudioSynthesis.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\VehicleAudioRuntime.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\Models\EngineAudioModel.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\Models\EngineSampleBankModel.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\Models\VehicleAudioEventModel.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\Models\VehicleAudioFleetBudgetModel.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\Models\DrivetrainAudioModel.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\Models\TireAudioModel.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\Models\AerodynamicAudioModel.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Vehicles\Models\ChassisAudioModel.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="$(ProjectDir)..\Input\InputSystem.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>

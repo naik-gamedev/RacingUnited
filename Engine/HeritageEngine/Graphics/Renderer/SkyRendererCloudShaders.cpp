@@ -758,15 +758,86 @@ void main()
 )glsl";
 
 const char* kCloudPresentFragmentShader = R"glsl(#version 460 core
-in vec2 vUv;out vec4 FragColor;
+in vec2 vUv;
+out vec4 FragColor;
 uniform sampler2D uSourceTexture;
+uniform sampler2D uSceneDepth;
+uniform sampler2DMS uSceneDepthMS;
+uniform int uSceneDepthSamples;
+uniform vec2 uSunScreenUv;
+uniform vec3 uSunColor;
+uniform float uSunIntensity;
+uniform float uSunElevation;
+uniform bool uSunScreenVisible;
+uniform float uCloudCover;
+uniform float uHumidity;
+uniform float uPrecipitation;
+
+float sceneDepthAt(vec2 uv)
+{
+    if(uSceneDepthSamples<=1)
+        return texture(uSceneDepth,uv).r;
+    ivec2 size=textureSize(uSceneDepthMS);
+    ivec2 pixel=clamp(ivec2(uv*vec2(size)),ivec2(0),size-1);
+    float nearest=0.0;
+    int count=min(uSceneDepthSamples,16);
+    for(int sampleIndex=0;sampleIndex<count;++sampleIndex)
+        nearest=max(nearest,texelFetch(uSceneDepthMS,pixel,sampleIndex).r);
+    return nearest;
+}
+
 void main()
 {
-    // OPT05: cloud scattering is premultiplied and A is transmittance. The fixed
-    // function blend state performs the exact former RGB composition:
-    // cloud.rgb + scene.rgb * cloud.a. Keeping the scene in the destination
-    // framebuffer removes one full-resolution scene-texture fetch per pixel.
-    FragColor=texture(uSourceTexture,vUv);
+    vec4 resolved=texture(uSourceTexture,vUv);
+    vec3 shafts=vec3(0.0);
+
+    // CLOUDURP15AD: restore the depth-carved radial Sun shafts removed by the
+    // dead-code cleanup. Clear reversed-Z samples contribute atmosphere while
+    // visible depth-writing geometry interrupts it. Sampling the resolved cloud
+    // colour also lets cloud gaps shape the rays without another cloud texture.
+    if(uSunScreenVisible&&uSunIntensity>0.0001&&uSunElevation>-0.025)
+    {
+        vec2 aspect=vec2(float(textureSize(uSourceTexture,0).x)
+            /float(max(textureSize(uSourceTexture,0).y,1)),1.0);
+        float sunDistance=length((vUv-uSunScreenUv)*aspect);
+        float radialEnvelope=1.0-smoothstep(0.035,0.72,sunDistance);
+        if(radialEnvelope>0.0001)
+        {
+            const int sampleCount=16;
+            vec2 stepUv=(uSunScreenUv-vUv)/float(sampleCount);
+            vec2 sampleUv=vUv;
+            float illumination=0.0;
+            float decay=1.0;
+            for(int sampleIndex=0;sampleIndex<sampleCount;++sampleIndex)
+            {
+                sampleUv+=stepUv;
+                bool inside=all(greaterThanEqual(sampleUv,vec2(0.0)))
+                    &&all(lessThanEqual(sampleUv,vec2(1.0)));
+                if(inside)
+                {
+                    float clearSky=1.0-step(1.0e-6,sceneDepthAt(sampleUv));
+                    vec3 sampleColor=texture(uSourceTexture,sampleUv).rgb;
+                    float luminance=dot(sampleColor,vec3(0.2126,0.7152,0.0722));
+                    float luminousSky=smoothstep(0.08,0.72,luminance);
+                    illumination+=clearSky*(0.32+0.68*luminousSky)*decay;
+                }
+                decay*=0.945;
+            }
+            illumination/=10.55;
+            float partialCloud=4.0*clamp(uCloudCover,0.0,1.0)
+                *(1.0-clamp(uCloudCover,0.0,1.0));
+            float haze=clamp(0.18+uHumidity*0.52
+                +clamp(uPrecipitation/80.0,0.0,1.0)*0.18,0.0,1.0);
+            float lowSun=mix(0.42,1.0,
+                1.0-smoothstep(0.12,0.62,max(uSunElevation,0.0)));
+            float strength=(0.035+0.095*partialCloud)*haze*lowSun
+                *clamp(uSunIntensity/3.4,0.0,1.0);
+            shafts=max(uSunColor,vec3(0.0))*illumination
+                *radialEnvelope*strength;
+        }
+    }
+
+    FragColor=vec4(resolved.rgb+shafts,resolved.a);
 }
 )glsl";
 

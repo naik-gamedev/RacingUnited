@@ -49,6 +49,7 @@ PrototypeCarDefinition = {
     },
 
     factorySetup = Peugeot206RCWorkshopAlignmentDefault,
+    audio = Peugeot206RCAudioDefinition,
 
     -- Suspension estimates are chassis authoring data, NOT wheel-fitment data.
     -- These package scales stay fixed when the player installs a different rim,

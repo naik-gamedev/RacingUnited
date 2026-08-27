@@ -151,6 +151,8 @@ bool tirePropertyFileImporterMapsMf62AndMotorcycleData();
 bool tireFamilyBaselinesAreCoherentAndBrandNeutral();
 bool tirePerformanceBiasesMapToMechanismsWithoutForceMultipliers();
 bool tirePartsResolveAndAssignReusableFitments();
+bool vehicleAudioSynthesisAndMixAreBounded();
+bool weatherAudioMixIsPhysicalSmoothAndBounded();
 
 bool surfaceWorldGlobalAddressingAndChunkCacheBehave();
 bool dynamicSurfaceStaticBakeSeparatesSheetsAndCaches();
