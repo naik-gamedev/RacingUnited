@@ -6,6 +6,8 @@ This project is open-source and crowdsourced, built in collaboration with the co
 
 [Join our Discord community](https://discord.gg/rTfC2Ev)
 
+![HeritageEngine](HeritageEngine.jpg)
+
 ## Current development platform
 
 Heritage Engine currently targets Windows 10/11 x64 and is built with Visual
