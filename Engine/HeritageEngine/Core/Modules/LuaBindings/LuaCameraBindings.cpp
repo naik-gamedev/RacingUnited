@@ -98,6 +98,63 @@ int LuaCoreBindingHandlers::luaCameraIsFlyEnabled(lua_State* state)
     return 1;
 }
 
+int LuaCoreBindingHandlers::luaCameraSetWorldViewActive(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_vehicleCamera)
+        return 0;
+    runtime->m_vehicleCamera->setDetachedWorldActive(
+        LuaModuleRuntime::booleanArgument(*runtime, state, 1, false));
+    runtime->m_api.lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaCameraIsWorldViewActive(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_vehicleCamera)
+        return 0;
+    runtime->m_api.lua_pushboolean(
+        state, runtime->m_vehicleCamera->detachedActive() ? 1 : 0);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaCameraSetWorldPose(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_vehicleCamera)
+        return 0;
+
+    const heritage::math::DVec3 position{
+        LuaModuleRuntime::numberArgument(*runtime, state, 1, 0.0),
+        LuaModuleRuntime::numberArgument(*runtime, state, 2, 0.0),
+        LuaModuleRuntime::numberArgument(*runtime, state, 3, 0.0)
+    };
+    const double pitch = LuaModuleRuntime::numberArgument(*runtime, state, 4, 0.0);
+    const double yaw = LuaModuleRuntime::numberArgument(*runtime, state, 5, 0.0);
+    const double roll = LuaModuleRuntime::numberArgument(*runtime, state, 6, 0.0);
+    runtime->m_api.lua_pushboolean(
+        state, runtime->m_vehicleCamera->setDetachedWorldPose(
+            position, pitch, yaw, roll) ? 1 : 0);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaCameraGetWorldPose(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_vehicleCamera)
+        return 0;
+    const heritage::math::DVec3 position =
+        runtime->m_vehicleCamera->detachedGlobalPosition();
+    runtime->m_api.lua_pushnumber(state, position.x);
+    runtime->m_api.lua_pushnumber(state, position.y);
+    runtime->m_api.lua_pushnumber(state, position.z);
+    runtime->m_api.lua_pushnumber(state, runtime->m_vehicleCamera->detachedPitchDegrees());
+    runtime->m_api.lua_pushnumber(state, runtime->m_vehicleCamera->detachedYawDegrees());
+    runtime->m_api.lua_pushnumber(state, runtime->m_vehicleCamera->detachedRollDegrees());
+    return 6;
+}
+
 int LuaCoreBindingHandlers::luaCameraSetFlySpeed(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
@@ -150,6 +207,10 @@ void LuaModuleRuntime::registerCameraBindings()
     registerFunction("Camera", "GetVehiclePose", &LuaCoreBindingHandlers::luaCameraGetVehiclePose);
     registerFunction("Camera", "SetFlyEnabled", &LuaCoreBindingHandlers::luaCameraSetFlyEnabled);
     registerFunction("Camera", "IsFlyEnabled", &LuaCoreBindingHandlers::luaCameraIsFlyEnabled);
+    registerFunction("Camera", "SetWorldViewActive", &LuaCoreBindingHandlers::luaCameraSetWorldViewActive);
+    registerFunction("Camera", "IsWorldViewActive", &LuaCoreBindingHandlers::luaCameraIsWorldViewActive);
+    registerFunction("Camera", "SetWorldPose", &LuaCoreBindingHandlers::luaCameraSetWorldPose);
+    registerFunction("Camera", "GetWorldPose", &LuaCoreBindingHandlers::luaCameraGetWorldPose);
     registerFunction("Camera", "SetFlySpeed", &LuaCoreBindingHandlers::luaCameraSetFlySpeed);
     registerFunction("Camera", "GetFlySpeed", &LuaCoreBindingHandlers::luaCameraGetFlySpeed);
     registerFunction("Camera", "SetUiInteractionActive", &LuaCoreBindingHandlers::luaCameraSetUiInteractionActive);

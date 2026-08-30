@@ -61,10 +61,10 @@ PrototypeCarDefinition = {
     },
 
     -- SUS03A authoring architecture. macpherson_strut_v1 is a real native
-    -- provider. linear_raycast_v1 remains the safe data-file fallback, while
-    -- SuspensionAuthoring.lua may promote each front corner to MacPherson using
-    -- a deterministic low-confidence estimate. Measured or GLB-authored points
-    -- always outrank and replace estimates; provenance is never hidden.
+    -- provider. linear_raycast_v1 remains the safe data-file fallback. TIRE45D
+    -- keeps deterministic low-confidence estimates authoring-only; a hardpoint
+    -- provider becomes runtime physics authority only after every required point
+    -- on that corner is legacy-authored, GLB/asset-authored, or measured.
     -- SUS04: reusable anti-roll bars couple the left/right suspension on each
     -- axle. These are low-confidence project estimates, not claimed Peugeot
     -- factory rates. The native mechanism is torsional (Nm/rad) with explicit

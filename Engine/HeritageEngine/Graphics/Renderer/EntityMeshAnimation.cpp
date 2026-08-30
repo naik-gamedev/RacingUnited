@@ -10,6 +10,293 @@
 
 namespace heritage::graphics::entity_mesh_internal {
 
+heritage::math::Mat4 scaleSafeLocalRotationOffset(
+    const heritage::math::Mat4& authoredLocal,
+    const heritage::math::Vec3& rotationOffsetDegrees)
+{
+    // VA02J: local wheel-spin offsets used to be composed as (T*R*S)*Q.
+    // That is only equivalent to a real local rotation when S is uniform. A
+    // Blender-authored/mirrored/non-uniform Pivot therefore made visible rim
+    // spokes wobble/shear while the round tire looked deceptively normal.
+    // Recover an orthogonal TRS local transform and compose T*R*Q*S instead.
+    const auto columnLength = [&](int base) {
+        return std::sqrt(
+            authoredLocal.m[base] * authoredLocal.m[base]
+            + authoredLocal.m[base + 1] * authoredLocal.m[base + 1]
+            + authoredLocal.m[base + 2] * authoredLocal.m[base + 2]);
+    };
+    float sx = columnLength(0);
+    float sy = columnLength(4);
+    float sz = columnLength(8);
+    if (sx <= 1.0e-7f || sy <= 1.0e-7f || sz <= 1.0e-7f)
+        return multiply(authoredLocal, eulerRotationDegrees(rotationOffsetDegrees));
+
+    heritage::math::Vec3 x{
+        authoredLocal.m[0] / sx, authoredLocal.m[1] / sx, authoredLocal.m[2] / sx };
+    heritage::math::Vec3 y{
+        authoredLocal.m[4] / sy, authoredLocal.m[5] / sy, authoredLocal.m[6] / sy };
+    heritage::math::Vec3 z{
+        authoredLocal.m[8] / sz, authoredLocal.m[9] / sz, authoredLocal.m[10] / sz };
+    const float xy = x.x * y.x + x.y * y.y + x.z * y.z;
+    const float xz = x.x * z.x + x.y * z.y + x.z * z.z;
+    const float yz = y.x * z.x + y.y * z.y + y.z * z.z;
+    if (std::max({ std::abs(xy), std::abs(xz), std::abs(yz) }) > 2.0e-3f)
+    {
+        // A genuine authored shear cannot be represented as TRS without loss.
+        // Preserve legacy semantics rather than silently changing such assets.
+        return multiply(authoredLocal, eulerRotationDegrees(rotationOffsetDegrees));
+    }
+
+    const float determinant =
+        x.x * (y.y * z.z - y.z * z.y)
+        - y.x * (x.y * z.z - x.z * z.y)
+        + z.x * (x.y * y.z - x.z * y.y);
+    if (determinant < 0.0f)
+    {
+        // Move the reflection sign into X scale while keeping the reconstructed
+        // bind matrix exactly equivalent. Wheel spin itself then remains a
+        // proper right-handed rotation between R and S.
+        x.x = -x.x; x.y = -x.y; x.z = -x.z;
+        sx = -sx;
+    }
+
+    heritage::math::Mat4 rotation = heritage::math::identity();
+    rotation.m[0] = x.x; rotation.m[1] = x.y; rotation.m[2] = x.z;
+    rotation.m[4] = y.x; rotation.m[5] = y.y; rotation.m[6] = y.z;
+    rotation.m[8] = z.x; rotation.m[9] = z.y; rotation.m[10] = z.z;
+    const heritage::math::Vec3 position{
+        authoredLocal.m[12], authoredLocal.m[13], authoredLocal.m[14] };
+    return multiply(
+        translation(position),
+        multiply(
+            rotation,
+            multiply(
+                eulerRotationDegrees(rotationOffsetDegrees),
+                scaleMatrix({ sx, sy, sz }))));
+}
+
+
+heritage::math::Mat4 axisAngleRotation(
+    heritage::math::Vec3 axis,
+    float angleDegrees)
+{
+    const float lengthSquared =
+        axis.x * axis.x + axis.y * axis.y + axis.z * axis.z;
+    if (lengthSquared <= 1.0e-16f)
+        return heritage::math::identity();
+    const float inverseLength = 1.0f / std::sqrt(lengthSquared);
+    axis.x *= inverseLength;
+    axis.y *= inverseLength;
+    axis.z *= inverseLength;
+
+    constexpr float kDegreesToRadians =
+        3.14159265358979323846f / 180.0f;
+    const float angle = angleDegrees * kDegreesToRadians;
+    const float c = std::cos(angle);
+    const float sn = std::sin(angle);
+    const float t = 1.0f - c;
+
+    heritage::math::Mat4 result = heritage::math::identity();
+    // Rodrigues matrix in the renderer's column-major Mat4 layout.
+    result.m[0] = t * axis.x * axis.x + c;
+    result.m[4] = t * axis.x * axis.y - sn * axis.z;
+    result.m[8] = t * axis.x * axis.z + sn * axis.y;
+    result.m[1] = t * axis.x * axis.y + sn * axis.z;
+    result.m[5] = t * axis.y * axis.y + c;
+    result.m[9] = t * axis.y * axis.z - sn * axis.x;
+    result.m[2] = t * axis.x * axis.z - sn * axis.y;
+    result.m[6] = t * axis.y * axis.z + sn * axis.x;
+    result.m[10] = t * axis.z * axis.z + c;
+    return result;
+}
+
+int semanticWheelTireNodeIndex(
+    const heritage::graphics::Mesh& mesh,
+    int pivotNodeIndex)
+{
+    if (pivotNodeIndex < 0
+        || static_cast<std::size_t>(pivotNodeIndex) >= mesh.nodes.size())
+        return -1;
+    const std::string& pivotName =
+        mesh.nodes[static_cast<std::size_t>(pivotNodeIndex)].name;
+    constexpr const char* kPivotSuffix = "_Pivot";
+    constexpr std::size_t kPivotSuffixLength = 6;
+    if (pivotName.size() <= kPivotSuffixLength
+        || pivotName.compare(
+            pivotName.size() - kPivotSuffixLength,
+            kPivotSuffixLength, kPivotSuffix) != 0)
+        return -1;
+
+    const std::string tireName =
+        pivotName.substr(0, pivotName.size() - kPivotSuffixLength) + "_Tire";
+    for (std::size_t index = 0; index < mesh.nodes.size(); ++index)
+    {
+        const auto& candidate = mesh.nodes[index];
+        if (candidate.name != tireName || !candidate.hasTireVisualGeometry)
+            continue;
+
+        // The tire must actually live below this Pivot. Do not let an unrelated
+        // similarly-named node redefine a generic local-rotation override.
+        int parent = static_cast<int>(index);
+        while (parent >= 0
+            && static_cast<std::size_t>(parent) < mesh.nodes.size())
+        {
+            if (parent == pivotNodeIndex)
+                return static_cast<int>(index);
+            parent = mesh.nodes[static_cast<std::size_t>(parent)].parentIndex;
+        }
+    }
+    return -1;
+}
+
+heritage::math::Vec3 transformDirection(
+    const heritage::math::Mat4& matrix,
+    const heritage::math::Vec3& direction)
+{
+    return {
+        matrix.m[0] * direction.x + matrix.m[4] * direction.y
+            + matrix.m[8] * direction.z,
+        matrix.m[1] * direction.x + matrix.m[5] * direction.y
+            + matrix.m[9] * direction.z,
+        matrix.m[2] * direction.x + matrix.m[6] * direction.y
+            + matrix.m[10] * direction.z
+    };
+}
+
+heritage::math::Vec3 transformPoint3(
+    const heritage::math::Mat4& matrix,
+    const heritage::math::Vec3& point)
+{
+    return {
+        matrix.m[0] * point.x + matrix.m[4] * point.y
+            + matrix.m[8] * point.z + matrix.m[12],
+        matrix.m[1] * point.x + matrix.m[5] * point.y
+            + matrix.m[9] * point.z + matrix.m[13],
+        matrix.m[2] * point.x + matrix.m[6] * point.y
+            + matrix.m[10] * point.z + matrix.m[14]
+    };
+}
+
+heritage::math::Mat4 geometricWheelSpinDelta(
+    const heritage::graphics::Mesh& mesh,
+    const std::vector<heritage::math::Mat4>& baseGlobals,
+    int pivotNodeIndex,
+    int tireNodeIndex,
+    const heritage::math::Mat4& currentPivotGlobal,
+    float spinDegrees)
+{
+    const auto& tireNode =
+        mesh.nodes[static_cast<std::size_t>(tireNodeIndex)];
+    const auto& tireBindGlobal =
+        baseGlobals[static_cast<std::size_t>(tireNodeIndex)];
+    const auto& pivotBindGlobal =
+        baseGlobals[static_cast<std::size_t>(pivotNodeIndex)];
+
+    const heritage::math::Vec3 tireCenterLocal{
+        tireNode.tireVisualCenter[0],
+        tireNode.tireVisualCenter[1],
+        tireNode.tireVisualCenter[2] };
+    heritage::math::Vec3 axleLocal{};
+    if (tireNode.tireVisualAxleAxis == 1)
+        axleLocal = { 0.0f, 1.0f, 0.0f };
+    else if (tireNode.tireVisualAxleAxis == 2)
+        axleLocal = { 0.0f, 0.0f, 1.0f };
+    else
+        axleLocal = { 1.0f, 0.0f, 0.0f };
+
+    // VA02K: derive the spin axle from the tire's measured geometry rather than
+    // assuming the authored Pivot local X basis is perfectly coaxial. A round
+    // tire can hide a few tenths of a degree of Pivot-axis error while the rim
+    // spokes visibly precess/wobble. The runtime delta maps the tire's bind-space
+    // centre/axle through suspension/upright motion, then one rigid axis-angle
+    // rotation is applied in mesh-global space. Pivot scale, mirror and tiny
+    // authored basis errors therefore cannot turn wheel spin into precession.
+    const heritage::math::Mat4 runtimeFromBind = multiply(
+        currentPivotGlobal, inverseMatrix(pivotBindGlobal));
+    // VA02L: the semantic Pivot origin is the mechanical hub/rotation centre.
+    // VA02K used the tire AABB centre for both centre and axle derivation. That
+    // made the rotationally-symmetric tire look perfect by construction, but a
+    // mirrored tire copy whose AABB centre is even slightly offset from the
+    // authored hub centre makes the non-symmetric rim orbit around that tire
+    // centre and appear as a bent-wheel wobble. Keep geometry as the AXLE
+    // direction authority, but restore the authored Pivot origin as the centre
+    // of the spin line.
+    const heritage::math::Vec3 bindPivotCenter =
+        transformPoint3(pivotBindGlobal, { 0.0f, 0.0f, 0.0f });
+    const heritage::math::Vec3 inferredTireCenter =
+        transformPoint3(tireBindGlobal, tireCenterLocal);
+    const heritage::math::Vec3 runtimeCenter =
+        transformPoint3(currentPivotGlobal, { 0.0f, 0.0f, 0.0f });
+    heritage::math::Vec3 bindAxle =
+        transformDirection(tireBindGlobal, axleLocal);
+    // Keep the old Pivot-local +X angular sign even when the tire mesh itself
+    // is mirrored. Geometry chooses the coaxial LINE; Pivot +X chooses which
+    // direction along that line is positive for the existing telemetry angle.
+    const heritage::math::Vec3 pivotPositiveAxle =
+        transformDirection(pivotBindGlobal, { 1.0f, 0.0f, 0.0f });
+    if (bindAxle.x * pivotPositiveAxle.x
+        + bindAxle.y * pivotPositiveAxle.y
+        + bindAxle.z * pivotPositiveAxle.z < 0.0f)
+    {
+        bindAxle.x = -bindAxle.x;
+        bindAxle.y = -bindAxle.y;
+        bindAxle.z = -bindAxle.z;
+    }
+    // Log the exact discrepancy once per semantic pivot. This is intentionally
+    // diagnostic-only: axial offset along the spin line is harmless, while the
+    // radial component is the amount that VA02K would have converted directly
+    // into visible rim orbit/precession.
+    {
+        const float axleLengthSquared =
+            bindAxle.x * bindAxle.x + bindAxle.y * bindAxle.y
+            + bindAxle.z * bindAxle.z;
+        if (axleLengthSquared > 1.0e-16f)
+        {
+            const float inverseAxleLength = 1.0f / std::sqrt(axleLengthSquared);
+            const heritage::math::Vec3 unitAxle{
+                bindAxle.x * inverseAxleLength,
+                bindAxle.y * inverseAxleLength,
+                bindAxle.z * inverseAxleLength };
+            const heritage::math::Vec3 centerDelta{
+                inferredTireCenter.x - bindPivotCenter.x,
+                inferredTireCenter.y - bindPivotCenter.y,
+                inferredTireCenter.z - bindPivotCenter.z };
+            const float axialOffset =
+                centerDelta.x * unitAxle.x + centerDelta.y * unitAxle.y
+                + centerDelta.z * unitAxle.z;
+            const heritage::math::Vec3 radialDelta{
+                centerDelta.x - unitAxle.x * axialOffset,
+                centerDelta.y - unitAxle.y * axialOffset,
+                centerDelta.z - unitAxle.z * axialOffset };
+            const float radialOffset = std::sqrt(
+                radialDelta.x * radialDelta.x + radialDelta.y * radialDelta.y
+                + radialDelta.z * radialDelta.z);
+            static std::unordered_map<std::string, bool> loggedPivotOffsets;
+            const std::string& pivotName =
+                mesh.nodes[static_cast<std::size_t>(pivotNodeIndex)].name;
+            if (!loggedPivotOffsets[pivotName])
+            {
+                loggedPivotOffsets[pivotName] = true;
+                std::cout
+                    << "VA02L wheel spin line: " << pivotName
+                    << " tire_vs_pivot_radial_mm=" << radialOffset * 1000.0f
+                    << " axial_mm=" << axialOffset * 1000.0f
+                    << '\n';
+            }
+        }
+    }
+
+    const heritage::math::Vec3 runtimeAxle =
+        transformDirection(runtimeFromBind, bindAxle);
+
+    return multiply(
+        multiply(
+            translation(runtimeCenter),
+            axisAngleRotation(runtimeAxle, spinDegrees)),
+        translation({
+            -runtimeCenter.x, -runtimeCenter.y, -runtimeCenter.z }));
+}
+
 struct RuntimeNodeState
 {
     bool hasMatrix = false;
@@ -403,6 +690,24 @@ void applyMeshNodeOverrides(
 
         heritage::math::Mat4 local = baseLocal;
         const auto found = overrides.find(mesh.nodes[index].name);
+        const int wheelTireNodeIndex = found != overrides.end()
+            && found->second->hasLocalRotationOffset
+            ? semanticWheelTireNodeIndex(mesh, nodeIndex) : -1;
+        const bool useGeometricWheelSpin = wheelTireNodeIndex >= 0
+            && std::abs(found->second->localRotationOffsetDegrees.y) <= 1.0e-5f
+            && std::abs(found->second->localRotationOffsetDegrees.z) <= 1.0e-5f;
+        bool localRotationOffsetConsumed = false;
+        if (found != overrides.end()
+            && found->second->hasLocalRotationOffset
+            && !useGeometricWheelSpin
+            && !found->second->hasAnchoredWorldDelta
+            && !found->second->hasAnchoredWorldPose
+            && !found->second->hasWorldPose)
+        {
+            local = scaleSafeLocalRotationOffset(
+                baseLocal, found->second->localRotationOffsetDegrees);
+            localRotationOffsetConsumed = true;
+        }
 
         heritage::math::Mat4 current = parentIndex >= 0
             ? multiply(self(self, parentIndex), local)
@@ -539,16 +844,31 @@ void applyMeshNodeOverrides(
                     found->second->worldRotationDegrees));
         }
 
-        if (found != overrides.end() && found->second->hasLocalRotationOffset)
+        if (found != overrides.end() && found->second->hasLocalRotationOffset
+            && !localRotationOffsetConsumed)
         {
-            // Local offsets are deliberately composed AFTER an authoritative
-            // world pose. VA02A uses this for WH_*_Pivot: the native wheel
-            // center/upright establishes the pivot pose, then wheel spin is
-            // applied around that exact runtime axis. This avoids requiring
-            // the authored Root->Pivot translation to be perfectly centered.
-            current = multiply(
-                current,
-                eulerRotationDegrees(found->second->localRotationOffsetDegrees));
+            if (useGeometricWheelSpin)
+            {
+                // VA02L: WH_*_Pivot wheel spin is a rigid mesh-global rotation
+                // around the authored Pivot ORIGIN and measured WH_*_Tire axle.
+                // VA02K also used the tire AABB centre, which can make the tire
+                // look stable while an offset rim visibly orbits that inferred
+                // centre. The Pivot owns hub centre; tire geometry owns axis.
+                current = multiply(
+                    geometricWheelSpinDelta(
+                        mesh, baseGlobals, nodeIndex, wheelTireNodeIndex,
+                        current, found->second->localRotationOffsetDegrees.x),
+                    current);
+            }
+            else
+            {
+                // Generic local offsets keep their historical node-local
+                // semantics. Only semantic embedded wheel pivots take the
+                // geometry-derived rigid spin path above.
+                current = multiply(
+                    current,
+                    eulerRotationDegrees(found->second->localRotationOffsetDegrees));
+            }
         }
 
         globals[index] = current;

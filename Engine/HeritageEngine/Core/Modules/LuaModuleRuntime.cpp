@@ -3,6 +3,7 @@
 #include "../../Audio/AudioSystem.hpp"
 #include "../../Audio/Vehicles/VehicleAudioRuntime.hpp"
 #include "../../Audio/Weather/WeatherAudioRuntime.hpp"
+#include "../../Audio/Lab/EngineSoundCaptureLab.hpp"
 #include "../Entities/EntityRegistry.hpp"
 #include "../../Input/InputSystem.hpp"
 #include "../../Physics/PhysicsWorld.hpp"
@@ -89,6 +90,11 @@ bool LuaModuleRuntime::onLoad(
             *m_audio, *m_physics);
     }
     m_context.emplace(context);
+    if (m_audio)
+    {
+        m_engineSoundLab = std::make_unique<heritage::audio::lab::EngineSoundCaptureLab>(
+            *m_audio, context.settingsRoot());
+    }
     m_assetRegistry.reset(context.assetRoot());
     // AS01A: do not walk the filesystem during module startup. The registry
     // performs its first failure-isolated scan from onUpdate after the window
@@ -211,6 +217,8 @@ void LuaModuleRuntime::onUpdate(float deltaTime, bool allowInteraction)
         m_vehicleAudio->update(deltaTime);
     if (m_weatherAudio)
         m_weatherAudio->update(deltaTime);
+    if (m_engineSoundLab)
+        m_engineSoundLab->update();
 
     // Scene.Load() is queued. Applying it here prevents a script callback from
     // destroying the active scene while that scene is updating or drawing.
@@ -285,6 +293,7 @@ void LuaModuleRuntime::onDrawUI(
 void LuaModuleRuntime::onShutdown()
 {
     destroyState(true);
+    m_engineSoundLab.reset();
     m_vehicleAudio.reset();
     m_weatherAudio.reset();
     clearImportedStaticBoxScene();

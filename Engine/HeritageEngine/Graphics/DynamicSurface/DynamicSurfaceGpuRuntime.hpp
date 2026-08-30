@@ -5,11 +5,13 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <glad/glad.h>
 
 
+namespace heritage::physics { class SurfacePresentation; }
 namespace heritage::physics::dynamicsurface { class DynamicSurfaceSystem; }
 namespace heritage::physics::water { class SurfaceHydrology; }
 
@@ -21,6 +23,7 @@ struct DynamicSurfaceGpuRuntimeStats
     bool waterReady = false;
     bool snowReady = false;
     bool mudReady = false;
+    bool tireMarksReady = false;
     bool authoritative = false;
     double cpuDispatchMs = 0.0;
     double gpuComputeMs = 0.0;
@@ -207,6 +210,14 @@ public:
     void consumeCompletedTireWaterSamples(
         std::vector<DynamicSurfaceGpuTireWaterSample>& outSamples);
 
+    // LIVETRACK22: tire-mark persistence remains owned by SurfacePresentation,
+    // but its near visual state is rasterized into the exact same 10m/256x256
+    // resident tile slots and indirection used by Dynamic Surface water/snow/mud.
+    // Returning tiles reconstruct from authoritative FP64 mark history instead
+    // of popping because a presentation page happened to be evicted.
+    void syncTireMarkPresentation(
+        const heritage::physics::SurfacePresentation& presentation);
+
     const DynamicSurfaceGpuRuntimeStats& stats() const { return m_stats; }
 
     GLuint waterTexture(std::size_t = 0) const { return m_water.atlas; }
@@ -214,6 +225,7 @@ public:
     GLuint farTileTagTexture() const { return m_farTileTagTexture; }
     GLuint snowTexture(std::size_t = 0) const { return m_snow.atlas; }
     GLuint mudTexture(std::size_t = 0) const { return m_mud.atlas; }
+    GLuint tireMarkTexture() const { return m_tireMarks.atlas; }
     GLuint tileIndirectionTexture() const { return m_tileIndirectionTexture; }
     bool authoritativeReady() const
     {
@@ -394,6 +406,14 @@ private:
         std::string& errorMessage);
     bool ensureSnowState(std::string& errorMessage);
     bool ensureMudState(std::string& errorMessage);
+    bool initializeTireMarkState(std::string& errorMessage);
+    void shutdownTireMarkState();
+    void resetTireMarkAtlas();
+    void indexNewTireMarkSegments(
+        const heritage::physics::SurfacePresentation& presentation);
+    void rasterizeTireMarkTile(
+        const heritage::physics::SurfacePresentation& presentation,
+        const TileRuntime& tile);
     void destroyState(StateRuntime& state);
     void clearStateSlot(StateRuntime& state, std::uint16_t slot, std::uint32_t clearValue);
 
@@ -462,6 +482,7 @@ private:
     StateRuntime m_water{};
     StateRuntime m_snow{};
     StateRuntime m_mud{};
+    StateRuntime m_tireMarks{};
 
     GLuint m_tileIndirectionTexture = 0;
     GLuint m_farWaterAtlas = 0;
@@ -476,6 +497,13 @@ private:
     std::vector<std::uint8_t> m_prebakedTopologyScratch;
     std::vector<std::uint8_t> m_farAtlasCpuMirror;
     std::vector<std::uint8_t> m_prebakedRgbaScratch;
+    std::vector<std::uint8_t> m_tireMarkRasterScratch;
+    std::unordered_map<std::uint64_t, std::vector<std::uint64_t>> m_tireMarkSerialsByTile;
+    std::unordered_set<std::uint64_t> m_dirtyTireMarkTiles;
+    std::uint64_t m_lastIndexedTireMarkSerial = 0u;
+    std::uint64_t m_lastTireMarkFirstSerial = 0u;
+    double m_lastTireMarkPresentationTime = -1.0;
+    double m_lastTireMarkRetirementRefreshTime = -1.0;
 
     GLuint m_geometryTriangleBuffer = 0;
     GLuint m_geometryBinHeaderBuffer = 0;

@@ -96,6 +96,12 @@ int main()
         << " installed-component mass-property accumulation\n";
     failed += massComponentAccumulationPassed ? 0 : 1;
 
+    const bool collisionBoundsPassed =
+        bodyCollisionBoundsAggregateSolidCompoundShapes();
+    std::cout << (collisionBoundsPassed ? "PASS" : "FAIL")
+        << " aggregate solid-collider body bounds for Racing AI\n";
+    failed += collisionBoundsPassed ? 0 : 1;
+
     const bool explicitInertiaPassed =
         rigidBodyExplicitInertiaIsAuthoritative();
     std::cout << (explicitInertiaPassed ? "PASS" : "FAIL")
@@ -112,6 +118,12 @@ int main()
     std::cout << (terrainDiagnosticsPassed ? "PASS" : "FAIL")
         << " terrain contact diagnostics and boundaries\n";
     failed += terrainDiagnosticsPassed ? 0 : 1;
+
+    const bool bodyContactEvidencePassed =
+        bodyContactEvidenceIsRequestedBodyOriented();
+    std::cout << (bodyContactEvidencePassed ? "PASS" : "FAIL")
+        << " requested-body-oriented solver contact evidence\n";
+    failed += bodyContactEvidencePassed ? 0 : 1;
 
     const bool staticTriangleRigidBodyPassed =
         staticTriangleRigidBodyContactsSettle();
@@ -136,6 +148,12 @@ int main()
     std::cout << (detachedCameraPassed ? "PASS" : "FAIL")
         << " detached FP64 free camera world-space flight\n";
     failed += detachedCameraPassed ? 0 : 1;
+
+    const bool detachedWorldCameraPassed =
+        detachedWorldCameraPoseIsFloatingOriginSafe();
+    std::cout << (detachedWorldCameraPassed ? "PASS" : "FAIL")
+        << " detached FP64 replay/broadcast camera world pose\n";
+    failed += detachedWorldCameraPassed ? 0 : 1;
 
     const bool dynamicChaseCameraPassed =
         chaseCameraDynamicOffsetsAreDampedAndBounded();
@@ -281,6 +299,17 @@ int main()
     std::cout << (tireFlexibleRingFieldPassed ? "PASS" : "FAIL")
         << " single-authority flexible-ring deformation field\n";
     failed += tireFlexibleRingFieldPassed ? 0 : 1;
+
+    const bool tireDynamicCarcassPassed =
+        tireDynamicCarcassSimulationRespectsRoadAndRimWithoutPrescribedShape();
+    std::cout << (tireDynamicCarcassPassed ? "PASS" : "FAIL")
+        << " physics-owned dynamic carcass road/rim constraints\n";
+    failed += tireDynamicCarcassPassed ? 0 : 1;
+
+    const bool tireCarcassLabPassed = tireCarcassDevelopmentLabExposesExactSearch();
+    std::cout << (tireCarcassLabPassed ? "PASS" : "FAIL")
+        << " TIRE45 exact carcass parameter lab and deterministic search\n";
+    failed += tireCarcassLabPassed ? 0 : 1;
 
     const bool tireRigidRingPassed = tireRigidRingStructuralModesAreRateStable();
     std::cout << (tireRigidRingPassed ? "PASS" : "FAIL")

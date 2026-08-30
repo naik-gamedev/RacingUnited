@@ -74,7 +74,7 @@ const float HIGHEST=EARTH_RADIUS+CLOUD_SHELL_MAX_ALTITUDE_M;
 const float NOISE_TEXTURE_NORMALIZATION_FACTOR=100000.0;
 const float MAX_SKYBOX_VOLUMETRIC_CLOUDS_DISTANCE=200000.0;
 const float CLOUD_DENSITY_THRESHOLD=0.001;
-const int PRIMARY_STEPS=32;
+const int PRIMARY_STEPS=64;
 const int NUM_LIGHT_STEPS=2;
 const int EMPTY_STEPS_BEFORE_LARGE_STEPS=8;
 const int NUM_MULTI_SCATTERING_OCTAVES=2;
@@ -93,6 +93,12 @@ const float MIN_EROSION_DISTANCE=3000.0;
 const float MAX_EROSION_DISTANCE=100000.0;
 const float FADE_IN_START=0.0;
 const float FADE_IN_DISTANCE=400.0;
+// CLOUDURP15EB: screen/ray-footprint-aware volume filtering. The source
+// volumes are 128^3 shape and 32^3 erosion textures. These are the world-space
+// widths represented by one mip-0 voxel at the active sampling scales.
+const float SHAPE_NOISE_VOXEL_M=156.25;
+const float EROSION_NOISE_VOXEL_M=29.205607;
+const float MICRO_EROSION_NOISE_VOXEL_M=10.416667;
 
 struct CloudCoverageData { float coverage; float rainClouds; float cloudType; float maxCloudHeight; };
 struct CloudProperties { float density; float ambientOcclusion; float height; float sigmaT; };
@@ -115,11 +121,17 @@ uint jenkinsHash(uvec3 v){return jenkinsHash(v.x^jenkinsHash(v.yz));}
 float constructFloat(uint m){m=(m&0x007fffffu)|0x3f800000u;return uintBitsToFloat(m)-1.0;}
 float integrationNoise()
 {
-    // CLOUDURP15E6: stochastic integration is indexed by rendered cloud frame,
-    // not simulation time. Pausing/slowing the clock must not freeze the dither
-    // sequence or prevent temporal convergence.
-    uvec2 px=uvec2(max(gl_FragCoord.xy,vec2(0.0)));
-    return constructFloat(jenkinsHash(uvec3(px,uTemporalFrameIndex)));
+    // CLOUDURP15EI: the upstream URP/HDRP marcher relies on a FULL 0..1
+    // stochastic first-step phase to break fixed-step contour bands. EC-EH
+    // narrowed that phase and exposed the march lattice as horizontal slices.
+    // Keep the full range, but use a low-discrepancy interleaved-gradient
+    // sequence instead of independent white hash noise so TAA converges with
+    // much less sand/sparkle. The golden-ratio frame rotation uniformly visits
+    // sub-step phases over time without locking to simulation time.
+    vec2 px=floor(max(gl_FragCoord.xy,vec2(0.0)));
+    float spatial=fract(52.9829189*fract(dot(px,vec2(0.06711056,0.00583715))));
+    float temporal=fract(float(uTemporalFrameIndex&255u)*0.6180339887498948);
+    return fract(spatial+temporal);
 }
 
 vec2 sphereRoots(float radius,vec3 origin,vec3 dir)
@@ -218,12 +230,72 @@ vec2 layerWind(float height)
 }
 vec3 sampleCurveLut(float cloudType,float height)
 {
-    // Four 64-sample preset columns, linearly interpolated by cloud type.
+    // Four high-resolution preset columns, linearly interpolated by cloud type.
     float u=(0.5+3.0*sat(cloudType))/4.0;
     return textureLod(uCurveLut,vec2(u,sat(height)),0.0).rgb;
 }
 
-void evaluateCloudProperties(vec3 positionPS,float noiseMipOffset,float erosionMipOffsetValue,bool cheapVersion,bool lightSampling,out CloudProperties properties)
+float noiseMipFromFootprint(float worldFootprintM,float voxelWorldM,float maxMip)
+{
+    // If one ray sample represents more than one mip-0 voxel, integrate the
+    // prefiltered volume instead of point-sampling sub-pixel Worley/Perlin detail.
+    float ratio=max(worldFootprintM/max(voxelWorldM,1e-4),1.0);
+    return clamp(log2(ratio),0.0,maxMip);
+}
+
+// CLOUDURP15EF: the 32^3 erosion field used to be sampled in an axis-aligned
+// world frame. Its trilinear voxel planes therefore appeared as coherent
+// horizontal strata across entire cloud bodies. Evaluate the same periodic
+// volume through two fixed orthonormal frames and blend them, decorrelating the
+// low-resolution voxel lattice without inventing a second cloud field.
+vec3 rotateErosionFrameA(vec3 p)
+{
+    const float cx=0.838670568, sx=0.544639035; // 33 degrees
+    const float cz=0.945518576, sz=0.325568154; // 19 degrees
+    vec3 q=vec3(p.x,cx*p.y-sx*p.z,sx*p.y+cx*p.z);
+    return vec3(cz*q.x-sz*q.y,sz*q.x+cz*q.y,q.z);
+}
+vec3 rotateErosionFrameB(vec3 p)
+{
+    const float cy=0.891006524, sy=0.453990500; // 27 degrees
+    const float cx=0.956304756, sx=0.292371705; // 17 degrees
+    vec3 q=vec3(cy*p.x+sy*p.z,p.y,-sy*p.x+cy*p.z);
+    return vec3(q.x,cx*q.y-sx*q.z,sx*q.y+cx*q.z);
+}
+float sampleDealiasedErosion(vec3 coordinates,float lodValue)
+{
+    float a=textureLod(uErosionNoise,rotateErosionFrameA(coordinates),lodValue).r;
+    float b=textureLod(uErosionNoise,rotateErosionFrameB(coordinates*1.013+vec3(0.371,0.113,0.527)),lodValue).r;
+    return mix(a,b,0.42);
+}
+
+// CLOUDURP15EG: the 128^3 shape field is only ~156.25 m/voxel at the
+// production shape scale. Across a 5 km storm layer that is only ~32 source
+// voxels vertically -- almost exactly the visible number of horizontal bands.
+// Sample the same periodic shape volume through two fully rotated frames so
+// world height no longer walks one coherent texture axis/voxel stack.
+vec3 rotateShapeFrameA(vec3 p)
+{
+    const float cy=0.927183855, sy=0.374606593; // 22 degrees
+    const float cx=0.819152044, sx=0.573576436; // 35 degrees
+    vec3 q=vec3(cy*p.x+sy*p.z,p.y,-sy*p.x+cy*p.z);
+    return vec3(q.x,cx*q.y-sx*q.z,sx*q.y+cx*q.z);
+}
+vec3 rotateShapeFrameB(vec3 p)
+{
+    const float cz=0.874619707, sz=0.484809620; // 29 degrees
+    const float cy=0.951056516, sy=0.309016994; // 18 degrees
+    vec3 q=vec3(cz*p.x-sz*p.y,sz*p.x+cz*p.y,p.z);
+    return vec3(cy*q.x+sy*q.z,q.y,-sy*q.x+cy*q.z);
+}
+float sampleDealiasedShape(vec3 coordinates,float lodValue)
+{
+    float a=textureLod(uShapeNoise,rotateShapeFrameA(coordinates),lodValue).r;
+    float b=textureLod(uShapeNoise,rotateShapeFrameB(coordinates*1.027+vec3(0.217,0.613,0.419)),min(lodValue+0.15,7.0)).r;
+    return mix(a,b,0.43);
+}
+
+void evaluateCloudProperties(vec3 positionPS,float noiseMipOffset,float erosionMipOffsetValue,float worldFootprintM,bool cheapVersion,bool lightSampling,out CloudProperties properties)
 {
     properties.density=0.0;properties.ambientOcclusion=1.0;properties.height=0.0;properties.sigmaT=0.04;
     if(!uLocalClouds&&positionPS.y<EARTH_RADIUS)return;
@@ -243,14 +315,19 @@ void evaluateCloudProperties(vec3 positionPS,float noiseMipOffset,float erosionM
     const float shapeScale=5.0;
     vec3 baseNoiseSamplingCoordinates=shapePosition.xzy/NOISE_TEXTURE_NORMALIZATION_FACTOR*shapeScale;
     baseNoiseSamplingCoordinates+=properties.height*vec3(windDir.x,windDir.y,0.0)*0.0625;
+    // CLOUDURP15EI: upstream source samples the R channel of Worley128RGBA
+    // directly with trilinear repeat. The earlier de-axis/footprint experiments
+    // changed morphology but did not remove the bands, so restore source density
+    // semantics here. (The upstream shader itself uses only .r for base shape.)
     float lowFrequencyNoise=textureLod(uShapeNoise,baseNoiseSamplingCoordinates,noiseMipOffset).r;
 
     vec3 densityErosionAO=sampleCurveLut(cloudCoverageData.cloudType,properties.height);
     float shapeFactorPreset=presetValue(vec4(0.95,0.90,0.50,0.85),cloudCoverageData.cloudType);
     float erosionFactorPreset=presetValue(vec4(0.80,0.80,0.50,0.75),cloudCoverageData.cloudType);
     float densityMultiplier=presetValue(vec4(0.32,0.32,0.18,0.245),cloudCoverageData.cloudType);
-    float microErosionFactor=presetValue(vec4(0.65,0.65,0.65,0.65),cloudCoverageData.cloudType);
-    float microErosionScale=presetValue(vec4(300.0,300.0,300.0,300.0),cloudCoverageData.cloudType);
+    // CLOUDURP15EC: keep micro erosion as broad cloud detail, not sand-grain texture.
+    float microErosionFactor=presetValue(vec4(0.34,0.34,0.34,0.34),cloudCoverageData.cloudType);
+    float microErosionScale=presetValue(vec4(140.0,140.0,140.0,140.0),cloudCoverageData.cloudType);
     const float erosionScale=107.0;
 
     float shapeFactor=mix(0.1,1.0,shapeFactorPreset)*densityErosionAO.g;
@@ -268,7 +345,8 @@ void evaluateCloudProperties(vec3 positionPS,float noiseMipOffset,float erosionM
     {
         vec3 erosionPosition=positionPS+vec3(wind.x,0.0,wind.y)*uTime*1.35;
         vec3 erosionCoords=erosionPosition/NOISE_TEXTURE_NORMALIZATION_FACTOR*erosionScale;
-        float erosionNoise=1.0-textureLod(uErosionNoise,erosionCoords,erosionMipOffsetValue).r;
+        float erosionLod=erosionMipOffsetValue;
+        float erosionNoise=1.0-textureLod(uErosionNoise,erosionCoords,erosionLod).r;
         erosionNoise=mix(0.0,erosionNoise,erosionFactor*0.75*cloudCoverageData.coverage);
         properties.ambientOcclusion=sat(properties.ambientOcclusion-sqrt(max(erosionNoise*EROSION_OCCLUSION,0.0)));
         baseCloud=densityRemap(baseCloud,erosionNoise,1.0,0.0,1.0);
@@ -318,7 +396,7 @@ vec3 evaluateCelestialTransmittance(vec3 positionPS,vec3 lightDirection,vec2 pha
         {
             float dist=intervalSize*(0.25+float(j));
             CloudProperties lightProperties;
-            evaluateCloudProperties(positionPS+lightDirection*dist,3.0*float(j)/float(NUM_LIGHT_STEPS),0.0,true,true,lightProperties);
+            evaluateCloudProperties(positionPS+lightDirection*dist,3.0*float(j)/float(NUM_LIGHT_STEPS),0.0,max(intervalSize*0.35,1.0),true,true,lightProperties);
             opticalDepth+=lightProperties.density*lightProperties.sigmaT;
         }
         vec3 extinction=vec3(intervalSize*opticalDepth);
@@ -424,6 +502,11 @@ void main()
 {
     CloudDepth=0.0;
     vec3 rayDirection=reconstructRay(vUv);
+    // CLOUDURP15EB: estimate the world-space cone covered by one cloud pixel.
+    // Derivatives are evaluated before raymarch divergence, then expanded by
+    // distance at each step. This lets mipmapped 3D density integrate the actual
+    // pixel footprint instead of aliasing high-frequency volume detail.
+    float rayConeSlope=max(max(length(dFdx(rayDirection)),length(dFdy(rayDirection))),1e-6);
     vec3 origin=vec3(uCameraGlobal.x,EARTH_RADIUS+uCameraGlobal.y,uCameraGlobal.z);
     float entry,exitD;
     if(!intersectCloudVolume(origin,rayDirection,entry,exitD)){FragColor=vec4(0.0,0.0,0.0,1.0);return;}
@@ -452,6 +535,13 @@ void main()
     // 0..1 value (not an entire step), and the same scalar modulates only the
     // first step length. This avoids turning temporal jitter into hundreds of
     // metres of per-pixel ray displacement.
+    // CLOUDURP15EC: the old full 0..1 first-step jitter was useful at 32 steps but
+    // visibly sprayed temporal grain onto silhouettes. 48 primary steps allow a
+    // much narrower stratification interval while still breaking fixed-step bands.
+    // CLOUDURP15EI: restore the upstream stochastic step lattice. The full
+    // 0..1 phase is what hides fixed-step contouring; temporal reconstruction
+    // is responsible for removing the resulting dither, not narrowing the
+    // sampling phase until the lattice becomes visible.
     float integrationJitter=integrationNoise();
     float currentDistance=integrationJitter;
     vec3 currentPosition=origin+(entry+currentDistance)*rayDirection;
@@ -461,10 +551,11 @@ void main()
         float distanceFromCamera=entry+currentDistance;
         float densityAttenuation=densityFadeValue(distanceFromCamera);
         float erosionMip=erosionMipOffset(distanceFromCamera);
+        float worldFootprintM=max(1.0,distanceFromCamera*rayConeSlope*0.75);
         if(activeSampling)
         {
             CloudProperties properties;
-            evaluateCloudProperties(currentPosition,0.0,erosionMip,false,false,properties);
+            evaluateCloudProperties(currentPosition,0.0,erosionMip,worldFootprintM,false,false,properties);
             properties.density*=densityAttenuation;
             if(properties.density>CLOUD_DENSITY_THRESHOLD)
             {
@@ -484,7 +575,7 @@ void main()
         else
         {
             CloudProperties properties;
-            evaluateCloudProperties(currentPosition,1.0,0.0,true,false,properties);
+            evaluateCloudProperties(currentPosition,1.0,0.0,worldFootprintM,true,false,properties);
             properties.density*=densityAttenuation;
             if(properties.density<CLOUD_DENSITY_THRESHOLD)
             {
@@ -540,7 +631,7 @@ uniform sampler2D uCloudTexture;uniform sampler2D uSceneTexture;uniform bool uBi
 // transmittance is stored in alpha as the temporal mask. The temporal resolve
 // therefore receives the same kind of full-resolution current buffer as
 // UnityVolumetricCloudsURP's accumulation target: scene+cloud RGB, cloud T in A.
-float gaussianWeight(vec2 o){const float sigma=2.75;return exp(-0.5*dot(o,o)/(sigma*sigma));}
+float gaussianWeight(vec2 o){const float sigma=1.90;return exp(-0.5*dot(o,o)/(sigma*sigma));}
 float edgeSoftness(float transmittance)
 {
     float opacity=1.0-transmittance;
@@ -554,14 +645,19 @@ vec4 upscaleCloud(vec2 uv)
     for(int i=-3;i<=3;++i)for(int j=-3;j<=3;++j)
     {
         vec2 o=vec2(i,j);vec4 neighbor=texture(uCloudTexture,offset+o*texel);
-        float w=gaussianWeight(o);result+=neighbor*w;normalization+=w;
+        // CLOUDURP15EC: small edge-aware reconstruction only. The previous 11x11
+        // near-total blend erased real density structure and produced the cartoon
+        // plateaus visible in user captures.
+        float transmittanceDelta=abs(neighbor.a-center.a);
+        float rangeWeight=exp(-20.0*transmittanceDelta);
+        float w=gaussianWeight(o)*max(rangeWeight,0.05);result+=neighbor*w;normalization+=w;
     }
     vec4 blurred=result/max(normalization,1e-6);
     float softness=edgeSoftness(center.a);
-    vec4 cloud=mix(center,blurred,0.14+0.72*softness);
+    vec4 cloud=mix(center,blurred,0.14+0.28*softness);
     // Transmittance uses the slightly stronger edge softening retained from the
     // existing Heritage bilateral upscale, but there is no temporal classifier.
-    cloud.a=mix(center.a,blurred.a,0.20+0.72*softness);
+    cloud.a=mix(center.a,blurred.a,0.16+0.32*softness);
     return cloud;
 }
 void main()
@@ -580,7 +676,7 @@ in vec2 vUv;out vec4 FragColor;
 uniform sampler2D uCurrentTexture;uniform sampler2D uHistoryTexture;uniform bool uHistoryValid;
 uniform sampler2D uSceneDepth;uniform sampler2DMS uSceneDepthMS;uniform int uSceneDepthSamples;uniform bool uLocalClouds;
 uniform mat4 uCurrentView,uPreviousView,uCurrentProjection,uPreviousProjection;uniform vec3 uCameraDelta;
-const float accumulationFactor=0.95;
+const float accumulationFactor=0.985;
 float sceneDepthAt(vec2 uv)
 {
     if(uSceneDepthSamples<=1)return texture(uSceneDepth,uv).r;
@@ -599,12 +695,12 @@ vec4 currentPoint(ivec2 p,ivec2 size)
 {
     return texelFetch(uCurrentTexture,clamp(p,ivec2(0),size-1),0);
 }
-vec3 historyPoint(vec2 uv)
+vec4 historyPoint(vec2 uv)
 {
     ivec2 size=textureSize(uHistoryTexture,0);
     vec2 c=clamp(uv,vec2(0.0),vec2(1.0));
     ivec2 p=clamp(ivec2(c*vec2(size)),ivec2(0),size-1);
-    return texelFetch(uHistoryTexture,p,0).rgb;
+    return texelFetch(uHistoryTexture,p,0);
 }
 void main()
 {
@@ -623,6 +719,7 @@ void main()
     vec4 s3=currentPoint(px+ivec2(1,0),size);
     vec4 s4=currentPoint(px+ivec2(0,1),size);
     float minTransmittance=min(cur.a,min(min(s1.a,s2.a),min(s3.a,s4.a)));
+    float maxTransmittance=max(cur.a,max(max(s1.a,s2.a),max(s3.a,s4.a)));
     if(minTransmittance>=0.999999){FragColor=cur;return;}
 
     // Upstream 5-pixel current-frame colour box: center + four cardinals.
@@ -644,13 +741,18 @@ void main()
     vec2 prevUv=vUv+velocity;
     if(any(lessThan(prevUv,vec2(0.0)))||any(greaterThan(prevUv,vec2(1.0)))){FragColor=cur;return;}
 
-    // Upstream history is point-clamped, then clipped to the current 5-pixel AABB.
-    vec3 prevColor=clamp(historyPoint(prevUv),boxMin,boxMax);
+    // Point-sampled history is clipped to the current five-pixel support in
+    // BOTH color and transmittance. Earlier Heritage milestones accumulated RGB
+    // but wrote current-frame alpha verbatim, so the silhouette could stay
+    // salt-and-pepper even under 99.995% color history.
+    vec4 prevSample=historyPoint(prevUv);
+    vec3 prevColor=clamp(prevSample.rgb,boxMin,boxMax);
+    float prevTransmittance=clamp(prevSample.a,minTransmittance,maxTransmittance);
 
-    // Preserve the upstream 0.95 accumulation as the baseline for coherent cloud
-    // structure.  The additional persistence is derived only from current-frame
-    // high-frequency disagreement inside the SAME upstream 5-pixel neighbourhood.
-    // This is not a second/legacy TAA path: it only modulates the upstream blend.
+    // CLOUDURP15EC: temporal accumulation is deliberately moderate again. The
+    // current frame is now higher-resolution and better sampled, so history is
+    // used to remove residual stochastic noise rather than to freeze/paint over
+    // an undersampled frame.
     const vec3 lumaWeights=vec3(0.2126,0.7152,0.0722);
     float l0=dot(cur.rgb,lumaWeights),l1=dot(c1,lumaWeights),l2=dot(c2,lumaWeights);
     float l3=dot(c3,lumaWeights),l4=dot(c4,lumaWeights);
@@ -669,16 +771,14 @@ void main()
     float alphaGrain=smoothstep(0.012,0.12,transmittanceResidual)*smoothstep(0.035,0.32,transmittanceSpread);
     float stochasticGrain=max(rgbGrain,alphaGrain);
 
-    // Dense interiors are where over-accumulation looks waxy/cartoonish.  Keep
-    // them close to the source 95% resolve while allowing exposed/partial volume
-    // samples to integrate much longer.  98.5% ~= 67-frame memory; 99.75% ~=
-    // 400-frame memory, but the current AABB clamp still bounds stale history.
+    // Exposed stochastic samples receive somewhat stronger persistence, but no
+    // tier is allowed to overwhelm the freshly reconstructed current frame.
     float exposedSample=smoothstep(0.035,0.32,transmittanceMean);
     float selectiveGrain=stochasticGrain*mix(0.18,1.0,exposedSample);
-    float mildGrain=smoothstep(0.10,0.42,selectiveGrain);
-    float strongGrain=smoothstep(0.48,0.88,selectiveGrain);
-    float adaptiveAccumulation=mix(accumulationFactor,0.985,mildGrain);
-    adaptiveAccumulation=mix(adaptiveAccumulation,0.9975,strongGrain);
+    float mildGrain=smoothstep(0.075,0.36,selectiveGrain);
+    float strongGrain=smoothstep(0.40,0.82,selectiveGrain);
+    float adaptiveAccumulation=mix(accumulationFactor,0.995,mildGrain);
+    adaptiveAccumulation=mix(adaptiveAccumulation,0.9990,strongGrain);
 
     float intensity=clamp(min(accumulationFactor-abs(velocity.x)*accumulationFactor,
                               accumulationFactor-abs(velocity.y)*accumulationFactor),0.0,1.0);
@@ -686,11 +786,12 @@ void main()
                                       adaptiveAccumulation-abs(velocity.y)*adaptiveAccumulation),0.0,1.0);
     intensity=max(intensity,adaptiveIntensity);
 
-    // The Unity shader emits history RGB + intensity and lets fixed-function
-    // SrcAlpha/OneMinusSrcAlpha blend it over current camera colour. Heritage
-    // writes the mathematically identical resolved RGB directly and keeps the
-    // current cloud transmittance in alpha for the next frame's clear-pixel mask.
-    FragColor=vec4(mix(cur.rgb,prevColor,intensity),cur.a);
+    // CLOUDURP15EB: temporalize cloud transmittance as well as color. Clamp it
+    // to the current five-pixel min/max before accumulation, so alpha grain can
+    // converge without allowing stale cloud occupancy outside current evidence.
+    float alphaIntensity=min(intensity,0.995);
+    float resolvedTransmittance=mix(cur.a,prevTransmittance,alphaIntensity);
+    FragColor=vec4(mix(cur.rgb,prevColor,intensity),resolvedTransmittance);
 }
 )glsl";
 
@@ -884,6 +985,13 @@ struct CloudCoverageData{float coverage;float rainClouds;float cloudType;float m
 struct CloudProperties{float density;float ambientOcclusion;float height;float sigmaT;};
 float sat(float x){return clamp(x,0.0,1.0);}
 float densityRemap(float x,float a,float b,float c,float d){return ((x-a)/max(b-a,1e-5))*(d-c)+c;}
+
+vec3 rotateErosionFrameA(vec3 p){const float cx=0.838670568,sx=0.544639035;const float cz=0.945518576,sz=0.325568154;vec3 q=vec3(p.x,cx*p.y-sx*p.z,sx*p.y+cx*p.z);return vec3(cz*q.x-sz*q.y,sz*q.x+cz*q.y,q.z);}
+vec3 rotateErosionFrameB(vec3 p){const float cy=0.891006524,sy=0.453990500;const float cx=0.956304756,sx=0.292371705;vec3 q=vec3(cy*p.x+sy*p.z,p.y,-sy*p.x+cy*p.z);return vec3(q.x,cx*q.y-sx*q.z,sx*q.y+cx*q.z);}
+float sampleDealiasedErosion(vec3 coordinates,float lodValue){float a=textureLod(uErosionNoise,rotateErosionFrameA(coordinates),lodValue).r;float b=textureLod(uErosionNoise,rotateErosionFrameB(coordinates*1.013+vec3(0.371,0.113,0.527)),lodValue).r;return mix(a,b,0.42);}
+vec3 rotateShapeFrameA(vec3 p){const float cy=0.927183855,sy=0.374606593;const float cx=0.819152044,sx=0.573576436;vec3 q=vec3(cy*p.x+sy*p.z,p.y,-sy*p.x+cy*p.z);return vec3(q.x,cx*q.y-sx*q.z,sx*q.y+cx*q.z);}
+vec3 rotateShapeFrameB(vec3 p){const float cz=0.874619707,sz=0.484809620;const float cy=0.951056516,sy=0.309016994;vec3 q=vec3(cz*p.x-sz*p.y,sz*p.x+cz*p.y,p.z);return vec3(cy*q.x+sy*q.z,q.y,-sy*q.x+cy*q.z);}
+float sampleDealiasedShape(vec3 coordinates,float lodValue){float a=textureLod(uShapeNoise,rotateShapeFrameA(coordinates),lodValue).r;float b=textureLod(uShapeNoise,rotateShapeFrameB(coordinates*1.027+vec3(0.217,0.613,0.419)),min(lodValue+0.15,7.0)).r;return mix(a,b,0.43);}
 float presetValue(vec4 values,float cloudType){float t=sat(cloudType)*3.0;if(t<1.0)return mix(values.x,values.y,t);if(t<2.0)return mix(values.y,values.z,t-1.0);return mix(values.z,values.w,t-2.0);}
 vec2 sphereRoots(float radius,vec3 origin,vec3 dir){float b=dot(origin,dir),c=dot(origin,origin)-radius*radius,disc=b*b-c;if(disc<0.0)return vec2(-1.0);float s=sqrt(disc);return vec2(-b-s,-b+s);}
 vec4 regionalWeather(vec2 cameraRelativeXZ)
@@ -918,7 +1026,7 @@ void evaluateCloudProperties(vec3 positionPS,bool cheapVersion,bool lightSamplin
     vec3 q=positionPS;q.y+=q.x/3.0+q.z/7.0;q+=vec3(wind.x,0.0,wind.y)*uTime;
     vec3 shape=q.xzy/NOISE_TEXTURE_NORMALIZATION_FACTOR*5.0+p.height*vec3(windDir.x,windDir.y,0.0)*0.0625;
     float low=textureLod(uShapeNoise,shape,0.0).r;vec3 lut=sampleCurveLut(c.cloudType,p.height);
-    float shapePreset=presetValue(vec4(0.95,0.90,0.50,0.85),c.cloudType);float erosionPreset=presetValue(vec4(0.80,0.80,0.50,0.75),c.cloudType);float densityMultiplier=presetValue(vec4(0.32,0.32,0.18,0.245),c.cloudType);float microFactor=0.65;
+    float shapePreset=presetValue(vec4(0.95,0.90,0.50,0.85),c.cloudType);float erosionPreset=presetValue(vec4(0.80,0.80,0.50,0.75),c.cloudType);float densityMultiplier=presetValue(vec4(0.32,0.32,0.18,0.245),c.cloudType);float microFactor=0.34;
     float shapeFactor=mix(0.1,1.0,shapePreset)*lut.g;float erosionFactor=erosionPreset*lut.g;low=mix(1.0,low,shapeFactor);
     float baseCloud=1.0-lut.r*c.coverage*(1.0-shapeFactor);baseCloud=sat(densityRemap(low,baseCloud,1.0,0.0,1.0))*c.coverage*c.coverage;
     p.ambientOcclusion=lut.b;p.sigmaT=mix(0.04,0.12,c.rainClouds);
@@ -926,7 +1034,7 @@ void evaluateCloudProperties(vec3 positionPS,bool cheapVersion,bool lightSamplin
     {
         vec3 ec=(positionPS+vec3(wind.x,0.0,wind.y)*uTime*1.35)/NOISE_TEXTURE_NORMALIZATION_FACTOR*107.0;
         float erosion=1.0-textureLod(uErosionNoise,ec,0.0).r;erosion=mix(0.0,erosion,erosionFactor*0.75*c.coverage);baseCloud=densityRemap(baseCloud,erosion,1.0,0.0,1.0);
-        if(uMicroErosion){vec3 fc=(positionPS+vec3(wind.x,0.0,wind.y)*uTime*1.35)/NOISE_TEXTURE_NORMALIZATION_FACTOR*300.0;float fine=1.0-textureLod(uErosionNoise,fc,0.0).r;fine=mix(0.0,fine,microFactor*lut.g*0.5*c.coverage);baseCloud=densityRemap(baseCloud,fine,1.0,0.0,1.0);}
+        if(uMicroErosion){vec3 fc=(positionPS+vec3(wind.x,0.0,wind.y)*uTime*1.35)/NOISE_TEXTURE_NORMALIZATION_FACTOR*140.0;float fine=1.0-textureLod(uErosionNoise,fc,0.0).r;fine=mix(0.0,fine,microFactor*lut.g*0.5*c.coverage);baseCloud=densityRemap(baseCloud,fine,1.0,0.0,1.0);}
     }
     if(lightSampling){baseCloud-=erosionFactor*0.1;if(uMicroErosion)baseCloud-=microFactor*lut.g*0.15;}
     p.density=max(baseCloud,0.0)*densityMultiplier;

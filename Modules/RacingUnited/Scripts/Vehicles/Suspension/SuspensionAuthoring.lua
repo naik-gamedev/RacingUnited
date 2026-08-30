@@ -59,8 +59,11 @@ function ApplySuspensionAuthoringGeometryToNativeVehicle()
     vehicleSuspensionAuthoring.activeHardpointWheelCount = active
     if active > 0 then
         vehicleSuspensionAuthoring.message = string.format(
-            "Hardpoint kinematics active on %d wheel(s); estimated data remains explicitly labeled",
+            "Authoritative hardpoint kinematics active on %d wheel(s)",
             active)
+    elseif (vehicleSuspensionAuthoring.estimatedCount or 0) > 0 then
+        vehicleSuspensionAuthoring.message =
+            "Estimated hardpoints are authoring-only; linear suspension physics remains active until legacy/asset/measured hardpoints are complete"
     end
     return true
 end

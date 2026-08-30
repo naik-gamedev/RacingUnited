@@ -299,6 +299,102 @@ bool terrainContactDiagnosticsClassifyFailureModes()
         && landingWorked;
 }
 
+bool bodyContactEvidenceIsRequestedBodyOriented()
+{
+    RigidBodySystem bodies;
+    CollisionSystem collisions;
+
+    RigidBodyDescription firstDescription;
+    firstDescription.motionType = BodyMotionType::Dynamic;
+    firstDescription.position = { -0.40f, 0.0f, 0.0f };
+    firstDescription.mass = 1000.0f;
+    firstDescription.gravityFactor = 0.0f;
+    firstDescription.linearDamping = 0.0f;
+    firstDescription.angularDamping = 0.0f;
+    const BodyHandle firstBody = bodies.create(firstDescription);
+
+    RigidBodyDescription secondDescription = firstDescription;
+    secondDescription.position = { 0.40f, 0.0f, 0.0f };
+    const BodyHandle secondBody = bodies.create(secondDescription);
+    if (firstBody == heritage::physics::InvalidBody
+        || secondBody == heritage::physics::InvalidBody)
+    {
+        return false;
+    }
+
+    const ColliderHandle firstCollider = collisions.createBox(
+        firstBody, { 0.5f, 0.5f, 0.5f }, {}, 0.75f, 0.0f, false, bodies);
+    const ColliderHandle secondCollider = collisions.createBox(
+        secondBody, { 0.5f, 0.5f, 0.5f }, {}, 0.75f, 0.0f, false, bodies);
+    if (firstCollider == heritage::physics::InvalidCollider
+        || secondCollider == heritage::physics::InvalidCollider)
+    {
+        return false;
+    }
+
+    if (!bodies.setLinearVelocity(firstBody, { 2.0f, 0.0f, 0.0f })
+        || !bodies.setLinearVelocity(secondBody, { -2.0f, 0.0f, 0.0f }))
+    {
+        return false;
+    }
+
+    collisions.simulate(bodies, kWorldDeltaTime);
+    if (collisions.contactCountForBody(firstBody) == 0
+        || collisions.contactCountForBody(secondBody) == 0)
+    {
+        return false;
+    }
+
+    heritage::physics::BodyContactEvidence firstEvidence;
+    heritage::physics::BodyContactEvidence secondEvidence;
+    if (!collisions.bodyContactEvidence(firstBody, 0, firstEvidence)
+        || !collisions.bodyContactEvidence(secondBody, 0, secondEvidence))
+    {
+        return false;
+    }
+
+    const float normalReciprocity = magnitude({
+        firstEvidence.normal.x + secondEvidence.normal.x,
+        firstEvidence.normal.y + secondEvidence.normal.y,
+        firstEvidence.normal.z + secondEvidence.normal.z });
+    const float pointDelta = magnitude({
+        firstEvidence.point.x - secondEvidence.point.x,
+        firstEvidence.point.y - secondEvidence.point.y,
+        firstEvidence.point.z - secondEvidence.point.z });
+    const float impulseDelta = std::abs(
+        firstEvidence.normalImpulse - secondEvidence.normalImpulse);
+
+    heritage::physics::BodyContactEvidence invalidEvidence;
+    const bool outOfRangeRejected = !collisions.bodyContactEvidence(
+        firstBody,
+        collisions.contactCountForBody(firstBody),
+        invalidEvidence);
+
+    std::cout
+        << "body_contact_evidence impulse=" << firstEvidence.normalImpulse
+        << " penetration=" << firstEvidence.penetration
+        << " reciprocal_normal_error=" << normalReciprocity
+        << '\n';
+
+    return firstEvidence.selfBody == firstBody
+        && firstEvidence.otherBody == secondBody
+        && secondEvidence.selfBody == secondBody
+        && secondEvidence.otherBody == firstBody
+        && firstEvidence.selfCollider == firstCollider
+        && firstEvidence.otherCollider == secondCollider
+        && secondEvidence.selfCollider == secondCollider
+        && secondEvidence.otherCollider == firstCollider
+        && !firstEvidence.trigger
+        && !secondEvidence.trigger
+        && firstEvidence.penetration > 0.0f
+        && firstEvidence.normalImpulse > 0.0f
+        && impulseDelta <= 0.0001f
+        && normalReciprocity <= 0.0001f
+        && pointDelta <= 0.0001f
+        && outOfRangeRejected
+        && invalidEvidence.selfBody == heritage::physics::InvalidBody;
+}
+
 bool staticTriangleRigidBodyContactsSettle()
 {
     auto runCase = [](bool sphere) {

@@ -1,4 +1,4 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='utf-8'?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <Filter Include="Source Files">
@@ -213,6 +213,8 @@
     <ClCompile Include="..\Audio\AudioSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Audio\Lab\EngineSoundCaptureLab.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Lab\EngineSoundLabDsp.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="..\Audio\Acoustics\AcousticPathTracer.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="..\Audio\Weather\WeatherAudioRuntime.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="..\Audio\Weather\Models\WeatherAudioModel.cpp"><Filter>Source Files</Filter></ClCompile>
@@ -595,9 +597,6 @@
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityMeshBindings.cpp">
       <Filter>Lua Bindings\Entity</Filter>
     </ClCompile>
-    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.cpp">
-      <Filter>Lua Bindings\Entity</Filter>
-    </ClCompile>
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTransformBindings.cpp">
       <Filter>Lua Bindings\Entity</Filter>
     </ClCompile>
@@ -867,6 +866,8 @@
     <ClInclude Include="..\Audio\AudioSystem.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Audio\Lab\EngineSoundCaptureLab.hpp"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Lab\EngineSoundLabDsp.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="..\Audio\Acoustics\AcousticPathTracer.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="..\Audio\Weather\WeatherAudioTypes.hpp"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="..\Audio\Weather\WeatherAudioRuntime.hpp"><Filter>Header Files</Filter></ClInclude>
@@ -1209,9 +1210,6 @@
     <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityBindingHandlers.hpp">
       <Filter>Lua Bindings\Entity</Filter>
     </ClInclude>
-    <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.hpp">
-      <Filter>Lua Bindings\Entity</Filter>
-    </ClInclude>
     <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionParser.hpp">
       <Filter>Lua Bindings\Vehicle</Filter>
     </ClInclude>
@@ -1489,5 +1487,16 @@
     <ClCompile Include="Runtime\EngineHotkeys.cpp">
       <Filter>Engine Runtime</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireCarcassLabBindings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Vehicles\Tires\TireCarcassDevelopmentLab.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClInclude Include="..\Vehicles\Tires\TireCarcassDevelopmentLab.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

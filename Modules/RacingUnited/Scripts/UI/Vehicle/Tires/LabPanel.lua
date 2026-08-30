@@ -492,6 +492,8 @@ function DrawVehicleTiresLabPanel()
         UI.TextDisabled("Spawn a vehicle to adjust fitted tire pressure.")
     end
 
+    DrawTireCarcassMegaLab()
+
     DrawTireSteadyStateCalibrationLab()
     DrawTireStatefulScenarioLab()
     DrawTireFleetPerformanceLab()

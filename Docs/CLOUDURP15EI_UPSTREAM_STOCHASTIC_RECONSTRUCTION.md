@@ -1,0 +1,7 @@
+# CLOUDURP15EI — Upstream Stochastic Reconstruction
+
+A source audit of `jiaozi158/UnityVolumetricCloudsURP` showed that the original HDRP-derived marcher deliberately uses a full-range random integration phase (`integrationNoise`) and applies it to the first march step. This stochastic phase is the mechanism that breaks fixed-step contour bands. CLOUDURP15EC through EH narrowed that phase while trying to reduce grain, which exposed the march lattice as the horizontal "ham slice" artifact seen in runtime captures.
+
+CLOUDURP15EI restores full 0..1 stochastic band breaking, but replaces frame-independent white hash appearance with an interleaved-gradient spatial sequence plus golden-ratio temporal rotation. The existing single reprojection/AABB-clamped temporal authority is strengthened moderately (0.985 base, 0.995 mild grain, 0.999 strong grain; 0.995 coverage cap) so the stochastic pattern converges over time instead of remaining visible as sand-like dither.
+
+The source audit also confirmed that the upstream shader samples only the R channel of `_Worley128RGBA` for base cloud shape. Missing GBA channels were therefore not the cause of the slices. The EF/EG rotated dual-frame density experiments are retired from production sampling, restoring the upstream direct trilinear-repeat R-channel Worley and Perlin semantics in both visible and shadow density. The lower-amplitude 0.34 / scale-140 micro erosion and the 256-sample vertical curve texture remain.

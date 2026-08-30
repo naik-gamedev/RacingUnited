@@ -68,6 +68,7 @@ struct LuaPhysicsBindingHandlers
     static int luaPhysicsColliderExists(lua_State* state);
     static int luaPhysicsGetColliderCount(lua_State* state);
     static int luaPhysicsGetBodyColliderCount(lua_State* state);
+    static int luaPhysicsGetBodyCollisionBounds(lua_State* state);
     static int luaPhysicsGetColliderBody(lua_State* state);
     static int luaPhysicsGetColliderShape(lua_State* state);
     static int luaPhysicsSetColliderMaterial(lua_State* state);
@@ -97,6 +98,7 @@ struct LuaPhysicsBindingHandlers
     static int luaPhysicsGetLastQueryExactTestCount(lua_State* state);
     static int luaPhysicsGetContactCount(lua_State* state);
     static int luaPhysicsGetBodyContactCount(lua_State* state);
+    static int luaPhysicsGetBodyContact(lua_State* state);
     static int luaPhysicsIsBodyTouching(lua_State* state);
     static int luaPhysicsGetBroadphaseCandidateCount(lua_State* state);
     static int luaPhysicsGetNarrowphaseTestCount(lua_State* state);

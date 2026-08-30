@@ -16,12 +16,16 @@ function DestroyVehicleDemo()
     vehicleWheelTelemetry = {}
 end
 
-function ResetNativeVehicleAt(x, y, z, message)
+function ResetNativeVehicleAt(x, y, z, message, rotationX, rotationY, rotationZ)
     if nativeVehicleBody == 0 or not Physics.BodyExists(nativeVehicleBody) then
         return false
     end
     Physics.SetBodyPosition(nativeVehicleBody, x, y, z)
-    Physics.SetBodyRotation(nativeVehicleBody, 0.0, 0.0, 0.0)
+    Physics.SetBodyRotation(
+        nativeVehicleBody,
+        rotationX or 0.0,
+        rotationY or 0.0,
+        rotationZ or 0.0)
     Physics.SetBodyLinearVelocity(nativeVehicleBody, 0.0, 0.0, 0.0)
     Physics.SetBodyAngularVelocity(nativeVehicleBody, 0.0, 0.0, 0.0)
     Physics.ClearBodyForces(nativeVehicleBody)

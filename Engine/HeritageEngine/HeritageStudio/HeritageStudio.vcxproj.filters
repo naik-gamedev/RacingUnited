@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Studio"><UniqueIdentifier>{5037B4D9-2E07-49F0-9E9F-16B2F03480F7}</UniqueIdentifier></Filter>
+    <Filter Include="Studio\Authoring"><UniqueIdentifier>{A5247B0F-44F7-4F3B-9C53-66D0149EFB72}</UniqueIdentifier></Filter>
+    <Filter Include="Audio"><UniqueIdentifier>{6C53E0F1-A5C4-44D3-BB63-3A31D048FB30}</UniqueIdentifier></Filter>
+    <Filter Include="Graphics Preview"><UniqueIdentifier>{E7F2D405-2F92-4D43-83C8-B4D4C989A5BC}</UniqueIdentifier></Filter>
+    <Filter Include="ThirdParty"><UniqueIdentifier>{F9B561BE-77B5-4539-895B-64908C55CE4B}</UniqueIdentifier></Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp"><Filter>Studio</Filter></ClCompile>
+    <ClCompile Include="HeritageStudioApp.cpp"><Filter>Studio</Filter></ClCompile>
+    <ClCompile Include="StudioScenePreview.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="..\Graphics\Mesh.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="..\Graphics\Material.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="..\Graphics\Texture2D.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfBinary.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfJson.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfDocument.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfMeshImporter.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfMetadata.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="..\Graphics\Gltf\GltfCollisionImporter.cpp"><Filter>Graphics Preview</Filter></ClCompile>
+    <ClCompile Include="Authoring\StudioAuthoringData.cpp"><Filter>Studio\Authoring</Filter></ClCompile>
+    <ClCompile Include="..\Audio\AudioSystem.cpp"><Filter>Audio</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Lab\EngineSoundCaptureLab.cpp"><Filter>Audio</Filter></ClCompile>
+    <ClCompile Include="..\Audio\Lab\EngineSoundLabDsp.cpp"><Filter>Audio</Filter></ClCompile>
+    <ClCompile Include="..\..\..\ThirdParty\GLAD\src\glad.c"><Filter>ThirdParty</Filter></ClCompile>
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\backends\imgui_impl_glfw.cpp"><Filter>ThirdParty</Filter></ClCompile>
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\backends\imgui_impl_opengl3.cpp"><Filter>ThirdParty</Filter></ClCompile>
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui.cpp"><Filter>ThirdParty</Filter></ClCompile>
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_draw.cpp"><Filter>ThirdParty</Filter></ClCompile>
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_tables.cpp"><Filter>ThirdParty</Filter></ClCompile>
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_widgets.cpp"><Filter>ThirdParty</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="HeritageStudioApp.hpp"><Filter>Studio</Filter></ClInclude>
+    <ClInclude Include="StudioScenePreview.hpp"><Filter>Graphics Preview</Filter></ClInclude>
+    <ClInclude Include="..\Graphics\Mesh.hpp"><Filter>Graphics Preview</Filter></ClInclude>
+    <ClInclude Include="..\Graphics\Material.hpp"><Filter>Graphics Preview</Filter></ClInclude>
+    <ClInclude Include="..\Graphics\Texture2D.hpp"><Filter>Graphics Preview</Filter></ClInclude>
+    <ClInclude Include="..\Graphics\GltfBinary.hpp"><Filter>Graphics Preview</Filter></ClInclude>
+    <ClInclude Include="..\Graphics\GltfSceneData.hpp"><Filter>Graphics Preview</Filter></ClInclude>
+    <ClInclude Include="Authoring\StudioAuthoringData.hpp"><Filter>Studio\Authoring</Filter></ClInclude>
+    <ClInclude Include="..\Audio\AudioSystem.hpp"><Filter>Audio</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Lab\EngineSoundCaptureLab.hpp"><Filter>Audio</Filter></ClInclude>
+    <ClInclude Include="..\Audio\Lab\EngineSoundLabDsp.hpp"><Filter>Audio</Filter></ClInclude>
+  </ItemGroup>
+</Project>

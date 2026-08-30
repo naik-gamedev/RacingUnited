@@ -222,6 +222,44 @@ bool VehicleCameraController::activateDetachedFromFrame(
     return true;
 }
 
+bool VehicleCameraController::setDetachedWorldPose(
+    const heritage::math::DVec3& globalPosition,
+    double pitchDegrees,
+    double yawDegrees,
+    double rollDegrees)
+{
+    if (!finite(globalPosition)
+        || !std::isfinite(pitchDegrees)
+        || !std::isfinite(yawDegrees)
+        || !std::isfinite(rollDegrees))
+    {
+        return false;
+    }
+
+    m_detachedGlobalPosition = globalPosition;
+    m_detachedPitchDegrees = std::clamp(
+        pitchDegrees, -kMaximumPitchDegrees, kMaximumPitchDegrees);
+    m_detachedYawDegrees = wrapDegrees(yawDegrees);
+    m_detachedRollDegrees = wrapDegrees(rollDegrees);
+    m_active = false;
+    m_detachedActive = true;
+    m_flyEnabled = false;
+    return true;
+}
+
+void VehicleCameraController::setDetachedWorldActive(bool active)
+{
+    if (!active)
+    {
+        deactivateDetached();
+        return;
+    }
+
+    m_active = false;
+    m_detachedActive = true;
+    m_flyEnabled = false;
+}
+
 void VehicleCameraController::deactivateDetached()
 {
     m_detachedActive = false;

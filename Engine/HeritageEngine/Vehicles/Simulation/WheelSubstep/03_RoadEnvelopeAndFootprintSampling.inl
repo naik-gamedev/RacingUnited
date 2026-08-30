@@ -63,6 +63,8 @@
             struct QueriedFootprintSample
             {
                 tires::TireRoadEnvelopeSample envelope;
+                heritage::math::Vec3 pointWorld{};
+                heritage::math::Vec3 normalWorld{ 0.0f, 1.0f, 0.0f };
                 SurfaceProfile surface{};
                 SurfaceProfile wetBaseSurface{};
                 SurfaceProfile providerBaseSurface{};
@@ -103,6 +105,9 @@
                 {
                     result.envelope.valid = true;
                     result.envelope.roadHeightRelativeToCenterM = 0.0;
+                    result.pointWorld = hit.point;
+                    result.normalWorld = normalized(
+                        hit.normal, { 0.0f, 1.0f, 0.0f });
                     result.material = hit.surfaceMaterial;
                     result.deformableProperties = hit.surfaceProperties.deformable;
                     result.wetness = hitSurfaceConditions.wetness;
@@ -144,6 +149,9 @@
                 result.envelope.valid = sampleSupported;
                 if (sampleSupported)
                 {
+                    result.pointWorld = sampleHit.point;
+                    result.normalWorld = normalized(
+                        sampleHit.normal, { 0.0f, 1.0f, 0.0f });
                     const VehicleScalar sampleHubLength =
                         sampleHit.distance - description.radius;
                     const VehicleScalar measuredRoadHeight =
@@ -288,6 +296,42 @@
             wheel.cachedFootprintRefined = refined;
 
             wheel.cachedRoadEnvelopeComplex = heightComplex || supportComplex || surfaceComplex;
+
+            // TIRE44: retain the exact road-envelope collision queries for the
+            // physics-owned carcass lattice. These are collider points/normals,
+            // not a fitted support plane and not render-time probes. Explicit
+            // misses are retained as unsupported samples so a road edge cannot
+            // become an accidental infinite floor in the structural solve.
+            wheel.carcassRoadSampleCount = std::min(
+                queried.size(),
+                static_cast<std::size_t>(
+                    tires::TireFlexibleRingMaximumRoadSamples));
+            for (std::size_t sampleIndex = 0;
+                 sampleIndex < wheel.carcassRoadSampleCount; ++sampleIndex)
+            {
+                const auto& source = queried[sampleIndex];
+                auto& target = wheel.carcassRoadSamples[sampleIndex];
+                target.queried = true;
+                target.supported = source.envelope.valid;
+                target.queryForwardM = source.envelope.longitudinalOffsetM;
+                target.queryLateralM = source.envelope.lateralOffsetM;
+                // TIRE45B: cache LOCAL ROAD SHAPE, not an absolute world
+                // contact location. The envelope intentionally refreshes at
+                // 125/250 Hz while wheel physics runs at 1 kHz. At speed, an
+                // absolute cached point can be centimetres (or at high speed,
+                // decimetres) behind the current wheel by the next carcass
+                // solve, which falsely drags the tread around the ring.
+                target.pointDeltaFromCenterContactWorld = source.envelope.valid
+                    ? subtract(source.pointWorld, hit.point)
+                    : heritage::math::Vec3{};
+                target.normalWorld = source.normalWorld;
+            }
+            for (std::size_t sampleIndex = wheel.carcassRoadSampleCount;
+                 sampleIndex < wheel.carcassRoadSamples.size(); ++sampleIndex)
+            {
+                wheel.carcassRoadSamples[sampleIndex] = {};
+            }
+
             if (envelope.valid)
             {
                 wheel.cachedRoadEnvelopeOffsetM = envelope.effectiveRoadHeightM;
@@ -617,6 +661,9 @@
         wheel.cachedRoadEnvelopeValidSamples = 0;
         wheel.cachedRoadEnvelopeTotalSamples = 0;
         wheel.cachedRoadEnvelopeComplex = false;
+        wheel.carcassRoadSampleCount = 0;
+        for (auto& sample : wheel.carcassRoadSamples)
+            sample = {};
         wheel.cachedFootprintRefined = false;
         wheel.cachedFootprintSurfaceValid = false;
         wheel.cachedFootprintFrictionMultiplier = 1.0;

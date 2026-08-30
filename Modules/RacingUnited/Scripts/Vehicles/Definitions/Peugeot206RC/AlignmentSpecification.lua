@@ -32,17 +32,21 @@ Peugeot206RCReferenceAlignment = {
 }
 
 Peugeot206RCWorkshopAlignmentDefault = {
-    provenance = "midpoint_of_user_supplied_peugeot_206_rc_spec_range",
-    confidence = 0.65,
+    -- TIRE45F: keep the evidence/specification above intact, but do not
+    -- silently apply a non-zero alignment to the prototype at runtime.
+    -- Blender/reference wheel geometry is neutral; camber/toe become explicit
+    -- setup choices in Studio instead of hidden startup deformation sources.
+    provenance = "neutral_prototype_runtime_alignment",
+    confidence = 1.0,
     front = {
         camberDegrees = 0.0,
-        toeInDegrees = -0.060000,
+        toeInDegrees = 0.0,
         casterDegrees = 3.200000,
         casterAdjustable = true
     },
     rear = {
-        camberDegrees = -1.0,
-        toeInDegrees = 0.260000,
+        camberDegrees = 0.0,
+        toeInDegrees = 0.0,
         casterDegrees = 0.0,
         casterAdjustable = false
     }

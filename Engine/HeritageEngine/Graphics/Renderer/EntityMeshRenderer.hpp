@@ -394,6 +394,7 @@ private:
         GLint gpuFarTileTags = -1;
         GLint gpuSnowAtlas = -1;
         GLint gpuMudAtlas = -1;
+        GLint gpuTireMarkAtlas = -1;
         GLint gpuTileIndirection = -1;
         GLint gpuDynamicSurfaceCenterOriginRelativeXZ = -1;
         GLint gpuDynamicSurfaceCenterWorldTile = -1;
@@ -404,6 +405,7 @@ private:
         GLint gpuFarAtlasTilesPerAxis = -1;
         GLint gpuDynamicSurfaceSnowReady = -1;
         GLint gpuDynamicSurfaceMudReady = -1;
+        GLint gpuDynamicSurfaceTireMarksReady = -1;
         GLint surfaceWetnessBreakupMask = -1;
         GLint hasSurfaceWetnessBreakupMask = -1;
         GLint surfacePatternCameraModuloXZ = -1;

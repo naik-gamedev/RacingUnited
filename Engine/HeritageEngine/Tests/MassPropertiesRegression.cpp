@@ -91,6 +91,60 @@ bool vehicleMassComponentAccumulationUsesParallelAxisTheorem()
     return passed;
 }
 
+bool bodyCollisionBoundsAggregateSolidCompoundShapes()
+{
+    RigidBodySystem bodies;
+    CollisionSystem collisions;
+    RigidBodyDescription description;
+    description.motionType = BodyMotionType::Dynamic;
+    description.mass = 1200.0f;
+    description.gravityFactor = 0.0f;
+    const BodyHandle body = bodies.create(description);
+    if (body == heritage::physics::InvalidBody)
+        return false;
+
+    if (collisions.createBox(
+            body, { 1.0f, 0.4f, 1.8f }, { 0.2f, 0.5f, 0.1f },
+            0.5f, 0.0f, false, bodies) == heritage::physics::InvalidCollider)
+    {
+        return false;
+    }
+    if (collisions.createSphere(
+            body, 0.6f, { -1.3f, 0.8f, 1.9f },
+            0.5f, 0.0f, false, bodies) == heritage::physics::InvalidCollider)
+    {
+        return false;
+    }
+    // Sensor/trigger volumes must not inflate the racecraft footprint.
+    if (collisions.createBox(
+            body, { 10.0f, 10.0f, 10.0f }, { 0.0f, 0.0f, 0.0f },
+            0.0f, 0.0f, true, bodies) == heritage::physics::InvalidCollider)
+    {
+        return false;
+    }
+
+    heritage::physics::BodyCollisionBounds bounds;
+    if (!collisions.bodyCollisionBounds(body, bounds))
+        return false;
+
+    const auto close = [](float left, float right) {
+        return std::abs(left - right) <= 0.0001f;
+    };
+    return bounds.colliderCount == 2
+        && close(bounds.minimum.x, -1.9f)
+        && close(bounds.minimum.y, 0.1f)
+        && close(bounds.minimum.z, -1.7f)
+        && close(bounds.maximum.x, 1.2f)
+        && close(bounds.maximum.y, 1.4f)
+        && close(bounds.maximum.z, 2.5f)
+        && close(bounds.size.x, 3.1f)
+        && close(bounds.size.y, 1.3f)
+        && close(bounds.size.z, 4.2f)
+        && close(bounds.center.x, -0.35f)
+        && close(bounds.center.y, 0.75f)
+        && close(bounds.center.z, 0.4f);
+}
+
 bool rigidBodyExplicitInertiaIsAuthoritative()
 {
     RigidBodySystem bodies;

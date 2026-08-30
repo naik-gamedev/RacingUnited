@@ -26,6 +26,16 @@ struct LuaCoreBindingHandlers
     static int luaAudioSetBusVolume(lua_State* state);
     static int luaAudioGetBusVolume(lua_State* state);
     static int luaAudioGetLastError(lua_State* state);
+    static int luaAudioEngineLabGetState(lua_State* state);
+    static int luaAudioEngineLabGetProfile(lua_State* state);
+    static int luaAudioEngineLabSetProfile(lua_State* state);
+    static int luaAudioEngineLabStartCalibrationCapture(lua_State* state);
+    static int luaAudioEngineLabStartBankCapture(lua_State* state);
+    static int luaAudioEngineLabStopCapture(lua_State* state);
+    static int luaAudioEngineLabPlayPreview(lua_State* state);
+    static int luaAudioEngineLabStopPreview(lua_State* state);
+    static int luaAudioEngineLabSaveProfile(lua_State* state);
+    static int luaAudioEngineLabLoadProfile(lua_State* state);
     static int luaAudioCreateVehicleSound(lua_State* state);
     static int luaAudioDestroyVehicleSound(lua_State* state);
     static int luaAudioSetVehicleSoundEnabled(lua_State* state);
@@ -52,6 +62,10 @@ struct LuaCoreBindingHandlers
     static int luaCameraGetVehiclePose(lua_State* state);
     static int luaCameraSetFlyEnabled(lua_State* state);
     static int luaCameraIsFlyEnabled(lua_State* state);
+    static int luaCameraSetWorldViewActive(lua_State* state);
+    static int luaCameraIsWorldViewActive(lua_State* state);
+    static int luaCameraSetWorldPose(lua_State* state);
+    static int luaCameraGetWorldPose(lua_State* state);
     static int luaCameraSetFlySpeed(lua_State* state);
     static int luaCameraGetFlySpeed(lua_State* state);
     static int luaCameraSetUiInteractionActive(lua_State* state);

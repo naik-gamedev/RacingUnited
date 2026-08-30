@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)]
     [string]$Root
 )
@@ -58,10 +58,18 @@ $luaStats = foreach ($file in $luaFiles) {
     [pscustomobject]@{ Path = Relative-ToRoot $file.FullName; Lines = Count-Lines $file.FullName }
 }
 
-$engineProject = Join-Path $engineRoot 'HeritageEngine\HeritageEngine.vcxproj'
-$testsProject = Join-Path $engineRoot 'Tests\HeritagePhysicsTests.vcxproj'
+# Active native projects are listed explicitly so the code-health inventory cannot
+# silently ignore a first-class executable. STUDIO01 adds HeritageStudio as the
+# standalone authoring host alongside the runtime and physics tests.
+$activeNativeProjectRelatives = @(
+    'HeritageEngine\HeritageEngine.vcxproj'
+    'Tests\HeritagePhysicsTests.vcxproj'
+    'HeritageStudio\HeritageStudio.vcxproj'
+)
+$activeNativeProjects = @($activeNativeProjectRelatives | ForEach-Object { Join-Path $engineRoot $_ })
 $compiled = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
-foreach ($set in @((Read-CompiledSources $engineProject), (Read-CompiledSources $testsProject))) {
+foreach ($projectPath in $activeNativeProjects) {
+    $set = Read-CompiledSources $projectPath
     foreach ($item in $set) { [void]$compiled.Add($item) }
 }
 $allCpp = Get-ChildItem -LiteralPath $engineRoot -Recurse -File -Filter '*.cpp'
@@ -153,7 +161,7 @@ $lines.Add(('C/C++/INL files: {0} | lines: {1}' -f $cppStats.Count, (($cppStats 
 $lines.Add(('Lua files: {0} | lines: {1}' -f $luaStats.Count, (($luaStats | Measure-Object Lines -Sum).Sum)))
 $lines.Add(('C/C++ files >=1000 lines: {0}' -f $largeCpp.Count))
 $lines.Add(('Lua files >=500 lines: {0}' -f $largeLua.Count))
-$lines.Add(('Compiled C++ translation units (engine + physics tests): {0}' -f $compiled.Count))
+$lines.Add(('Compiled C++ translation units (active native projects: runtime + physics tests + Studio): {0}' -f $compiled.Count))
 $lines.Add(('Project-tree .cpp not compiled by those active projects: {0}' -f @($uncompiledCpp).Count))
 $lines.Add(('Reachable Racing United Lua files from Scripts/Main.lua: {0}/{1}' -f $reachableLua.Count, $luaFiles.Count))
 $lines.Add(('Unreachable Racing United Lua files: {0}' -f @($unreachableLua).Count))

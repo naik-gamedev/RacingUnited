@@ -1383,7 +1383,7 @@ Check (
     $weather06Sky.Contains("CLOUD_SHELL_MIN_ALTITUDE_M=900.0") -and
     $weather06Sky.Contains("CLOUD_SHELL_MAX_ALTITUDE_M=6500.0") -and
     $weather06Sky.Contains("MAX_SKYBOX_VOLUMETRIC_CLOUDS_DISTANCE=200000.0") -and
-    $weather06Sky.Contains("PRIMARY_STEPS=32") -and
+    ($weather06Sky.Contains("PRIMARY_STEPS=32") -or $weather06Sky.Contains("PRIMARY_STEPS=48") -or $weather06Sky.Contains("PRIMARY_STEPS=64")) -and
     $weather06Sky.Contains("NUM_LIGHT_STEPS=2") -and
     $weather06Sky.Contains("EMPTY_STEPS_BEFORE_LARGE_STEPS=8") -and
     $weather06Sky.Contains("NUM_MULTI_SCATTERING_OCTAVES=2") -and
@@ -1398,20 +1398,26 @@ Check (
     $weather06Sky.Contains("henyeyGreenstein") -and
     $weather06Sky.Contains("uPbrTransmittanceLut") -and
     $weather06Sky.Contains("uHistoryTexture") -and
-    $weather06Sky.Contains("const float accumulationFactor=0.95") -and
+    $weather06Sky.Contains("const float accumulationFactor=") -and
     $weather06Sky.Contains("boxMin=min(boxMin") -and
     $weather06Sky.Contains("boxMax=max(boxMax") -and
-    $weather06Sky.Contains("vec3 prevColor=clamp(historyPoint(prevUv),boxMin,boxMax)") -and
+    # VCLOUD01 owns the temporal architecture, not a later milestone's exact alpha resolve.
+    # Legacy RGB-only history and CLOUDURP15EB RGB+transmittance history are both
+    # valid descendants as long as point history is current-frame-clamped and the
+    # resolved RGB still uses the single temporal path. CLOUDURP15EB below owns
+    # the stricter transmittance-history assertions.
+    $weather06Sky.Contains("historyPoint(prevUv)") -and
+    $weather06Sky.Contains("vec3 prevColor=clamp(") -and
     $weather06Sky.Contains("float intensity=clamp(min(accumulationFactor-abs(velocity.x)*accumulationFactor") -and
-    $weather06Sky.Contains("FragColor=vec4(mix(cur.rgb,prevColor,intensity),cur.a)") -and
+    $weather06Sky.Contains("FragColor=vec4(mix(cur.rgb,prevColor,intensity),") -and
     $weather06Sky.Contains("glSamplerParameteri(m_cloudHistorySampler,GL_TEXTURE_MIN_FILTER,GL_NEAREST)") -and
     $weather06Sky.Contains("glSamplerParameteri(m_cloudHistorySampler,GL_TEXTURE_MAG_FILTER,GL_NEAREST)") -and
     $weather06Sky.Contains("float depth=uLocalClouds?sceneDepthAt(vUv):0.0") -and
     $weather06Sky.Contains("FragColor=vec4(cloud.rgb+scene*cloud.a,cloud.a)") -and
     $weather06Sky.Contains('C(m_combine.scene,"uSceneTexture")') -and
     $weather06Sky.Contains("glBlendFuncSeparate(GL_ONE,GL_ZERO,GL_ZERO,GL_ONE)") -and
-    $weather06Sky.Contains("float integrationJitter=integrationNoise()") -and
-    $weather06Sky.Contains("float currentDistance=integrationJitter") -and
+    $weather06Sky.Contains("integrationNoise()") -and
+    ($weather06Sky.Contains("float currentDistance=integrationJitter") -or ($weather06Sky.Contains("float currentDistance=0.0") -and $weather06Sky.Contains("sampleDistance=min(currentDistance+0.5*stepAdvance,totalDistance)"))) -and
     $weather06Sky.Contains("float relativeStepSize=mix(integrationJitter,1.0") -and
     $weather06Sky.Contains('R(m_ray.temporalFrameIndex,"uTemporalFrameIndex")') -and
     $weather06Sky.Contains("glUniform1ui(m_ray.temporalFrameIndex,m_cloudTemporalFrameIndex++)") -and
@@ -1494,35 +1500,172 @@ Check (
     $weather06Sky.Contains('MOON_CLOUD_SCATTER_EXPOSURE=5.0')
 ) "CELESTIAL04 routes one Sun/Moon cloud cookie through a dedicated opaque receiver pass without adding another shadow authority"
 
-# CLOUDURP15E7 keeps CLOUDURP15E6's upstream temporal denoiser as the sole
-# cloud-TAA path and selectively lengthens temporal integration only where the
-# existing 5-pixel current neighbourhood exhibits stochastic RGB/transmittance
-# disagreement. Dense coherent interiors stay on the upstream 0.95 baseline.
-$cloudUrp15E7DocPath = Join-Path $Root "Docs\CLOUDURP15E7_SELECTIVE_STOCHASTIC_ACCUMULATION.md"
+# CLOUDURP15E8 established the single selective upstream-derived temporal
+# denoiser architecture. Later tuning milestones may strengthen its history
+# weights, but must keep the same point-history, current-frame AABB clamp and
+# stochastic classifier instead of adding a second cloud TAA authority.
+$cloudUrp15E8DocPath = Join-Path $Root "Docs\CLOUDURP15E8_STRONGER_SELECTIVE_TEMPORAL_DENOISER.md"
 Check (
-    (Test-Path $cloudUrp15E7DocPath) -and
+    (Test-Path $cloudUrp15E8DocPath) -and
     $weather06Sky.Contains('uniform sampler2D uCurrentTexture;uniform sampler2D uHistoryTexture;uniform bool uHistoryValid') -and
-    $weather06Sky.Contains('const float accumulationFactor=0.95') -and
     $weather06Sky.Contains('float minTransmittance=min(cur.a') -and
     $weather06Sky.Contains('if(minTransmittance>=0.999999)') -and
     $weather06Sky.Contains('float stochasticGrain=max(rgbGrain,alphaGrain)') -and
     $weather06Sky.Contains('float exposedSample=smoothstep(0.035,0.32,transmittanceMean)') -and
-    $weather06Sky.Contains('float adaptiveAccumulation=mix(accumulationFactor,0.985,mildGrain)') -and
-    $weather06Sky.Contains('adaptiveAccumulation=mix(adaptiveAccumulation,0.9975,strongGrain)') -and
+    $weather06Sky.Contains('float mildGrain=smoothstep(') -and
+    $weather06Sky.Contains('float strongGrain=smoothstep(') -and
     $weather06Sky.Contains('intensity=max(intensity,adaptiveIntensity)') -and
-    $weather06Sky.Contains('vec3 prevColor=clamp(historyPoint(prevUv),boxMin,boxMax)') -and
+    $weather06Sky.Contains('vec4 prevSample=historyPoint(prevUv)') -and
+    $weather06Sky.Contains('vec3 prevColor=clamp(prevSample.rgb,boxMin,boxMax)') -and
     $weather06Sky.Contains('float depth=uLocalClouds?sceneDepthAt(vUv):0.0') -and
     $weather06Sky.Contains('glSamplerParameteri(m_cloudHistorySampler,GL_TEXTURE_MIN_FILTER,GL_NEAREST)') -and
     $weather06Sky.Contains('glSamplerParameteri(m_cloudHistorySampler,GL_TEXTURE_MAG_FILTER,GL_NEAREST)') -and
     $weather06Sky.Contains('glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,m_cloudCombinedTexture)') -and
-    $weather06Sky.Contains('float integrationJitter=integrationNoise()') -and
+    $weather06Sky.Contains('integrationNoise()') -and
     -not $weather06Sky.Contains('const float stableHistory=0.20') -and
     -not $weather06Sky.Contains('const float mildHistory=0.60') -and
     -not $weather06Sky.Contains('const float strongTaaIntensity=50.0') -and
     -not $weather06Sky.Contains('nativeCurrentNeighbor') -and
     -not $weather06Sky.Contains('float cloudDepth=cloudDepthAt(vUv)') -and
     -not $weather06Sky.Contains('GL_TEXTURE_MIN_FILTER,GL_LINEAR);glSamplerParameteri(m_cloudHistorySampler')
-) "CLOUDURP15E7 keeps one upstream point-history TAA and selectively increases accumulation only for stochastic partial cloud samples"
+) "CLOUDURP15E8 preserves the sole point-history selective cloud denoiser and current-frame AABB anti-ghosting architecture"
+
+# CLOUDURP15EA/EB were deliberately extreme diagnostic denoiser experiments.
+# CLOUDURP15EC supersedes their exact tuning after visual validation showed that
+# near-total 11x11 + 99.995% history smoothing preserved grain while flattening
+# cloud bodies into cartoon slabs. Keep the single point-history architecture,
+# but allow EC to own the production quality constants.
+$cloudUrp15EADocPath = Join-Path $Root "Docs\CLOUDURP15EA_EXTREME_DENOISER.md"
+$cloudUrp15EBDocPath = Join-Path $Root "Docs\CLOUDURP15EB_SUBPIXEL_DENSITY_FILTER.md"
+$cloudUrp15ECDocPath = Join-Path $Root "Docs\CLOUDURP15EC_HIGH_QUALITY_RAYMARCH_RECONSTRUCTION.md"
+$cloudUrp15EDDocPath = Join-Path $Root "Docs\CLOUDURP15ED_REFINED_RECONSTRUCTION_ANTI_BANDING.md"
+$cloudUrp15EEDocPath = Join-Path $Root "Docs\CLOUDURP15EE_OCCUPIED_INTERVAL_MICROSTEP.md"
+$cloudUrp15EFDocPath = Join-Path $Root "Docs\CLOUDURP15EF_DEAXIS_EROSION_VOLUME.md"
+$cloudUrp15EIDocPath = Join-Path $Root "Docs\CLOUDURP15EI_UPSTREAM_STOCHASTIC_RECONSTRUCTION.md"
+Check (
+    (Test-Path $cloudUrp15EADocPath) -and
+    (Test-Path $cloudUrp15EBDocPath) -and
+    (Test-Path $cloudUrp15ECDocPath) -and
+    (Test-Path $cloudUrp15EDDocPath) -and
+    (Test-Path $cloudUrp15EEDocPath) -and
+    (Test-Path $cloudUrp15EFDocPath) -and
+    (Test-Path $cloudUrp15EIDocPath) -and
+    $weather06Sky.Contains('float stochasticGrain=max(rgbGrain,alphaGrain)') -and
+    $weather06Sky.Contains('vec4 prevSample=historyPoint(prevUv)') -and
+    $weather06Sky.Contains('vec3 prevColor=clamp(prevSample.rgb,boxMin,boxMax)') -and
+    $weather06Sky.Contains('float prevTransmittance=clamp(prevSample.a,minTransmittance,maxTransmittance)') -and
+    $weather06Sky.Contains('float resolvedTransmittance=mix(cur.a,prevTransmittance,alphaIntensity)') -and
+    ($weather06Sky.Contains('float rangeWeight=exp(-18.0*transmittanceDelta)') -or $weather06Sky.Contains('float rangeWeight=exp(-20.0*transmittanceDelta)'))
+) "CLOUDURP15ED preserves one clamped RGB+coverage temporal authority while refining reconstruction"
+
+# CLOUDURP15EC/ED/EE are the production-quality cloud reconstruction passes.
+# EC established the direction; ED improved banding with midpoint sampling; EE
+# attacks the remaining stack-of-slices artifact directly by integrating each
+# occupied march interval as several shorter substeps inside the raymarch.
+Check (
+    (
+        $weather06Sky.Contains('const int PRIMARY_STEPS=48') -and
+        $weather06Sky.Contains('microErosionFactor=presetValue(vec4(0.40,0.40,0.40,0.40)') -and
+        $weather06Sky.Contains('microErosionScale=presetValue(vec4(140.0,140.0,140.0,140.0)') -and
+        $weather06Sky.Contains('noiseMipFromFootprint(worldFootprintM,SHAPE_NOISE_VOXEL_M,2.0)*0.55') -and
+        $weather06Sky.Contains('distanceFromCamera*rayConeSlope*0.75') -and
+        $weather06Sky.Contains('float integrationJitter=0.5+(integrationNoise()-0.5)*0.35') -and
+        $weather06Sky.Contains('for(int i=-2;i<=2;++i)for(int j=-2;j<=2;++j)') -and
+        $weather06Sky.Contains('vec4 cloud=mix(center,blurred,0.10+0.30*softness)') -and
+        $weather06Sky.Contains('const float accumulationFactor=0.965') -and
+        $weather06Sky.Contains('float adaptiveAccumulation=mix(accumulationFactor,0.985,mildGrain)') -and
+        $weather06Sky.Contains('adaptiveAccumulation=mix(adaptiveAccumulation,0.995,strongGrain)') -and
+        $weather06Sky.Contains('float alphaIntensity=min(intensity,0.985)') -and
+        $weather06Sky.Contains('int hw=std::max((w*9)/10,1),hh=std::max((h*9)/10,1)')
+    ) -or (
+        $weather06Sky.Contains('const int PRIMARY_STEPS=64') -and
+        $weather06Sky.Contains('float integrationJitter=0.5+(integrationNoise()-0.5)*0.25') -and
+        $weather06Sky.Contains('sampleDistance=min(currentDistance+0.5*stepAdvance,totalDistance)') -and
+        $weather06Sky.Contains('CloudProperties properties2;') -and
+        $weather06Sky.Contains('secondaryPosition=origin+(entry+min(currentDistance+0.80*stepAdvance,totalDistance))*rayDirection') -and
+        $weather06Sky.Contains('evaluateCloud(properties,rayDirection,samplePosition,stepAdvance,result)') -and
+        $weather06Sky.Contains('for(int i=-3;i<=3;++i)for(int j=-3;j<=3;++j)') -and
+        $weather06Sky.Contains('vec4 cloud=mix(center,blurred,0.18+0.32*softness)') -and
+        $weather06Sky.Contains('cloud.a=mix(center.a,blurred.a,0.18+0.38*softness)') -and
+        $weather06Sky.Contains('float rangeWeight=exp(-20.0*transmittanceDelta)') -and
+        $weather06Sky.Contains('const float accumulationFactor=0.972') -and
+        $weather06Sky.Contains('float adaptiveAccumulation=mix(accumulationFactor,0.990,mildGrain)') -and
+        $weather06Sky.Contains('adaptiveAccumulation=mix(adaptiveAccumulation,0.9975,strongGrain)') -and
+        $weather06Sky.Contains('float alphaIntensity=min(intensity,0.990)') -and
+        $weather06Sky.Contains('int hw=std::max(w,1),hh=std::max(h,1)')
+    ) -or (
+        $weather06Sky.Contains('const int PRIMARY_STEPS=64') -and
+        $weather06Sky.Contains('const int OCCUPIED_SUBSTEPS=4') -and
+        $weather06Sky.Contains('float integrationJitter=0.5+(integrationNoise()-0.5)*0.25') -and
+        $weather06Sky.Contains('CloudProperties occupancyProbe;') -and
+        $weather06Sky.Contains('float subStepAdvance=stepAdvance/float(OCCUPIED_SUBSTEPS)') -and
+        $weather06Sky.Contains('for(int subStepIndex=0;subStepIndex<OCCUPIED_SUBSTEPS;++subStepIndex)') -and
+        $weather06Sky.Contains('evaluateCloud(subProperties,rayDirection,subPosition,subStepAdvance,result)') -and
+        $weather06Sky.Contains('for(int i=-3;i<=3;++i)for(int j=-3;j<=3;++j)') -and
+        $weather06Sky.Contains('vec4 cloud=mix(center,blurred,0.18+0.32*softness)') -and
+        $weather06Sky.Contains('cloud.a=mix(center.a,blurred.a,0.18+0.38*softness)') -and
+        $weather06Sky.Contains('float rangeWeight=exp(-20.0*transmittanceDelta)') -and
+        $weather06Sky.Contains('const float accumulationFactor=0.975') -and
+        $weather06Sky.Contains('float adaptiveAccumulation=mix(accumulationFactor,0.992,mildGrain)') -and
+        $weather06Sky.Contains('adaptiveAccumulation=mix(adaptiveAccumulation,0.9980,strongGrain)') -and
+        $weather06Sky.Contains('float alphaIntensity=min(intensity,0.992)') -and
+        $weather06Sky.Contains('int hw=std::max(w,1),hh=std::max(h,1)')
+    ) -or (
+        $weather06Sky.Contains('const int PRIMARY_STEPS=64') -and
+        $weather06Sky.Contains('float integrationJitter=integrationNoise()') -and
+        $weather06Sky.Contains('float currentDistance=integrationJitter') -and
+        $weather06Sky.Contains('float relativeStepSize=mix(integrationJitter,1.0,sat(float(currentIndex)))') -and
+        $weather06Sky.Contains('float spatial=fract(52.9829189*fract(dot(px,vec2(0.06711056,0.00583715))))') -and
+        $weather06Sky.Contains('float temporal=fract(float(uTemporalFrameIndex&255u)*0.6180339887498948)') -and
+        $weather06Sky.Contains('const float accumulationFactor=0.985') -and
+        $weather06Sky.Contains('float adaptiveAccumulation=mix(accumulationFactor,0.995,mildGrain)') -and
+        $weather06Sky.Contains('adaptiveAccumulation=mix(adaptiveAccumulation,0.9990,strongGrain)') -and
+        $weather06Sky.Contains('float alphaIntensity=min(intensity,0.995)') -and
+        $weather06Sky.Contains('for(int i=-3;i<=3;++i)for(int j=-3;j<=3;++j)') -and
+        $weather06Sky.Contains('vec4 cloud=mix(center,blurred,0.14+0.28*softness)') -and
+        $weather06Sky.Contains('int hw=std::max(w,1),hh=std::max(h,1)')
+    )
+) "CLOUDURP15EI production cloud reconstruction restores upstream stochastic band breaking while temporally converging dither"
+
+# CLOUDURP15EF removes the remaining world-horizontal strata at the density-source level.
+# The low-resolution 32^3 erosion texture must no longer be sampled in one
+# axis-aligned world frame; main and shadow density share the same two-frame
+# periodic de-aliasing helper.
+Check (
+    (Test-Path $cloudUrp15EFDocPath) -and
+    (
+        (
+            $weather06Sky.Contains('float sampleDealiasedErosion(vec3 coordinates,float lodValue)') -and
+            $weather06Sky.Contains('float erosionNoise=1.0-sampleDealiasedErosion(erosionCoords,erosionLod)')
+        ) -or (
+            (Test-Path $cloudUrp15EIDocPath) -and
+            $weather06Sky.Contains('float erosionNoise=1.0-textureLod(uErosionNoise,erosionCoords,erosionLod).r') -and
+            $weather06Sky.Contains('float fineNoise=1.0-textureLod(uErosionNoise,fineCoords,erosionMipOffsetValue).r') -and
+            $weather06Sky.Contains('float erosion=1.0-textureLod(uErosionNoise,ec,0.0).r')
+        )
+    ) -and
+    $weather06Sky.Contains('microErosionFactor=presetValue(vec4(0.34,0.34,0.34,0.34)')
+) "CLOUDURP15EF experiment remains documented; CLOUDURP15EI may restore upstream direct erosion sampling after source audit"
+
+# CLOUDURP15EG follows the surviving bands to the coarse 128^3 base-shape field.
+# At shapeScale=5 that volume is ~156.25 m/voxel, so a 5 km storm layer sees
+# only ~32 source voxels vertically. Rotated dual-frame sampling must remove
+# world-height alignment, and the vertical preset LUT is raised to 256 samples.
+$cloudUrp15EGDocPath = Join-Path $Root "Docs\CLOUDURP15EG_DEGRID_SHAPE_VOLUME.md"
+Check (
+    (Test-Path $cloudUrp15EGDocPath) -and
+    $weather06Sky.Contains('constexpr int kPresetCount=4,kSamples=256') -and
+    (
+        (
+            $weather06Sky.Contains('float sampleDealiasedShape(vec3 coordinates,float lodValue)') -and
+            $weather06Sky.Contains('float lowFrequencyNoise=sampleDealiasedShape(baseNoiseSamplingCoordinates,max(noiseMipOffset,shapeFootprintMip))')
+        ) -or (
+            (Test-Path $cloudUrp15EIDocPath) -and
+            $weather06Sky.Contains('float lowFrequencyNoise=textureLod(uShapeNoise,baseNoiseSamplingCoordinates,noiseMipOffset).r') -and
+            $weather06Sky.Contains('float low=textureLod(uShapeNoise,shape,0.0).r')
+        )
+    )
+) "CLOUDURP15EG 256-sample vertical profile remains; CLOUDURP15EI may restore upstream direct Worley sampling after source audit"
 
 
 Check (

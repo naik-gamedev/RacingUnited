@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
@@ -17,7 +17,7 @@ set "CODE_HEALTH_REPORT=%REPORTS%\CodeHealthSnapshot.txt"
 set "RUNTIME_CAPTURE=%ROOT%\Tools\Diagnostics\LaunchEngineCaptured.ps1"
 set "RUNTIME_LOG=%DIAGNOSTICS%\RuntimeConsoleLatest.log"
 set "RUNTIME_CRASH=%DIAGNOSTICS%\RuntimeCrashLatest.txt"
-set "MILESTONE=CLOUDURP15E7_SELECTIVE_STOCHASTIC_ACCUMULATION"
+set "MILESTONE=CLOUDURP15EI_UPSTREAM_STOCHASTIC_RECONSTRUCTION"
 set "MSBUILD_TARGET=Build"
 set "BUILD_MODE=incremental"
 if /I "%~1"=="full" (
@@ -31,14 +31,40 @@ if not exist "%DIAGNOSTICS%" mkdir "%DIAGNOSTICS%"
 cls
 echo ============================================================
 echo Heritage Engine - CURRENT build + run [%MILESTONE%]
-echo CLOUDURP15E7: upstream UnityVolumetricCloudsURP/HDRP temporal denoiser remains the sole TAA authority; stochastic partial samples receive selective extra persistence
-echo Temporal path: full-resolution scene+cloud ^| 5-pixel AABB ^| point history ^| coherent cloud = 95%% ^| noisy partial samples = up to 98.5-99.75%%
-echo Single clear stochastic holes at cloud boundaries now accumulate; only a fully clear 5-pixel neighbourhood bypasses history
-echo Raymarch jitter also matches upstream semantics: one 0..1 sample per pixel/frame, raw initial offset, same sample only on first relative step
-echo CELESTIAL04 dedicated post-opaque Sun/Moon cloud-shadow receiver and the existing 256x256 optical-depth cookie are otherwise unchanged
-echo Scene materials attenuate direct celestial light strongly and diffuse sky/IBL modestly under the same cookie, making moving cloud shadows visible without black decals
-echo PBSKY01 atmosphere, VCLOUD01 cloud morphology, PERF05 link-status caching, PERF06A F8 diagnostics and OPT00 async timing remain intact
-echo Heritage regional weather remains the sole radar/rain/hydrology/cloud-map authority; no second weather simulation is introduced
+echo LIVETRACK22A: tire-mark atlas allocation/reset ownership is kept in DynamicSurfaceGpuResources; the production coordinator is back under the OPT03 ^<500-line split-responsibility safety contract with no runtime behavior change
+echo LIVETRACK22: tire marks are now an R8 material state in the SAME 10m / near-256x256 Dynamic Surface tile slots and indirection as production water; FP64 mark history reconstructs returning tiles
+echo LIVETRACK22: mark visibility fades continuously across 0-500m; live wet film/puddles suppress contrast, full-wet deposition is reduced, and far vector LOD uses corrected depth bias + 85-110m material handoff
+echo TIRE45K: physical MF/contact Fy is distributed as real lower-tread shear force inside the 24x13 carcass solve; cornering side-bend no longer depends on large rigid-ring offsets
+echo TIRE45K: physical aligning moment Mz is resolved as an equal/opposed front-rear footprint shear pair, restoring visible tread torsion while preserving zero straight-line lateral forcing
+echo TIRE45J: rigid-ring yaw/contact twist remain physically gated/capped auxiliary modes, while real curb-side unilateral contact remains independent
+echo TIRE45D: low-confidence estimated suspension hardpoints remain authoring/gizmo data only and cannot become runtime vehicle-force authority
+echo TIRE45D: with no authoritative Peugeot hardpoints in the GLB, linear suspension alignment stays authoritative instead of estimate-induced camber/bump-toe
+echo TIRE45F: prototype startup alignment is neutral 0 camber / 0 toe on all four wheels; Peugeot specification remains reference-only until explicitly applied
+echo TIRE45I1: regression now checks flat-road planarity across the authored tread only; intentional outer shoulder/sidewall curvature is no longer misclassified as a failure
+echo TIRE45I: flexible-ring rest profile now matches the broad authored GLB tread; pure radial road compression can no longer become a cross-width inward wedge when its displacement field is presented
+echo TIRE45H: straight/top-road carcass obeys a zero-lateral symmetry invariant; stale side deformation is cleared unless real rigid lateral load or steep curb-side contact is present
+echo TIRE45H: low-speed contact-patch torsion remains tire-force/moment state but no longer rotates production carcass geometry; ordinary road-top radial collapse is bounded by live hub/road overlap + wheel load
+echo TIRE45G: unmeasured prototype rigid-ring yaw remains simulated/telemetry-visible but no longer rotates the production carcass field; real lateral force and curb-contact deformation remain active
+echo TIRE45C: tire flexible-ring field is sampled/applied in authoritative WORLD wheel basis; GLB mirror/scale/pivot chains cannot rotate deformation components
+echo TIRE45C TRACE: final bridge reports native field maxima + ring/upright state while rolling so physics-vs-presentation faults are conclusive
+echo TIRE45B: moving-wheel carcass road-cache geometry remains re-anchored to the live 1 kHz centre contact
+echo TIRE45: physics-owned 24x13 carcass Megalab exposes 217 live structural parameters, exact scenarios and deterministic brute-force search
+echo Road-envelope collision samples and rim/flange boundaries are unilateral constraints inside the structural solve
+echo Tire LAB search can evaluate up to 1,000,000 candidates in bounded exact-solver batches; search score never feeds tire forces
+echo No tireDeflection-to-vertex target, no support-plane snap, no world-Z flattening and no render-time tire collision solve
+echo MF6.2/contact physics remain force authority; carcass deformation consumes the same physical pressure/contact/rigid-ring state
+echo Heritage production vehicle/weather audio, fleet LOD, geometry occlusion and shared acoustic reverb remain intact
+echo CLOUDURP15EE: occupied-interval microstep integration attacks the remaining stack-of-slices artifact directly inside the raymarch while keeping ED full-resolution 64-step reconstruction
+echo CLOUDURP15EE: each occupied march interval is resolved as four shorter substeps; moderate temporal history is strengthened slightly to calm residual shimmer without reverting to cartoon blur
+echo CLOUDURP15EE: EC/ED footprint filtering, RGB+coverage temporal authority and the current-frame AABB anti-ghosting clamp remain intact
+echo CLOUDURP15EG: the coarse 128x128x128 shape volume is sampled through two fully rotated frames so its ~156m voxel stack cannot appear as horizontal density slices across tall clouds
+echo CLOUDURP15EG: vertical cloud-profile LUT resolution is raised 64 to 256 samples; EF de-aliased erosion, EE occupied microsteps, full-resolution reconstruction and RGB+coverage temporal stabilization remain intact
+echo CLOUDURP15EH3: packed-RGBA shape experiment is fully retired from runtime after it erased cloud occupancy; renderer is restored to the last known-visible WorleyNoise128R density path
+echo CLOUDURP15EH3: no fBm packed-shape remap remains in visible or shadow density; EG de-grid rotation, 256-sample profile LUT and EE 4x occupied microsteps remain intact
+echo CLOUDURP15ED1: VCLOUD01 validation now accepts midpoint interval sampling as the production descendant of the original integration-jitter architecture; runtime cloud behavior is unchanged
+echo CLOUDURP15EI: source audit against jiaozi158 UnityVolumetricCloudsURP restores the upstream full 0..1 stochastic first-step phase; narrowed EC-EH jitter was exposing the fixed march lattice as horizontal slices
+echo CLOUDURP15EI: white hash dither is replaced by a full-range low-discrepancy interleaved-gradient + golden-ratio temporal sequence; 64 real steps remain and TAA is 0.985/0.995/0.999 to converge the dither instead of revealing bands
+echo CLOUDURP15EI: EF/EG de-axis density experiments are retired from production sampling; visible/shadow density return to upstream direct trilinear R-channel Worley + Perlin semantics while the reduced 0.34/140 micro erosion and 256-sample profile remain
 echo OPT03C4 single GPU-water authority, OPT03B tire-water bridge and byte-compatible OPT02 .hhyd v15 architecture remain intact
 echo Native stdout/stderr and Windows crash/minidump capture remain enabled
 echo ============================================================
@@ -79,6 +105,8 @@ for %%F in (
     "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterContourMesher.hpp"
     "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterSurfaceStitcher.hpp"
     "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\EntityMeshShaders.hpp.bak_livetrack01"
+    "%ROOT%\Engine\HeritageEngine\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.cpp"
+    "%ROOT%\Engine\HeritageEngine\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.hpp"
     "%ROOT%\Modules\RacingUnited\Scripts\UI\Vehicle\WaterLaboratoryPanel.lua"
     "%ROOT%\Modules\RacingUnited\Scripts\UI\Scene\WaterLaboratoryPanel.lua"
     "%ROOT%\Engine\HeritageEngine\Physics\Surfaces\Water\WaterLaboratory.hpp"
@@ -95,6 +123,8 @@ if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.cpp
 if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterParcelRenderer.hpp" goto :legacy_cleanup_failed
 if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterContourMesher.hpp" goto :legacy_cleanup_failed
 if exist "%ROOT%\Engine\HeritageEngine\Graphics\Renderer\WaterSurfaceStitcher.hpp" goto :legacy_cleanup_failed
+if exist "%ROOT%\Engine\HeritageEngine\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.cpp" goto :legacy_cleanup_failed
+if exist "%ROOT%\Engine\HeritageEngine\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.hpp" goto :legacy_cleanup_failed
 if exist "%ROOT%\Modules\RacingUnited\Scripts\UI\Vehicle\WaterLaboratoryPanel.lua" goto :legacy_cleanup_failed
 if exist "%ROOT%\Modules\RacingUnited\Scripts\UI\Scene\WaterLaboratoryPanel.lua" goto :legacy_cleanup_failed
 if exist "%ROOT%\Engine\HeritageEngine\Physics\Surfaces\Water\WaterLaboratory.hpp" goto :legacy_cleanup_failed

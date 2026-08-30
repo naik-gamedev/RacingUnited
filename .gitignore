@@ -20,6 +20,7 @@ Build/
 # Local runtime state and per-user settings
 /UserData/
 /settings_*.ini
+/imgui.ini
 
 # Local project archives
 /*.zip

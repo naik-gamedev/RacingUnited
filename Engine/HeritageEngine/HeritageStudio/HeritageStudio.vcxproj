@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32"><Configuration>Debug</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{C84B2B16-78A7-4DE1-9D84-63E4EF92D9C2}</ProjectGuid>
+    <RootNamespace>HeritageStudio</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><UseDebugLibraries>true</UseDebugLibraries><PlatformToolset>v145</PlatformToolset><CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><UseDebugLibraries>false</UseDebugLibraries><PlatformToolset>v145</PlatformToolset><WholeProgramOptimization>true</WholeProgramOptimization><CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><UseDebugLibraries>true</UseDebugLibraries><PlatformToolset>v145</PlatformToolset><CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><UseDebugLibraries>false</UseDebugLibraries><PlatformToolset>v145</PlatformToolset><WholeProgramOptimization>true</WholeProgramOptimization><CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets"><Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" /></ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <TargetName>HeritageStudio</TargetName>
+    <OutDir>$(ProjectDir)..\..\..\Build\Studio\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)..\..\..\Build\Intermediate\HeritageStudio\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>false</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\ThirdParty\GLAD\include;$(ProjectDir)..\..\..\ThirdParty\GLFW\include;$(ProjectDir)..\..\..\ThirdParty\IMGUI;$(ProjectDir)..\..\..\ThirdParty\IMGUI\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\..\..\ThirdParty\GLFW\lib-vc2022;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;gdi32.lib;user32.lib;shell32.lib;dwmapi.lib;xaudio2.lib;ole32.lib;windowscodecs.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Manifest><EnableSegmentHeap>true</EnableSegmentHeap></Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile><RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary><PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile><RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary><FunctionLevelLinking>true</FunctionLevelLinking><IntrinsicFunctions>true</IntrinsicFunctions><PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="HeritageStudioApp.cpp" />
+    <ClCompile Include="StudioScenePreview.cpp" />
+    <ClCompile Include="Authoring\StudioAuthoringData.cpp" />
+    <ClCompile Include="..\Graphics\Mesh.cpp" />
+    <ClCompile Include="..\Graphics\Material.cpp" />
+    <ClCompile Include="..\Graphics\Texture2D.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfBinary.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfJson.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfDocument.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfMeshImporter.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfMetadata.cpp" />
+    <ClCompile Include="..\Graphics\Gltf\GltfCollisionImporter.cpp" />
+    <ClCompile Include="..\Audio\AudioSystem.cpp" />
+    <ClCompile Include="..\Audio\Lab\EngineSoundCaptureLab.cpp" />
+    <ClCompile Include="..\Audio\Lab\EngineSoundLabDsp.cpp" />
+    <ClCompile Include="..\..\..\ThirdParty\GLAD\src\glad.c" />
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\backends\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui.cpp" />
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_draw.cpp" />
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_tables.cpp" />
+    <ClCompile Include="..\..\..\ThirdParty\IMGUI\imgui_widgets.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="HeritageStudioApp.hpp" />
+    <ClInclude Include="StudioScenePreview.hpp" />
+    <ClInclude Include="Authoring\StudioAuthoringData.hpp" />
+    <ClInclude Include="..\Graphics\Mesh.hpp" />
+    <ClInclude Include="..\Graphics\Material.hpp" />
+    <ClInclude Include="..\Graphics\Texture2D.hpp" />
+    <ClInclude Include="..\Graphics\GltfBinary.hpp" />
+    <ClInclude Include="..\Graphics\GltfSceneData.hpp" />
+    <ClInclude Include="..\Audio\AudioSystem.hpp" />
+    <ClInclude Include="..\Audio\Lab\EngineSoundCaptureLab.hpp" />
+    <ClInclude Include="..\Audio\Lab\EngineSoundLabDsp.hpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

@@ -99,7 +99,7 @@ function EnsureSuspensionHardpointEstimates(forceRebuild)
         "estimated_macpherson_road_v1 + estimated_trailing_arm_torsion_bar_road_v1"
     vehicleSuspensionAuthoring.estimatedCount = inserted
     vehicleSuspensionAuthoring.message = string.format(
-        "Assisted authoring supplied %d front + %d rear low-confidence hardpoints",
+        "Assisted authoring supplied %d front + %d rear low-confidence hardpoints; estimates are authoring-only until stronger evidence exists",
         frontInserted, rearInserted)
     return true
 end

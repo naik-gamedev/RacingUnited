@@ -77,9 +77,10 @@ struct SurfacePresentationRendererStats
 };
 
 // Driven-surface renderer for visual evidence of authoritative SurfaceWorld
-// state. TIRE16K keeps tire marks in persistent 100 m GPU-cache pages so old
-// skid history is not re-tessellated or re-uploaded every frame. Chunks are an
-// invisible batching mechanism only and never influence physics or mark shape.
+// state. LIVETRACK22 moves close tire-mark presentation into the shared
+// Dynamic Surface 10m/256x256 material atlas. TIRE16K 100m GPU-cache pages are
+// retained only as persistent 85-500m vector LOD/history storage, so near marks
+// no longer z-fight as coplanar geometry. Neither presentation path owns physics.
 class SurfacePresentationRenderer
 {
 public:
@@ -178,7 +179,9 @@ private:
         const heritage::physics::SurfacePresentation& presentation,
         const heritage::math::Mat4& view,
         const heritage::math::Mat4& projection,
-        const heritage::math::DVec3& cameraGlobal) const;
+        const heritage::math::DVec3& cameraGlobal,
+        bool nearMaterialAuthority,
+        float weatherWetness) const;
 
     void clearMarbleGpuCache() const;
     void syncMarbleGpuCache(
@@ -216,6 +219,8 @@ private:
     GLint m_tireMarkUniformDrawDistance = -1;
     GLint m_tireMarkUniformVisibilityFadeWidth = -1;
     GLint m_tireMarkUniformCapDistance = -1;
+    GLint m_tireMarkUniformNearMaterialAuthority = -1;
+    GLint m_tireMarkUniformWeatherWetness = -1;
     GLint m_tireMarkUniformChunkOriginRelative = -1;
 
     GLint m_marbleUniformView = -1;

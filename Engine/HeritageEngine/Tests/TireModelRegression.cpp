@@ -14,6 +14,7 @@
 #include "../Vehicles/Tires/TireDistributedContact.hpp"
 #include "../Vehicles/Tires/TireFleetBenchmark.hpp"
 #include "../Vehicles/Tires/TireFlexibleRingField.hpp"
+#include "../Vehicles/Tires/TireCarcassDevelopmentLab.hpp"
 #include "../Vehicles/Tires/TireRigidRing.hpp"
 #include "../Vehicles/Tires/TireRoadEnveloping.hpp"
 #include "../Vehicles/Tires/TireThermal.hpp"
@@ -1245,6 +1246,477 @@ bool tireFlexibleRingFieldIsSmoothBoundedAndAsymmetric()
                     next * TireFlexibleRingFieldBands + centerBand]));
     }
     return largestAdjacentJump < 0.018;
+}
+
+bool tireDynamicCarcassSimulationRespectsRoadAndRimWithoutPrescribedShape()
+{
+    using namespace heritage::vehicles::tires;
+
+    TireFlexibleRingFieldDescription description;
+    description.unloadedRadiusM = 0.315;
+    description.rimRadiusM = 0.2159;
+    description.sectionWidthM = 0.205;
+    description.maximumDeflectionM = 0.080;
+    description.referencePressurePa = 220000.0;
+    description.verticalStiffnessNPerM = 220000.0;
+
+    TireFlexibleRingDynamicState state;
+    TireFlexibleRingDynamicsInput input;
+    input.deltaTimeSeconds = 0.008;
+    input.grounded = true;
+    input.inflationPressurePa = 220000.0;
+    input.thermalStiffnessScale = 1.0;
+    input.normalLoadN = 3200.0;
+    input.roadSampleCount = 1;
+    auto& road = input.roadSamples[0];
+    road.queried = true;
+    road.supported = true;
+    road.pointDownM = 0.295; // wheel centre is 20 mm into unloaded radius
+    road.normalDown = -1.0; // physical road normal points upward
+
+    TireFlexibleRingFieldOutput settled;
+    for (int step = 0; step < 250; ++step)
+        settled = advanceTireFlexibleRingDynamics(description, input, state);
+    if (!settled.valid)
+        return false;
+
+    constexpr std::size_t bottomStation = 6;
+    constexpr std::size_t centerBand = 6;
+    const auto indexOf = [](std::size_t station, std::size_t band) {
+        return station * TireFlexibleRingFieldBands + band;
+    };
+    const std::size_t bottomCenter = indexOf(bottomStation, centerBand);
+    const VehicleScalar bottomDown = description.unloadedRadiusM
+        + settled.downDisplacementM[bottomCenter];
+    const VehicleScalar roadPenetration = std::max(
+        bottomDown - road.pointDownM, VehicleScalar{0.0});
+
+    // The road is a unilateral contact in the structural solve. A small
+    // compliance is expected; centimetres of below-road curl are not.
+    if (roadPenetration > 0.0015)
+        return false;
+
+    // A flat supported road must produce a broad, essentially planar tread
+    // footprint rather than the historical pointed/concave hook under the
+    // wheel centre.  Check both circumferential neighbours and the complete
+    // lateral bottom section. These are simulation results, not geometry
+    // clamps: the road remains represented only by contact samples/normals.
+    const VehicleScalar frontFootDown = description.unloadedRadiusM
+        * std::sin(2.0 * 3.14159265358979323846 * 5.0
+            / static_cast<VehicleScalar>(TireFlexibleRingFieldStations))
+        + settled.downDisplacementM[indexOf(5, centerBand)];
+    const VehicleScalar rearFootDown = description.unloadedRadiusM
+        * std::sin(2.0 * 3.14159265358979323846 * 7.0
+            / static_cast<VehicleScalar>(TireFlexibleRingFieldStations))
+        + settled.downDisplacementM[indexOf(7, centerBand)];
+    if (std::abs(frontFootDown - road.pointDownM) > 0.0015
+        || std::abs(rearFootDown - road.pointDownM) > 0.0015)
+    {
+        return false;
+    }
+    VehicleScalar minimumBottomDown = std::numeric_limits<VehicleScalar>::infinity();
+    VehicleScalar maximumBottomDown = -std::numeric_limits<VehicleScalar>::infinity();
+    // TIRE45I1: TIRE45I deliberately confines rest-profile curvature to the
+    // outer shoulder/sidewall bands.  The flat-road planarity invariant therefore
+    // applies to the authored tread (bands 1..11), not the +/-1.0 sidewall edge.
+    // Including bands 0/12 incorrectly treats the intended shoulder drop as a
+    // road-penetration failure and makes the Windows regression reject the fix.
+    for (std::size_t band = 1; band + 1 < TireFlexibleRingFieldBands; ++band)
+    {
+        const VehicleScalar width = TireFlexibleRingWidthCoordinates[band];
+        const VehicleScalar shoulderT = std::clamp(
+            (std::abs(width) - VehicleScalar{0.80}) / VehicleScalar{0.20},
+            VehicleScalar{0.0}, VehicleScalar{1.0});
+        const VehicleScalar shoulder = shoulderT * shoulderT
+            * (VehicleScalar{3.0} - VehicleScalar{2.0} * shoulderT);
+        const VehicleScalar radialScale = VehicleScalar{1.0}
+            - VehicleScalar{0.055} * shoulder * shoulder;
+        const VehicleScalar down = description.unloadedRadiusM * radialScale
+            + settled.downDisplacementM[indexOf(bottomStation, band)];
+        minimumBottomDown = std::min(minimumBottomDown, down);
+        maximumBottomDown = std::max(maximumBottomDown, down);
+    }
+    if (maximumBottomDown - minimumBottomDown > 0.0015)
+        return false;
+
+    // TIRE45I: the renderer applies the simulated displacement field to the
+    // authored GLB tread, not to the solver's private rest geometry.  Therefore
+    // a broad flat-road footprint must also have nearly equal RADIAL
+    // displacement across the authored tread bands.  The retired 0.055*w^2
+    // whole-section crown passed the structural-planarity test above while
+    // still differing by >10 mm from centre to +/-0.82 in displacement space,
+    // which is exactly the visible inward/wedge artifact seen on the Peugeot.
+    VehicleScalar minimumAuthoredTreadRadial =
+        std::numeric_limits<VehicleScalar>::infinity();
+    VehicleScalar maximumAuthoredTreadRadial =
+        -std::numeric_limits<VehicleScalar>::infinity();
+    for (std::size_t band = 1; band + 1 < TireFlexibleRingFieldBands; ++band)
+    {
+        const VehicleScalar theta = 2.0 * 3.14159265358979323846
+            * static_cast<VehicleScalar>(bottomStation)
+            / static_cast<VehicleScalar>(TireFlexibleRingFieldStations);
+        const VehicleScalar radialForward = std::cos(theta);
+        const VehicleScalar radialDown = std::sin(theta);
+        const std::size_t index = indexOf(bottomStation, band);
+        const VehicleScalar radial =
+            settled.forwardDisplacementM[index] * radialForward
+            + settled.downDisplacementM[index] * radialDown;
+        minimumAuthoredTreadRadial = std::min(
+            minimumAuthoredTreadRadial, radial);
+        maximumAuthoredTreadRadial = std::max(
+            maximumAuthoredTreadRadial, radial);
+    }
+    if (maximumAuthoredTreadRadial - minimumAuthoredTreadRadial > 0.0010)
+        return false;
+
+    // TIRE45E: a flat road and pure vertical load contain no lateral source.
+    // The old synthetic Poisson anchor created ~3 mm of symmetric lateral
+    // bulge here, which looked like inward tire lean from the rear. Production
+    // must keep this channel essentially zero until a real lateral force or
+    // lateral collision normal exists.
+    VehicleScalar flatRoadMaximumLateral = 0.0;
+    for (VehicleScalar value : settled.lateralDisplacementM)
+        flatRoadMaximumLateral = std::max(flatRoadMaximumLateral, std::abs(value));
+    if (flatRoadMaximumLateral > 0.00025)
+        return false;
+
+    // TIRE45J: yaw/tread-twist are production-visible again only when real
+    // cornering physics authorizes them. A straight/parking state with a stale
+    // structural yaw or contact-patch twist must remain visually neutral.
+    TireFlexibleRingDynamicState straightTorsionState;
+    TireFlexibleRingDynamicsInput straightTorsionInput = input;
+    straightTorsionInput.ringYawRadians = 0.03;
+    straightTorsionInput.contactPatchTwistRadians = 0.12;
+    straightTorsionInput.forwardSpeedMps = 0.40;
+    straightTorsionInput.lateralForceN = 0.0;
+    straightTorsionInput.aligningMomentNm = 0.0;
+    straightTorsionInput.slipAngleRadians = 0.0;
+    TireFlexibleRingFieldOutput straightTorsionOutput;
+    for (int step = 0; step < 180; ++step)
+        straightTorsionOutput = advanceTireFlexibleRingDynamics(
+            description, straightTorsionInput, straightTorsionState);
+    VehicleScalar straightTorsionMaximumLateral = 0.0;
+    for (VehicleScalar value : straightTorsionOutput.lateralDisplacementM)
+        straightTorsionMaximumLateral = std::max(
+            straightTorsionMaximumLateral, std::abs(value));
+    if (!straightTorsionOutput.valid
+        || straightTorsionMaximumLateral > 0.00025)
+    {
+        return false;
+    }
+
+    // TIRE45K: genuine MF/contact Fy and Mz must DRIVE the flexible carcass,
+    // not merely unlock separate rigid-ring presentation states.  Keep the
+    // ring lateral/yaw/twist inputs at zero here on purpose: this regression
+    // proves a real tire-force state alone produces side-bend and footprint
+    // torsion in the 24x13 structural field.
+    TireFlexibleRingDynamicState corneringState;
+    TireFlexibleRingDynamicsInput corneringInput = input;
+    corneringInput.forwardSpeedMps = 18.0;
+    corneringInput.lateralForceN = 2600.0;
+    corneringInput.aligningMomentNm = 65.0;
+    corneringInput.slipAngleRadians =
+        4.0 * 3.14159265358979323846 / 180.0;
+    corneringInput.ringLateralOffsetM = 0.0;
+    corneringInput.ringYawRadians = 0.0;
+    corneringInput.contactPatchTwistRadians = 0.0;
+    TireFlexibleRingFieldOutput corneringOutput;
+    for (int step = 0; step < 220; ++step)
+        corneringOutput = advanceTireFlexibleRingDynamics(
+            description, corneringInput, corneringState);
+    VehicleScalar corneringMaximumLateral = 0.0;
+    for (VehicleScalar value : corneringOutput.lateralDisplacementM)
+        corneringMaximumLateral = std::max(
+            corneringMaximumLateral, std::abs(value));
+    if (!corneringOutput.valid || corneringMaximumLateral < 0.006)
+        return false;
+
+    // Self-aligning moment must also appear as a front/rear-opposed lateral
+    // shear pair around the footprint. This is the visible tread torsion mode,
+    // not a whole-wheel camber/yaw transform.
+    TireFlexibleRingDynamicState torsionOnlyState;
+    TireFlexibleRingDynamicsInput torsionOnlyInput = input;
+    torsionOnlyInput.forwardSpeedMps = 18.0;
+    torsionOnlyInput.lateralForceN = 0.0;
+    torsionOnlyInput.aligningMomentNm = 65.0;
+    torsionOnlyInput.slipAngleRadians =
+        4.0 * 3.14159265358979323846 / 180.0;
+    TireFlexibleRingFieldOutput torsionOnlyOutput;
+    for (int step = 0; step < 220; ++step)
+        torsionOnlyOutput = advanceTireFlexibleRingDynamics(
+            description, torsionOnlyInput, torsionOnlyState);
+    const std::size_t footprintFront = indexOf(5, TireFlexibleRingFieldBands / 2);
+    const std::size_t footprintRear = indexOf(7, TireFlexibleRingFieldBands / 2);
+    const VehicleScalar frontTorsion =
+        torsionOnlyOutput.lateralDisplacementM[footprintFront];
+    const VehicleScalar rearTorsion =
+        torsionOnlyOutput.lateralDisplacementM[footprintRear];
+    if (!torsionOnlyOutput.valid
+        || frontTorsion * rearTorsion >= 0.0
+        || std::max(std::abs(frontTorsion), std::abs(rearTorsion)) < 0.00045)
+    {
+        return false;
+    }
+
+    // Authority must fade again after the manoeuvre. The old cornering shape
+    // cannot become a permanent inward lean when Fy/Mz/slip return to neutral.
+    TireFlexibleRingDynamicsInput corneringReleaseInput = input;
+    corneringReleaseInput.forwardSpeedMps = 8.0;
+    TireFlexibleRingFieldOutput corneringReleased;
+    for (int step = 0; step < 180; ++step)
+        corneringReleased = advanceTireFlexibleRingDynamics(
+            description, corneringReleaseInput, corneringState);
+    VehicleScalar releasedMaximumLateral = 0.0;
+    for (VehicleScalar value : corneringReleased.lateralDisplacementM)
+        releasedMaximumLateral = std::max(
+            releasedMaximumLateral, std::abs(value));
+    if (!corneringReleased.valid || releasedMaximumLateral > 0.00035)
+        return false;
+
+    // TIRE45H: if a prior manoeuvre leaves a pathological state behind, a
+    // normal top-support manifold with no lateral authority must immediately
+    // re-enter the physical load/road envelope instead of preserving a
+    // 60-70 mm collapse or centimetres of stale side displacement.
+    TireFlexibleRingDynamicState staleState;
+    staleState.initialized = true;
+    for (std::size_t field = 0; field < TireFlexibleRingFieldCount; ++field)
+    {
+        staleState.downDisplacementM[field] = 0.060;
+        staleState.lateralDisplacementM[field] = 0.020;
+    }
+    TireFlexibleRingFieldOutput recovered = advanceTireFlexibleRingDynamics(
+        description, input, staleState);
+    VehicleScalar recoveredMaximumDown = 0.0;
+    VehicleScalar recoveredMaximumLateral = 0.0;
+    for (std::size_t field = 0; field < TireFlexibleRingFieldCount; ++field)
+    {
+        recoveredMaximumDown = std::max(
+            recoveredMaximumDown, std::abs(recovered.downDisplacementM[field]));
+        recoveredMaximumLateral = std::max(
+            recoveredMaximumLateral, std::abs(recovered.lateralDisplacementM[field]));
+    }
+    if (!recovered.valid
+        || recoveredMaximumDown > 0.035
+        || recoveredMaximumLateral > 0.00025)
+    {
+        return false;
+    }
+
+    // Removing the synthetic flat-road bulge must not neuter side-contact
+    // deformation. A vertical curb wall touching the negative-width shoulder
+    // supplies a genuine +lateral collision normal and must still push that
+    // part of the carcass inward by millimetres.
+    TireFlexibleRingDynamicState curbState;
+    TireFlexibleRingDynamicsInput curbInput = input;
+    curbInput.roadSampleCount = 2;
+    auto& curbWall = curbInput.roadSamples[1];
+    curbWall.queried = true;
+    curbWall.supported = true;
+    curbWall.queryLateralM = -0.095;
+    curbWall.pointLateralM = -0.080;
+    curbWall.pointDownM = road.pointDownM;
+    curbWall.normalDown = 0.0;
+    curbWall.normalLateral = 1.0;
+    TireFlexibleRingFieldOutput curbLoaded;
+    for (int step = 0; step < 250; ++step)
+        curbLoaded = advanceTireFlexibleRingDynamics(
+            description, curbInput, curbState);
+    if (!curbLoaded.valid
+        || curbLoaded.lateralDisplacementM[indexOf(bottomStation, 0)] < 0.005)
+    {
+        return false;
+    }
+
+    // Pure longitudinal rigid-ring motion must become carcass shear, not
+    // manufacture a new radial collapse mode at the footprint.
+    const VehicleScalar baselineBottomRadial =
+        settled.downDisplacementM[bottomCenter];
+    input.ringLongitudinalOffsetM = 0.025;
+    TireFlexibleRingFieldOutput accelerated;
+    for (int step = 0; step < 120; ++step)
+        accelerated = advanceTireFlexibleRingDynamics(description, input, state);
+    if (std::abs(accelerated.forwardDisplacementM[bottomCenter] - 0.025)
+            > 0.004
+        || std::abs(accelerated.downDisplacementM[bottomCenter]
+            - baselineBottomRadial) > 0.0015)
+    {
+        return false;
+    }
+
+    input.ringLongitudinalOffsetM = -0.025;
+    TireFlexibleRingFieldOutput braked;
+    for (int step = 0; step < 180; ++step)
+        braked = advanceTireFlexibleRingDynamics(description, input, state);
+    if (std::abs(braked.forwardDisplacementM[bottomCenter] + 0.025) > 0.004
+        || std::abs(braked.downDisplacementM[bottomCenter]
+            - baselineBottomRadial) > 0.0015)
+    {
+        return false;
+    }
+
+    // A deflated carcass may collapse substantially, but the internal rim/
+    // flange collision is itself a simulated unilateral boundary. No control
+    // point may pass through the protected rim envelope.
+    input.ringLongitudinalOffsetM = 0.0;
+    input.inflationPressurePa = 0.0;
+    road.pointDownM = 0.250;
+    TireFlexibleRingFieldOutput deflated;
+    for (int step = 0; step < 300; ++step)
+        deflated = advanceTireFlexibleRingDynamics(description, input, state);
+
+    const VehicleScalar sidewallHeight =
+        description.unloadedRadiusM - description.rimRadiusM;
+    const VehicleScalar minimumRadius = description.rimRadiusM
+        + std::clamp(sidewallHeight * 0.15,
+            VehicleScalar{0.006}, VehicleScalar{0.018})
+        + std::clamp(sidewallHeight * 0.10,
+            VehicleScalar{0.004}, VehicleScalar{0.012});
+    for (std::size_t station = 0;
+         station < TireFlexibleRingFieldStations; ++station)
+    {
+        const VehicleScalar theta = 2.0 * 3.14159265358979323846
+            * static_cast<VehicleScalar>(station)
+            / static_cast<VehicleScalar>(TireFlexibleRingFieldStations);
+        for (std::size_t band = 0; band < TireFlexibleRingFieldBands; ++band)
+        {
+            const VehicleScalar width = TireFlexibleRingWidthCoordinates[band];
+            const VehicleScalar radialScale = 1.0
+                - 0.055 * width * width;
+            const auto index = indexOf(station, band);
+            const VehicleScalar forward = description.unloadedRadiusM
+                * radialScale * std::cos(theta)
+                + deflated.forwardDisplacementM[index];
+            const VehicleScalar down = description.unloadedRadiusM
+                * radialScale * std::sin(theta)
+                + deflated.downDisplacementM[index];
+            if (std::sqrt(forward * forward + down * down)
+                < minimumRadius - 0.0025)
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+
+bool tireCarcassDevelopmentLabExposesExactSearch()
+{
+    using namespace heritage::vehicles::tires;
+
+    if (tireCarcassDevelopmentParameterCount() != 217)
+        return false;
+
+    TireCarcassDevelopmentParameterInfo first;
+    TireCarcassDevelopmentParameterInfo last;
+    if (!tireCarcassDevelopmentParameterInfo(0, first)
+        || !tireCarcassDevelopmentParameterInfo(216, last)
+        || first.key != "mass_scale"
+        || last.key != "band_coupling_12")
+    {
+        return false;
+    }
+
+    TireCarcassSyntheticInput synthetic;
+    synthetic.description.unloadedRadiusM = 0.315;
+    synthetic.description.rimRadiusM = 0.2159;
+    synthetic.description.sectionWidthM = 0.205;
+    synthetic.description.maximumDeflectionM = 0.080;
+    synthetic.description.referencePressurePa = 220000.0;
+    synthetic.description.verticalStiffnessNPerM = 220000.0;
+    synthetic.referencePressurePa = 220000.0;
+    synthetic.normalLoadN = 3200.0;
+    synthetic.roadOverlapM = 0.018;
+    synthetic.integrationSteps = 40;
+
+    TireFlexibleRingDevelopmentTuning defaults;
+    resetTireCarcassDevelopmentTuning(defaults, true);
+    const auto baseline = runTireCarcassSyntheticScenario(
+        synthetic, defaults, TireCarcassSyntheticScenario::StaticFlat);
+    if (!baseline.valid
+        || baseline.roadPenetrationMm > 2.0
+        || baseline.rimPenetrationMm > 0.5)
+    {
+        return false;
+    }
+
+    const auto acceleration = runTireCarcassSyntheticScenario(
+        synthetic, defaults, TireCarcassSyntheticScenario::HardAcceleration);
+    const auto braking = runTireCarcassSyntheticScenario(
+        synthetic, defaults, TireCarcassSyntheticScenario::HardBraking);
+    if (!acceleration.valid || !braking.valid
+        || acceleration.centerForwardDisplacementMm < 20.0
+        || braking.centerForwardDisplacementMm > -20.0
+        || std::abs(acceleration.centerRadialDisplacementMm
+            - braking.centerRadialDisplacementMm) > 0.05)
+    {
+        return false;
+    }
+
+    std::size_t bottomFoundationIndex = static_cast<std::size_t>(-1);
+    for (std::size_t index = 0;
+         index < tireCarcassDevelopmentParameterCount(); ++index)
+    {
+        TireCarcassDevelopmentParameterInfo info;
+        if (tireCarcassDevelopmentParameterInfo(index, info)
+            && info.key == "station_foundation_6")
+        {
+            bottomFoundationIndex = index;
+            break;
+        }
+    }
+    if (bottomFoundationIndex == static_cast<std::size_t>(-1))
+        return false;
+
+    auto altered = defaults;
+    if (!setTireCarcassDevelopmentParameterValue(
+            altered, bottomFoundationIndex, 0.20))
+    {
+        return false;
+    }
+    const auto changed = runTireCarcassSyntheticScenario(
+        synthetic, altered, TireCarcassSyntheticScenario::StaticFlat);
+    if (!changed.valid
+        || std::abs(changed.centerBottomHeightMm - baseline.centerBottomHeightMm)
+            < 0.0001)
+    {
+        return false;
+    }
+
+    constexpr std::uint32_t coreAndContactMask =
+        (std::uint32_t{1} << 0) | (std::uint32_t{1} << 2);
+    const auto searchA = runTireCarcassSearchBatch(
+        synthetic, defaults, TireCarcassSyntheticScenario::StaticFlat,
+        451729, 0, 4, 0.15, coreAndContactMask);
+    const auto searchB = runTireCarcassSearchBatch(
+        synthetic, defaults, TireCarcassSyntheticScenario::StaticFlat,
+        451729, 0, 4, 0.15, coreAndContactMask);
+    if (!searchA.valid || !searchB.valid
+        || searchA.bestTrialIndex != searchB.bestTrialIndex
+        || std::abs(searchA.bestScore - searchB.bestScore) > 1.0e-12)
+    {
+        return false;
+    }
+
+    const auto candidateA = tireCarcassDevelopmentTrialTuning(
+        defaults, 451729, searchA.bestTrialIndex, 0.15,
+        coreAndContactMask);
+    const auto candidateB = tireCarcassDevelopmentTrialTuning(
+        defaults, 451729, searchA.bestTrialIndex, 0.15,
+        coreAndContactMask);
+    for (std::size_t index = 0;
+         index < tireCarcassDevelopmentParameterCount(); ++index)
+    {
+        if (std::abs(
+            tireCarcassDevelopmentParameterValue(candidateA, index)
+            - tireCarcassDevelopmentParameterValue(candidateB, index))
+            > 1.0e-12)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool tireRigidRingStructuralModesAreRateStable()

@@ -1,0 +1,471 @@
+// Peugeot 206 RC / GTi 180 - PSA EW10J4S (RFK)
+// Engine Simulator Community Edition v0.1.14a
+// v16 FINAL CURVE CAL 10: final fine ignition trim from the near-target v15 neutral dyno.
+// IMPORTANT: all calibration dyno pulls from this point forward must be performed
+// in NEUTRAL (N). The earlier v6 149 lb-ft / 155 hp result was taken in 1st gear
+// with the vehicle moving and is not used as the neutral engine-dyno baseline.
+//
+// v9 neutral diagnostics clustered at ~179-182 lb-ft and ~189-190 hp regardless
+// of which small parameter family was changed. v10 therefore reshapes the whole
+// effective breathing model toward the stock EW10J4S target rather than chasing
+// those small deltas. This is an Engine Simulator calibration proxy, not a claim
+// that the proxy cam/flow values equal Peugeot factory drawings.
+//
+// Calibration targets:
+//   factory: 202 Nm (149 lb-ft) @ 4750 rpm; 130 kW / 177 PS (~175 hp) @ 7000 rpm
+//   stock chassis-dyno reference: 197 Nm @ 4732 rpm; 172.1 CV @ 6603 rpm
+//   practical CE target: ~145-153 lb-ft around 4.7-5.2k and ~168-177 hp around 6.4-7.0k
+//   v15 observed: 153 lb-ft @ 4799 rpm; 172 hp @ 6910 rpm (neutral dyno)
+//   CAL10 goal: trim ~4 lb-ft from the already-correct 4.8k torque crest and recover
+//   ~2-3 hp near 7k. Ignition-map shaping only; mechanical model unchanged.
+//
+// Original v6 note: first stock-output calibration pass after the running v5 measured
+// ~227 lb-ft / ~247 hp in Community Edition -- far above the production engine.
+// This revision preserves verified geometry and drivetrain data, but reduces the
+// estimated breathing/combustion calibration toward the real stock targets:
+// 202 Nm @ 4750 rpm, 130 kW / 177 PS @ 7000 rpm, ~160 Nm already at 2000 rpm.
+//
+// Verified production anchors:
+//   1997 cc, 85.0 x 88.0 mm, 11.0:1, DOHC 16V, naturally aspirated
+//   130 kW (177 PS) @ 7000 rpm, 202 Nm @ 4750 rpm
+//   firing order 1-3-4-2
+//   ~160 Nm already at 2000 rpm (~80% of peak), useful as a curve-shape anchor.
+//
+// Project dyno observation (v5, Community Edition v0.1.14a):
+//   ~227 lb-ft / ~247 hp peak indicated -> grossly over-breathing.
+// v6 therefore reduces only UNKNOWN/ESTIMATED flow, cam, ignition and friction
+// parameters; bore/stroke/compression and stock drivetrain remain unchanged.
+//
+// NOTE: exact production cam profiles, port-flow curves, runner/header dimensions,
+// masses and ignition map remain calibration estimates until better factory data is found.
+// The CAT CAMS 4901902 sheet is a COMPETITION profile and is intentionally NOT used
+// as a stock cam specification.
+
+import "engine_sim.mr"
+
+units units()
+constants constants()
+impulse_response_library ir_lib()
+
+label cycle(2 * 360 * units.deg)
+
+private node ew10_wires {
+    output wire1: ignition_wire();
+    output wire2: ignition_wire();
+    output wire3: ignition_wire();
+    output wire4: ignition_wire();
+}
+
+// Known EW firing order: 1-3-4-2.
+private node ew10_distributor {
+    input wires;
+    input timing_curve;
+    input rev_limit: 7300 * units.rpm;
+
+    alias output __out:
+        ignition_module(
+            timing_curve: timing_curve,
+            rev_limit: rev_limit,
+            limiter_duration: 0.08 * units.sec
+        )
+        .connect_wire(wires.wire1, (0.0 / 4.0) * cycle)
+        .connect_wire(wires.wire3, (1.0 / 4.0) * cycle)
+        .connect_wire(wires.wire4, (2.0 / 4.0) * cycle)
+        .connect_wire(wires.wire2, (3.0 / 4.0) * cycle);
+}
+
+// Stable combustion calibration borrowed from the pattern used by the official
+// Engine Simulator four-cylinder examples. This is a simulator calibration,
+// not claimed EW10J4S factory data.
+private node ew10_turbulence_to_flame_speed_ratio {
+    alias output __out:
+        function(5.0)
+            .add_sample(0.0,  3.0)
+            .add_sample(5.0,  7.5)
+            .add_sample(10.0, 15.0)
+            .add_sample(15.0, 24.75)
+            .add_sample(20.0, 37.5)
+            .add_sample(25.0, 46.875)
+            .add_sample(30.0, 56.25)
+            .add_sample(35.0, 65.625)
+            .add_sample(40.0, 75.0)
+            .add_sample(45.0, 84.375);
+}
+
+private node ew10_camshaft_builder {
+    input intake_lobe_profile;
+    input exhaust_lobe_profile;
+    input intake_lobe_center: 110 * units.deg;
+    input exhaust_lobe_center: 108 * units.deg;
+    input advance: 0 * units.deg;
+    input base_radius: 17 * units.mm;
+
+    output intake_cam: _intake_cam;
+    output exhaust_cam: _exhaust_cam;
+
+    camshaft_parameters params(
+        advance: advance,
+        base_radius: base_radius
+    )
+
+    camshaft _intake_cam(params, lobe_profile: intake_lobe_profile)
+    camshaft _exhaust_cam(params, lobe_profile: exhaust_lobe_profile)
+
+    label rot360(360 * units.deg)
+
+    // Physical cylinders 1,2,3,4.  Compression/firing phases for 1-3-4-2:
+    // cyl 1 = 0 deg, cyl 2 = 540 deg, cyl 3 = 180 deg, cyl 4 = 360 deg.
+    _intake_cam
+        .add_lobe(rot360 + intake_lobe_center + (0.0 / 4.0) * cycle) // cyl 1
+        .add_lobe(rot360 + intake_lobe_center + (3.0 / 4.0) * cycle) // cyl 2
+        .add_lobe(rot360 + intake_lobe_center + (1.0 / 4.0) * cycle) // cyl 3
+        .add_lobe(rot360 + intake_lobe_center + (2.0 / 4.0) * cycle) // cyl 4
+
+    _exhaust_cam
+        .add_lobe(rot360 - exhaust_lobe_center + (0.0 / 4.0) * cycle) // cyl 1
+        .add_lobe(rot360 - exhaust_lobe_center + (3.0 / 4.0) * cycle) // cyl 2
+        .add_lobe(rot360 - exhaust_lobe_center + (1.0 / 4.0) * cycle) // cyl 3
+        .add_lobe(rot360 - exhaust_lobe_center + (2.0 / 4.0) * cycle) // cyl 4
+}
+
+private node ew10_head {
+    input intake_camshaft;
+    input exhaust_camshaft;
+    input chamber_volume: 49.936 * units.cc;
+    input flip_display: false;
+    input flow_attenuation: 1.0;
+    input lift_scale: 1.0;
+    alias output __out: head;
+
+    // IMPORTANT: add_flow_sample expects raw flow values. Do NOT wrap these in
+    // k_28inH2O(). The imported Engine Simulator helper performs that conversion.
+    // Curves are calibration estimates for a naturally aspirated 2.0L 16V head.
+    function intake_flow(50 * units.thou)
+    intake_flow
+        .add_flow_sample(  0 * lift_scale,   0 * flow_attenuation)
+        .add_flow_sample( 50 * lift_scale,  27 * flow_attenuation)
+        .add_flow_sample(100 * lift_scale,  49 * flow_attenuation)
+        .add_flow_sample(150 * lift_scale,  69 * flow_attenuation)
+        .add_flow_sample(200 * lift_scale,  87 * flow_attenuation)
+        .add_flow_sample(250 * lift_scale, 103 * flow_attenuation)
+        .add_flow_sample(300 * lift_scale, 147 * flow_attenuation)
+        .add_flow_sample(350 * lift_scale, 180 * flow_attenuation)
+        .add_flow_sample(400 * lift_scale, 194 * flow_attenuation)
+        .add_flow_sample(450 * lift_scale, 200 * flow_attenuation)
+
+    function exhaust_flow(50 * units.thou)
+    exhaust_flow
+        .add_flow_sample(  0 * lift_scale,   0 * flow_attenuation)
+        .add_flow_sample( 50 * lift_scale,  21 * flow_attenuation)
+        .add_flow_sample(100 * lift_scale,  38 * flow_attenuation)
+        .add_flow_sample(150 * lift_scale,  53 * flow_attenuation)
+        .add_flow_sample(200 * lift_scale,  68 * flow_attenuation)
+        .add_flow_sample(250 * lift_scale,  81 * flow_attenuation)
+        .add_flow_sample(300 * lift_scale, 113 * flow_attenuation)
+        .add_flow_sample(350 * lift_scale, 140 * flow_attenuation)
+        .add_flow_sample(400 * lift_scale, 151 * flow_attenuation)
+        .add_flow_sample(450 * lift_scale, 158 * flow_attenuation)
+
+    generic_cylinder_head head(
+        chamber_volume: chamber_volume,
+        intake_runner_volume: 120 * units.cc,
+        intake_runner_cross_section_area: 9.0 * units.cm2,
+        exhaust_runner_volume: 65 * units.cc,
+        exhaust_runner_cross_section_area: 7.2 * units.cm2,
+        intake_port_flow: intake_flow,
+        exhaust_port_flow: exhaust_flow,
+        valvetrain: standard_valvetrain(
+            intake_camshaft: intake_camshaft,
+            exhaust_camshaft: exhaust_camshaft
+        ),
+        flip_display: flip_display
+    )
+}
+
+public node peugeot_206_rc_ew10j4s {
+    alias output __out: engine;
+
+    label bore(85.0 * units.mm)
+    label stroke(88.0 * units.mm)
+    label rod_length(139.0 * units.mm)
+    label compression_height(29.0 * units.mm)
+
+    label piston_mass(440 * units.g)
+    label rod_mass(500 * units.g)
+    label crank_mass(15.0 * units.kg)
+    label flywheel_mass(6.0 * units.kg)
+    label flywheel_radius(145 * units.mm)
+
+    label crank_moment(
+        disk_moment_of_inertia(mass: crank_mass, radius: stroke / 2)
+    )
+    label flywheel_moment(
+        disk_moment_of_inertia(mass: flywheel_mass, radius: flywheel_radius)
+    )
+    label accessory_moment(
+        disk_moment_of_inertia(mass: 3.0 * units.kg, radius: 55 * units.mm)
+    )
+
+    engine engine(
+        name: "Peugeot 206 RC EW10J4S (RFK) v16 FINAL CURVE CAL 10",
+        starter_torque: 170 * units.lb_ft,
+        starter_speed: 650 * units.rpm,
+        redline: 7300 * units.rpm,
+        fuel: fuel(
+            max_burning_efficiency: 0.745,
+            turbulence_to_flame_speed_ratio: ew10_turbulence_to_flame_speed_ratio()
+        ),
+        throttle_gamma: 2.0,
+        hf_gain: 0.01,
+        noise: 0.15,
+        jitter: 0.01,
+        simulation_frequency: 20000,
+        convolution: 0.65,
+        fluid_simulation_steps: 8,
+        max_sle_solver_steps: 128
+    )
+
+    ew10_wires wires()
+
+    crankshaft crank(
+        throw: stroke / 2,
+        flywheel_mass: flywheel_mass,
+        mass: crank_mass,
+        friction_torque: 5.5 * units.lb_ft,
+        moment_of_inertia: crank_moment + flywheel_moment + accessory_moment,
+        position_x: 0.0,
+        position_y: 0.0,
+        tdc: 90 * units.deg
+    )
+
+    rod_journal rj1(angle:   0 * units.deg)
+    rod_journal rj2(angle: 180 * units.deg)
+    rod_journal rj3(angle: 180 * units.deg)
+    rod_journal rj4(angle:   0 * units.deg)
+
+    crank
+        .add_rod_journal(rj1)
+        .add_rod_journal(rj2)
+        .add_rod_journal(rj3)
+        .add_rod_journal(rj4)
+
+    piston_parameters piston_params(
+        mass: piston_mass,
+        compression_height: compression_height,
+        wrist_pin_position: 0.0,
+        displacement: 0.0
+    )
+
+    connecting_rod_parameters rod_params(
+        mass: rod_mass,
+        moment_of_inertia: rod_moment_of_inertia(
+            mass: rod_mass,
+            length: rod_length
+        ),
+        center_of_mass: 0.0,
+        length: rod_length
+    )
+
+    cylinder_bank_parameters bank_params(
+        bore: bore,
+        deck_height: stroke / 2 + rod_length + compression_height
+    )
+
+    intake intake(
+        plenum_volume: 2.8 * units.L,
+        plenum_cross_section_area: 38.48 * units.cm2,
+        intake_flow_rate: k_carb(390.0),
+        runner_flow_rate: k_carb(192.0),
+        runner_length: 14.5 * units.inch,
+        idle_flow_rate: k_carb(0.0),
+        // RFK warm idle target remains roughly 650-850 rpm. Reduced v6 breathing
+        // needs a hair more idle opening than v5; keep this as a calibration value.
+        idle_throttle_plate_position: 0.9968,
+        throttle_gamma: 2.0,
+        velocity_decay: 0.6
+    )
+
+    exhaust_system_parameters exhaust_params(
+        outlet_flow_rate: k_carb(710.0),
+        primary_tube_length: 21.0 * units.inch,
+        primary_flow_rate: k_carb(222.0),
+        velocity_decay: 0.82,
+        volume: 24.0 * units.L
+    )
+
+    exhaust_system exhaust(
+        exhaust_params,
+        length: 90 * units.inch,
+        audio_volume: 1.8,
+        impulse_response: ir_lib.mild_exhaust_0
+    )
+
+    cylinder_bank bank(bank_params, angle: 0 * units.deg)
+    bank
+        .add_cylinder(
+            piston: piston(piston_params, blowby: k_28inH2O(0.01)),
+            connecting_rod: connecting_rod(rod_params),
+            rod_journal: rj1,
+            intake: intake,
+            exhaust_system: exhaust,
+            ignition_wire: wires.wire1,
+            primary_length: 1.5 * units.inch,
+            sound_attenuation: 1.00
+        )
+        .add_cylinder(
+            piston: piston(piston_params, blowby: k_28inH2O(0.01)),
+            connecting_rod: connecting_rod(rod_params),
+            rod_journal: rj2,
+            intake: intake,
+            exhaust_system: exhaust,
+            ignition_wire: wires.wire2,
+            primary_length: 2.0 * units.inch,
+            sound_attenuation: 0.98
+        )
+        .add_cylinder(
+            piston: piston(piston_params, blowby: k_28inH2O(0.01)),
+            connecting_rod: connecting_rod(rod_params),
+            rod_journal: rj3,
+            intake: intake,
+            exhaust_system: exhaust,
+            ignition_wire: wires.wire3,
+            primary_length: 2.5 * units.inch,
+            sound_attenuation: 0.98
+        )
+        .add_cylinder(
+            piston: piston(piston_params, blowby: k_28inH2O(0.01)),
+            connecting_rod: connecting_rod(rod_params),
+            rod_journal: rj4,
+            intake: intake,
+            exhaust_system: exhaust,
+            ignition_wire: wires.wire4,
+            primary_length: 3.0 * units.inch,
+            sound_attenuation: 1.00
+        )
+
+    engine.add_cylinder_bank(bank)
+    engine.add_crankshaft(crank)
+
+    // STOCK EFFECTIVE-CURVE PROXY, not claimed Peugeot cam data.
+    // CAL5: v10 measured 158 lb-ft @ 5140 and 165 hp @ 5975 in CE v0.1.14a.
+    // The real EW10J4S uses continuously-variable intake timing plus a dual-mode
+    // intake, which CE cannot reproduce directly. This calibration deliberately
+    // reduces low/mid-lift flow while preserving high-lift breathing, and uses a
+    // CAL7 extends only the high-rpm effective lobe while using stronger fixed intake advance as a VVT compromise.
+    // Do NOT copy these duration/centerline values into Heritage as literal Peugeot specs.
+    harmonic_cam_lobe intake_lobe(
+        duration_at_50_thou: 246 * units.deg,
+        gamma: 1.1,
+        lift: 10.45 * units.mm,
+        steps: 128
+    )
+
+    harmonic_cam_lobe exhaust_lobe(
+        duration_at_50_thou: 240 * units.deg,
+        gamma: 1.1,
+        lift: 9.95 * units.mm,
+        steps: 128
+    )
+
+    ew10_camshaft_builder cams(
+        intake_lobe_profile: intake_lobe,
+        exhaust_lobe_profile: exhaust_lobe,
+        // Production intake VVT is continuously variable. CAL7 advances the fixed
+        // effective intake phase further to pull the torque crest earlier, while the
+        // longer lobe/high-lift-only airflow proxy carries breathing toward 7k.
+        intake_lobe_center: 103 * units.deg,
+        // CAT CAMS profiles retaining original EW10J4S architecture consistently
+        // use ~104 deg exhaust centerline; this is supporting calibration evidence,
+        // not a claim of a Peugeot factory cam drawing.
+        exhaust_lobe_center: 104 * units.deg,
+        base_radius: 17 * units.mm
+    )
+
+    bank.set_cylinder_head(
+        ew10_head(
+            intake_camshaft: cams.intake_cam,
+            exhaust_camshaft: cams.exhaust_cam
+        )
+    )
+
+    // CAL9 changes ONLY the ignition curve. v14 reached the desired power magnitude and
+    // nearly the desired power rpm (174 hp @ 6772), but its torque peak fell to 144 lb-ft
+    // and migrated even later to 5923 rpm. The mechanical breathing model is therefore held
+    // fixed. This curve deliberately creates an early 4.5-4.9k torque shelf, then a much
+    // deeper 5.4-5.9k timing valley to prevent the natural late VE crest from becoming the
+    // reported torque maximum. High-rpm advance returns aggressively above 6.2k to preserve
+    // the v14 top-end. This is a simulator curve-shaping proxy, not Peugeot ECU map data.
+    function timing_curve(1000 * units.rpm)
+    timing_curve
+        .add_sample(   0 * units.rpm,  8 * units.deg)
+        .add_sample( 650 * units.rpm, 10 * units.deg)
+        .add_sample( 850 * units.rpm, 11 * units.deg)
+        .add_sample(1000 * units.rpm, 10 * units.deg)
+        .add_sample(2000 * units.rpm, 18 * units.deg)
+        .add_sample(3000 * units.rpm, 23 * units.deg)
+        .add_sample(3750 * units.rpm, 24.0 * units.deg)
+        .add_sample(4000 * units.rpm, 25.5 * units.deg)
+        .add_sample(4250 * units.rpm, 27.0 * units.deg)
+        .add_sample(4500 * units.rpm, 28.0 * units.deg)
+        .add_sample(4750 * units.rpm, 28.5 * units.deg)
+        .add_sample(4900 * units.rpm, 28.0 * units.deg)
+        .add_sample(5100 * units.rpm, 25.0 * units.deg)
+        .add_sample(5300 * units.rpm, 21.0 * units.deg)
+        .add_sample(5500 * units.rpm, 18.5 * units.deg)
+        .add_sample(5750 * units.rpm, 18.0 * units.deg)
+        .add_sample(5950 * units.rpm, 21.0 * units.deg)
+        .add_sample(6100 * units.rpm, 26.0 * units.deg)
+        .add_sample(6250 * units.rpm, 30.0 * units.deg)
+        .add_sample(6500 * units.rpm, 34.5 * units.deg)
+        .add_sample(6750 * units.rpm, 37.0 * units.deg)
+        .add_sample(7000 * units.rpm, 39.5 * units.deg)
+        .add_sample(7300 * units.rpm, 34.0 * units.deg)
+
+    engine.add_ignition_module(
+        ew10_distributor(
+            wires: wires,
+            timing_curve: timing_curve,
+            rev_limit: 7300 * units.rpm
+        )
+    )
+}
+
+// Peugeot 206 RC / GTi 180 production vehicle data used by Engine Simulator's
+// simple driving model.  The real car is FWD; Engine Simulator's vehicle node
+// does not model axle placement, but the mass/aero/final drive/rolling radius
+// determine the load seen by the engine.
+private node peugeot_206_rc_vehicle {
+    alias output __out:
+        vehicle(
+            mass: 1100 * units.kg,
+            drag_coefficient: 0.335,
+            cross_sectional_area: (65.9 * units.inch) * (46.57 * units.inch),
+            diff_ratio: 3.947,
+            // Peugeot press data gives 1.816 m loaded rolling circumference.
+            tire_radius: 11.38 * units.inch,
+            rolling_resistance: 162 * units.N
+        );
+}
+
+// BE4/5T 5-speed manual fitted to the 206 RC.  Ratios are stock production
+// values.  max_clutch_torque is a simulator calibration, set safely above the
+// stock engine's 202 Nm (149 lb-ft) peak while remaining road-car-like.
+private node peugeot_206_rc_transmission {
+    alias output __out:
+        transmission(
+            max_clutch_torque: 230 * units.lb_ft
+        )
+        .add_gear(2.923)
+        .add_gear(1.869)
+        .add_gear(1.360)
+        .add_gear(1.051)
+        .add_gear(0.860);
+}
+
+// Current Community Edition direct-load style.  Supplying transmission +
+// vehicle is required if we want the Up/Down gear controls to work.
+run(
+    engine: peugeot_206_rc_ew10j4s(),
+    transmission: peugeot_206_rc_transmission(),
+    vehicle: peugeot_206_rc_vehicle()
+)

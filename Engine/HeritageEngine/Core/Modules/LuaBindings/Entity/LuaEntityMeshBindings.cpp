@@ -2,7 +2,6 @@
 #include "../../../../Physics/PhysicsWorld.hpp"
 #include <array>
 #include "LuaEntityBindingHandlers.hpp"
-#include "LuaEntityTireFlexibleRingBridge.hpp"
 #include "../LuaBindingInternals.hpp"
 
 #include <algorithm>
@@ -329,17 +328,8 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_
             ? static_cast<std::size_t>(requestedWheelIndex - 1.0)
             : std::size_t{0};
 
-        // TIRE28C/VIS21: the GLB semantic node name is authoritative for WHICH
-        // physical wheel owns this visual deformation field.  TIRE27 live testing
-        // proved that a left-side sidewalk contact could appear on the right-side
-        // visible tire.  Do not "fix" creator assets to match a transient native
-        // wheel-vector order.  Resolve WH_FL/WH_FR/WH_RL/WH_RR against the actual
-        // native WheelDescription mounts every call, then use that resolved wheel
-        // for BOTH the probe centre and the wheel basis/state.
-        //
-        // This also makes the bridge robust to future loaders that reorder contact
-        // units internally: presentation semantics stay FL/FR/RL/RR while native
-        // vector order is allowed to change.
+        // GLB semantic wheel names remain authoritative for presentation. The
+        // native wheel vector may be reordered without swapping FL/FR/RL/RR.
         auto semanticCorner = [](const std::string& name, bool& left, bool& front)
         {
             const auto has = [&](const char* token) {
@@ -361,8 +351,8 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_
                 runtime->m_physics->vehicles().wheelCount(vehicleHandle);
             if (wheelCount > 0)
             {
-                std::vector<heritage::vehicles::WheelDescription> descriptions;
-                descriptions.resize(wheelCount);
+                std::vector<heritage::vehicles::WheelDescription> descriptions(
+                    wheelCount);
                 bool complete = true;
                 float minX = std::numeric_limits<float>::infinity();
                 float maxX = -std::numeric_limits<float>::infinity();
@@ -381,18 +371,8 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_
                     minZ = (std::min)(minZ, descriptions[i].localMount.z);
                     maxZ = (std::max)(maxZ, descriptions[i].localMount.z);
                 }
-
                 if (complete)
                 {
-                    // Heritage vehicle-local convention is X=lateral and Z=
-                    // longitudinal.  Use the extrema rather than hard-coded wheel
-                    // numbers, so a four-wheel definition can arrive in any order.
-                    // Racing United authored vehicle semantics follow the GLB itself:
-                    // with the vehicle nose authored toward Blender -Y, the
-                    // driver's LEFT side is +X in the exported/Heritage vehicle
-                    // geometry.  The current native prototype vector still carries
-                    // the older opposite side labels, which is exactly the TIRE27
-                    // left-contact/right-visual bug.
                     const float targetX = semanticLeft ? maxX : minX;
                     const float targetZ = semanticFront ? maxZ : minZ;
                     float bestScore = std::numeric_limits<float>::infinity();
@@ -410,351 +390,109 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_
                         }
                     }
                     wheelIndex = bestIndex;
-
-                    static std::unordered_set<std::string> reportedSemanticRouting;
-                    if (reportedSemanticRouting.insert(nodeName).second)
-                    {
-                        const auto& resolved = descriptions[wheelIndex];
-                        std::cout
-                            << "TIRE28C VIS21 semantic routing node=" << nodeName
-                            << " requested=" << (requestedIndex + 1)
-                            << " resolved=" << (wheelIndex + 1)
-                            << " mount=(" << resolved.localMount.x << ','
-                            << resolved.localMount.y << ','
-                            << resolved.localMount.z << ")\n";
-                    }
                 }
             }
         }
 
         heritage::vehicles::WheelState wheelState;
         heritage::vehicles::WheelDescription wheelDescription;
-        if (runtime->m_physics->vehicles().wheelState(vehicleHandle, wheelIndex, wheelState)
+        heritage::vehicles::tires::TireFlexibleRingFieldOutput carcassField;
+        if (runtime->m_physics->vehicles().wheelState(
+                vehicleHandle, wheelIndex, wheelState)
             && runtime->m_physics->vehicles().wheelDescription(
-                vehicleHandle, wheelIndex, wheelDescription))
+                vehicleHandle, wheelIndex, wheelDescription)
+            && runtime->m_physics->vehicles().wheelTireFlexibleRingField(
+                vehicleHandle, wheelIndex, carcassField))
         {
-            // TIRE27/VIS20: keep the proven render-space probe bridge, but replace the
-            // coarse uniform 9x7 topology with a dense bottom-biased 21x13
-            // lattice. The live curb test proved contact/deformation reaches
-            // the visible tire; each old sample simply controlled too much rubber.
-            // The live tire shader was proven in TIRE23.  What failed afterward
-            // was the contact bridge. Build the requested lower-half contact lattice
-            // with the CollisionSystem itself, then send only
-            // scalar physical compression to presentation.  No absolute contact
-            // position survives this boundary, so stale WheelState/world/model
-            // coordinate disagreements cannot make the visual contact disappear.
-            std::array<float, heritage::entities::TireVisualContactSampleCount>
-                compressionM{};
-            std::array<float, heritage::entities::TireVisualContactSampleCount>
-                contactForwardDisplacementM{};
-            std::array<float, heritage::entities::TireVisualContactSampleCount>
-                contactDownDisplacementM{};
-            std::array<float, heritage::entities::TireVisualContactSampleCount>
-                contactLateralDisplacementM{};
-
-            heritage::math::Vec3 chassisWorldPosition{};
-            heritage::math::Vec3 chassisWorldRotationDegrees{};
-            const bool haveRenderChassisPose =
-                runtime->m_entities->worldPosition(entityHandle, chassisWorldPosition)
-                && runtime->m_entities->worldRotationDegrees(
-                    entityHandle, chassisWorldRotationDegrees);
-
-            heritage::math::Vec3 probeCenter = wheelState.worldCenter;
-            if (haveRenderChassisPose)
+            std::array<float, heritage::entities::TireVisualDeformationFieldCount>
+                forwardM{};
+            std::array<float, heritage::entities::TireVisualDeformationFieldCount>
+                downM{};
+            std::array<float, heritage::entities::TireVisualDeformationFieldCount>
+                lateralM{};
+            static_assert(
+                heritage::entities::TireVisualDeformationFieldCount
+                    == heritage::vehicles::tires::TireFlexibleRingFieldCount);
+            float maximumForwardM = 0.0f;
+            float maximumDownM = 0.0f;
+            float maximumLateralM = 0.0f;
+            for (std::size_t index = 0; index < forwardM.size(); ++index)
             {
-                // EmbeddedWheelBinding renders from the authored bind pose plus
-                // suspension travel relative to the *current/interpolated* chassis,
-                // deliberately not from WheelState.worldCenter. Reconstruct that
-                // same wheel-centre policy here so the probe lattice follows the
-                // tire the player actually sees.
-                const auto chassisRotation = heritage::math::normalized(
-                    heritage::math::makeQuaternionFromEulerDegrees(
-                        chassisWorldRotationDegrees));
-                const float suspensionLength = static_cast<float>(
-                    std::isfinite(wheelState.suspensionLength)
-                        ? wheelState.suspensionLength
-                        : wheelDescription.restLength);
-                const heritage::math::Vec3 localWheelCenter{
-                    wheelDescription.localMount.x
-                        + wheelDescription.localSuspensionDirection.x * suspensionLength,
-                    wheelDescription.localMount.y
-                        + wheelDescription.localSuspensionDirection.y * suspensionLength,
-                    wheelDescription.localMount.z
-                        + wheelDescription.localSuspensionDirection.z * suspensionLength };
-                const heritage::math::Vec3 rotatedLocalCenter =
-                    heritage::math::rotateVectorUnit(chassisRotation, localWheelCenter);
-                probeCenter = {
-                    chassisWorldPosition.x + rotatedLocalCenter.x,
-                    chassisWorldPosition.y + rotatedLocalCenter.y,
-                    chassisWorldPosition.z + rotatedLocalCenter.z };
+                forwardM[index] = static_cast<float>(
+                    carcassField.forwardDisplacementM[index]);
+                downM[index] = static_cast<float>(
+                    carcassField.downDisplacementM[index]);
+                lateralM[index] = static_cast<float>(
+                    carcassField.lateralDisplacementM[index]);
+                maximumForwardM = (std::max)(maximumForwardM, std::abs(forwardM[index]));
+                maximumDownM = (std::max)(maximumDownM, std::abs(downM[index]));
+                maximumLateralM = (std::max)(maximumLateralM, std::abs(lateralM[index]));
             }
 
-            auto dot3 = [](const heritage::math::Vec3& a, const heritage::math::Vec3& b)
+            // TIRE45C live fault trace.  This is deliberately emitted from the
+            // final native->renderer bridge so one log line tells us whether a
+            // grotesque visible tire already exists in the physical 24x13 field
+            // or is introduced only while mapping that sane field onto the GLB.
+            // Rate-limit per wheel: normal driving must not spam the console.
+            static std::array<std::uint64_t, 64> traceCounters{};
+            const std::size_t traceSlot = wheelIndex % traceCounters.size();
+            const std::uint64_t traceCounter = ++traceCounters[traceSlot];
+            const float maximumAnyM = (std::max)(maximumForwardM,
+                (std::max)(maximumDownM, maximumLateralM));
+            const bool suspiciousField = maximumAnyM >= 0.040f
+                || maximumLateralM >= 0.020f;
+            const bool suspiciousTrace = suspiciousField
+                && (traceCounter % 30u) == 0u;
+            const bool rollingTrace = std::abs(
+                static_cast<float>(wheelState.wheelAngularVelocity)) >= 1.0f
+                && (traceCounter % 120u) == 0u;
+            if (suspiciousTrace || rollingTrace)
             {
-                return a.x * b.x + a.y * b.y + a.z * b.z;
-            };
-            auto length3 = [&](const heritage::math::Vec3& v)
-            {
-                return std::sqrt((std::max)(dot3(v, v), 0.0f));
-            };
-            auto scale3 = [](const heritage::math::Vec3& v, float s)
-            {
-                return heritage::math::Vec3{ v.x * s, v.y * s, v.z * s };
-            };
-            auto add3 = [](const heritage::math::Vec3& a, const heritage::math::Vec3& b)
-            {
-                return heritage::math::Vec3{ a.x + b.x, a.y + b.y, a.z + b.z };
-            };
-            auto normalize3 = [&](heritage::math::Vec3 v, const heritage::math::Vec3& fallback)
-            {
-                const float len = length3(v);
-                if (len <= 1.0e-6f)
-                    return fallback;
-                return scale3(v, 1.0f / len);
-            };
-            auto cross3 = [](const heritage::math::Vec3& a, const heritage::math::Vec3& b)
-            {
-                return heritage::math::Vec3{
-                    a.y * b.z - a.z * b.y,
-                    a.z * b.x - a.x * b.z,
-                    a.x * b.y - a.y * b.x };
-            };
+                const auto dot3 = [](const heritage::math::Vec3& a,
+                    const heritage::math::Vec3& b) {
+                    return a.x * b.x + a.y * b.y + a.z * b.z;
+                };
+                std::cout
+                    << "TIRE45C TRACE node=" << nodeName
+                    << " wheel=" << wheelIndex
+                    << " fieldValid=" << (carcassField.valid ? 1 : 0)
+                    << " max_mm(F,D,L)="
+                    << maximumForwardM * 1000.0f << ','
+                    << maximumDownM * 1000.0f << ','
+                    << maximumLateralM * 1000.0f
+                    << " omega=" << wheelState.wheelAngularVelocity
+                    << " speed=" << wheelState.longitudinalSpeed
+                    << " slip=" << wheelState.slipRatio
+                    << " loadN=" << wheelState.normalForce
+                    << " camber=" << wheelState.camberAngleDegrees
+                    << " toe=" << wheelState.toeAngleDegrees
+                    << " ring_mm(Lon,Lat)="
+                    << wheelState.tireRingLongitudinalOffset * 1000.0 << ','
+                    << wheelState.tireRingLateralOffset * 1000.0
+                    << " yaw=" << wheelState.tireRingYawDegrees
+                    << " windup=" << wheelState.tireRingWindupDegrees
+                    << " twist=" << wheelState.contactPatchTwistDegrees
+                    << " basisDot(FR,FU,RU)="
+                    << dot3(wheelState.worldWheelForward, wheelState.worldWheelRight) << ','
+                    << dot3(wheelState.worldWheelForward, wheelState.worldWheelUp) << ','
+                    << dot3(wheelState.worldWheelRight, wheelState.worldWheelUp)
+                    << '\n';
+            }
 
-            heritage::math::Vec3 wheelRight = normalize3(
-                wheelState.worldWheelRight, { 1.0f, 0.0f, 0.0f });
-            heritage::math::Vec3 wheelForward = wheelState.worldWheelForward;
-            wheelForward = add3(
-                wheelForward,
-                scale3(wheelRight, -dot3(wheelForward, wheelRight)));
-            wheelForward = normalize3(wheelForward, { 0.0f, 0.0f, 1.0f });
-            heritage::math::Vec3 wheelUp = normalize3(
-                cross3(wheelRight, wheelForward),
-                wheelState.worldWheelUp);
-            // Preserve the WheelState's up sign. Mirrored wheels may otherwise
-            // flip the lower hemisphere and probe the roof side of the tire.
-            if (dot3(wheelUp, wheelState.worldWheelUp) < 0.0f)
-                wheelUp = scale3(wheelUp, -1.0f);
-
-            // The ordinary support plane is already represented by native tire
-            // deflection/contact-patch state. Side-facing casts against that same
-            // plane are rejected so the contact sampler cannot manufacture a
-            // second local indentation on top of the flexible-ring equilibrium.
-            const heritage::math::Vec3 primarySupportNormal = normalize3(
-                wheelState.contactNormal, wheelUp);
-            const heritage::math::Vec3 primarySupportPoint = wheelState.contactPoint;
-            const bool primarySupportPlaneValid = wheelState.grounded
-                && std::isfinite(primarySupportPoint.x)
-                && std::isfinite(primarySupportPoint.y)
-                && std::isfinite(primarySupportPoint.z)
-                && dot3(primarySupportNormal, primarySupportNormal) > 0.99f;
-
-            const float tireRadiusM = std::clamp(
+            const float tireReferenceRadiusM = std::clamp(
                 static_cast<float>(wheelState.tireFreeRollingRadius > 0.05
                     ? wheelState.tireFreeRollingRadius
                     : wheelDescription.radius),
                 0.05f,
                 2.5f);
-            const float tireHalfWidthM = std::clamp(
-                wheelDescription.fitment.tireWidthMm > 20.0f
-                    ? wheelDescription.fitment.tireWidthMm * 0.0005f
-                    : static_cast<float>(wheelState.tireContactPatchWidth > 0.02
-                        ? wheelState.tireContactPatchWidth / 1.5
-                        : 0.105),
-                0.025f,
-                0.55f);
-            const float maximumCompressionM = std::clamp(
-                wheelDescription.maximumTireDeflection > 0.005f
-                    ? wheelDescription.maximumTireDeflection
-                    : 0.08f,
-                0.015f,
-                0.12f);
-
-            // TIRE29/VIS22: deformation capacity is directional.  TIRE28C live
-            // testing proved the routing fix, but a rear-left curb contact could
-            // collapse a sidewall strip through the opposite half of the tire and
-            // produce a long tongue/fin.  One scalar maximum is not geometrically
-            // valid in every direction: an 80 mm radial allowance is plausible for
-            // this 17-inch tire, while 80 mm laterally consumes almost the complete
-            // 102 mm half-width.  Bound each probe by the actual tire section before
-            // presentation ever sees it.
-            const float authoredRimDiameterIn =
-                wheelDescription.fitment.tireRimDiameterIn > 1.0f
-                    ? wheelDescription.fitment.tireRimDiameterIn
-                    : wheelDescription.fitment.rimDiameterIn;
-            const float rimRadiusM = authoredRimDiameterIn > 1.0f
-                ? authoredRimDiameterIn * 0.0254f * 0.5f
-                : tireRadiusM * 0.72f;
-            const float sidewallHeightM = std::clamp(
-                tireRadiusM - rimRadiusM, 0.020f, tireRadiusM * 0.45f);
-            const float radialCompressionCapacityM = (std::min)(
-                maximumCompressionM, sidewallHeightM * 0.90f);
-            const float lateralCompressionCapacityM = (std::min)(
-                maximumCompressionM, tireHalfWidthM * 0.55f);
-
-            heritage::physics::CollisionQueryFilter filter;
-            filter.layerMask = 0xffffffffu;
-            filter.includeTriggers = false;
-            filter.ignoredBody = runtime->m_physics->vehicles().chassisBody(vehicleHandle);
-
-            constexpr float kPi = 3.14159265358979323846f;
-            constexpr float kProbeSphereRadiusM = 0.006f;
-            constexpr float kOutsideMarginM = 0.012f;
-            const float probeDepthM = maximumCompressionM + 0.025f;
-            const float expectedTouchDistanceM = (std::max)(
-                probeDepthM - kProbeSphereRadiusM, 0.001f);
-
-            for (std::size_t station = 0;
-                 station < heritage::entities::TireVisualContactSampleStations;
-                 ++station)
-            {
-                // TIRE27: non-uniform station spacing.  Indices 4..16 cover
-                // 65..115 degrees, concentrating most of the longitudinal
-                // resolution in the loaded region below the user's green-line
-                // chord while retaining front/rear lower-half coverage.
-                const float phi =
-                    heritage::entities::TireVisualContactSamplePhiRadians[station];
-                const heritage::math::Vec3 radialDirection = normalize3(
-                    add3(
-                        scale3(wheelForward, std::cos(phi)),
-                        scale3(wheelUp, -std::sin(phi))),
-                    scale3(wheelUp, -1.0f));
-
-                for (std::size_t band = 0;
-                     band < heritage::entities::TireVisualContactSampleBands;
-                     ++band)
-                {
-                    const float widthCoordinate =
-                        heritage::entities::TireVisualContactSampleWidthCoordinates[band];
-                    const float absWidth = std::abs(widthCoordinate);
-
-                    // Rounded tire cross-section: centre tread probes mainly
-                    // radially, shoulders become diagonal, outer bands become
-                    // sidewall-facing. The 13 width bands now give the loaded
-                    // tread substantially finer lateral resolution while still
-                    // seeing a road, kerb face or rock against the sidewall.
-                    const float sideNormalWeight = std::clamp(
-                        (absWidth - 0.42f) / 0.58f, 0.0f, 1.0f);
-                    const float sideNormalBlend = sideNormalWeight
-                        * sideNormalWeight * 0.86f;
-                    const heritage::math::Vec3 sideDirection = scale3(
-                        wheelRight, widthCoordinate >= 0.0f ? 1.0f : -1.0f);
-                    const heritage::math::Vec3 surfaceNormal = normalize3(
-                        add3(
-                            scale3(radialDirection, 1.0f - sideNormalBlend),
-                            scale3(sideDirection, sideNormalBlend)),
-                        radialDirection);
-
-                    const float radialScale = 1.0f
-                        - 0.055f * absWidth * absWidth;
-                    const float lateralOffsetM = tireHalfWidthM
-                        * widthCoordinate * 0.94f;
-                    const heritage::math::Vec3 nominalSurface = add3(
-                        add3(
-                            probeCenter,
-                            scale3(radialDirection, tireRadiusM * radialScale)),
-                        scale3(wheelRight, lateralOffsetM));
-                    const heritage::math::Vec3 castOrigin = add3(
-                        nominalSurface,
-                        scale3(surfaceNormal, -probeDepthM));
-
-                    heritage::physics::SphereCastHit hit;
-                    const bool hitSomething = runtime->m_physics->collisions().sphereCast(
-                        castOrigin,
-                        kProbeSphereRadiusM,
-                        surfaceNormal,
-                        probeDepthM + kOutsideMarginM,
-                        filter,
-                        runtime->m_physics->rigidBodies(),
-                        hit);
-
-                    const float regionalCompressionCapacityM =
-                        radialCompressionCapacityM * (1.0f - sideNormalBlend)
-                        + lateralCompressionCapacityM * sideNormalBlend;
-                    float compression = 0.0f;
-                    if (hitSomething)
-                    {
-                        compression = std::clamp(
-                            expectedTouchDistanceM - hit.distance,
-                            0.0f,
-                            regionalCompressionCapacityM);
-                    }
-
-                    const std::size_t index = station
-                        * heritage::entities::TireVisualContactSampleBands + band;
-                    bool duplicatePrimarySupport = false;
-                    if (hitSomething && primarySupportPlaneValid)
-                    {
-                        const heritage::math::Vec3 hitNormal = normalize3(
-                            hit.normal, primarySupportNormal);
-                        const float supportNormalAlignment = dot3(
-                            hitNormal, primarySupportNormal);
-                        const heritage::math::Vec3 pointFromSupport = add3(
-                            hit.point, scale3(primarySupportPoint, -1.0f));
-                        const float supportPlaneOffsetM = std::abs(dot3(
-                            pointFromSupport, primarySupportNormal));
-                        duplicatePrimarySupport =
-                            supportNormalAlignment >= 0.965f
-                            && supportPlaneOffsetM <= 0.006f;
-                    }
-                    if (duplicatePrimarySupport && sideNormalBlend > 0.08f)
-                        compression = 0.0f;
-                    compressionM[index] = compression;
-                    if (compression > 0.0f)
-                    {
-                        // Resolve penetration along the collider's real normal,
-                        // not along the probe's rounded-tire launch direction.
-                        // A horizontal road top then moves every tread/shoulder
-                        // sample radially inward; only a genuine vertical face
-                        // can create a lateral inward contact component.
-                        // Contact location disambiguates support beneath the
-                        // tread from an obstacle outside the sidewall. A narrow
-                        // kerb beneath the tyre is crossed from inside by the
-                        // outward shoulder probes, so its sweep normal can face
-                        // the tyre centre even though the carcass must wrap and
-                        // bulge outward. Any hit inside the lateral footprint is
-                        // therefore radial support. Only contact beyond the
-                        // shoulder is permitted to indent laterally.
-                        const heritage::math::Vec3 hitFromWheelCenter = add3(
-                            hit.point, scale3(probeCenter, -1.0f));
-                        const float hitLateralM = dot3(
-                            hitFromWheelCenter, wheelRight);
-                        const float supportHalfWidthM = tireHalfWidthM * 0.82f;
-                        const bool beneathTread =
-                            std::abs(hitLateralM) <= supportHalfWidthM;
-                        const heritage::math::Vec3 resolvingNormal = beneathTread
-                            ? scale3(radialDirection, -1.0f)
-                            : normalize3(hit.normal, scale3(surfaceNormal, -1.0f));
-                        contactForwardDisplacementM[index] = compression
-                            * dot3(resolvingNormal, wheelForward);
-                        contactDownDisplacementM[index] = compression
-                            * dot3(resolvingNormal, scale3(wheelUp, -1.0f));
-                        contactLateralDisplacementM[index] = compression
-                            * dot3(resolvingNormal, wheelRight);
-                    }
-                }
-            }
-
-            // One contact sampler, one flexible-ring solve, one final renderer
-            // field.  No broad plane, curb dent, sidewall bulge or probe pass is
-            // permitted to move a vertex after this solve.
-            heritage::vehicles::TireModelDescription tireModel;
-            const bool haveTireModel = runtime->m_physics->vehicles().wheelTireModel(
-                vehicleHandle, wheelIndex, tireModel);
-            const auto flexibleRingField = solveTireFlexibleRingPresentationField(
-                wheelState, haveTireModel ? &tireModel : nullptr,
-                tireRadiusM, rimRadiusM, tireHalfWidthM,
-                maximumCompressionM, compressionM,
-                contactForwardDisplacementM,
-                contactDownDisplacementM,
-                contactLateralDisplacementM);
             result = runtime->m_entities->setMeshNodeTireDeformationField(
                 entityHandle,
                 nodeName,
-                flexibleRingField.valid,
-                tireRadiusM,
-                flexibleRingField.forwardDisplacementM,
-                flexibleRingField.downDisplacementM,
-                flexibleRingField.lateralDisplacementM,
+                carcassField.valid,
+                tireReferenceRadiusM,
+                forwardM,
+                downM,
+                lateralM,
                 wheelState.tireFailureStage
                     == heritage::vehicles::tires::TireFailureStage::BareRimRunning,
                 static_cast<std::uint8_t>(wheelState.tireFailureStage),
@@ -766,10 +504,9 @@ int LuaEntityBindingHandlers::luaEntitySetMeshNodeTireFlexibleRingFromWheel(lua_
                 static_cast<float>(wheelState.wheelAngularVelocity),
                 static_cast<float>(wheelState.wheelRotationDegrees
                     * 0.01745329251994329577),
-                wheelForward,
-                wheelRight,
-                wheelUp);
-
+                wheelState.worldWheelForward,
+                wheelState.worldWheelRight,
+                wheelState.worldWheelUp);
         }
     }
     runtime->m_api.lua_pushboolean(state, result ? 1 : 0);

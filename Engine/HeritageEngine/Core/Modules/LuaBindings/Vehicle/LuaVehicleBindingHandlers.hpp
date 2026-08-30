@@ -89,6 +89,18 @@ struct LuaVehicleBindingHandlers
     static int luaVehicleTriggerWheelTireFailure(lua_State* state);
     static int luaVehicleTriggerTireFailure(lua_State* state);
     static int luaVehicleGetTireColdInflationPressureRange(lua_State* state);
+    static int luaVehicleGetTireCarcassLabParameterCount(lua_State* state);
+    static int luaVehicleGetTireCarcassLabParameterInfo(lua_State* state);
+    static int luaVehicleGetTireCarcassLabParameter(lua_State* state);
+    static int luaVehicleSetTireCarcassLabParameter(lua_State* state);
+    static int luaVehicleGetTireCarcassLabEnabled(lua_State* state);
+    static int luaVehicleSetTireCarcassLabEnabled(lua_State* state);
+    static int luaVehicleResetTireCarcassLab(lua_State* state);
+    static int luaVehicleResetTireCarcassLabState(lua_State* state);
+    static int luaVehicleCopyTireCarcassLabToAllWheels(lua_State* state);
+    static int luaVehicleRunTireCarcassSyntheticScenario(lua_State* state);
+    static int luaVehicleRunTireCarcassSearchBatch(lua_State* state);
+    static int luaVehicleApplyTireCarcassSearchTrial(lua_State* state);
     static int luaVehicleResetTirePhysicalState(lua_State* state);
     static int luaVehicleSetTireContactFidelity(lua_State* state);
     static int luaVehicleGetTireContactFidelity(lua_State* state);

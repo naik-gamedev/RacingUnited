@@ -55,6 +55,15 @@ public:
     bool activateDetachedFromFrame(
         const CameraFrame& sourceFrame,
         const heritage::math::DVec3& globalOrigin);
+    // STUDIO25: direct FP64 world-space camera authority for replay/broadcast
+    // directors. This shares the detached-camera render path but does not
+    // enable manual fly navigation unless explicitly requested afterwards.
+    bool setDetachedWorldPose(
+        const heritage::math::DVec3& globalPosition,
+        double pitchDegrees,
+        double yawDegrees,
+        double rollDegrees = 0.0);
+    void setDetachedWorldActive(bool active);
     void deactivateDetached();
     bool detachedActive() const { return m_detachedActive; }
     heritage::math::DVec3 detachedGlobalPosition() const
@@ -63,6 +72,7 @@ public:
     }
     double detachedYawDegrees() const { return m_detachedYawDegrees; }
     double detachedPitchDegrees() const { return m_detachedPitchDegrees; }
+    double detachedRollDegrees() const { return m_detachedRollDegrees; }
 
     // CAM10: module/engine UI may temporarily borrow the pointer while a fly
     // camera stays logically active. This suppresses navigation/cursor capture

@@ -568,6 +568,20 @@ struct AudioSystem::Impl
             voice.acousticRouting = false;
     }
 
+    std::shared_ptr<Clip> loadClipUncached(const std::filesystem::path& requestedPath)
+    {
+        std::error_code pathError;
+        const std::filesystem::path absolutePath = std::filesystem::absolute(
+            requestedPath, pathError).lexically_normal();
+        LoadedWav loaded;
+        if (!loadAudioFile(pathError ? requestedPath : absolutePath, loaded, error))
+            return {};
+        auto clip = std::make_shared<Clip>();
+        clip->format = loaded.format;
+        clip->pcm = std::move(loaded.pcm);
+        return clip;
+    }
+
     std::shared_ptr<Clip> loadClip(const std::filesystem::path& requestedPath)
     {
         std::error_code pathError;
@@ -1005,6 +1019,23 @@ AudioHandle AudioSystem::playOneShot(
 {
 #ifdef _WIN32
     return m_impl->play(path, bus, volume, pitch, false);
+#else
+    (void)path; (void)bus; (void)volume; (void)pitch;
+    m_impl->error = "Audio playback is unavailable on this platform.";
+    return kInvalidAudioHandle;
+#endif
+}
+
+AudioHandle AudioSystem::playOneShotUncached(
+    const std::filesystem::path& path,
+    AudioBus bus,
+    float volume,
+    float pitch)
+{
+#ifdef _WIN32
+    return m_impl->playClip(
+        m_impl->loadClipUncached(path),
+        bus, volume, pitch, false);
 #else
     (void)path; (void)bus; (void)volume; (void)pitch;
     m_impl->error = "Audio playback is unavailable on this platform.";

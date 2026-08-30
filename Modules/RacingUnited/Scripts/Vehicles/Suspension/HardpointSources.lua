@@ -120,10 +120,39 @@ local function SuspensionAuthoringWheelCenter(wheel)
         SuspensionAuthoringScale(direction, physics.restLengthM))
 end
 
+local function SuspensionAuthoringPhysicsHardpointsReady(assembly, wheel)
+    if assembly == nil or wheel == nil then return false end
+    local required = assembly.requiredHardpoints or {}
+    if #required == 0 then return false end
+
+    local hardpoints = assembly.hardpointsByCorner
+        and assembly.hardpointsByCorner[wheel.name] or {}
+    -- TIRE45D: estimated coordinates are useful creator scaffolding, but they
+    -- are explicitly too weak to become vehicle-force authority.  The current
+    -- Peugeot GLB contains no suspension hardpoints, and the deterministic
+    -- MacPherson estimate was creating ~1.6 deg camber and ~1.0 deg bump toe at
+    -- ordinary loaded travel.  That false alignment generated real MF6.2
+    -- lateral force / aligning moment and therefore real carcass ring yaw while
+    -- the car merely rolled forward.  Require at least legacy-authored evidence
+    -- for every required point before a hardpoint provider may drive physics.
+    local minimumPhysicsPriority = SuspensionAuthoringSourcePriority(
+        "legacy_authored")
+    for _, id in ipairs(required) do
+        local value = hardpoints[id]
+        if SuspensionAuthoringHardpointPosition(value) == nil then
+            return false
+        end
+        local provenance = SuspensionAuthoringHardpointProvenance(value)
+        if SuspensionAuthoringSourcePriority(provenance) < minimumPhysicsPriority then
+            return false
+        end
+    end
+    return true
+end
+
 local function SuspensionAuthoringRefreshRuntimeProvider(assembly, wheel)
     if assembly == nil or wheel == nil then return false end
-    local authored, required = SuspensionAuthoringHardpointReadiness(assembly, wheel)
-    if required > 0 and authored == required
+    if SuspensionAuthoringPhysicsHardpointsReady(assembly, wheel)
         and assembly.preferredProvider ~= nil
         and assembly.preferredProvider ~= "" then
         assembly.runtimeProvider = assembly.preferredProvider
@@ -254,4 +283,5 @@ SuspensionAuthoringInternal.MakeHardpoint = SuspensionAuthoringMakeHardpoint
 SuspensionAuthoringInternal.RequiredId = SuspensionAuthoringRequiredId
 SuspensionAuthoringInternal.SetHardpoint = SuspensionAuthoringSetHardpoint
 SuspensionAuthoringInternal.WheelCenter = SuspensionAuthoringWheelCenter
+SuspensionAuthoringInternal.PhysicsHardpointsReady = SuspensionAuthoringPhysicsHardpointsReady
 SuspensionAuthoringInternal.RefreshRuntimeProvider = SuspensionAuthoringRefreshRuntimeProvider

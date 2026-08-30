@@ -108,6 +108,8 @@ uniform float uLodBlendWidth;
 uniform float uDrawDistance;
 uniform float uVisibilityFadeWidth;
 uniform float uCapDistance;
+uniform bool uNearMaterialAuthority;
+uniform float uWeatherWetness;
 
 out float gLateral;
 out float gEdgeFeather;
@@ -155,11 +157,20 @@ float visibilityWeight(float distanceMeters)
 {
     if (distanceMeters >= uDrawDistance)
         return 0.0;
-    float fadeStart = max(0.0, uDrawDistance - uVisibilityFadeWidth);
-    if (distanceMeters <= fadeStart)
-        return 1.0;
-    return 1.0 - smooth01(
-        (distanceMeters - fadeStart) / max(uDrawDistance - fadeStart, 0.0001));
+
+    // LIVETRACK22: the mark is never a full-strength ribbon followed by a late
+    // pop-out band. Visibility decays continuously from the camera to the full
+    // 500m visual range, matching the requested 0 -> range slow fade.
+    float masterFade = 1.0 - smooth01(
+        distanceMeters / max(uDrawDistance, 0.0001));
+
+    // Within the high-resolution Dynamic Surface disk the R8 material tile is
+    // the visual authority. The old vector ribbon only cross-fades back in near
+    // the edge so there is no double-darkening or residency pop.
+    float nearHandoff = uNearMaterialAuthority
+        ? smooth01((distanceMeters - 85.0) / 25.0)
+        : 1.0;
+    return masterFade * nearHandoff;
 }
 
 void emitMarkVertex(vec3 position, float lateral, float edgeFeatherMix, float alpha)
@@ -201,8 +212,10 @@ void main()
             / max(uDrawDistance - uDetailedDistance, 0.0001),
         0.0, 1.0);
     float farOpacityScale = 0.60 - 0.12 * farDistanceT;
+    float rainVisibility = mix(
+        1.0, 0.18, smooth01(clamp(uWeatherWetness, 0.0, 1.0)));
     float opacityScale = mix(farOpacityScale, 1.0, nearWeight)
-        * rangeVisibility * ageOpacity;
+        * rangeVisibility * ageOpacity * rainVisibility;
     float detailMix = nearWeight;
     float edgeFeatherMix = clamp(1.0 - nearWeight, 0.0, 1.0);
 
@@ -212,6 +225,11 @@ void main()
     vec3 endRight = normalizeSafe(gRecord[0].endRight, startRight);
     startRight = normalizeSafe(startRight - startNormal * dot(startRight, startNormal), startRight);
     endRight = normalizeSafe(endRight - endNormal * dot(endRight, endNormal), endRight);
+    // Far vector LOD is only a persistence bridge beyond the material atlas.
+    // Lift it 1.25 mm along the recorded support normal; combined with the
+    // corrected negative polygon offset this removes coplanar depth flicker.
+    startCenter += startNormal * 0.00125;
+    endCenter += endNormal * 0.00125;
     vec3 tangentFallback = normalizeSafe(cross(startRight, startNormal), vec3(0.0, 0.0, 1.0));
     vec3 tangent = normalizeSafe(endCenter - startCenter, tangentFallback);
 

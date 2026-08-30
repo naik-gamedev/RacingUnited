@@ -332,7 +332,9 @@ void SurfacePresentationRenderer::drawTireMarkGpuCache(
     const heritage::physics::SurfacePresentation& presentation,
     const heritage::math::Mat4& view,
     const heritage::math::Mat4& projection,
-    const heritage::math::DVec3& cameraGlobal) const
+    const heritage::math::DVec3& cameraGlobal,
+    bool nearMaterialAuthority,
+    float weatherWetness) const
 {
     if (m_tireMarkGpuChunks.empty())
         return;
@@ -349,7 +351,10 @@ void SurfacePresentationRenderer::drawTireMarkGpuCache(
         : static_cast<float>(presentation.tireMarkSegments().front().birthTimeSeconds);
 
     glEnable(GL_POLYGON_OFFSET_FILL);
-    glPolygonOffset(1.0f, 4.0f);
+    // LIVETRACK22: the far vector LOD is a decal-like overlay. Positive offset
+    // pushed it behind coplanar road depth on conventional OpenGL depth and
+    // caused the observed clip/flicker. Pull it slightly toward the camera.
+    glPolygonOffset(-1.0f, -4.0f);
     glUseProgram(m_tireMarkProgram);
     glUniformMatrix4fv(
         m_tireMarkUniformView,
@@ -381,6 +386,12 @@ void SurfacePresentationRenderer::drawTireMarkGpuCache(
     glUniform1f(
         m_tireMarkUniformCapDistance,
         static_cast<float>(kTireMarkGpuCapDistanceM));
+    glUniform1i(
+        m_tireMarkUniformNearMaterialAuthority,
+        nearMaterialAuthority ? 1 : 0);
+    glUniform1f(
+        m_tireMarkUniformWeatherWetness,
+        std::clamp(weatherWetness, 0.0f, 1.0f));
     const GLint chunkOriginLocation = m_tireMarkUniformChunkOriginRelative;
 
     const double conservativeChunkRange = kTireMarkGpuDrawDistanceM

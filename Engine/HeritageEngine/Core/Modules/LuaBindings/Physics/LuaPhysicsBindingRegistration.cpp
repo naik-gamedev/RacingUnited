@@ -108,6 +108,7 @@ void LuaModuleRuntime::registerPhysicsBindings()
     registerFunction("Physics", "ColliderExists", &LuaPhysicsBindingHandlers::luaPhysicsColliderExists);
     registerFunction("Physics", "GetColliderCount", &LuaPhysicsBindingHandlers::luaPhysicsGetColliderCount);
     registerFunction("Physics", "GetBodyColliderCount", &LuaPhysicsBindingHandlers::luaPhysicsGetBodyColliderCount);
+    registerFunction("Physics", "GetBodyCollisionBounds", &LuaPhysicsBindingHandlers::luaPhysicsGetBodyCollisionBounds);
     registerFunction("Physics", "GetColliderBody", &LuaPhysicsBindingHandlers::luaPhysicsGetColliderBody);
     registerFunction("Physics", "GetColliderShape", &LuaPhysicsBindingHandlers::luaPhysicsGetColliderShape);
     registerFunction("Physics", "SetColliderMaterial", &LuaPhysicsBindingHandlers::luaPhysicsSetColliderMaterial);
@@ -124,6 +125,7 @@ void LuaModuleRuntime::registerPhysicsBindings()
     registerFunction("Physics", "GetLastQueryExactTestCount", &LuaPhysicsBindingHandlers::luaPhysicsGetLastQueryExactTestCount);
     registerFunction("Physics", "GetContactCount", &LuaPhysicsBindingHandlers::luaPhysicsGetContactCount);
     registerFunction("Physics", "GetBodyContactCount", &LuaPhysicsBindingHandlers::luaPhysicsGetBodyContactCount);
+    registerFunction("Physics", "GetBodyContact", &LuaPhysicsBindingHandlers::luaPhysicsGetBodyContact);
     registerFunction("Physics", "IsBodyTouching", &LuaPhysicsBindingHandlers::luaPhysicsIsBodyTouching);
     registerFunction("Physics", "GetBroadphaseCandidateCount", &LuaPhysicsBindingHandlers::luaPhysicsGetBroadphaseCandidateCount);
     registerFunction("Physics", "GetNarrowphaseTestCount", &LuaPhysicsBindingHandlers::luaPhysicsGetNarrowphaseTestCount);

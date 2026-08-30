@@ -237,6 +237,10 @@ bool SurfacePresentationRenderer::initialize()
         m_tireMarkProgram, "uVisibilityFadeWidth");
     m_tireMarkUniformCapDistance = glGetUniformLocation(
         m_tireMarkProgram, "uCapDistance");
+    m_tireMarkUniformNearMaterialAuthority = glGetUniformLocation(
+        m_tireMarkProgram, "uNearMaterialAuthority");
+    m_tireMarkUniformWeatherWetness = glGetUniformLocation(
+        m_tireMarkProgram, "uWeatherWetness");
     m_tireMarkUniformChunkOriginRelative = glGetUniformLocation(
         m_tireMarkProgram, "uChunkOriginRelative");
 
@@ -579,8 +583,13 @@ void SurfacePresentationRenderer::draw(
 
     // TIRE16K persistent GPU tire-mark pages. No per-frame history vector,
     // sorting, ribbon tessellation or giant dynamic-VBO upload remains here.
+    const auto tireMarkWeather = surfaces.regionalWeatherOutputAt(cameraGlobal);
+    const float tireMarkWetness = tireMarkWeather.valid
+        ? static_cast<float>(std::clamp(tireMarkWeather.effectiveWetness, 0.0, 1.0))
+        : 0.0f;
     drawTireMarkGpuCache(
-        surfaces.presentation(), view, projection, cameraGlobal);
+        surfaces.presentation(), view, projection, cameraGlobal,
+        surfaces.gpuDynamicSurfaceAuthorityEnabled(), tireMarkWetness);
     drawMarbleGpuCache(view, projection, cameraGlobal);
     drawMovingRubberGpu(surfaces, view, projection, cameraGlobal);
 

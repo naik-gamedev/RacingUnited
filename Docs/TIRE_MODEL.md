@@ -1,8 +1,44 @@
 # Heritage Tire Model
 
-> **Status note (2026-08-14):** this document retains mechanism detail and milestone history.
+> **Status note (2026-08-29):** this document retains mechanism detail and milestone history.
 > `CURRENT_TIRE_STATUS.md` is authoritative for implemented/partial/missing status and the active
 > TIRE18 sequence.
+
+## TIRE44 status — physics-owned dynamic carcass
+
+TIRE44 supersedes TIRE41 as the runtime carcass-deformation authority. The 24x13 flexible-ring
+field is now persistent per-wheel physics state with displacement and velocity, advanced at 125 Hz
+from the 1000 Hz wheel simulation while visible presentation renews a short demand lease. Unrequested
+carcasses do not spend structural-solver CPU because TIRE44 does not feed this lattice back into MF6.2.
+The renderer no longer samples collision geometry or solves an
+equilibrium tire shape. `Entity.SetMeshNodeTireFlexibleRingFromWheel` only copies the already-solved
+physics field into the authored tire mesh and its shadow path.
+
+The structural solve receives real road-envelope collision points and normals already queried by tire
+physics. Explicit unsupported samples remain holes/edges rather than becoming an inferred plane.
+Road and rim/flange contact are unilateral constraints inside the implicit lattice solve together with
+inertia, damping, circumferential/lateral coupling, pressure-dependent stiffness and moving rigid-ring
+attachment. There is no world-Z flattening, support-plane snap, post-contact vertex clamp, or
+`tireDeflection -> radial mesh displacement` command.
+
+MF6.2/contact geometry remain the force/traction authority. `tireDeflection`, loaded radius and patch
+geometry continue to participate in those physical calculations; the rendered mesh does not feed grip
+backward. TIRE44 therefore fixes carcass shape authority without making mesh topology part of tire
+force generation. See ADR-140.
+
+### TIRE45B moving-wheel road-cache invariant
+
+The road-envelope query runs at a bounded cadence while the wheel/contact path runs at 1 kHz. Cached
+carcass road samples therefore must not retain absolute world-space contact points: the vehicle may
+translate substantially before the cache is consumed again. TIRE45B stores every supported envelope
+point as an offset from that envelope refresh's centre contact and reconstructs the point around the
+live centre contact immediately before the carcass field converts it into wheel-local coordinates.
+Normals remain world-space directions. This preserves kerb, edge and bank shape while removing false
+deformation proportional to vehicle speed times cache age.
+
+The 24 circumferential field stations are spatial/Eulerian locations in the wheel frame. They are not
+material parcels, so wheel angular velocity does not rotate or advect the complete persistent lattice.
+Material-fixed phenomena already use `wheelRotationRadians` when mapped into those stations.
 
 ## TIRE12 status
 
@@ -90,7 +126,7 @@ circumferential wear sector creates a local visual flat-spot dent. The bead regi
 nearly rigid, so separate wheel/rim/brake nodes are not squashed. Physics dimensions are
 converted into authored local mesh scale from the tire's physics reference radius.
 
-TIRE41 keeps radial presentation under the flexible-ring contact solve alone. The road-envelope
+Historical TIRE41 kept radial presentation under an instantaneous flexible-ring equilibrium solve. The road-envelope
 radial support mode is not added again as a translation of the complete belt relative to the rim;
 doing so double-counts a curb and makes the unloaded crown balloon while the footprint collapses.
 Dynamic pressure supplies reduced-order hoop tension, authored vertical construction stiffness

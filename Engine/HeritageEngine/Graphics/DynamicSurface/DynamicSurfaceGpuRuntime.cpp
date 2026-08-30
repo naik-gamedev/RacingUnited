@@ -100,6 +100,8 @@ bool DynamicSurfaceGpuRuntime::initialize(std::string& errorMessage)
         return false;
     }
 
+    if (!initializeTireMarkState(errorMessage)) { shutdown(); return false; }
+
     // LIVETRACK18 far presentation cache: one rolling 32x32 topology raster per
     // 10m world tile. LIVETRACK18 adds baked runoff accumulation beside
     // capacity/flow (RGB8). The extra channel costs only ~16 MiB for the complete
@@ -182,6 +184,7 @@ void DynamicSurfaceGpuRuntime::shutdown()
     m_farTileTagTexture = 0;
     m_farWaterAtlas = 0;
     m_tileIndirectionTexture = 0;
+    shutdownTireMarkState();
     destroyState(m_mud);
     destroyState(m_snow);
     destroyState(m_water);

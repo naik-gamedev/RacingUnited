@@ -53,6 +53,18 @@ struct StaticSceneTriangle
     SurfaceMaterialProperties surfaceProperties{};
 };
 
+struct BodyCollisionBounds
+{
+    // Aggregate solid-collider bounds in body-local coordinates. Trigger-only
+    // volumes are intentionally excluded so gameplay/AI sees the same physical
+    // footprint used for collision response rather than sensor extents.
+    heritage::math::Vec3 minimum{ 0.0f, 0.0f, 0.0f };
+    heritage::math::Vec3 maximum{ 0.0f, 0.0f, 0.0f };
+    heritage::math::Vec3 center{ 0.0f, 0.0f, 0.0f };
+    heritage::math::Vec3 size{ 0.0f, 0.0f, 0.0f };
+    std::size_t colliderCount = 0;
+};
+
 struct ColliderDescription
 {
     BodyHandle body = InvalidBody;
@@ -88,6 +100,24 @@ struct CollisionContact
     heritage::math::Vec3 tangent{ 1.0f, 0.0f, 0.0f };
     float accumulatedNormalImpulse = 0.0f;
     float accumulatedTangentImpulse = 0.0f;
+    bool warmStarted = false;
+};
+
+// Read-only requested-body view of one solver contact from the most recently
+// completed fixed world step. The normal is always oriented from selfBody
+// toward otherBody, independent of the solver's internal A/B pair ordering.
+struct BodyContactEvidence
+{
+    ColliderHandle selfCollider = InvalidCollider;
+    ColliderHandle otherCollider = InvalidCollider;
+    BodyHandle selfBody = InvalidBody;
+    BodyHandle otherBody = InvalidBody;
+    heritage::math::Vec3 point{ 0.0f, 0.0f, 0.0f };
+    heritage::math::Vec3 normal{ 0.0f, 1.0f, 0.0f };
+    float penetration = 0.0f;
+    float normalImpulse = 0.0f;
+    float tangentImpulse = 0.0f;
+    bool trigger = false;
     bool warmStarted = false;
 };
 
@@ -185,6 +215,11 @@ public:
     bool exists(ColliderHandle handle) const;
     std::size_t count() const { return m_aliveCount; }
     std::size_t countForBody(BodyHandle body) const;
+    // STUDIO22: returns the aggregate local-space footprint of all solid
+    // collision shapes attached to a rigid body. This keeps Racing AI spatial
+    // reasoning tied to the physics collision authority instead of duplicate
+    // hand-authored chassis width/length data.
+    bool bodyCollisionBounds(BodyHandle body, BodyCollisionBounds& bounds) const;
     void destroyForBody(BodyHandle body);
     void removeInvalidBodies(const RigidBodySystem& bodies);
 
@@ -290,6 +325,13 @@ public:
     const std::vector<CollisionContact>& contacts() const { return m_contacts; }
     std::size_t contactCount() const { return m_contacts.size(); }
     std::size_t contactCountForBody(BodyHandle body) const;
+    // STUDIO23: returns an indexed requested-body-oriented view of real solver
+    // contact evidence without exposing CollisionContact pair ordering to
+    // gameplay, Lua bindings, replay or future damage/steward systems.
+    bool bodyContactEvidence(
+        BodyHandle body,
+        std::size_t index,
+        BodyContactEvidence& evidence) const;
     bool bodyTouching(BodyHandle body) const;
 
     std::size_t broadphaseCandidateCount() const { return m_broadphaseCandidateCount; }

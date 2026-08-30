@@ -25,6 +25,7 @@ bool EntityMeshRenderer::initializeSurfaceWetnessMaterialBindings()
     m_uniforms.gpuFarTileTags = uniform("uGpuFarTileTags");
     m_uniforms.gpuSnowAtlas = uniform("uGpuSnowAtlas");
     m_uniforms.gpuMudAtlas = uniform("uGpuMudAtlas");
+    m_uniforms.gpuTireMarkAtlas = uniform("uGpuTireMarkAtlas");
     m_uniforms.gpuTileIndirection = uniform("uGpuTileIndirection");
     m_uniforms.gpuDynamicSurfaceCenterOriginRelativeXZ =
         uniform("uGpuDynamicSurfaceCenterOriginRelativeXZ");
@@ -40,6 +41,7 @@ bool EntityMeshRenderer::initializeSurfaceWetnessMaterialBindings()
     m_uniforms.gpuFarAtlasTilesPerAxis = uniform("uGpuFarAtlasTilesPerAxis");
     m_uniforms.gpuDynamicSurfaceSnowReady = uniform("uGpuDynamicSurfaceSnowReady");
     m_uniforms.gpuDynamicSurfaceMudReady = uniform("uGpuDynamicSurfaceMudReady");
+    m_uniforms.gpuDynamicSurfaceTireMarksReady = uniform("uGpuDynamicSurfaceTireMarksReady");
     m_uniforms.surfaceWetnessBreakupMask = uniform("uSurfaceWetnessBreakupMask");
     m_uniforms.hasSurfaceWetnessBreakupMask =
         uniform("uHasSurfaceWetnessBreakupMask");
@@ -58,6 +60,7 @@ bool EntityMeshRenderer::initializeSurfaceWetnessMaterialBindings()
     glUniform1i(m_uniforms.gpuTileIndirection, 19);
     glUniform1i(m_uniforms.gpuFarWaterAtlas, 20);
     glUniform1i(m_uniforms.gpuFarTileTags, 21);
+    glUniform1i(m_uniforms.gpuTireMarkAtlas, 22);
     return initializeSurfaceWetnessResources();
 }
 
@@ -96,6 +99,9 @@ void EntityMeshRenderer::bindSurfaceWetnessMaterialState(
     glUniform1i(
         m_uniforms.gpuDynamicSurfaceMudReady,
         gpuStats.mudReady ? 1 : 0);
+    glUniform1i(
+        m_uniforms.gpuDynamicSurfaceTireMarksReady,
+        gpuStats.tireMarksReady ? 1 : 0);
 
     const double centerOriginX =
         static_cast<double>(m_dynamicSurfaceGpuRuntime.centerTileX())
@@ -140,6 +146,8 @@ void EntityMeshRenderer::bindSurfaceWetnessMaterialState(
     glBindTexture(GL_TEXTURE_2D, m_dynamicSurfaceGpuRuntime.farWaterTexture());
     glActiveTexture(GL_TEXTURE0 + 21);
     glBindTexture(GL_TEXTURE_2D, m_dynamicSurfaceGpuRuntime.farTileTagTexture());
+    glActiveTexture(GL_TEXTURE0 + 22);
+    glBindTexture(GL_TEXTURE_2D, m_dynamicSurfaceGpuRuntime.tireMarkTexture());
 }
 
 bool EntityMeshRenderer::initializeSurfaceWetnessResources()
@@ -168,8 +176,8 @@ bool EntityMeshRenderer::initializeSurfaceWetnessResources()
     }
 
     std::cout
-        << "LIVETRACK21 surface water: priority-flood standing storage + MFD kinematic runoff + decoded-domain filtering + early puddle-gated rain ripples; "
-        << "legacy CPU Hydro renderer/indirection removed; obsolete persistent GPU Track mirror retired.\n";
+        << "LIVETRACK22 unified driven surface: water + 10m/256x256 tire-mark material tiles share one near residency/indirection domain; "
+        << "far tire-mark vector history remains only as a 100-500m persistence LOD.\n";
     return true;
 }
 

@@ -27,6 +27,9 @@ function OnStart()
         RefreshSceneEntityHandles()
         CreatePhysicsDemo()
         VehicleOnPrototypeEnter()
+        RacingConeCourse.Start()
+        RacingTrafficAgents.Start()
+        RacingPolice.Start()
         EnterDefaultPlayerWorld()
     else
         ClearSceneEntityHandles()
@@ -46,6 +49,7 @@ function OnStart()
         physicsCcdWallBody = 0
         physicsCcdWallCollider = 0
         physicsCcdLaunched = false
+        RacingConeCourse.Stop()
         ClearVehicleRuntimeHandles()
     end
 
@@ -65,8 +69,18 @@ function OnSceneEnter(sceneName)
         SetVehicleDebugVisible(true)
         CreatePhysicsDemo()
         VehicleOnPrototypeEnter()
+        RacingConeCourse.Start()
+        RacingTrafficAgents.Start()
+        RacingPolice.Start()
         EnterDefaultPlayerWorld()
     else
+        RacingEvents.AbortEvent("Scene changed.")
+        RacingPracticeLoop.Clear()
+        RacingReplay.Clear()
+        RacingMotorsport.Stop(false)
+        RacingPolice.Stop()
+        RacingTrafficAgents.Stop()
+        RacingConeCourse.Stop()
         VehicleOnPrototypeExit()
         ClearSceneEntityHandles()
         DestroyPhysicsDemo()
@@ -77,6 +91,13 @@ end
 function OnSceneExit(sceneName)
     Engine.Log("Leaving scene: " .. sceneName)
     if sceneName == "prototype" then
+        RacingEvents.AbortEvent("Prototype scene exited.")
+        RacingPracticeLoop.Clear()
+        RacingReplay.Clear()
+        RacingMotorsport.Stop(false)
+        RacingPolice.Stop()
+        RacingTrafficAgents.Stop()
+        RacingConeCourse.Stop()
         DestroyPlayerWorld()
         if temporaryEntity ~= 0 and Entity.Exists(temporaryEntity) then
             Entity.Destroy(temporaryEntity)
@@ -102,12 +123,20 @@ function OnFixedUpdate(fixedDeltaTime)
     end
 
     VehicleFixedUpdate(fixedDeltaTime)
+    RacingConeCourse.FixedUpdate(fixedDeltaTime)
+    RacingTrafficAgents.FixedUpdate(fixedDeltaTime)
+    RacingPolice.FixedUpdate(fixedDeltaTime)
+    RacingEvents.FixedUpdate(fixedDeltaTime)
+    RacingMotorsport.FixedUpdate(fixedDeltaTime)
+    RacingReplay.FixedUpdate(fixedDeltaTime)
+    RacingPracticeLoop.FixedUpdate(fixedDeltaTime)
 
     PhysicsDemoFixedUpdate(fixedDeltaTime)
 end
 
 function OnUpdate(deltaTime)
     VehicleUpdate(deltaTime)
+    RacingReplay.Update(deltaTime)
 
     if Scene.GetCurrent() == "prototype" then
         RefreshVehicleAssetDiscovery(false, true)
@@ -124,6 +153,9 @@ function OnUpdate(deltaTime)
 
     if Scene.GetCurrent() == "prototype" and Input.Pressed("Toggle 3D View") then
         showPrototypeControls = not showPrototypeControls
+    end
+    if Scene.GetCurrent() == "prototype" then
+        RacingPracticeLoop.HandleInput()
     end
 
     -- CAM10: a visible module control panel temporarily borrows the mouse from

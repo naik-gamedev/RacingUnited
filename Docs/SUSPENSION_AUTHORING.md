@@ -5,13 +5,13 @@
 SUS01 created the hardpoint authoring boundary, SUS02 implemented reusable
 `macpherson_strut_v1` front kinematics, and SUS03A made estimated front authoring
 practical. SUS03B applies the same evidence-aware workflow to the rear and adds
-`trailing_arm_torsion_bar_v1`, so the prototype can run mechanism-specific
-front and rear suspension without pretending estimated coordinates are factory
-measurements.
+`trailing_arm_torsion_bar_v1`. TIRE45D tightens the authority boundary: low-
+confidence estimated coordinates remain creator scaffolding and gizmo data, but
+they do **not** drive vehicle forces.
 
 The governing rule is not "never estimate." It is **never confuse an estimate
-with a measurement.** Better evidence can replace estimated points later without
-changing the provider or vehicle topology.
+with a measurement or with physics authority.** Better evidence can replace
+estimated points later without changing the provider or vehicle topology.
 
 ## Hardpoint source contract
 
@@ -35,8 +35,11 @@ Racing United currently prioritizes sources as:
 3. `legacy_authored`
 4. `estimated`
 
-This permits partial upgrades. A GLB may replace only the points its creator has
-located accurately while the remaining points continue using estimates.
+This permits partial upgrades in authoring. A GLB may replace only the points its
+creator has located accurately while remaining points continue using estimates
+for visualization/editing. Runtime hardpoint kinematics activate only when every
+required point for that corner is at least `legacy_authored`; mixed sets that
+still contain an `estimated` point stay on `linear_raycast_v1`.
 
 ## Assisted MacPherson profile
 
@@ -57,9 +60,10 @@ The output is the complete eight-point MacPherson contract required by
 (0.35). It is a coherent starting linkage, **not Peugeot factory CAD**.
 
 For the current Peugeot-oriented prototype, the front-left and front-right
-packages are generated independently from their own wheel centres. When both
-front sets are complete, Racing United activates native MacPherson kinematics on
-the front wheels.
+packages are generated independently from their own wheel centres. They remain
+authoring-only until a complete stronger-evidence hardpoint set exists. This is
+important because the v1 estimate can create materially wrong camber/bump-steer
+at loaded travel and must not silently become MF6.2 force input.
 
 ## Assisted trailing-arm/torsion-bar profile
 
@@ -150,9 +154,10 @@ Trailing-arm kinematics
 + rear anti-roll group
 ```
 
-Both axles can now run their mechanism-specific providers from estimated or
-better data. Front uses `macpherson_strut_v1`; rear uses
-`trailing_arm_torsion_bar_v1`. Estimated data remains replaceable point-by-point.
+Both axles can run their mechanism-specific providers once each corner has a
+complete authoritative hardpoint set. Front then uses `macpherson_strut_v1`;
+rear uses `trailing_arm_torsion_bar_v1`. Until then, estimated data remains
+replaceable point-by-point while runtime physics stays on `linear_raycast_v1`.
 SUS04 supplies front and rear anti-roll coupling as a separate reusable
 mechanism. It remains outside both kinematics providers and can couple any
 explicit left/right contact-unit pair.

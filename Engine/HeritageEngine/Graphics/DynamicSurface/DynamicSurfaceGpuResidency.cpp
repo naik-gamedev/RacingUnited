@@ -166,6 +166,15 @@ void DynamicSurfaceGpuRuntime::refreshResidency(
         ++m_stats.topologyUploadsThisFrame;
         if (m_snow.allocated) clearStateSlot(m_snow, slot, 0u);
         if (m_mud.allocated) clearStateSlot(m_mud, slot, 0u);
+        if (m_tireMarks.allocated)
+        {
+            clearStateSlot(m_tireMarks, slot, 0u);
+            // LIVETRACK22: if persistent mark history intersects a returning
+            // tile, reconstruct its R8 material state in the same slot. Empty
+            // returning tiles stay explicitly clear, preventing stale-slot pops.
+            if (m_tireMarkSerialsByTile.find(key) != m_tireMarkSerialsByTile.end())
+                m_dirtyTireMarkTiles.insert(key);
+        }
         residencyChanged = true;
     }
 

@@ -104,6 +104,173 @@ struct TireFlexibleRingFieldInput
         directContactLateralDisplacementM{};
 };
 
+
+// TIRE44: physics-owned dynamic carcass state.  The renderer consumes this
+// field but does not solve tire shape.  Road and rim contact enter as
+// unilateral structural constraints inside advanceTireFlexibleRingDynamics().
+inline constexpr std::size_t TireFlexibleRingMaximumRoadSamples = 25;
+
+struct TireFlexibleRingRoadSample
+{
+    // queried=false means this slot is unused. queried=true/supported=false is
+    // important for partial-support edges: the nearest road-envelope query
+    // explicitly found no collider there.
+    bool queried = false;
+    bool supported = false;
+    VehicleScalar queryForwardM = 0.0;
+    VehicleScalar queryLateralM = 0.0;
+    VehicleScalar pointForwardM = 0.0;
+    VehicleScalar pointDownM = 0.0;
+    VehicleScalar pointLateralM = 0.0;
+    VehicleScalar normalForward = 0.0;
+    VehicleScalar normalDown = -1.0;
+    VehicleScalar normalLateral = 0.0;
+};
+
+// TIRE45 development-only solver override bank. Most controls retain the TIRE44
+// production defaults. TIRE45E intentionally defaults the synthetic Poisson
+// lateral-bulge heuristic to zero because flat radial support is not a lateral
+// excitation source; the Megalab can still opt back into it explicitly.
+// The large station/band banks are intentional: they let the in-game lab
+// isolate whether an artefact comes from lower-carcass topology, tread/shoulder
+// stiffness, contact response or the rigid-ring anchor mapping instead of
+// forcing another guessed global "fix".
+struct TireFlexibleRingDevelopmentTuning
+{
+    bool enabled = false;
+
+    VehicleScalar effectiveMassScale = 1.0;
+    VehicleScalar foundationScale = 1.0;
+    VehicleScalar circumferentialScale = 1.0;
+    VehicleScalar secondNeighborScale = 1.0;
+    VehicleScalar lateralScale = 1.0;
+    VehicleScalar contactScale = 1.0;
+    VehicleScalar rimContactScale = 1.0;
+    VehicleScalar dampingScale = 1.0;
+    VehicleScalar velocityRetention = 0.86;
+    VehicleScalar pressureExponent = 0.50;
+    VehicleScalar pneumaticMinimumScale = 0.10;
+    VehicleScalar pneumaticMaximumScale = 2.25;
+    VehicleScalar thermalInfluence = 1.0;
+    VehicleScalar longitudinalAnchorScale = 1.0;
+    VehicleScalar lateralAnchorScale = 1.0;
+    // TIRE45J: rigid-ring yaw and lower-footprint torsion are visible again,
+    // but only through the physical cornering-authority gate in the dynamic
+    // solver. This preserves real cornering deflection/torsion without bringing
+    // back the old straight-line inward wedge or parking-state twist artefacts.
+    VehicleScalar yawAnchorScale = 1.0;
+    VehicleScalar windupAnchorScale = 1.0;
+    VehicleScalar contactTwistAnchorScale = 1.0;
+    // TIRE45E: pure vertical support must not manufacture visible lateral
+    // tread/sidewall motion. Real lateral tire load and side-contact normals
+    // still deform the carcass through the rigid ring and unilateral contacts.
+    // Keep the old heuristic exposed in Megalab, but production defaults off.
+    VehicleScalar poissonBulgeScale = 0.0;
+    VehicleScalar flatSpotScale = 1.0;
+    VehicleScalar flangeHeightScale = 1.0;
+    VehicleScalar flangeClearanceScale = 1.0;
+    VehicleScalar shoulderAllowanceScale = 1.0;
+    VehicleScalar maximumMagnitudeScale = 1.0;
+    VehicleScalar associationForwardScale = 1.0;
+    VehicleScalar associationLateralScale = 1.0;
+    VehicleScalar groundStationThreshold = -0.10;
+    VehicleScalar contactSlopM = 0.0;
+    VehicleScalar radialCompressionScale = 1.0;
+    VehicleScalar lowerHemisphereAnchorScale = 1.0;
+    VehicleScalar structuralRateScale = 1.0;
+    int implicitIterations = 8;
+
+    std::array<VehicleScalar, TireFlexibleRingFieldStations>
+        stationFoundationScale{};
+    std::array<VehicleScalar, TireFlexibleRingFieldStations>
+        stationContactScale{};
+    std::array<VehicleScalar, TireFlexibleRingFieldStations>
+        stationDampingScale{};
+    std::array<VehicleScalar, TireFlexibleRingFieldStations>
+        stationAnchorScale{};
+    std::array<VehicleScalar, TireFlexibleRingFieldStations>
+        stationCircumferentialScale{};
+
+    std::array<VehicleScalar, TireFlexibleRingFieldBands>
+        bandFoundationScale{};
+    std::array<VehicleScalar, TireFlexibleRingFieldBands>
+        bandContactScale{};
+    std::array<VehicleScalar, TireFlexibleRingFieldBands>
+        bandDampingScale{};
+    std::array<VehicleScalar, TireFlexibleRingFieldBands>
+        bandAnchorScale{};
+    std::array<VehicleScalar, TireFlexibleRingFieldBands>
+        bandLateralScale{};
+
+    TireFlexibleRingDevelopmentTuning()
+    {
+        stationFoundationScale.fill(1.0);
+        stationContactScale.fill(1.0);
+        stationDampingScale.fill(1.0);
+        stationAnchorScale.fill(1.0);
+        stationCircumferentialScale.fill(1.0);
+        bandFoundationScale.fill(1.0);
+        bandContactScale.fill(1.0);
+        bandDampingScale.fill(1.0);
+        bandAnchorScale.fill(1.0);
+        bandLateralScale.fill(1.0);
+    }
+};
+
+struct TireFlexibleRingDynamicState
+{
+    bool initialized = false;
+    std::array<VehicleScalar, TireFlexibleRingFieldCount> forwardDisplacementM{};
+    std::array<VehicleScalar, TireFlexibleRingFieldCount> downDisplacementM{};
+    std::array<VehicleScalar, TireFlexibleRingFieldCount> lateralDisplacementM{};
+    std::array<VehicleScalar, TireFlexibleRingFieldCount> forwardVelocityMps{};
+    std::array<VehicleScalar, TireFlexibleRingFieldCount> downVelocityMps{};
+    std::array<VehicleScalar, TireFlexibleRingFieldCount> lateralVelocityMps{};
+};
+
+struct TireFlexibleRingDynamicsInput
+{
+    VehicleScalar deltaTimeSeconds = 0.0;
+    bool grounded = false;
+    VehicleScalar inflationPressurePa = 220000.0;
+    VehicleScalar thermalStiffnessScale = 1.0;
+    VehicleScalar normalLoadN = 0.0;
+
+    // TIRE45J: presentation-side lateral/torsional carcass modes are allowed
+    // only when the tire is under genuine cornering authority. These are
+    // one-substep-old force/moment/slip values from the physical MF/contact
+    // solver, not render heuristics. Straight rolling therefore stays neutral,
+    // while real Fy/Mz/slip can bend and twist the carcass again.
+    VehicleScalar lateralForceN = 0.0;
+    VehicleScalar aligningMomentNm = 0.0;
+    VehicleScalar slipAngleRadians = 0.0;
+    VehicleScalar forwardSpeedMps = 0.0;
+
+    // The 24 circumferential controls are EULERIAN wheel-frame stations.
+    // They describe spatial carcass shape relative to wheel forward/down/right,
+    // not named rubber parcels. Therefore wheel spin must NOT convect this
+    // state around the array. Material-fixed effects (for example flat spots)
+    // are mapped into the spatial lattice explicitly with wheelRotationRadians.
+    // Kept as input telemetry for future constitutive-rate work only.
+    VehicleScalar wheelAngularVelocityRadPerS = 0.0;
+
+    VehicleScalar ringLongitudinalOffsetM = 0.0;
+    VehicleScalar ringLateralOffsetM = 0.0;
+    VehicleScalar ringYawRadians = 0.0;
+    VehicleScalar ringWindupRadians = 0.0;
+    VehicleScalar contactPatchTwistRadians = 0.0;
+    VehicleScalar flatSpotDepthM = 0.0;
+    VehicleScalar flatSpotSector = 0.0;
+    VehicleScalar wheelRotationRadians = 0.0;
+
+    std::array<TireFlexibleRingRoadSample, TireFlexibleRingMaximumRoadSamples>
+        roadSamples{};
+    std::size_t roadSampleCount = 0;
+
+    // Optional development override. Production callers leave this null.
+    const TireFlexibleRingDevelopmentTuning* developmentTuning = nullptr;
+};
+
 struct TireFlexibleRingFieldOutput
 {
     bool valid = false;
@@ -118,5 +285,18 @@ bool validTireFlexibleRingFieldDescription(
 TireFlexibleRingFieldOutput evaluateTireFlexibleRingField(
     const TireFlexibleRingFieldDescription& description,
     const TireFlexibleRingFieldInput& input);
+
+// Advances the stateful physics-owned flexible carcass.  This is the runtime
+// authority from TIRE44 onward; evaluateTireFlexibleRingField() remains as a
+// deterministic legacy/regression utility only.
+TireFlexibleRingFieldOutput advanceTireFlexibleRingDynamics(
+    const TireFlexibleRingFieldDescription& description,
+    const TireFlexibleRingDynamicsInput& input,
+    TireFlexibleRingDynamicState& state);
+
+void relaxTireFlexibleRingDynamics(
+    const TireFlexibleRingFieldDescription& description,
+    VehicleScalar deltaTimeSeconds,
+    TireFlexibleRingDynamicState& state);
 
 } // namespace heritage::vehicles::tires

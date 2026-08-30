@@ -154,6 +154,7 @@
       <ClCompile Include="..\Vehicles\Tires\TireDistributedContact.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireFleetBenchmark.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireFlexibleRingField.cpp" />
+      <ClCompile Include="..\Vehicles\Tires\TireCarcassDevelopmentLab.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireRoadEnveloping.cpp" />
       <ClCompile Include="..\Vehicles\Tires\TireThermal.cpp" />

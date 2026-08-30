@@ -144,83 +144,94 @@ vec3 sampleTireFlexibleRingField(float theta, float widthCoordinate)
         stationT);
 }
 
-vec3 tireFlexibleRingDisplacementLocal(vec3 position)
+vec3 tireFlexibleRingDisplacementWorld(vec3 localPosition, vec3 worldPosition)
 {
     if (!uTireVisualDeformationFieldValid)
         return vec3(0.0);
 
-    vec3 axle = tireAxisVector(uTireVisualAxleAxis);
-    vec3 relative = position - uTireVisualCenter;
-    float axial = dot(relative, axle);
-    vec3 radial = relative - axle * axial;
-    float radius = length(radial);
-    float radialSpan = max(
+    vec3 axleLocal = tireAxisVector(uTireVisualAxleAxis);
+    vec3 relativeLocal = localPosition - uTireVisualCenter;
+    float axialLocal = dot(relativeLocal, axleLocal);
+    vec3 radialLocal = relativeLocal - axleLocal * axialLocal;
+    float radiusLocal = length(radialLocal);
+    float radialSpanLocal = max(
         uTireVisualOuterRadius - uTireVisualInnerRadius, 0.0001);
-    if (radius <= 0.000001 || uTireVisualOuterRadius <= 0.0001)
+    if (radiusLocal <= 0.000001 || uTireVisualOuterRadius <= 0.0001)
         return vec3(0.0);
 
-    mat3 worldToLocal = inverse(mat3(uModel));
-    vec3 forward = worldToLocal * uTireWheelForwardWorld;
-    forward -= axle * dot(forward, axle);
-    if (dot(forward, forward) < 0.000001)
-        forward = normalize(cross(tireRestDown(uTireVisualAxleAxis), axle));
-    else
-        forward = normalize(forward);
+    // TIRE45C: sample and apply the physics field in WORLD space.  The old
+    // presentation reconstructed a wheel basis through inverse(mat3(uModel))
+    // and then converted metre displacements back to authored local units.
+    // That makes correctness depend on the exact GLB mirror/scale/pivot chain.
+    // The physical field already lives in the non-spinning wheel world basis,
+    // so use that basis directly and let the already-spun vertex determine the
+    // spatial station.  Mirrored/non-uniform authoring transforms can no longer
+    // turn radial/longitudinal deformation into lateral tire lean.
+    vec3 forwardWorld = uTireWheelForwardWorld;
+    forwardWorld = dot(forwardWorld, forwardWorld) > 0.000001
+        ? normalize(forwardWorld) : vec3(0.0, 0.0, 1.0);
 
-    vec3 lateral = worldToLocal * uTireWheelRightWorld;
-    lateral -= forward * dot(lateral, forward);
-    if (dot(lateral, lateral) < 0.000001)
-        lateral = axle;
-    else
-        lateral = normalize(lateral);
-    // Use the authoritative suspension up vector instead of deriving height from
-    // a cross product. Mirrored left/right wheel nodes reverse that product's
-    // handedness even though their physical up direction remains identical.
-    vec3 up = worldToLocal * uTireWheelUpWorld;
-    up -= forward * dot(up, forward);
-    up -= lateral * dot(up, lateral);
-    vec3 down = dot(up, up) > 0.000001
-        ? -normalize(up)
-        : normalize(cross(forward, lateral));
+    vec3 rightWorld = uTireWheelRightWorld;
+    rightWorld -= forwardWorld * dot(rightWorld, forwardWorld);
+    rightWorld = dot(rightWorld, rightWorld) > 0.000001
+        ? normalize(rightWorld) : vec3(1.0, 0.0, 0.0);
 
-    vec3 radialDirection = radial / radius;
+    vec3 upWorld = uTireWheelUpWorld;
+    upWorld -= forwardWorld * dot(upWorld, forwardWorld);
+    upWorld -= rightWorld * dot(upWorld, rightWorld);
+    if (dot(upWorld, upWorld) > 0.000001)
+        upWorld = normalize(upWorld);
+    else
+        upWorld = normalize(cross(forwardWorld, rightWorld));
+    // Preserve the physical handedness even if a fallback path was needed.
+    if (dot(cross(forwardWorld, rightWorld), upWorld) < 0.0)
+        upWorld = -upWorld;
+    vec3 downWorld = -upWorld;
+
+    vec3 centerWorld = (uModel * vec4(uTireVisualCenter, 1.0)).xyz;
+    vec3 relativeWorld = worldPosition - centerWorld;
+    vec3 radialWorld = relativeWorld
+        - rightWorld * dot(relativeWorld, rightWorld);
+    float radialWorldLength = length(radialWorld);
+    if (radialWorldLength <= 0.000001)
+        return vec3(0.0);
+    vec3 radialDirectionWorld = radialWorld / radialWorldLength;
     float theta = atan(
-        dot(radialDirection, down),
-        dot(radialDirection, forward));
+        dot(radialDirectionWorld, downWorld),
+        dot(radialDirectionWorld, forwardWorld));
+
+    // Width is most reliable in the authored node's own coordinates because
+    // the importer measured half-width there.  Only the sign is matched to the
+    // physical right direction; spin cannot affect an axle coordinate.
+    vec3 authoredAxleWorld = mat3(uModel) * axleLocal;
+    float axleSign = dot(authoredAxleWorld, rightWorld) < 0.0 ? -1.0 : 1.0;
     float widthCoordinate = clamp(
-        dot(relative, lateral) / max(uTireVisualHalfWidth, 0.0001),
+        axleSign * axialLocal / max(uTireVisualHalfWidth, 0.0001),
         -1.0, 1.0);
     vec3 fieldM = sampleTireFlexibleRingField(theta, widthCoordinate);
 
-    // The bead remains fixed to the rim. This interpolates the one solved
-    // field through carcass depth; it does not introduce another shape model.
+    // The bead remains fixed to the rim. The attachment is evaluated in the
+    // same local geometry space in which the importer measured the tire radii.
     float radialFraction = clamp(
-        (radius - uTireVisualInnerRadius) / radialSpan, 0.0, 1.0);
+        (radiusLocal - uTireVisualInnerRadius) / radialSpanLocal, 0.0, 1.0);
     float carcassAttachment = smoothstep(0.015, 0.62, radialFraction);
-    float metersToLocal = uTireVisualOuterRadius
-        / max(uTireReferenceRadiusM, 0.02);
-    return metersToLocal * carcassAttachment
-        * (forward * fieldM.x + down * fieldM.y + lateral * fieldM.z);
+
+    // fieldM is already metres. uModel maps the authored mesh to world metres,
+    // therefore no metres-to-local conversion belongs in this path.
+    return carcassAttachment
+        * (forwardWorld * fieldM.x
+            + downWorld * fieldM.y
+            + rightWorld * fieldM.z);
 }
 
-vec4 tireProbeDebugOverlay(vec3 position)
+vec4 tireProbeDebugOverlay(vec3 displacementWorldM)
 {
     if (!uTireProbeDebugVisible || !uTireVisualEnabled)
         return vec4(0.0);
-    vec3 displacement = tireFlexibleRingDisplacementLocal(position);
-    float magnitudeM = length(displacement)
-        * max(uTireReferenceRadiusM, 0.02)
-        / max(uTireVisualOuterRadius, 0.0001);
+    float magnitudeM = length(displacementWorldM);
     vec3 color = mix(vec3(0.05, 0.75, 1.0), vec3(1.0, 0.05, 0.02),
         smoothstep(0.004, 0.030, magnitudeM));
     return vec4(color, smoothstep(0.0001, 0.0010, magnitudeM) * 0.92);
-}
-
-void applyTireVisualDeformation(inout vec3 position, inout vec3 normal)
-{
-    if (!uTireVisualEnabled)
-        return;
-    position += tireFlexibleRingDisplacementLocal(position);
 }
 
 float tireWrappedAngle(float value)
@@ -338,14 +349,16 @@ void main()
     vec4 localPosition = skin * vec4(aPos, 1.0);
     vec3 localNormal = mat3(skin) * aNormal;
     vec3 localTangent = mat3(skin) * aTangent.xyz;
-    vec4 tireProbeDebug = tireProbeDebugOverlay(localPosition.xyz);
     vTireFailureCoordinates = tireFailureCoordinates(localPosition.xyz);
     vec3 deformedPosition = localPosition.xyz;
-    applyTireVisualDeformation(deformedPosition, localNormal);
     applyTireFailureStrip(deformedPosition, vTireFailureCoordinates);
     localPosition = vec4(deformedPosition, 1.0);
 
     vec4 world = uModel * localPosition;
+    vec3 tireWorldDisplacement = tireFlexibleRingDisplacementWorld(
+        localPosition.xyz, world.xyz);
+    world.xyz += tireWorldDisplacement;
+    vec4 tireProbeDebug = tireProbeDebugOverlay(tireWorldDisplacement);
     mat3 model3 = mat3(uModel);
     mat3 normalMatrix = mat3(transpose(inverse(uModel)));
 
@@ -415,6 +428,9 @@ uniform sampler2D uGpuFarWaterAtlas;
 uniform isampler2D uGpuFarTileTags;
 uniform usampler2D uGpuSnowAtlas;
 uniform usampler2D uGpuMudAtlas;
+// LIVETRACK22: close tire marks are a surface-material R8 state in the same
+// 10m/256x256 tile slots/indirection as the other Dynamic Surface channels.
+uniform sampler2D uGpuTireMarkAtlas;
 uniform usampler2D uGpuTileIndirection;
 uniform sampler2D uSurfaceWetnessBreakupMask;
 
@@ -436,6 +452,7 @@ uniform bool uHasSurfaceWetnessBreakupMask;
 uniform bool uGpuDynamicSurfaceAuthorityActive;
 uniform bool uGpuDynamicSurfaceSnowReady;
 uniform bool uGpuDynamicSurfaceMudReady;
+uniform bool uGpuDynamicSurfaceTireMarksReady;
 uniform vec2 uGpuDynamicSurfaceCenterOriginRelativeXZ;
 uniform ivec2 uGpuDynamicSurfaceCenterWorldTile;
 uniform ivec2 uGpuDynamicSurfaceTileMapCenter;
@@ -1266,6 +1283,27 @@ float kinematicRunoffDepthM(GpuWaterDecoded state)
     return clamp(depthM, 0.0, 0.0030);
 }
 
+
+float gpuTireMarkStrength(vec3 positionRelative)
+{
+    if (!uGpuDynamicSurfaceAuthorityActive || !uGpuDynamicSurfaceTireMarksReady)
+        return 0.0;
+    ivec2 tileDelta = ivec2(0);
+    vec2 tileUv = vec2(0.0);
+    uint slot = 0u;
+    if (!gpuDynamicSurfaceTile(positionRelative, tileDelta, tileUv, slot))
+        return 0.0;
+
+    float resolution = float(max(uGpuDynamicSurfaceTileResolution, 1));
+    ivec2 origin = gpuDynamicSurfaceAtlasOrigin(slot);
+    vec2 atlasSize = vec2(textureSize(uGpuTireMarkAtlas, 0));
+    vec2 minUv = (vec2(origin) + vec2(0.5)) / atlasSize;
+    vec2 maxUv = (vec2(origin) + vec2(resolution - 0.5)) / atlasSize;
+    vec2 atlasUv = (vec2(origin) + tileUv * resolution) / atlasSize;
+    atlasUv = clamp(atlasUv, minUv, maxUv);
+    return clamp(texture(uGpuTireMarkAtlas, atlasUv).r, 0.0, 1.0);
+}
+
 float gpuSnowDepth(vec3 positionRelative)
 {
     if (!uGpuDynamicSurfaceAuthorityActive || !uGpuDynamicSurfaceSnowReady)
@@ -1740,6 +1778,30 @@ void main()
         }
     }
 
+    // LIVETRACK22: close skid marks are part of the road material itself, so
+    // they cannot z-fight against coplanar road triangles. Their contrast is
+    // continuously reduced by the SAME live wet-film/standing-water state; a
+    // rain-soaked road no longer carries dry-looking black ribbons. Distance
+    // visibility is a slow 0..500m master fade, matching the far-vector LOD.
+    if (uSurfaceWetnessReceiver && uGpuDynamicSurfaceAuthorityActive
+        && uGpuDynamicSurfaceTireMarksReady)
+    {
+        float tireMark = gpuTireMarkStrength(vWorldPosition);
+        float markDistanceM = length(vWorldPosition.xz);
+        float markRangeVisibility = 1.0 - smoothstep(0.0, 500.0, markDistanceM);
+        // Complement the far-vector 85..110m handoff rather than double-darkening
+        // the road while both representations are available.
+        float nearTileWeight = 1.0 - smoothstep(85.0, 110.0, markDistanceM);
+        float wetAuthority = clamp(
+            max(dynamicSurfaceFilm, dynamicSurfaceStanding * 1.15), 0.0, 1.0);
+        float wetVisibility = mix(
+            1.0, 0.14, smoothstep(0.05, 0.88, wetAuthority));
+        wetVisibility *= 1.0 - 0.48 * dynamicSurfaceStanding;
+        float markVisual = clamp(
+            tireMark * markRangeVisibility * nearTileWeight * wetVisibility, 0.0, 1.0);
+        baseColor *= mix(vec3(1.0), vec3(0.42), markVisual);
+    }
+
     float roughness = clamp(uMaterialRoughness, 0.04, 1.0);
     if (uHasRoughnessMap)
         roughness = clamp(
@@ -2040,48 +2102,61 @@ vec3 sampleTireShadowField(float theta, float widthCoordinate)
         tireShadowFieldControl(station1, band1), bandT), stationT);
 }
 
-vec3 deformTireShadowPosition(vec3 position)
+vec3 deformTireShadowWorldPosition(vec3 localPosition, vec3 worldPosition)
 {
     if (!uTireVisualEnabled || !uTireVisualDeformationFieldValid)
-        return position;
-    vec3 axle = tireAxisVector(uTireVisualAxleAxis);
-    vec3 relative = position - uTireVisualCenter;
-    float axial = dot(relative, axle);
-    vec3 radial = relative - axle * axial;
-    float radius = length(radial);
-    float radialSpan = max(uTireVisualOuterRadius
+        return worldPosition;
+
+    vec3 axleLocal = tireAxisVector(uTireVisualAxleAxis);
+    vec3 relativeLocal = localPosition - uTireVisualCenter;
+    float axialLocal = dot(relativeLocal, axleLocal);
+    vec3 radialLocal = relativeLocal - axleLocal * axialLocal;
+    float radiusLocal = length(radialLocal);
+    float radialSpanLocal = max(uTireVisualOuterRadius
         - uTireVisualInnerRadius, 0.0001);
-    if (radius <= 0.000001)
-        return position;
-    mat3 worldToLocal = inverse(mat3(uModel));
-    vec3 forward = worldToLocal * uTireWheelForwardWorld;
-    forward -= axle * dot(forward, axle);
-    forward = dot(forward, forward) > 0.000001
-        ? normalize(forward)
-        : normalize(cross(tireRestDown(uTireVisualAxleAxis), axle));
-    vec3 lateral = worldToLocal * uTireWheelRightWorld;
-    lateral -= forward * dot(lateral, forward);
-    lateral = dot(lateral, lateral) > 0.000001 ? normalize(lateral) : axle;
-    vec3 up = worldToLocal * uTireWheelUpWorld;
-    up -= forward * dot(up, forward);
-    up -= lateral * dot(up, lateral);
-    vec3 down = dot(up, up) > 0.000001
-        ? -normalize(up)
-        : normalize(cross(forward, lateral));
-    vec3 radialDirection = radial / radius;
-    float theta = atan(dot(radialDirection, down),
-        dot(radialDirection, forward));
-    float widthCoordinate = clamp(dot(relative, lateral)
+    if (radiusLocal <= 0.000001)
+        return worldPosition;
+
+    vec3 forwardWorld = uTireWheelForwardWorld;
+    forwardWorld = dot(forwardWorld, forwardWorld) > 0.000001
+        ? normalize(forwardWorld) : vec3(0.0, 0.0, 1.0);
+    vec3 rightWorld = uTireWheelRightWorld;
+    rightWorld -= forwardWorld * dot(rightWorld, forwardWorld);
+    rightWorld = dot(rightWorld, rightWorld) > 0.000001
+        ? normalize(rightWorld) : vec3(1.0, 0.0, 0.0);
+    vec3 upWorld = uTireWheelUpWorld;
+    upWorld -= forwardWorld * dot(upWorld, forwardWorld);
+    upWorld -= rightWorld * dot(upWorld, rightWorld);
+    upWorld = dot(upWorld, upWorld) > 0.000001
+        ? normalize(upWorld) : normalize(cross(forwardWorld, rightWorld));
+    if (dot(cross(forwardWorld, rightWorld), upWorld) < 0.0)
+        upWorld = -upWorld;
+    vec3 downWorld = -upWorld;
+
+    vec3 centerWorld = (uModel * vec4(uTireVisualCenter, 1.0)).xyz;
+    vec3 relativeWorld = worldPosition - centerWorld;
+    vec3 radialWorld = relativeWorld
+        - rightWorld * dot(relativeWorld, rightWorld);
+    float radialWorldLength = length(radialWorld);
+    if (radialWorldLength <= 0.000001)
+        return worldPosition;
+    vec3 radialDirectionWorld = radialWorld / radialWorldLength;
+    float theta = atan(dot(radialDirectionWorld, downWorld),
+        dot(radialDirectionWorld, forwardWorld));
+
+    vec3 authoredAxleWorld = mat3(uModel) * axleLocal;
+    float axleSign = dot(authoredAxleWorld, rightWorld) < 0.0 ? -1.0 : 1.0;
+    float widthCoordinate = clamp(axleSign * axialLocal
         / max(uTireVisualHalfWidth, 0.0001), -1.0, 1.0);
     vec3 fieldM = sampleTireShadowField(theta, widthCoordinate);
-    float radialFraction = clamp((radius - uTireVisualInnerRadius)
-        / radialSpan, 0.0, 1.0);
+    float radialFraction = clamp((radiusLocal - uTireVisualInnerRadius)
+        / radialSpanLocal, 0.0, 1.0);
     float attachment = smoothstep(0.015, 0.62, radialFraction);
-    float metersToLocal = uTireVisualOuterRadius
-        / max(uTireReferenceRadiusM, 0.02);
-    position += metersToLocal * attachment
-        * (forward * fieldM.x + down * fieldM.y + lateral * fieldM.z);
-    return position;
+    worldPosition += attachment
+        * (forwardWorld * fieldM.x
+            + downWorld * fieldM.y
+            + rightWorld * fieldM.z);
+    return worldPosition;
 }
 
 void main()
@@ -2097,13 +2172,15 @@ void main()
     }
 
     vec4 localPosition = skin * vec4(aPos, 1.0);
-    localPosition.xyz = deformTireShadowPosition(localPosition.xyz);
+    vec4 worldPosition = uModel * localPosition;
+    worldPosition.xyz = deformTireShadowWorldPosition(
+        localPosition.xyz, worldPosition.xyz);
 
     // SHADOW02: keep the vertex result in camera-relative world space. A
     // layered geometry stage fans the triangle out only to the cascades whose
     // frusta contain this draw range. This removes the old CPU-side four-pass
     // submission loop without changing the shadow-map coordinate system.
-    gl_Position = uModel * localPosition;
+    gl_Position = worldPosition;
 }
 )glsl";
 

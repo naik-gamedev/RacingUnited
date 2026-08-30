@@ -23,8 +23,8 @@ void EntityMeshRenderer::initializeDynamicSurfaceGpuRuntime()
 
     const auto& stats = m_dynamicSurfaceGpuRuntime.stats();
     std::cout
-        << "LIVETRACK21 standing + running surface water: 10m tiles / near 256x256 + complete far 32x32 set, "
-        << ".hhyd v15 priority-flood 4-bit standing-depth ceiling + MFD catchment/flow, same-domain hydraulic-head standing water + rainfall-driven kinematic runoff, no circular rain splats and no periodic full-field CFD; "
+        << "LIVETRACK22 Dynamic Surface: 10m tiles / near 256x256 water+tire-mark material state + complete far 32x32 water set, "
+        << ".hhyd v15 priority-flood standing water + MFD runoff; tire-mark FP64 history reconstructs the shared near tile residency; "
         << stats.committedMiB << " MiB committed.\n";
 }
 
@@ -147,6 +147,13 @@ void EntityMeshRenderer::updateDynamicSurfaceGpuRuntime(
         surfaceWorld->hydrologyResetSerial(),
         gpuTireEvents,
         gpuWaterSampleRequests);
+
+    // LIVETRACK22: persistent tire-mark history is projected into the same
+    // resident 10m/256x256 Dynamic Surface tile slots immediately after
+    // residency has been updated. Near marks therefore follow surface-tile
+    // lifetime/re-entry instead of a separate coplanar decal lifetime.
+    m_dynamicSurfaceGpuRuntime.syncTireMarkPresentation(
+        surfaceWorld->presentation());
 
     auto& gpuWaterSamples = m_dynamicSurfaceGpuWaterSampleResultScratch;
     m_dynamicSurfaceGpuRuntime.consumeCompletedTireWaterSamples(gpuWaterSamples);

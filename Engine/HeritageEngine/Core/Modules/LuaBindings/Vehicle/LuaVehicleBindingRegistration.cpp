@@ -56,6 +56,18 @@ void LuaModuleRuntime::registerVehicleBindings()
     registerFunction("Vehicle", "TriggerWheelTireFailure", &LuaVehicleBindingHandlers::luaVehicleTriggerWheelTireFailure);
     registerFunction("Vehicle", "TriggerTireFailure", &LuaVehicleBindingHandlers::luaVehicleTriggerTireFailure);
     registerFunction("Vehicle", "GetTireColdInflationPressureRange", &LuaVehicleBindingHandlers::luaVehicleGetTireColdInflationPressureRange);
+    registerFunction("Vehicle", "GetTireCarcassLabParameterCount", &LuaVehicleBindingHandlers::luaVehicleGetTireCarcassLabParameterCount);
+    registerFunction("Vehicle", "GetTireCarcassLabParameterInfo", &LuaVehicleBindingHandlers::luaVehicleGetTireCarcassLabParameterInfo);
+    registerFunction("Vehicle", "GetTireCarcassLabParameter", &LuaVehicleBindingHandlers::luaVehicleGetTireCarcassLabParameter);
+    registerFunction("Vehicle", "SetTireCarcassLabParameter", &LuaVehicleBindingHandlers::luaVehicleSetTireCarcassLabParameter);
+    registerFunction("Vehicle", "GetTireCarcassLabEnabled", &LuaVehicleBindingHandlers::luaVehicleGetTireCarcassLabEnabled);
+    registerFunction("Vehicle", "SetTireCarcassLabEnabled", &LuaVehicleBindingHandlers::luaVehicleSetTireCarcassLabEnabled);
+    registerFunction("Vehicle", "ResetTireCarcassLab", &LuaVehicleBindingHandlers::luaVehicleResetTireCarcassLab);
+    registerFunction("Vehicle", "ResetTireCarcassLabState", &LuaVehicleBindingHandlers::luaVehicleResetTireCarcassLabState);
+    registerFunction("Vehicle", "CopyTireCarcassLabToAllWheels", &LuaVehicleBindingHandlers::luaVehicleCopyTireCarcassLabToAllWheels);
+    registerFunction("Vehicle", "RunTireCarcassSyntheticScenario", &LuaVehicleBindingHandlers::luaVehicleRunTireCarcassSyntheticScenario);
+    registerFunction("Vehicle", "RunTireCarcassSearchBatch", &LuaVehicleBindingHandlers::luaVehicleRunTireCarcassSearchBatch);
+    registerFunction("Vehicle", "ApplyTireCarcassSearchTrial", &LuaVehicleBindingHandlers::luaVehicleApplyTireCarcassSearchTrial);
     registerFunction("Vehicle", "ResetTirePhysicalState", &LuaVehicleBindingHandlers::luaVehicleResetTirePhysicalState);
     registerFunction("Vehicle", "SetTireContactFidelity", &LuaVehicleBindingHandlers::luaVehicleSetTireContactFidelity);
     registerFunction("Vehicle", "GetTireContactFidelity", &LuaVehicleBindingHandlers::luaVehicleGetTireContactFidelity);

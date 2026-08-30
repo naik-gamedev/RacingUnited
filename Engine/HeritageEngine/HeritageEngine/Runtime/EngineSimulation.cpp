@@ -107,7 +107,22 @@ void updateEngineSimulation(
     const bool playerChaseCameraActive =
         cameraPlayer != heritage::entities::InvalidEntity;
 
-    if (playerChaseCameraActive)
+    // STUDIO25: detached/world-space camera authority is independent of a
+    // player body. Broadcast/replay cameras therefore remain valid in post-
+    // race review, spectator scenes and future network-only sessions.
+    if (vehicleCamera.detachedActive())
+    {
+        vehicleCamera.updateFly(vehicleCameraFlyInput, dt);
+        vehicleCamera.buildLocalFrame(
+            { 0.0, 0.0, 0.0 },
+            { 1.0f, 0.0f, 0.0f },
+            { 0.0f, 1.0f, 0.0f },
+            { 0.0f, 0.0f, 1.0f },
+            physics.globalOrigin(),
+            entityCameraFrame);
+        chaseCamera.reset();
+    }
+    else if (playerChaseCameraActive)
     {
         // CAM03: use the interpolated rigid-body quaternion basis directly.
         // The chase camera therefore follows the chassis' ACTUAL +Z forward
@@ -193,23 +208,7 @@ void updateEngineSimulation(
                 frameCameraInput.dynamicMotionResponseActive = false;
             }
 
-            if (vehicleCamera.detachedActive())
-            {
-                // CAM07 detached free flight is world-space FP64 authority. It
-                // still uses the player pose only because this frame block is
-                // also where the normal chase camera is selected; buildLocalFrame
-                // ignores the chassis basis while detached.
-                vehicleCamera.updateFly(vehicleCameraFlyInput, dt);
-                vehicleCamera.buildLocalFrame(
-                    globalPlayerPosition,
-                    cameraRightWorld,
-                    cameraUpWorld,
-                    cameraForwardWorld,
-                    physics.globalOrigin(),
-                    entityCameraFrame);
-                chaseCamera.reset();
-            }
-            else if (vehicleCamera.active())
+            if (vehicleCamera.active())
             {
                 // CAMLAB01 fixed/authoring views are rigidly vehicle-local and
                 // consume the full interpolated chassis basis. This is what

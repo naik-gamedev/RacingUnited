@@ -1,4 +1,4 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='utf-8'?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -192,6 +192,8 @@ user32.lib
     <ClCompile Include="..\Camera\ChaseCamera.cpp" />
     <ClCompile Include="..\Camera\VehicleCameraController.cpp" />
     <ClCompile Include="..\Audio\AudioSystem.cpp" />
+    <ClCompile Include="..\Audio\Lab\EngineSoundCaptureLab.cpp" />
+    <ClCompile Include="..\Audio\Lab\EngineSoundLabDsp.cpp" />
     <ClCompile Include="..\Audio\Acoustics\AcousticPathTracer.cpp" />
     <ClCompile Include="..\Audio\Weather\WeatherAudioRuntime.cpp" />
     <ClCompile Include="..\Audio\Weather\Models\WeatherAudioModel.cpp" />
@@ -316,7 +318,6 @@ user32.lib
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityCoreBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityDebugBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityMeshBindings.cpp" />
-    <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTransformBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaAudioBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaEngineBindings.cpp" />
@@ -345,6 +346,7 @@ user32.lib
     <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleSuspensionBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTelemetryBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireBindings.cpp" />
+    <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireCarcassLabBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireCalibrationBindings.cpp" />
     <ClCompile Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireScenarioBindings.cpp" />
     <ClCompile Include="..\Core\Modules\ModuleRuntimeManager.cpp" />
@@ -438,6 +440,8 @@ user32.lib
     <ClInclude Include="..\Camera\ChaseCamera.hpp" />
     <ClInclude Include="..\Camera\VehicleCameraController.hpp" />
     <ClInclude Include="..\Audio\AudioSystem.hpp" />
+    <ClInclude Include="..\Audio\Lab\EngineSoundCaptureLab.hpp" />
+    <ClInclude Include="..\Audio\Lab\EngineSoundLabDsp.hpp" />
     <ClInclude Include="..\Audio\Acoustics\AcousticPathTracer.hpp" />
     <ClInclude Include="..\Audio\Weather\WeatherAudioTypes.hpp" />
     <ClInclude Include="..\Audio\Weather\WeatherAudioRuntime.hpp" />
@@ -498,6 +502,7 @@ user32.lib
     <ClInclude Include="..\Vehicles\Tires\TireDistributedContact.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireFleetBenchmark.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireFlexibleRingField.hpp" />
+    <ClInclude Include="..\Vehicles\Tires\TireCarcassDevelopmentLab.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireRigidRing.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireRoadEnveloping.hpp" />
     <ClInclude Include="..\Vehicles\Tires\TireThermal.hpp" />
@@ -569,7 +574,6 @@ user32.lib
     <ClInclude Include="..\Core\Modules\LuaBindings\Physics\LuaPhysicsBindingHandlers.hpp" />
     <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleBindingHandlers.hpp" />
     <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityBindingHandlers.hpp" />
-    <ClInclude Include="..\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.hpp" />
     <ClInclude Include="..\Core\Modules\LuaBindings\Vehicle\LuaVehicleDefinitionParser.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleRuntimeManager.hpp" />
     <ClInclude Include="..\Core\Modules\ModuleRuntimeAction.hpp" />
@@ -654,6 +658,7 @@ user32.lib
     <ClCompile Include="..\Vehicles\Tires\TireDistributedContact.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireFleetBenchmark.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireFlexibleRingField.cpp" />
+    <ClCompile Include="..\Vehicles\Tires\TireCarcassDevelopmentLab.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireRigidRing.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireRoadEnveloping.cpp" />
     <ClCompile Include="..\Vehicles\Tires\TireThermal.cpp" />

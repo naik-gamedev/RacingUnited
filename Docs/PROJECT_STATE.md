@@ -5,6 +5,8 @@
 
 ## Current checkpoint
 
+**Current Heritage Studio candidate:** STUDIO28 — traffic cones are now a shared free-roam and motorsport gameplay primitive. RACE authoring gains physical/event cone placement plus ordered invisible autoslalom/gymkhana Gate, left/right slalom, 180° turnaround, Stop Box, 360° left/right circle and Finish elements. Quick builders generate common course pieces plus straight/diagonal cone lines that copy full physics/traffic semantics for roadworks and lane-closure tapers. Persistent cones can Guide/Slow/Close Lane/Close Road through the existing traffic graph; event cones support solver-contact-backed contact/displacement/knock-down penalties, deterministic missed/wrong-element rules, resettable event overlays, replay bookmarks, adjusted-time personal bests and coherent per-element PB split deltas. HRACE advances to v7, HGAME to v12 with appended Autoslalom/Gymkhana event types, and generated StudioGameplay to schema v18. STUDIO27 Blender fly + static/moving broadcast-camera work remains intact.
+
 **Architecture audit candidate (2026-08-25):** ARCH14 fresh-tree inspection reopens cleanup under the CLEAN13 concrete-blocker exception. It is documentation/audit only and does not supersede the current runtime/visual milestone. See `CODE_HEALTH_OPTIMIZATION_ROADMAP_2026_08_25.md` and `Build/Reports/ARCH14_ProjectArchitectureAudit.txt`.
 
 **User-confirmed cleanup baseline:** CLEAN13 — the planned CLEAN01-CLEAN13 architecture program builds, launches and drives. The architecture-only cleanup stop rule is now active.

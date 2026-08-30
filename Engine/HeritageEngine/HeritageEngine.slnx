@@ -5,4 +5,5 @@
   </Configurations>
   <Project Path="HeritageEngine/HeritageEngine.vcxproj" Id="5a1d857d-c901-4e17-97c2-50661a043cf6" />
   <Project Path="Tests/HeritagePhysicsTests.vcxproj" Id="9b8d4310-fc30-49a8-9e0b-13647ba7361f" />
+  <Project Path="HeritageStudio/HeritageStudio.vcxproj" Id="c84b2b16-78a7-4de1-9d84-63e4ef92d9c2" />
 </Solution>

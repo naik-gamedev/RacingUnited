@@ -519,9 +519,89 @@
     "returns": "boolean",
     "description": "Stops recording while retaining every captured sample and summary."
   },
+  "Vehicle.GetTireCarcassLabParameterCount": {
+    "arguments": "()",
+    "returns": "integer",
+    "description": "Returns the TIRE45 development carcass parameter count (217). These runtime-only parameters tune the physics-owned 24x13 structural solver and are not serialized into tire data."
+  },
+  "Vehicle.GetTireCarcassLabParameterInfo": {
+    "arguments": "(parameterIndex: number)",
+    "returns": "table|nil",
+    "description": "Returns key, label, group, bounds, default and integer metadata for one 1-based TIRE45 carcass parameter."
+  },
+  "Vehicle.GetTireCarcassLabParameter": {
+    "arguments": "(vehicle: VehicleHandle, wheelIndex: number, parameterIndex: number)",
+    "returns": "number|nil",
+    "description": "Reads one runtime-only TIRE45 carcass-development parameter for a 1-based wheel and parameter index."
+  },
+  "Vehicle.SetTireCarcassLabParameter": {
+    "arguments": "(vehicle: VehicleHandle, wheelIndex: number, parameterIndex: number, value: number)",
+    "returns": "boolean",
+    "description": "Sets one bounded runtime-only TIRE45 structural parameter, enables the lab for that wheel and resets its dynamic carcass state. It does not edit MF6.2 tire-force data."
+  },
+  "Vehicle.GetTireCarcassLabEnabled": {
+    "arguments": "(vehicle: VehicleHandle, wheelIndex: number)",
+    "returns": "boolean|nil",
+    "description": "Returns whether development overrides are active for the selected wheel's physics-owned carcass simulation."
+  },
+  "Vehicle.SetTireCarcassLabEnabled": {
+    "arguments": "(vehicle: VehicleHandle, wheelIndex: number, enabled: boolean)",
+    "returns": "boolean",
+    "description": "Enables or disables runtime-only TIRE45 carcass overrides for one wheel while preserving production tire-force authority."
+  },
+  "Vehicle.ResetTireCarcassLab": {
+    "arguments": "(vehicle: VehicleHandle, wheelIndex: number)",
+    "returns": "boolean",
+    "description": "Resets all 217 carcass-development parameters to exact TIRE44 defaults for one wheel and clears its structural state."
+  },
+  "Vehicle.ResetTireCarcassLabState": {
+    "arguments": "(vehicle: VehicleHandle, wheelIndex: number)",
+    "returns": "boolean",
+    "description": "Clears only the selected wheel's carcass displacement/velocity state while preserving its current 217 tuning values."
+  },
+  "Vehicle.CopyTireCarcassLabToAllWheels": {
+    "arguments": "(vehicle: VehicleHandle, sourceWheelIndex: number)",
+    "returns": "boolean",
+    "description": "Copies one wheel's complete TIRE45 carcass-development tuning to every wheel on the vehicle and resets their structural states."
+  },
+  "Vehicle.RunTireCarcassSyntheticScenario": {
+    "arguments": "(vehicle: VehicleHandle, wheelIndex: number, scenario: string, integrationSteps?: number)",
+    "returns": "table|nil",
+    "description": "Runs one isolated deterministic scenario through the same 24x13 implicit carcass solver as the live wheel and returns pathology/debug metrics and shape profiles."
+  },
+  "Vehicle.RunTireCarcassSearchBatch": {
+    "arguments": "(vehicle: VehicleHandle, wheelIndex: number, scenario: string, seed: integer, firstTrial: integer, count: integer, spread: number, groupMask: integer, integrationSteps?: integer)",
+    "returns": "table|nil",
+    "description": "Evaluates a bounded deterministic batch of exact-solver parameter candidates and returns the lowest-pathology trial/result. The score is development-only and never feeds tire forces."
+  },
+  "Vehicle.ApplyTireCarcassSearchTrial": {
+    "arguments": "(vehicle: VehicleHandle, wheelIndex: number, seed: integer, trialIndex: integer, spread: number, groupMask: integer)",
+    "returns": "boolean",
+    "description": "Reconstructs and applies one deterministic TIRE45 random-search trial so a candidate can be inspected live on the actual vehicle."
+  },
   "Entity.SetMeshNodeTireFlexibleRingFromWheel": {
     "arguments": "(entity: EntityHandle, nodeName: string, vehicle: VehicleHandle, wheelIndex: number)",
     "returns": "boolean",
-    "description": "Native-to-native tire presentation bridge. Samples bounded distributed collision contact, solves one reduced-order flexible-ring field with the authoritative wheel state, and publishes only the final displacement field to the authored tire mesh node."
+    "description": "Copies the already-simulated physics-owned dynamic tire carcass field for one wheel into the authored tire mesh node. This binding performs no collision probing, equilibrium solve, contact-plane locking or grip calculation."
+  },
+  "Camera.SetWorldViewActive": {
+    "arguments": "(active: boolean)",
+    "returns": "boolean",
+    "description": "Enables or releases the detached FP64 world-camera render path without requiring a player vehicle. Disabling returns camera authority to normal gameplay camera selection."
+  },
+  "Camera.IsWorldViewActive": {
+    "arguments": "()",
+    "returns": "boolean",
+    "description": "Returns whether the detached/world-space camera path is currently active."
+  },
+  "Camera.SetWorldPose": {
+    "arguments": "(globalX: number, globalY: number, globalZ: number, pitchDegrees: number, yawDegrees: number, rollDegrees?: number)",
+    "returns": "boolean",
+    "description": "Sets a detached camera pose in floating-origin-safe global FP64 coordinates for replay, broadcast, spectator or authored world cameras."
+  },
+  "Camera.GetWorldPose": {
+    "arguments": "()",
+    "returns": "globalX: number, globalY: number, globalZ: number, pitchDegrees: number, yawDegrees: number, rollDegrees: number",
+    "description": "Returns the stored detached world-camera FP64 pose."
   }
 }

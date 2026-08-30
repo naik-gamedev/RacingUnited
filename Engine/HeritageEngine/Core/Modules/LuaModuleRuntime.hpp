@@ -20,6 +20,7 @@
 namespace heritage::camera { class VehicleCameraController; }
 namespace heritage::audio::vehicles { class VehicleAudioRuntime; }
 namespace heritage::audio::weather { class WeatherAudioRuntime; }
+namespace heritage::audio::lab { class EngineSoundCaptureLab; }
 
 namespace heritage::modules {
 
@@ -180,6 +181,7 @@ private:
     heritage::audio::AudioSystem* m_audio = nullptr;
     std::unique_ptr<heritage::audio::vehicles::VehicleAudioRuntime> m_vehicleAudio;
     std::unique_ptr<heritage::audio::weather::WeatherAudioRuntime> m_weatherAudio;
+    std::unique_ptr<heritage::audio::lab::EngineSoundCaptureLab> m_engineSoundLab;
     heritage::input::InputSystem* m_input = nullptr;
     heritage::camera::VehicleCameraController* m_vehicleCamera = nullptr;
     heritage::entities::EntityRegistry* m_entities = nullptr;

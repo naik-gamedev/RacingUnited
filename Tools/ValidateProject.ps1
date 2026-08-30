@@ -43,7 +43,8 @@ $validationModules = @(
     "Validation\10_CodeArchitecture.ps1",
     "Validation\20_PhysicsAndRegression.ps1",
     "Validation\30_VehicleAndContentArchitecture.ps1",
-    "Validation\40_RuntimeAndBuildHygiene.ps1"
+    "Validation\40_RuntimeAndBuildHygiene.ps1",
+    "Validation\50_HeritageStudio.ps1"
 )
 foreach ($relativeModule in $validationModules) {
     $modulePath = Join-Path $ToolsRoot $relativeModule

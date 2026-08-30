@@ -303,6 +303,314 @@ bool VehicleSystem::wheelState(
     return true;
 }
 
+bool VehicleSystem::wheelTireFlexibleRingField(
+    VehicleHandle handle,
+    std::size_t wheelIndex,
+    tires::TireFlexibleRingFieldOutput& value)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass field query received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+    auto& wheel = slot->record.wheels[wheelIndex];
+    if (wheel.flexibleRingDemandSeconds <= VehicleScalar{0.0})
+    {
+        // Do not resurrect a stale shape after a long cull. The next physics
+        // step starts the structural state from its undeformed rest condition.
+        wheel.flexibleRingState = {};
+        wheel.flexibleRingOutput = {};
+        wheel.flexibleRingAccumulatorSeconds = 0.0;
+    }
+    wheel.flexibleRingDemandSeconds = VehicleScalar{0.25};
+    value = wheel.flexibleRingOutput;
+    clearError();
+    return true;
+}
+
+
+namespace {
+
+tires::TireCarcassSyntheticInput makeTireCarcassSyntheticInput(
+    const WheelDescription& description,
+    const WheelState& state,
+    const TireModelDescription& tireModel,
+    std::size_t integrationSteps)
+{
+    tires::TireCarcassSyntheticInput input;
+    input.description.unloadedRadiusM =
+        tireModel.contactGeometry.unloadedRadiusM > 0.05
+            ? tireModel.contactGeometry.unloadedRadiusM
+            : static_cast<VehicleScalar>(description.radius);
+    input.description.rimRadiusM = tireModel.contactGeometry.rimRadiusM;
+    if (input.description.rimRadiusM <= 0.01)
+    {
+        const VehicleScalar rimDiameterIn = description.fitment.tireRimDiameterIn > 1.0f
+            ? static_cast<VehicleScalar>(description.fitment.tireRimDiameterIn)
+            : static_cast<VehicleScalar>(description.fitment.rimDiameterIn);
+        input.description.rimRadiusM = rimDiameterIn > 1.0
+            ? rimDiameterIn * VehicleScalar{0.0127}
+            : input.description.unloadedRadiusM * VehicleScalar{0.60};
+    }
+    input.description.rimRadiusM = std::clamp(
+        input.description.rimRadiusM,
+        VehicleScalar{0.01},
+        input.description.unloadedRadiusM - VehicleScalar{0.005});
+    input.description.sectionWidthM =
+        tireModel.contactGeometry.nominalWidthM > 0.03
+            ? tireModel.contactGeometry.nominalWidthM
+            : description.fitment.tireWidthMm > 30.0f
+                ? static_cast<VehicleScalar>(description.fitment.tireWidthMm) * VehicleScalar{0.001}
+                : VehicleScalar{0.205};
+    input.description.maximumDeflectionM = std::clamp(
+        static_cast<VehicleScalar>(description.maximumTireDeflection),
+        VehicleScalar{0.015},
+        input.description.unloadedRadiusM - input.description.rimRadiusM);
+    input.description.referencePressurePa =
+        tireModel.referenceInflationPressurePa > 20000.0
+            ? tireModel.referenceInflationPressurePa : VehicleScalar{220000.0};
+    input.description.verticalStiffnessNPerM =
+        tireModel.contactGeometry.verticalStiffnessNPerM > 1000.0
+            ? tireModel.contactGeometry.verticalStiffnessNPerM
+            : std::max(static_cast<VehicleScalar>(description.tireRadialStiffness),
+                VehicleScalar{1000.0});
+    input.referencePressurePa = input.description.referencePressurePa;
+    input.normalLoadN = state.normalForce > 100.0
+        ? state.normalForce
+        : tireModel.nominalLoad > 100.0
+            ? tireModel.nominalLoad : VehicleScalar{3200.0};
+    // This is wheel-centre overlap for the isolated scenario, not a carcass
+    // vertex target. The structural solver still discovers its own shape.
+    input.roadOverlapM = std::clamp(
+        input.normalLoadN / input.description.verticalStiffnessNPerM,
+        VehicleScalar{0.004},
+        std::min(input.description.maximumDeflectionM,
+            VehicleScalar{0.045}));
+    input.integrationSteps = std::clamp<std::size_t>(integrationSteps, 4, 240);
+    return input;
+}
+
+} // namespace
+
+bool VehicleSystem::setTireCarcassDevelopmentEnabled(
+    VehicleHandle handle, std::size_t wheelIndex, bool enabled)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass lab received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+    auto& wheel = slot->record.wheels[wheelIndex];
+    wheel.flexibleRingDevelopmentTuning.enabled = enabled;
+    wheel.flexibleRingState = {};
+    wheel.flexibleRingOutput = {};
+    wheel.flexibleRingAccumulatorSeconds = 0.0;
+    wheel.flexibleRingDemandSeconds = VehicleScalar{0.50};
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::tireCarcassDevelopmentEnabled(
+    VehicleHandle handle, std::size_t wheelIndex, bool& enabled) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass lab received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+    enabled = slot->record.wheels[wheelIndex].flexibleRingDevelopmentTuning.enabled;
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::tireCarcassDevelopmentParameter(
+    VehicleHandle handle, std::size_t wheelIndex,
+    std::size_t parameterIndex, VehicleScalar& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size()
+        || parameterIndex >= tires::tireCarcassDevelopmentParameterCount())
+    {
+        setError("Vehicle tire-carcass lab parameter query is invalid.");
+        return false;
+    }
+    value = tires::tireCarcassDevelopmentParameterValue(
+        slot->record.wheels[wheelIndex].flexibleRingDevelopmentTuning,
+        parameterIndex);
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::setTireCarcassDevelopmentParameter(
+    VehicleHandle handle, std::size_t wheelIndex,
+    std::size_t parameterIndex, VehicleScalar value)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass lab parameter write is invalid.");
+        return false;
+    }
+    auto& wheel = slot->record.wheels[wheelIndex];
+    if (!tires::setTireCarcassDevelopmentParameterValue(
+            wheel.flexibleRingDevelopmentTuning, parameterIndex, value))
+    {
+        setError("Vehicle tire-carcass lab parameter index is invalid.");
+        return false;
+    }
+    wheel.flexibleRingDevelopmentTuning.enabled = true;
+    wheel.flexibleRingState = {};
+    wheel.flexibleRingOutput = {};
+    wheel.flexibleRingAccumulatorSeconds = 0.0;
+    wheel.flexibleRingDemandSeconds = VehicleScalar{0.50};
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::resetTireCarcassDevelopmentTuning(
+    VehicleHandle handle, std::size_t wheelIndex)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass lab reset is invalid.");
+        return false;
+    }
+    auto& wheel = slot->record.wheels[wheelIndex];
+    tires::resetTireCarcassDevelopmentTuning(
+        wheel.flexibleRingDevelopmentTuning, true);
+    wheel.flexibleRingState = {};
+    wheel.flexibleRingOutput = {};
+    wheel.flexibleRingAccumulatorSeconds = 0.0;
+    wheel.flexibleRingDemandSeconds = VehicleScalar{0.50};
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::resetTireCarcassDevelopmentState(
+    VehicleHandle handle, std::size_t wheelIndex)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass dynamic-state reset is invalid.");
+        return false;
+    }
+    auto& wheel = slot->record.wheels[wheelIndex];
+    wheel.flexibleRingState = {};
+    wheel.flexibleRingOutput = {};
+    wheel.flexibleRingAccumulatorSeconds = 0.0;
+    wheel.flexibleRingDemandSeconds = VehicleScalar{0.50};
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::copyTireCarcassDevelopmentTuningToAllWheels(
+    VehicleHandle handle, std::size_t sourceWheelIndex)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || sourceWheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass lab copy source is invalid.");
+        return false;
+    }
+    const auto source =
+        slot->record.wheels[sourceWheelIndex].flexibleRingDevelopmentTuning;
+    for (auto& wheel : slot->record.wheels)
+    {
+        wheel.flexibleRingDevelopmentTuning = source;
+        wheel.flexibleRingState = {};
+        wheel.flexibleRingOutput = {};
+        wheel.flexibleRingAccumulatorSeconds = 0.0;
+        wheel.flexibleRingDemandSeconds = VehicleScalar{0.50};
+    }
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::runTireCarcassSyntheticScenario(
+    VehicleHandle handle, std::size_t wheelIndex,
+    tires::TireCarcassSyntheticScenario scenario,
+    std::size_t integrationSteps,
+    tires::TireCarcassSyntheticResult& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass synthetic scenario is invalid.");
+        return false;
+    }
+    const auto& wheel = slot->record.wheels[wheelIndex];
+    const auto input = makeTireCarcassSyntheticInput(
+        wheel.description, wheel.state, wheel.tireModel, integrationSteps);
+    value = tires::runTireCarcassSyntheticScenario(
+        input, wheel.flexibleRingDevelopmentTuning, scenario);
+    if (!value.valid)
+    {
+        setError("Vehicle tire-carcass synthetic scenario failed.");
+        return false;
+    }
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::runTireCarcassSearchBatch(
+    VehicleHandle handle, std::size_t wheelIndex,
+    tires::TireCarcassSyntheticScenario scenario,
+    std::uint64_t seed, std::uint64_t firstTrialIndex,
+    std::size_t trialCount, VehicleScalar spread,
+    std::uint32_t groupMask,
+    std::size_t integrationSteps,
+    tires::TireCarcassSearchBatchResult& value) const
+{
+    const Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass search batch is invalid.");
+        return false;
+    }
+    const auto& wheel = slot->record.wheels[wheelIndex];
+    const auto input = makeTireCarcassSyntheticInput(
+        wheel.description, wheel.state, wheel.tireModel, integrationSteps);
+    value = tires::runTireCarcassSearchBatch(
+        input, wheel.flexibleRingDevelopmentTuning, scenario,
+        seed, firstTrialIndex, trialCount, spread, groupMask);
+    if (!value.valid)
+    {
+        setError("Vehicle tire-carcass search batch produced no valid candidate.");
+        return false;
+    }
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::applyTireCarcassSearchTrial(
+    VehicleHandle handle, std::size_t wheelIndex,
+    std::uint64_t seed, std::uint64_t trialIndex,
+    VehicleScalar spread, std::uint32_t groupMask)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle tire-carcass search apply is invalid.");
+        return false;
+    }
+    auto& wheel = slot->record.wheels[wheelIndex];
+    wheel.flexibleRingDevelopmentTuning = tires::tireCarcassDevelopmentTrialTuning(
+        wheel.flexibleRingDevelopmentTuning,
+        seed, trialIndex, spread, groupMask);
+    wheel.flexibleRingDevelopmentTuning.enabled = true;
+    wheel.flexibleRingState = {};
+    wheel.flexibleRingOutput = {};
+    wheel.flexibleRingAccumulatorSeconds = 0.0;
+    wheel.flexibleRingDemandSeconds = VehicleScalar{0.50};
+    clearError();
+    return true;
+}
+
 bool VehicleSystem::wheelDescription(
     VehicleHandle handle,
     std::size_t wheelIndex,

@@ -331,7 +331,10 @@ void SurfacePresentation::recordTireMark(
     const float loadIntensity = clamp01(contact.normalLoadN / 5200.0f);
     const float temperatureFactor = 0.72f
         + 0.28f * smoothStep(28.0f, 92.0f, contact.treadTemperatureC);
-    const float wetTransfer = 1.0f - 0.72f * clamp01(contact.wetness);
+    // LIVETRACK22: a water-saturated contact does not lay down a dry-looking
+    // opaque skid. Keep a small residual transfer for hot rubber smearing, but
+    // make full-wet deposition only ~8% of dry instead of the previous 28%.
+    const float wetTransfer = 1.0f - 0.92f * clamp01(contact.wetness);
     float materialTransfer = 1.0f;
     if (contact.material == SurfaceMaterial::PaintedLine)
         materialTransfer = 0.78f;

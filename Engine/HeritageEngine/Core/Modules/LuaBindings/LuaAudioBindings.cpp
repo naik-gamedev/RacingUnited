@@ -9,6 +9,7 @@
 #include "../../../Audio/AudioSystem.hpp"
 #include "../../../Audio/Vehicles/VehicleAudioRuntime.hpp"
 #include "../../../Audio/Weather/WeatherAudioRuntime.hpp"
+#include "../../../Audio/Lab/EngineSoundCaptureLab.hpp"
 #include <cstdint>
 #include <cctype>
 #include <filesystem>
@@ -482,6 +483,203 @@ int LuaCoreBindingHandlers::luaAudioGetLastError(lua_State* state)
     return 1;
 }
 
+int LuaCoreBindingHandlers::luaAudioEngineLabGetState(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    runtime->m_engineSoundLab->update();
+    const auto value = runtime->m_engineSoundLab->status();
+    runtime->m_api.lua_createtable(state, 0, 14);
+    pushBooleanField(runtime->m_api, state, "available", value.available);
+    pushBooleanField(runtime->m_api, state, "capturing", value.capturing);
+    pushBooleanField(runtime->m_api, state, "previewPlaying", value.previewPlaying);
+    pushNumberField(runtime->m_api, state, "progress", value.progress);
+    pushNumberField(runtime->m_api, state, "requestedDurationSeconds", value.requestedDurationSeconds);
+    pushNumberField(runtime->m_api, state, "capturedDurationSeconds", value.capturedDurationSeconds);
+    pushNumberField(runtime->m_api, state, "peak", value.peak);
+    pushNumberField(runtime->m_api, state, "rms", value.rms);
+    pushNumberField(runtime->m_api, state, "sampleRate", value.sampleRate);
+    const std::string rawPath = heritage::paths::toUtf8(value.lastRawPath);
+    const std::string previewPath = heritage::paths::toUtf8(value.lastPreviewPath);
+    runtime->m_api.lua_pushlstring(state, rawPath.c_str(), rawPath.size());
+    runtime->m_api.lua_setfield(state, -2, "lastRawPath");
+    runtime->m_api.lua_pushlstring(state, previewPath.c_str(), previewPath.size());
+    runtime->m_api.lua_setfield(state, -2, "lastPreviewPath");
+    runtime->m_api.lua_pushlstring(state, value.profileName.c_str(), value.profileName.size());
+    runtime->m_api.lua_setfield(state, -2, "profileName");
+    runtime->m_api.lua_pushlstring(state, value.lastError.c_str(), value.lastError.size());
+    runtime->m_api.lua_setfield(state, -2, "lastError");
+    const std::string root = heritage::paths::toUtf8(runtime->m_engineSoundLab->root());
+    runtime->m_api.lua_pushlstring(state, root.c_str(), root.size());
+    runtime->m_api.lua_setfield(state, -2, "root");
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaAudioEngineLabGetProfile(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    const auto& p = runtime->m_engineSoundLab->profile();
+    runtime->m_api.lua_createtable(state, 0, 23);
+#define HERITAGE_PUSH_PROFILE_FIELD(name) pushNumberField(runtime->m_api, state, #name, p.name)
+    HERITAGE_PUSH_PROFILE_FIELD(inputGainDb);
+    HERITAGE_PUSH_PROFILE_FIELD(highPassHz);
+    HERITAGE_PUSH_PROFILE_FIELD(lowPassHz);
+    HERITAGE_PUSH_PROFILE_FIELD(bodyGainDb);
+    HERITAGE_PUSH_PROFILE_FIELD(bodyFrequencyHz);
+    HERITAGE_PUSH_PROFILE_FIELD(bodyQ);
+    HERITAGE_PUSH_PROFILE_FIELD(presenceCutDb);
+    HERITAGE_PUSH_PROFILE_FIELD(presenceFrequencyHz);
+    HERITAGE_PUSH_PROFILE_FIELD(presenceQ);
+    HERITAGE_PUSH_PROFILE_FIELD(highShelfDb);
+    HERITAGE_PUSH_PROFILE_FIELD(pulseSoftening);
+    HERITAGE_PUSH_PROFILE_FIELD(saturation);
+    HERITAGE_PUSH_PROFILE_FIELD(mechanicalPresence);
+    HERITAGE_PUSH_PROFILE_FIELD(intakePresence);
+    HERITAGE_PUSH_PROFILE_FIELD(intakeFrequencyHz);
+    HERITAGE_PUSH_PROFILE_FIELD(exhaustMuffling);
+    HERITAGE_PUSH_PROFILE_FIELD(exhaustBodyGainDb);
+    HERITAGE_PUSH_PROFILE_FIELD(exhaustBodyFrequencyHz);
+    HERITAGE_PUSH_PROFILE_FIELD(exhaustBodyQ);
+    HERITAGE_PUSH_PROFILE_FIELD(cabinDamping);
+    HERITAGE_PUSH_PROFILE_FIELD(cabinLowFrequencyLeak);
+    HERITAGE_PUSH_PROFILE_FIELD(cabinResonance);
+    HERITAGE_PUSH_PROFILE_FIELD(cabinResonanceHz);
+    HERITAGE_PUSH_PROFILE_FIELD(reverbPreview);
+    HERITAGE_PUSH_PROFILE_FIELD(occlusionPreview);
+    HERITAGE_PUSH_PROFILE_FIELD(outputGainDb);
+#undef HERITAGE_PUSH_PROFILE_FIELD
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaAudioEngineLabSetProfile(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    if (runtime->m_api.lua_type(state, 1) != kLuaTypeTable)
+    {
+        runtime->m_api.lua_pushboolean(state, 0);
+        return 1;
+    }
+    auto p = runtime->m_engineSoundLab->profile();
+#define HERITAGE_READ_PROFILE_FIELD(name) p.name = static_cast<float>(audioFieldNumber(runtime->m_api, state, 1, #name, p.name))
+    HERITAGE_READ_PROFILE_FIELD(inputGainDb);
+    HERITAGE_READ_PROFILE_FIELD(highPassHz);
+    HERITAGE_READ_PROFILE_FIELD(lowPassHz);
+    HERITAGE_READ_PROFILE_FIELD(bodyGainDb);
+    HERITAGE_READ_PROFILE_FIELD(bodyFrequencyHz);
+    HERITAGE_READ_PROFILE_FIELD(bodyQ);
+    HERITAGE_READ_PROFILE_FIELD(presenceCutDb);
+    HERITAGE_READ_PROFILE_FIELD(presenceFrequencyHz);
+    HERITAGE_READ_PROFILE_FIELD(presenceQ);
+    HERITAGE_READ_PROFILE_FIELD(highShelfDb);
+    HERITAGE_READ_PROFILE_FIELD(pulseSoftening);
+    HERITAGE_READ_PROFILE_FIELD(saturation);
+    HERITAGE_READ_PROFILE_FIELD(mechanicalPresence);
+    HERITAGE_READ_PROFILE_FIELD(intakePresence);
+    HERITAGE_READ_PROFILE_FIELD(intakeFrequencyHz);
+    HERITAGE_READ_PROFILE_FIELD(exhaustMuffling);
+    HERITAGE_READ_PROFILE_FIELD(exhaustBodyGainDb);
+    HERITAGE_READ_PROFILE_FIELD(exhaustBodyFrequencyHz);
+    HERITAGE_READ_PROFILE_FIELD(exhaustBodyQ);
+    HERITAGE_READ_PROFILE_FIELD(cabinDamping);
+    HERITAGE_READ_PROFILE_FIELD(cabinLowFrequencyLeak);
+    HERITAGE_READ_PROFILE_FIELD(cabinResonance);
+    HERITAGE_READ_PROFILE_FIELD(cabinResonanceHz);
+    HERITAGE_READ_PROFILE_FIELD(reverbPreview);
+    HERITAGE_READ_PROFILE_FIELD(occlusionPreview);
+    HERITAGE_READ_PROFILE_FIELD(outputGainDb);
+#undef HERITAGE_READ_PROFILE_FIELD
+    runtime->m_engineSoundLab->setProfile(p);
+    runtime->m_api.lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaAudioEngineLabStartCalibrationCapture(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    const float duration = static_cast<float>(
+        LuaModuleRuntime::numberArgument(*runtime, state, 1, 6.0));
+    const bool started = runtime->m_engineSoundLab->startCalibrationCapture(duration);
+    runtime->m_api.lua_pushboolean(state, started ? 1 : 0);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaAudioEngineLabStartBankCapture(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    const std::string vehicle = LuaModuleRuntime::stringArgument(*runtime, state, 1, "Peugeot206RC");
+    const std::string engine = LuaModuleRuntime::stringArgument(*runtime, state, 2, "EW10J4S");
+    const int rpm = static_cast<int>(LuaModuleRuntime::numberArgument(*runtime, state, 3, 2000.0));
+    const int throttle = static_cast<int>(LuaModuleRuntime::numberArgument(*runtime, state, 4, 50.0));
+    const float duration = static_cast<float>(LuaModuleRuntime::numberArgument(*runtime, state, 5, 4.0));
+    const bool started = runtime->m_engineSoundLab->startBankCapture(
+        vehicle, engine, rpm, throttle, duration);
+    runtime->m_api.lua_pushboolean(state, started ? 1 : 0);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaAudioEngineLabStopCapture(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    runtime->m_engineSoundLab->stopCapture();
+    runtime->m_api.lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaAudioEngineLabPlayPreview(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    const std::string perspective = LuaModuleRuntime::stringArgument(*runtime, state, 1, "raw");
+    const bool played = runtime->m_engineSoundLab->playPreview(
+        heritage::audio::lab::parseEngineSoundPerspective(perspective.c_str()));
+    runtime->m_api.lua_pushboolean(state, played ? 1 : 0);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaAudioEngineLabStopPreview(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    runtime->m_engineSoundLab->stopPreview();
+    runtime->m_api.lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaAudioEngineLabSaveProfile(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    const std::string name = LuaModuleRuntime::stringArgument(*runtime, state, 1, "Peugeot206RC_EW10J4S");
+    const bool saved = runtime->m_engineSoundLab->saveProfile(name);
+    runtime->m_api.lua_pushboolean(state, saved ? 1 : 0);
+    return 1;
+}
+
+int LuaCoreBindingHandlers::luaAudioEngineLabLoadProfile(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime || !runtime->m_engineSoundLab)
+        return 0;
+    const std::string name = LuaModuleRuntime::stringArgument(*runtime, state, 1, "Peugeot206RC_EW10J4S");
+    const bool loaded = runtime->m_engineSoundLab->loadProfile(name);
+    runtime->m_api.lua_pushboolean(state, loaded ? 1 : 0);
+    return 1;
+}
+
 int LuaCoreBindingHandlers::luaAudioCreateVehicleSound(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
@@ -914,6 +1112,16 @@ void LuaModuleRuntime::registerAudioBindings()
     registerFunction("Audio", "SetBusVolume", &LuaCoreBindingHandlers::luaAudioSetBusVolume);
     registerFunction("Audio", "GetBusVolume", &LuaCoreBindingHandlers::luaAudioGetBusVolume);
     registerFunction("Audio", "GetLastError", &LuaCoreBindingHandlers::luaAudioGetLastError);
+    registerFunction("Audio", "EngineLabGetState", &LuaCoreBindingHandlers::luaAudioEngineLabGetState);
+    registerFunction("Audio", "EngineLabGetProfile", &LuaCoreBindingHandlers::luaAudioEngineLabGetProfile);
+    registerFunction("Audio", "EngineLabSetProfile", &LuaCoreBindingHandlers::luaAudioEngineLabSetProfile);
+    registerFunction("Audio", "EngineLabStartCalibrationCapture", &LuaCoreBindingHandlers::luaAudioEngineLabStartCalibrationCapture);
+    registerFunction("Audio", "EngineLabStartBankCapture", &LuaCoreBindingHandlers::luaAudioEngineLabStartBankCapture);
+    registerFunction("Audio", "EngineLabStopCapture", &LuaCoreBindingHandlers::luaAudioEngineLabStopCapture);
+    registerFunction("Audio", "EngineLabPlayPreview", &LuaCoreBindingHandlers::luaAudioEngineLabPlayPreview);
+    registerFunction("Audio", "EngineLabStopPreview", &LuaCoreBindingHandlers::luaAudioEngineLabStopPreview);
+    registerFunction("Audio", "EngineLabSaveProfile", &LuaCoreBindingHandlers::luaAudioEngineLabSaveProfile);
+    registerFunction("Audio", "EngineLabLoadProfile", &LuaCoreBindingHandlers::luaAudioEngineLabLoadProfile);
     registerFunction("Audio", "CreateVehicleSound", &LuaCoreBindingHandlers::luaAudioCreateVehicleSound);
     registerFunction("Audio", "DestroyVehicleSound", &LuaCoreBindingHandlers::luaAudioDestroyVehicleSound);
     registerFunction("Audio", "SetVehicleSoundEnabled", &LuaCoreBindingHandlers::luaAudioSetVehicleSoundEnabled);

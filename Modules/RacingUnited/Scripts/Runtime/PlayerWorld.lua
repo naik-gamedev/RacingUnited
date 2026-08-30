@@ -14,6 +14,7 @@ playerWorld = {
     collisionMode = "none",
     spawnPosition = { 0.0, 0.05, 0.0 },
     spawnGlobalPosition = { 0.0, 0.05, 0.0 },
+    spawnRotation = { 0.0, 0.0, 0.0 },
     spawnMode = "origin-fallback",
     detectedSceneCount = 0,
     latestSceneGlb = "",
@@ -109,9 +110,39 @@ function ResetVehicleAtPlayerWorldSpawn(message)
         return false
     end
     playerWorld.spawnPosition = { x, y, z }
+    local rotation = playerWorld.spawnRotation or { 0.0, 0.0, 0.0 }
     return ResetNativeVehicleAt(
         x, y, z,
-        message or "Reset vehicle at Player World spawn")
+        message or "Reset vehicle at Player World spawn",
+        rotation[1] or 0.0,
+        rotation[2] or 0.0,
+        rotation[3] or 0.0)
+end
+
+local function ApplyHeritageStudioVehicleSpawn()
+    local marker = Entity.FindByName("Heritage Studio Vehicle Spawn")
+    if marker == 0 or not Entity.Exists(marker) then
+        return false
+    end
+
+    local x, groundY, z = Entity.GetWorldPosition(marker)
+    if x == nil or groundY == nil or z == nil then
+        return false
+    end
+
+    local rotationX, rotationY, rotationZ = Entity.GetWorldRotation(marker)
+    playerWorld.spawnPosition = {
+        x,
+        groundY + PrototypeCarDefinition.resetPosition[2],
+        z
+    }
+    playerWorld.spawnRotation = {
+        rotationX or 0.0,
+        rotationY or 0.0,
+        rotationZ or 0.0
+    }
+    playerWorld.spawnMode = "heritage-studio-hscene"
+    return true
 end
 
 local function CreatePlayerWorldVisual()
@@ -223,6 +254,7 @@ function LoadPlayerWorld()
             PrototypeCarDefinition.resetPosition[2],
             0.0
         }
+        playerWorld.spawnRotation = { 0.0, 0.0, 0.0 }
         collisionWarning =
             " | collision fallback active (author a *_Collision mesh later)"
     else
@@ -242,7 +274,15 @@ function LoadPlayerWorld()
                 0.0
             }
         end
+        playerWorld.spawnRotation = { 0.0, 0.0, 0.0 }
     end
+
+    -- Heritage Studio publishes its vehicle spawn directly into the module's
+    -- entry .hscene. When present, it deliberately overrides GLB spawn metadata
+    -- so moving the marker in Studio + Ctrl+S changes the next Racing United
+    -- load without any manual file copying. If no marker exists, the existing
+    -- GLB-authored spawn path above remains the unchanged fallback.
+    ApplyHeritageStudioVehicleSpawn()
 
     playerWorld.loaded = true
     playerWorld.loadedAsset = playerWorld.sceneAsset

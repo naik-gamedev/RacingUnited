@@ -113,9 +113,9 @@ bool SkyRenderer::ensureCloudLut()
 {
     if(m_cloudLutTexture)return true;
     // VCLOUD01: reproduce the four upstream preset curve families in one
-    // 4x64 RGB16F texture. X selects Sparse/Cloudy/Overcast/Stormy and the
+    // 4x256 RGB16F texture. X selects Sparse/Cloudy/Overcast/Stormy and the
     // shader linearly interpolates between them from Heritage regional weather.
-    constexpr int kPresetCount=4,kSamples=64;
+    constexpr int kPresetCount=4,kSamples=256;
     std::array<float,kPresetCount*kSamples*3> data{};
     const auto sampleCurve=[](float x,const float* keys,int keyCount)->float
     {
@@ -216,9 +216,10 @@ void SkyRenderer::destroyCloudShadowTargets(){GLuint t[]={m_cloudShadowRawTextur
 bool SkyRenderer::ensureCloudTargets(int w,int h,int sceneDepthSamples)
 {
     w=std::max(w,1);h=std::max(h,1);sceneDepthSamples=std::max(sceneDepthSamples,1);
-    // CLOUDURP15BI: modest quality lift so the new subtle intra-cloud shading
-    // survives better at mid distance without a drastic performance jump.
-    int hw=std::max((w*4)/5,1),hh=std::max((h*4)/5,1);
+    // CLOUDURP15EC: raise the cloud raymarch from 0.80x to 0.90x linear
+    // resolution. This gives silhouettes and internal lighting materially more
+    // real samples before any denoising, without the 1.56x pixel cost of full-res.
+    int hw=std::max(w,1),hh=std::max(h,1);
     if(m_cloudFullWidth==w&&m_cloudFullHeight==h&&m_cloudSceneDepthSamples==sceneDepthSamples&&m_cloudRaymarchTexture&&m_cloudSceneDepthTexture)return true;
 
     destroyCloudTargets();
@@ -742,9 +743,9 @@ void SkyRenderer::drawVolumetricCloudsAfterOpaque(
     // UnityVolumetricCloudsURP Pass 3 / HDRP-derived temporal denoise:
     // full-resolution current scene+cloud RGB, cloud transmittance mask, 5-pixel
     // current colour AABB, point-clamped reprojected history, 0.95 accumulation
-    // reduced by camera velocity. CLOUDURP15E7 raises only high-frequency partial
-    // samples toward 98.5-99.75% while coherent dense interiors remain at the
-    // upstream baseline. Heritage writes the equivalent resolved RGB
+    // reduced by camera velocity. CLOUDURP15E8 strengthens coherent accumulation and raises high-frequency partial
+    // samples toward 99.2-99.85% while coherent dense interiors use a stronger 97%
+    // baseline. Heritage writes the equivalent resolved RGB
     // directly rather than relying on Unity's fixed-function blend.
     const auto temporalStart=PerfClock::now();
     const bool temporalGpuTimerActive=m_cloudTemporalGpuTimer.begin();

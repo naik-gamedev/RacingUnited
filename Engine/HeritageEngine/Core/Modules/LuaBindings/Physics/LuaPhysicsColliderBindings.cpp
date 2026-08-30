@@ -504,6 +504,56 @@ int LuaPhysicsBindingHandlers::luaPhysicsGetBodyColliderCount(lua_State* state)
     return 1;
 }
 
+int LuaPhysicsBindingHandlers::luaPhysicsGetBodyCollisionBounds(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    runtime->m_lastPhysicsError.clear();
+    heritage::physics::BodyCollisionBounds bounds;
+    if (!runtime->m_physics
+        || !runtime->m_physics->collisions().bodyCollisionBounds(
+            LuaModuleRuntime::bodyHandleArgument(*runtime, state, 1), bounds))
+    {
+        if (runtime->m_physics)
+            runtime->m_lastPhysicsError = runtime->m_physics->collisions().lastError();
+        runtime->m_api.lua_pushnil(state);
+        return 1;
+    }
+
+    runtime->m_api.lua_createtable(state, 0, 22);
+    const auto pushNumberField = [&](const char* name, LuaNumber value) {
+        runtime->m_api.lua_pushnumber(state, value);
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    const auto pushIntegerField = [&](const char* name, LuaInteger value) {
+        runtime->m_api.lua_pushinteger(state, value);
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+
+    pushNumberField("minX", bounds.minimum.x);
+    pushNumberField("minY", bounds.minimum.y);
+    pushNumberField("minZ", bounds.minimum.z);
+    pushNumberField("maxX", bounds.maximum.x);
+    pushNumberField("maxY", bounds.maximum.y);
+    pushNumberField("maxZ", bounds.maximum.z);
+    pushNumberField("centerX", bounds.center.x);
+    pushNumberField("centerY", bounds.center.y);
+    pushNumberField("centerZ", bounds.center.z);
+    pushNumberField("sizeX", bounds.size.x);
+    pushNumberField("sizeY", bounds.size.y);
+    pushNumberField("sizeZ", bounds.size.z);
+    pushNumberField("halfExtentX", bounds.size.x * 0.5f);
+    pushNumberField("halfExtentY", bounds.size.y * 0.5f);
+    pushNumberField("halfExtentZ", bounds.size.z * 0.5f);
+    pushNumberField("width", bounds.size.x);
+    pushNumberField("height", bounds.size.y);
+    pushNumberField("length", bounds.size.z);
+    pushIntegerField("colliderCount", static_cast<LuaInteger>(bounds.colliderCount));
+    return 1;
+}
+
 int LuaPhysicsBindingHandlers::luaPhysicsGetColliderBody(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);

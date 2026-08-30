@@ -12,6 +12,8 @@
 #include "../Physics/RigidBodySystem.hpp"
 #include "TireModel.hpp"
 #include "Tires/TireContactPatch.hpp"
+#include "Tires/TireFlexibleRingField.hpp"
+#include "Tires/TireCarcassDevelopmentLab.hpp"
 #include "Tires/TireCalibrationLab.hpp"
 #include "Tires/TireScenarioLab.hpp"
 #include "Tires/TireDistributedContact.hpp"
@@ -533,9 +535,48 @@ public:
     bool addWheel(VehicleHandle handle, const WheelDescription& description);
     std::size_t wheelCount(VehicleHandle handle) const;
     bool wheelState(VehicleHandle handle, std::size_t wheelIndex, WheelState& value) const;
-    // TIRE26/VIS18: render-time contact probing needs the authored physical
-    // wheel mount/width/radius without reaching into VehicleSystem internals.
-    // This is read-only configuration state; physics remains authoritative.
+    bool wheelTireFlexibleRingField(
+        VehicleHandle handle,
+        std::size_t wheelIndex,
+        tires::TireFlexibleRingFieldOutput& value);
+    // TIRE45 development-only carcass laboratory. These overrides are runtime
+    // state only and are never serialized into tire data or vehicle handling.
+    bool setTireCarcassDevelopmentEnabled(
+        VehicleHandle handle, std::size_t wheelIndex, bool enabled);
+    bool tireCarcassDevelopmentEnabled(
+        VehicleHandle handle, std::size_t wheelIndex, bool& enabled) const;
+    bool tireCarcassDevelopmentParameter(
+        VehicleHandle handle, std::size_t wheelIndex,
+        std::size_t parameterIndex, VehicleScalar& value) const;
+    bool setTireCarcassDevelopmentParameter(
+        VehicleHandle handle, std::size_t wheelIndex,
+        std::size_t parameterIndex, VehicleScalar value);
+    bool resetTireCarcassDevelopmentTuning(
+        VehicleHandle handle, std::size_t wheelIndex);
+    bool resetTireCarcassDevelopmentState(
+        VehicleHandle handle, std::size_t wheelIndex);
+    bool copyTireCarcassDevelopmentTuningToAllWheels(
+        VehicleHandle handle, std::size_t sourceWheelIndex);
+    bool runTireCarcassSyntheticScenario(
+        VehicleHandle handle, std::size_t wheelIndex,
+        tires::TireCarcassSyntheticScenario scenario,
+        std::size_t integrationSteps,
+        tires::TireCarcassSyntheticResult& value) const;
+    bool runTireCarcassSearchBatch(
+        VehicleHandle handle, std::size_t wheelIndex,
+        tires::TireCarcassSyntheticScenario scenario,
+        std::uint64_t seed, std::uint64_t firstTrialIndex,
+        std::size_t trialCount, VehicleScalar spread,
+        std::uint32_t groupMask,
+        std::size_t integrationSteps,
+        tires::TireCarcassSearchBatchResult& value) const;
+    bool applyTireCarcassSearchTrial(
+        VehicleHandle handle, std::size_t wheelIndex,
+        std::uint64_t seed, std::uint64_t trialIndex,
+        VehicleScalar spread, std::uint32_t groupMask);
+    // Read-only authored physical wheel geometry for presentation/debug tools.
+    // TIRE44 carcass contact itself is already solved inside VehicleSystem;
+    // render code must not use this query to create a second tire shape solve.
     bool wheelDescription(
         VehicleHandle handle,
         std::size_t wheelIndex,
@@ -820,6 +861,39 @@ private:
         bool steerRateInitialized = false;
         tires::TireContactPatchState contactPatchState;
         tires::TireRigidRingState rigidRingState;
+        // TIRE44 physics-owned carcass simulation. The road-envelope queries
+        // already performed for force support are retained as real collider
+        // samples and become unilateral contact boundaries for the structural
+        // lattice; rendering no longer performs a separate tire-shape solve.
+        struct CarcassRoadSampleCache
+        {
+            bool queried = false;
+            bool supported = false;
+            VehicleScalar queryForwardM = 0.0;
+            VehicleScalar queryLateralM = 0.0;
+            // TIRE45B: road-envelope samples are cached for several 1 kHz
+            // wheel substeps. Never retain an absolute world contact point
+            // here: as the vehicle translates that point is left behind and
+            // the carcass solver interprets vehicle travel as metres of belt
+            // deformation. Keep the sampled shape relative to the centre
+            // contact instead; Phase 06 re-anchors it to the current 1 kHz
+            // centre hit before solving the structural lattice.
+            heritage::math::Vec3 pointDeltaFromCenterContactWorld{};
+            heritage::math::Vec3 normalWorld{ 0.0f, 1.0f, 0.0f };
+        };
+        std::array<CarcassRoadSampleCache,
+            tires::TireFlexibleRingMaximumRoadSamples> carcassRoadSamples{};
+        std::size_t carcassRoadSampleCount = 0;
+        tires::TireFlexibleRingDynamicState flexibleRingState;
+        tires::TireFlexibleRingFieldOutput flexibleRingOutput;
+        // TIRE45 runtime-only parameter bank. Disabled defaults preserve the
+        // production TIRE44 solver exactly until the user opens the lab.
+        tires::TireFlexibleRingDevelopmentTuning flexibleRingDevelopmentTuning;
+        VehicleScalar flexibleRingAccumulatorSeconds = 0.0;
+        // Physics-owned carcass simulation is presentation-demanded because it
+        // does not feed MF6.2 forces. A short lease keeps visible tires active
+        // without spending structural-solver CPU on an unseen 150-car field.
+        VehicleScalar flexibleRingDemandSeconds = 0.0;
         tires::TireThermalState thermalState;
         tires::TireFailureState failureState;
         tires::TireWearState wearState;

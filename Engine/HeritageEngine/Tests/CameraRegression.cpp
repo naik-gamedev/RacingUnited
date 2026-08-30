@@ -226,6 +226,48 @@ bool detachedFreeCameraCopiesCurrentFrameAndMovesInWorldSpace()
     return !camera.detachedActive() && !camera.flyEnabled();
 }
 
+bool detachedWorldCameraPoseIsFloatingOriginSafe()
+{
+    heritage::camera::VehicleCameraController camera;
+    const heritage::math::DVec3 globalEye{ 100012.0, 205.0, -49990.0 };
+    if (!camera.setDetachedWorldPose(globalEye, -12.0, 45.0, 3.0)
+        || !camera.detachedActive()
+        || camera.flyEnabled()
+        || std::abs(camera.detachedGlobalPosition().x - globalEye.x) > 1.0e-9
+        || std::abs(camera.detachedGlobalPosition().y - globalEye.y) > 1.0e-9
+        || std::abs(camera.detachedGlobalPosition().z - globalEye.z) > 1.0e-9
+        || std::abs(camera.detachedPitchDegrees() - (-12.0)) > 1.0e-9
+        || std::abs(camera.detachedYawDegrees() - 45.0) > 1.0e-9
+        || std::abs(camera.detachedRollDegrees() - 3.0) > 1.0e-9)
+    {
+        return false;
+    }
+
+    const heritage::math::DVec3 origin{ 100000.0, 200.0, -50000.0 };
+    heritage::camera::CameraFrame frame{};
+    if (!camera.buildLocalFrame(
+            { -900000.0, 5000.0, 800000.0 },
+            { 0.0f, 0.0f, -1.0f },
+            { 0.0f, 1.0f, 0.0f },
+            { 1.0f, 0.0f, 0.0f },
+            origin,
+            frame))
+    {
+        return false;
+    }
+
+    if (!frame.valid
+        || std::abs(frame.eyeLocal.x - 12.0f) > 0.0001f
+        || std::abs(frame.eyeLocal.y - 5.0f) > 0.0001f
+        || std::abs(frame.eyeLocal.z - 10.0f) > 0.0001f)
+    {
+        return false;
+    }
+
+    camera.setDetachedWorldActive(false);
+    return !camera.detachedActive() && !camera.flyEnabled();
+}
+
 bool chaseCameraDynamicOffsetsAreDampedAndBounded()
 {
     heritage::camera::ChaseCamera camera;

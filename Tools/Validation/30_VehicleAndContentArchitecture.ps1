@@ -169,10 +169,10 @@ Check (
 ) "Scene UI coordinator owns weather without the retired Water Laboratory panel"
 Check (-not (Test-Path (Join-Path $Root "Modules\RacingUnited\Scripts\Runtime\VehicleDemo.lua"))) "obsolete Runtime/VehicleDemo.lua is absent"
 
-# SUS03B: hardpoint authoring distinguishes evidence quality. Reusable front
-# and rear mechanisms may run from versioned low-confidence estimates while
-# GLB-authored/measured points transparently supersede estimates. Chassis
-# suspension estimates must not be regenerated from current wheel/tire fitment.
+# SUS03B/TIRE45D: hardpoint authoring distinguishes evidence quality. Estimated
+# points remain creator scaffolding only; runtime hardpoint kinematics require a
+# complete legacy-authored/asset-authored/measured set. Chassis suspension
+# estimates must not be regenerated from current wheel/tire fitment.
 $suspensionAuthoringRuntimePath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\SuspensionAuthoring.lua"
 $suspensionAuthoringPanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\Suspension\AuthoringPanel.lua"
 $suspensionAuthoringDocPath = Join-Path $Root "Docs\SUSPENSION_AUTHORING.md"
@@ -194,6 +194,7 @@ Check ($suspensionAuthoringRuntime.Contains("rearReferencePackageScaleM")) "rear
 Check (-not $suspensionAuthoringRuntime.Contains("wheel.radiusM or shared.radiusM")) "authoring runtime does not derive suspension geometry from installed tire radius"
 Check ($suspensionAuthoringRuntime.Contains("EstimateTrailingArmHardpoints")) "Racing United can estimate trailing-arm rear hardpoints"
 Check ($suspensionAuthoringRuntime.Contains('"estimated"')) "estimated suspension data is provenance-labeled"
+Check ($suspensionAuthoringRuntime.Contains('minimumPhysicsPriority = SuspensionAuthoringSourcePriority(') -and $suspensionAuthoringRuntime.Contains('"legacy_authored"')) "TIRE45D estimated hardpoints cannot become runtime physics authority"
 Check ($suspensionAuthoringRuntime.Contains("SuspensionAuthoringImportHardpointsFromMetadata")) "GLB hardpoints can supersede estimates"
 Check ($suspensionAuthoringRuntime.Contains("Vehicle.SetWheelSuspensionHardpoints")) "authoring layer can activate native hardpoint kinematics"
 
@@ -383,23 +384,64 @@ Check (-not $vehicleTelemetry.Contains("local grounded, length, compression")) "
 Check ($wheelTelemetryCpp.Contains('pushNumberField("length", value.suspensionLength)')) "named wheel telemetry exposes native suspension length through the Lua `length` field"
 Check ($visualWheelsRuntime.Contains("telemetry.length or baseline.suspensionLength")) "embedded GLB wheel presentation consumes the actual Lua suspension-length field"
 Check (-not $visualWheelsRuntime.Contains("telemetry.suspensionLength")) "embedded GLB wheel presentation does not reference the nonexistent suspensionLength telemetry field"
-Check ($luaRuntimeAndBindingsCpp.Contains('registerFunction("Entity", "SetMeshNodeTireFlexibleRingFromWheel"') -and $luaBindingCpp.Contains("luaEntitySetMeshNodeTireFlexibleRingFromWheel")) "TIRE41 registers one native flexible-ring presentation bridge"
-Check ($visualWheelsRuntime.Contains("Entity.SetMeshNodeTireFlexibleRingFromWheel") -and $visualWheelsRuntime.Contains('"WH_" .. corner .. "_Tire"')) "Peugeot embedded tire nodes consume the unified flexible-ring field"
+Check ($luaRuntimeAndBindingsCpp.Contains('registerFunction("Entity", "SetMeshNodeTireFlexibleRingFromWheel"') -and $luaBindingCpp.Contains("luaEntitySetMeshNodeTireFlexibleRingFromWheel")) "TIRE44 registers the copy-only physics-owned flexible-carcass Entity API"
+Check ($visualWheelsRuntime.Contains("Entity.SetMeshNodeTireFlexibleRingFromWheel") -and $visualWheelsRuntime.Contains('"WH_" .. corner .. "_Tire"')) "Peugeot embedded tire nodes consume the physics-owned dynamic carcass field"
 Check ($visualWheelsRuntime.Contains("local flexibleRingBridge = Entity.SetMeshNodeTireFlexibleRingFromWheel") -and $visualWheelsRuntime.Contains("if flexibleRingBridge ~= nil then")) "a stale native executable cannot abort Lua reload and erase the vehicle"
-$tire41FieldHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireFlexibleRingField.hpp"
-$tire41FieldCppPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireFlexibleRingField.cpp"
-$tire41BridgePath = Join-Path $Root "Engine\HeritageEngine\Core\Modules\LuaBindings\Entity\LuaEntityTireFlexibleRingBridge.cpp"
-$tire41FieldHeader = if (Test-Path $tire41FieldHeaderPath) { [IO.File]::ReadAllText($tire41FieldHeaderPath) } else { "" }
-$tire41FieldCpp = if (Test-Path $tire41FieldCppPath) { [IO.File]::ReadAllText($tire41FieldCppPath) } else { "" }
-$tire41Bridge = if (Test-Path $tire41BridgePath) { [IO.File]::ReadAllText($tire41BridgePath) } else { "" }
-Check ($tire41FieldHeader.Contains("TireFlexibleRingFieldStations = 24") -and $tire41FieldCpp.Contains("solveElasticFoundation") -and $tire41FieldCpp.Contains("contactConstraintStiffness")) "TIRE41 owns one bounded cyclic flexible-ring/elastic-foundation solver"
-Check ($tire41Bridge.Contains("evaluateTireFlexibleRingField") -and $tire41Bridge.Contains("wheelState.tireInflationPressurePa") -and $tire41Bridge.Contains("wheelState.tireRingWindupDegrees")) "TIRE41 bridge assembles pressure, deflection, contact, ring and wear state before presentation"
-$tire41FieldUniforms = ([regex]::Matches($clean05Shaders, "uniform bool uTireVisualDeformationFieldValid;")).Count
-$tire41VisibleAdds = ([regex]::Matches($clean05Shaders, "position \+= tireFlexibleRingDisplacementLocal\(position\);")).Count
-$tire41ShadowAdds = ([regex]::Matches($clean05Shaders, "position \+= metersToLocal \* attachment")).Count
-Check ($tire41FieldUniforms -eq 2 -and $tire41VisibleAdds -eq 1 -and $tire41ShadowAdds -eq 1) "TIRE41 visible and shadow shaders each apply the final displacement field exactly once"
-Check (([regex]::Matches($clean05Shaders, "uniform vec3 uTireVisualDisplacementM\[HERITAGE_TIRE_FIELD_COUNT\];")).Count -eq 2 -and -not $clean05Shaders.Contains("uTireVisualForwardDisplacementM")) "TIRE41 final vector field is GPU-register-safe and not split into three oversized scalar arrays"
-Check (-not $clean05Shaders.Contains("uTireVisualProbeCompressionM") -and -not $clean05Shaders.Contains("flattenAmount") -and -not $clean05Shaders.Contains("hardPlanePenetration") -and -not $clean05Shaders.Contains("tireCarcassProfileM")) "TIRE41 deleted probe dents, plane clamps, heuristic bulges and carcass-profile stacking"
+$tire44FieldHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireFlexibleRingField.hpp"
+$tire44FieldCppPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireFlexibleRingField.cpp"
+$tire44VehicleHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleSystem.hpp"
+$tire44Phase03Path = Join-Path $Root "Engine\HeritageEngine\Vehicles\Simulation\WheelSubstep\03_RoadEnvelopeAndFootprintSampling.inl"
+$tire44Phase06Path = Join-Path $Root "Engine\HeritageEngine\Vehicles\Simulation\WheelSubstep\06_ContactKinematicsAndPatchGeometry.inl"
+$tire44FieldHeader = if (Test-Path $tire44FieldHeaderPath) { [IO.File]::ReadAllText($tire44FieldHeaderPath) } else { "" }
+$tire44FieldCpp = if (Test-Path $tire44FieldCppPath) { [IO.File]::ReadAllText($tire44FieldCppPath) } else { "" }
+$tire44VehicleHeader = if (Test-Path $tire44VehicleHeaderPath) { [IO.File]::ReadAllText($tire44VehicleHeaderPath) } else { "" }
+$tire44Phase03 = if (Test-Path $tire44Phase03Path) { [IO.File]::ReadAllText($tire44Phase03Path) } else { "" }
+$tire44Phase06 = if (Test-Path $tire44Phase06Path) { [IO.File]::ReadAllText($tire44Phase06Path) } else { "" }
+Check ($tire44FieldHeader.Contains("TireFlexibleRingFieldStations = 24") -and $tire44FieldHeader.Contains("TireFlexibleRingDynamicState") -and $tire44FieldHeader.Contains("TireFlexibleRingRoadSample")) "TIRE44 owns one bounded 24x13 stateful carcass lattice and explicit road-contact samples"
+Check ($tire44FieldCpp.Contains("advanceTireFlexibleRingDynamics") -and $tire44FieldCpp.Contains("Implicit Jacobi solve") -and $tire44FieldCpp.Contains("implicitIterations = std::clamp") -and $tire44FieldCpp.Contains("roadSampleForNode") -and $tire44FieldCpp.Contains("solveRankOneContact") -and $tire44FieldCpp.Contains("Internal rim/flange collision")) "TIRE44 solves bounded inertia/carcass/contact dynamics with pre-associated physical road samples"
+Check ($tire44VehicleHeader.Contains("flexibleRingState") -and $tire44VehicleHeader.Contains("carcassRoadSamples") -and $tire44VehicleHeader.Contains("wheelTireFlexibleRingField") -and $tire44VehicleHeader.Contains("flexibleRingDemandSeconds")) "VehicleSystem owns persistent per-wheel carcass displacement/velocity, collision samples and bounded simulation demand state"
+Check ($tire44Phase03.Contains("carcassRoadSamples") -and $tire44Phase03.Contains("sampleHit.point") -and $tire44Phase03.Contains("sampleHit.normal")) "TIRE44 reuses tire-force road-envelope collision geometry instead of creating a render-side support approximation"
+Check ($tire44Phase06.Contains("VehicleScalar{0.008} / flexibleRingRateScale") -and $tire44Phase06.Contains("flexibleRingDemandSeconds") -and $tire44Phase06.Contains("advanceTireFlexibleRingDynamics") -and -not $tire44Phase06.Contains("carcassInput.verticalDeflection")) "TIRE44 advances requested carcasses at 125 Hz without prescribing physical tireDeflection as a mesh-shape target"
+Check ($tire44VehicleHeader.Contains("pointDeltaFromCenterContactWorld") -and -not $tire44VehicleHeader.Contains("heritage::math::Vec3 pointWorld{};")) "TIRE45B carcass road-envelope cache stores local point offsets instead of stale absolute world positions"
+Check ($tire44Phase03.Contains("subtract(source.pointWorld, hit.point)") -and $tire44Phase06.Contains("add(") -and $tire44Phase06.Contains("state.contactPoint") -and $tire44Phase06.Contains("source.pointDeltaFromCenterContactWorld")) "TIRE45B re-anchors cached road-envelope shape to the live centre contact before each carcass solve"
+Check (-not $tire44FieldCpp.Contains("transportCarcassStateThroughWheelRotation")) "TIRE45B keeps circumferential carcass stations Eulerian and does not advect the whole lattice with wheel spin"
+Check ($luaBindingCpp.Contains("wheelTireFlexibleRingField") -and -not $luaBindingCpp.Contains("evaluateTireFlexibleRingField") -and -not $luaBindingCpp.Contains("solveTireFlexibleRingPresentationField")) "TIRE44 render bridge copies the already-simulated physics field and performs no carcass equilibrium solve"
+Check (-not $vehicleProject.Contains("LuaEntityTireFlexibleRingBridge.cpp") -and -not $vehicleProject.Contains("LuaEntityTireFlexibleRingBridge.hpp")) "retired TIRE41 render-time carcass solver bridge is not compiled"
+$tire44LauncherPath = Join-Path $Root "Tools\00_BuildAndRunCurrent.cmd"
+$tire44StudioLauncherPath = Join-Path $Root "Tools\01_BuildAndRunHeritageStudio.cmd"
+$tire44Launcher = if (Test-Path $tire44LauncherPath) { [IO.File]::ReadAllText($tire44LauncherPath) } else { "" }
+$tire44StudioLauncher = if (Test-Path $tire44StudioLauncherPath) { [IO.File]::ReadAllText($tire44StudioLauncherPath) } else { "" }
+Check ($tire44Launcher.Contains("LuaEntityTireFlexibleRingBridge.cpp") -and $tire44Launcher.Contains("LuaEntityTireFlexibleRingBridge.hpp") -and $tire44Launcher.Contains("del /f /q") -and $tire44StudioLauncher.Contains("LuaEntityTireFlexibleRingBridge.cpp") -and $tire44StudioLauncher.Contains("LuaEntityTireFlexibleRingBridge.hpp") -and $tire44StudioLauncher.Contains("del /f /q")) "TIRE44A runtime and Studio launchers delete the retired render-time carcass bridge before validation"
+Check (-not $tire44FieldCpp.Contains("supportPlaneLock") -and -not $tire44Phase06.Contains("supportPlaneLock") -and -not $luaBindingCpp.Contains("supportPlaneLock")) "TIRE44 contains no support-plane lock or vertex snapping quick fix"
+$tire44FieldUniforms = ([regex]::Matches($clean05Shaders, "uniform bool uTireVisualDeformationFieldValid;")).Count
+$tire45cVisibleSamples = ([regex]::Matches($clean05Shaders, "vec3 fieldM = sampleTireFlexibleRingField\(theta, widthCoordinate\);")).Count
+$tire45cVisibleWorldAdds = ([regex]::Matches($clean05Shaders, "world\.xyz \+= tireWorldDisplacement;")).Count
+$tire45cShadowSamples = ([regex]::Matches($clean05Shaders, "vec3 fieldM = sampleTireShadowField\(theta, widthCoordinate\);")).Count
+$tire45cShadowWorldApplies = ([regex]::Matches($clean05Shaders, "worldPosition\.xyz = deformTireShadowWorldPosition\(")).Count
+Check ($tire44FieldUniforms -eq 2 -and $tire45cVisibleSamples -eq 1 -and $tire45cVisibleWorldAdds -eq 1 -and $tire45cShadowSamples -eq 1 -and $tire45cShadowWorldApplies -eq 1) "TIRE45C visible and shadow shaders each sample/apply the final simulated displacement field exactly once in world space"
+Check (([regex]::Matches($clean05Shaders, "uniform vec3 uTireVisualDisplacementM\[HERITAGE_TIRE_FIELD_COUNT\];")).Count -eq 2 -and -not $clean05Shaders.Contains("uTireVisualForwardDisplacementM")) "TIRE44 final vector field remains GPU-register-safe and unified"
+Check (-not $clean05Shaders.Contains("uTireVisualProbeCompressionM") -and -not $clean05Shaders.Contains("flattenAmount") -and -not $clean05Shaders.Contains("hardPlanePenetration") -and -not $clean05Shaders.Contains("tireCarcassProfileM")) "TIRE44 does not restore shader dents, plane clamps, heuristic bulges or stacked carcass authorities"
+
+$tire45LabHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireCarcassDevelopmentLab.hpp"
+$tire45LabCppPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireCarcassDevelopmentLab.cpp"
+$tire45BindingPath = Join-Path $Root "Engine\HeritageEngine\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireCarcassLabBindings.cpp"
+$tire45UiPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\Tires\CarcassMegaLabPanel.lua"
+$tire45LabHeader = ReadText $tire45LabHeaderPath
+$tire45LabCpp = ReadText $tire45LabCppPath
+$tire45Binding = ReadText $tire45BindingPath
+$tire45Ui = ReadText $tire45UiPath
+Check ($vehicleProject.Contains('..\Vehicles\Tires\TireCarcassDevelopmentLab.cpp') -and $vehicleProject.Contains('..\Core\Modules\LuaBindings\Vehicle\LuaVehicleTireCarcassLabBindings.cpp')) "TIRE45 compiles the dedicated carcass development lab and Lua binding translation units"
+Check ($physicsTestsProject.Contains('..\Vehicles\Tires\TireCarcassDevelopmentLab.cpp')) "TIRE45 physics regressions compile the exact carcass development/search implementation"
+Check ($tire44FieldHeader.Contains("TireFlexibleRingDevelopmentTuning") -and $tire44FieldHeader.Contains("stationFoundationScale") -and $tire44FieldHeader.Contains("bandLateralScale")) "TIRE45 flexible-ring dynamics accepts bounded development-only global/station/band structural tuning"
+Check ($tire45LabCpp.Contains("kParameterCount") -and $tire45LabCpp.Contains("kGlobalParameterCount = 32") -and $tire45LabCpp.Contains("kStationBankCount = 5") -and $tire45LabCpp.Contains("kBandBankCount = 5")) "TIRE45 exposes 217 raw structural controls rather than another small guessed slider set"
+Check ($tire45LabCpp.Contains("runTireCarcassSyntheticScenario") -and $tire45LabCpp.Contains("advanceTireFlexibleRingDynamics") -and -not $tire45LabCpp.Contains("evaluateTireFlexibleRingField(")) "TIRE45 isolated scenarios execute the exact stateful 24x13 dynamic carcass solver, not the legacy equilibrium proxy"
+Check ($tire45LabCpp.Contains("structuralRestRadialScale") -and $tire45LabCpp.Contains("Metrics must use the exact same rounded structural rest carcass")) "TIRE45 synthetic diagnostics measure penetration against the same rounded structural rest carcass used by the exact solver"
+Check ($tire45LabCpp.Contains("nearestRoad") -and $tire45LabCpp.Contains("nearestRoad->supported") -and $tire45LabCpp.Contains("signedDistance") -and $tire45LabCpp.Contains("PartialRoadEdge") -and $tire45LabCpp.Contains("BankedRoad")) "TIRE45 pathology scoring follows discrete supported road samples/normals instead of inventing a flat support plane"
+Check ($tire45LabCpp.Contains("runTireCarcassSearchBatch") -and $tire45LabCpp.Contains("tireCarcassDevelopmentTrialTuning") -and $tire45Ui.Contains("1000000") -and $tire45Ui.Contains("searchBatch")) "TIRE45 supports deterministic bounded brute-force search budgets up to one million exact candidates"
+Check ($tire45Binding.Contains("luaVehicleRunTireCarcassSyntheticScenario") -and $tire45Binding.Contains("luaVehicleRunTireCarcassSearchBatch") -and $tire45Binding.Contains("luaVehicleApplyTireCarcassSearchTrial") -and $tire45Ui.Contains("APPLY TRIAL INDEX")) "TIRE45 Lua API exposes exact scenarios, search batches and reproducible candidate application/recall"
+Check ($tire45Ui.Contains("DrawCarcassParameterGroup()") -and $tire45Ui.Contains("Vehicle.ResetTireCarcassLabState") -and $tire45Ui.Contains("Physics.SetTimeScale(0.0)") -and $tire45Ui.Contains("Physics.SetTimeScale(0.10)") -and $tire45Ui.Contains("Vehicle.CopyTireCarcassLabToAllWheels") -and $tire45Ui.Contains("CaptureCarcassSnapshot()") -and $tire45Ui.Contains("RestoreCarcassSnapshot(")) "TIRE45 in-game Tire LAB provides grouped live tuning, dynamic-state reset, freeze/slow-motion, A/B snapshots and all-wheel copy workflow"
+Check ($tire45Ui.Contains("static_flat") -and $tire45Ui.Contains("hard_acceleration") -and $tire45Ui.Contains("hard_braking") -and $tire45Ui.Contains("zero_pressure") -and $tire45Ui.Contains("partial_road_edge")) "TIRE45 Tire LAB exposes static, longitudinal, pressure and partial-support structural scenarios"
+Check (-not $tire45LabCpp.Contains("supportPlaneLock") -and -not $tire45Ui.Contains("support plane lock") -and -not $tire45LabCpp.Contains("world-Z")) "TIRE45 search/tuning infrastructure does not reintroduce a support-plane or world-height shape correction"
 
 $wheelContractPath = Join-Path $Root "Docs\Decisions\ADR-009-Wheel-Coordinate-Contract.md"
 Check (Test-Path $wheelContractPath) "wheel coordinate/presentation ADR exists"
@@ -538,3 +580,25 @@ $ui04VehicleTabs = if (Test-Path $ui04VehicleTabsPath) { [IO.File]::ReadAllText(
 $ui04LabTabs = if (Test-Path $ui04LabTabsPath) { [IO.File]::ReadAllText($ui04LabTabsPath) } else { "" }
 Check ($ui04LuaUi.Contains("ImGuiTabBarFlags_FittingPolicyScroll") -and -not $ui04Common.Contains("DrawResponsiveTabs") -and $ui04PrototypeTabs.Contains('UI.BeginTabBar("PrototypeLabTabs")') -and $ui04VehicleTabs.Contains('UI.BeginTabBar("VehicleDebugTabs")') -and $ui04LabTabs.Contains('UI.BeginTabBar("VehicleLabSubTabs")')) "UI04 restores original ImGui tab bars across Racing United LAB pages"
 Check ($ui04LuaUi.Contains("ImGui::CalcTextSize(label.c_str(), nullptr, true)") -and $ui04LuaUi.Contains("availableWidth < 120.0f") -and $ui04LuaUi.Contains("ImGui::NewLine()") -and $ui04LuaUi.Contains("state, 4, false")) "UI04 Lua buttons use natural widths and never collapse into off-panel one-letter controls"
+
+# AUDIO01: Engine Simulator CE remains an external authoring source. Heritage
+# owns capture, non-destructive acoustic shaping and bank metadata without
+# introducing a second production vehicle-audio authority.
+$audio01CaptureHeaderPath = Join-Path $Root "Engine\HeritageEngine\Audio\Lab\EngineSoundCaptureLab.hpp"
+$audio01CaptureCppPath = Join-Path $Root "Engine\HeritageEngine\Audio\Lab\EngineSoundCaptureLab.cpp"
+$audio01DspPath = Join-Path $Root "Engine\HeritageEngine\Audio\Lab\EngineSoundLabDsp.cpp"
+$audio01BindingsPath = Join-Path $Root "Engine\HeritageEngine\Core\Modules\LuaBindings\LuaAudioBindings.cpp"
+$audio01PanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\AudioLabPanel.lua"
+$audio01DocPath = Join-Path $Root "Docs\Audio-Engine-Sound-Capture-Laboratory.md"
+$audio01EnginePath = Join-Path $Root "Modules\RacingUnited\Assets\Audio\Authoring\EngineSimulator\Peugeot206RC\Peugeot_206_RC_EW10J4S_FINAL_STOCK.mr"
+$audio01ResearchPath = Join-Path $Root "Modules\RacingUnited\Assets\Audio\Authoring\EngineSimulator\Peugeot206RC\Peugeot_206_RC_EW10J4S_FINAL_RESEARCH.txt"
+$audio01Capture = if (Test-Path $audio01CaptureCppPath) { [IO.File]::ReadAllText($audio01CaptureCppPath) } else { "" }
+$audio01Dsp = if (Test-Path $audio01DspPath) { [IO.File]::ReadAllText($audio01DspPath) } else { "" }
+$audio01Bindings = if (Test-Path $audio01BindingsPath) { [IO.File]::ReadAllText($audio01BindingsPath) } else { "" }
+$audio01Panel = if (Test-Path $audio01PanelPath) { [IO.File]::ReadAllText($audio01PanelPath) } else { "" }
+Check ((Test-Path $audio01CaptureHeaderPath) -and (Test-Path $audio01CaptureCppPath) -and (Test-Path $audio01DspPath)) "AUDIO01 native Engine Sound Capture Laboratory is modular under Audio/Lab"
+Check ($audio01Capture.Contains("AUDCLNT_STREAMFLAGS_LOOPBACK") -and $audio01Capture.Contains("WAVE_FORMAT_IEEE_FLOAT") -and $audio01Capture.Contains("capture_manifest.csv")) "AUDIO01 records default-output WASAPI loopback into float WAV and owns guided-bank manifest metadata"
+Check ($audio01Dsp.Contains("EngineSoundPerspective::Raw") -and $audio01Dsp.Contains("EngineSoundPerspective::EngineBay") -and $audio01Dsp.Contains("EngineSoundPerspective::RearExhaust") -and $audio01Dsp.Contains("EngineSoundPerspective::DriverCabin")) "AUDIO01 non-destructive DSP preserves RAW plus engine-bay/exhaust/cabin audition perspectives"
+Check ($audio01Bindings.Contains('registerFunction("Audio", "EngineLabStartCalibrationCapture"') -and $audio01Bindings.Contains('registerFunction("Audio", "EngineLabStartBankCapture"') -and $audio01Bindings.Contains('registerFunction("Audio", "EngineLabSetProfile"')) "AUDIO01 exposes a narrow Lua capture/profile authoring bridge"
+Check ($audio01Panel.Contains("53 steady-state cells") -and $audio01Panel.Contains("SHAPE / FILTER") -and $audio01Panel.Contains("Stock exhaust muffling") -and $audio01Panel.Contains("Cabin damping / insulation")) "AUDIO01 Racing United LAB exposes guided capture plus Materialize-style acoustic shaping"
+Check ((Test-Path $audio01DocPath) -and (Test-Path $audio01EnginePath) -and (Test-Path $audio01ResearchPath)) "AUDIO01 documentation and final calibrated EW10J4S authoring assets are present"

@@ -102,6 +102,16 @@ public:
         float volume = 1.0f,
         float pitch = 1.0f);
 
+    // AUDIO01 authoring path: decode this file for this playback only instead
+    // of inserting it into the production clip cache. Engine Sound Lab rewrites
+    // the same preview filename whenever a filter slider changes, so caching it
+    // would replay stale audio and leak authoring revisions into the fleet cache.
+    AudioHandle playOneShotUncached(
+        const std::filesystem::path& path,
+        AudioBus bus = AudioBus::Effects,
+        float volume = 1.0f,
+        float pitch = 1.0f);
+
     AudioHandle playLoop(
         const std::filesystem::path& path,
         AudioBus bus = AudioBus::Ambience,

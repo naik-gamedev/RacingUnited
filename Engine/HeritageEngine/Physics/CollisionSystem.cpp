@@ -534,6 +534,73 @@ void CollisionSystem::nearbyStaticSceneTriangles(
         triangles.push_back(m_staticSceneTriangles[indices[i]]);
 }
 
+bool CollisionSystem::bodyCollisionBounds(
+    BodyHandle bodyHandle,
+    BodyCollisionBounds& bounds) const
+{
+    bounds = {};
+    if (bodyHandle == InvalidBody)
+    {
+        setError("Physics.GetBodyCollisionBounds requires a valid body handle.");
+        return false;
+    }
+
+    const float infinity = std::numeric_limits<float>::infinity();
+    heritage::math::Vec3 minimum{ infinity, infinity, infinity };
+    heritage::math::Vec3 maximum{ -infinity, -infinity, -infinity };
+    std::size_t count = 0;
+
+    for (const Slot& slot : m_slots)
+    {
+        if (!slot.alive || slot.record.body != bodyHandle || slot.record.trigger)
+            continue;
+
+        const Record& collider = slot.record;
+        heritage::math::Vec3 halfExtents{};
+        if (collider.shapeType == ColliderShapeType::Sphere)
+            halfExtents = { collider.radius, collider.radius, collider.radius };
+        else
+            halfExtents = collider.halfExtents;
+
+        const heritage::math::Vec3 localMinimum{
+            collider.localPosition.x - halfExtents.x,
+            collider.localPosition.y - halfExtents.y,
+            collider.localPosition.z - halfExtents.z };
+        const heritage::math::Vec3 localMaximum{
+            collider.localPosition.x + halfExtents.x,
+            collider.localPosition.y + halfExtents.y,
+            collider.localPosition.z + halfExtents.z };
+
+        minimum.x = (std::min)(minimum.x, localMinimum.x);
+        minimum.y = (std::min)(minimum.y, localMinimum.y);
+        minimum.z = (std::min)(minimum.z, localMinimum.z);
+        maximum.x = (std::max)(maximum.x, localMaximum.x);
+        maximum.y = (std::max)(maximum.y, localMaximum.y);
+        maximum.z = (std::max)(maximum.z, localMaximum.z);
+        ++count;
+    }
+
+    if (count == 0)
+    {
+        setError("Physics.GetBodyCollisionBounds found no solid colliders on the body.");
+        return false;
+    }
+
+    bounds.minimum = minimum;
+    bounds.maximum = maximum;
+    bounds.center = {
+        (minimum.x + maximum.x) * 0.5f,
+        (minimum.y + maximum.y) * 0.5f,
+        (minimum.z + maximum.z) * 0.5f };
+    bounds.size = {
+        maximum.x - minimum.x,
+        maximum.y - minimum.y,
+        maximum.z - minimum.z };
+    bounds.colliderCount = count;
+    clearError();
+    return true;
+}
+
 void CollisionSystem::destroyForBody(BodyHandle bodyHandle)
 {
     for (std::uint32_t index = 0;
@@ -880,6 +947,43 @@ std::size_t CollisionSystem::contactCountForBody(BodyHandle bodyHandle) const
             ++result;
     }
     return result;
+}
+bool CollisionSystem::bodyContactEvidence(
+    BodyHandle bodyHandle,
+    std::size_t requestedIndex,
+    BodyContactEvidence& evidence) const
+{
+    std::size_t bodyContactIndex = 0;
+    for (const CollisionContact& contact : m_contacts)
+    {
+        const bool requestedIsA = contact.bodyA == bodyHandle;
+        const bool requestedIsB = contact.bodyB == bodyHandle;
+        if (!requestedIsA && !requestedIsB)
+            continue;
+        if (bodyContactIndex++ != requestedIndex)
+            continue;
+
+        evidence.selfBody = bodyHandle;
+        evidence.otherBody = requestedIsA ? contact.bodyB : contact.bodyA;
+        evidence.selfCollider = requestedIsA
+            ? contact.colliderA : contact.colliderB;
+        evidence.otherCollider = requestedIsA
+            ? contact.colliderB : contact.colliderA;
+        evidence.point = contact.point;
+        evidence.normal = requestedIsA
+            ? contact.normal
+            : heritage::math::Vec3{
+                -contact.normal.x, -contact.normal.y, -contact.normal.z };
+        evidence.penetration = contact.penetration;
+        evidence.normalImpulse = contact.accumulatedNormalImpulse;
+        evidence.tangentImpulse = contact.accumulatedTangentImpulse;
+        evidence.trigger = contact.trigger;
+        evidence.warmStarted = contact.warmStarted;
+        return true;
+    }
+
+    evidence = {};
+    return false;
 }
 bool CollisionSystem::bodyTouching(BodyHandle bodyHandle) const
 {

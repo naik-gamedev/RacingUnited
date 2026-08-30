@@ -117,3 +117,7 @@ physicsSpringAnchorY = 4.70
 Input.RegisterAction("Confirm", "Key:Space", "Common")
 Input.RegisterAction("Horn", "Mouse:Right", "Common")
 Input.RegisterAction("Toggle 3D View", "Key:Tab", "Common")
+Input.RegisterAction("Practice Loop Restart", "Key:F3", "Practice")
+Input.RegisterAction("Practice Loop Toggle", "Key:F4", "Practice")
+Input.RegisterAction("Practice Loop Start", "Key:F5", "Practice")
+Input.RegisterAction("Practice Loop End", "Key:F6", "Practice")

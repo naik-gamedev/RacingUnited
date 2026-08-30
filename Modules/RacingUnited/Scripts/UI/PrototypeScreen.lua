@@ -27,6 +27,18 @@ function DrawPrototypeScreen()
             DrawPrototypeScenePanel()
             UI.EndTabItem()
         end
+        if UI.BeginTabItem("TRAFFIC") then
+            DrawPrototypeTrafficPanel()
+            UI.EndTabItem()
+        end
+        if UI.BeginTabItem("POLICE") then
+            DrawPrototypePolicePanel()
+            UI.EndTabItem()
+        end
+        if UI.BeginTabItem("RACE") then
+            DrawPrototypeRacePanel()
+            UI.EndTabItem()
+        end
         if UI.BeginTabItem("SAFETY") then
             DrawPrototypeSafetyPanel()
             UI.EndTabItem()

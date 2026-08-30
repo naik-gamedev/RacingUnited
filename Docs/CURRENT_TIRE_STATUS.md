@@ -1,6 +1,6 @@
 # Current Tire Physics Status
 
-**Authority date:** 2026-08-14  
+**Authority date:** 2026-08-29
 **Scope:** Heritage Engine native tire, contact, driven-surface, failure, presentation and authoring systems.
 
 This is the authoritative tire-status ledger. It records what the current source tree actually
@@ -28,10 +28,19 @@ The tire is a deterministic reduced-order physical system. It is not an unrestri
 1000 Hz vehicle loop owns force/contact transients; thermal, wear, surface and presentation work may
 use bounded lower-rate state where doing so does not change authoritative forces unpredictably.
 
-TIRE41 / ADR-074 is the active visual deformation architecture: one 24x13 cyclic flexible-ring field
-consumes the bounded 21x13 collision lattice and native load, pressure, deflection, rigid-ring and
-flat-spot state. Historical shader dents, stacked bulges and competing carcass fields must not be
-restored.
+TIRE44 / ADR-140 is the active carcass-deformation architecture, with the TIRE45B moving-wheel
+road-cache correction. One persistent 24x13 physics-owned displacement/velocity lattice advances at
+125 Hz from the 1000 Hz wheel path while its visible readback lease is active. It reuses actual
+tire-force road-envelope collision points/normals/misses as unilateral contacts, includes an internal
+rim/flange contact boundary, and consumes pressure plus rigid-ring/tread structural state. Road-envelope
+samples cached across 1 kHz wheel substeps store point offsets from the envelope's centre contact, not
+absolute world points; each carcass solve re-anchors that local road shape to the live centre contact.
+This prevents vehicle translation between envelope refreshes from masquerading as carcass deformation.
+The 24 circumferential lattice stations are Eulerian wheel-frame stations: whole-field state is not
+convected by wheel angular velocity; material-fixed effects such as flat spots use wheel rotation
+explicitly. Physical `tireDeflection` remains contact/force telemetry but is not prescribed as a
+carcass-node shape. Historical shader dents, support-plane locks, stacked bulges, render-time carcass
+solvers and whole-field wheel-spin advection must not be restored.
 
 Visual flexible-ring vertex deformation is evaluated only for tire-node centres within 50 metres
 of the active camera. Distant tires retain their complete physical, thermal, wear and failure state;
@@ -55,7 +64,7 @@ temperature, wear and contamination history; the 3x3 force cells are an ephemera
 | Transient slip | Implemented | Longitudinal/lateral relaxation state is rate-stable at 1000 Hz and 120 Hz. |
 | Motorcycle tire contour | Partial | High-camber contour/contact telemetry and force branch exist; a complete two-wheel vehicle solver is a separate vehicle-topology milestone. |
 | Contact geometry | Implemented | Loaded/effective radius, finite footprint, adaptive road envelope and SWIFT-like rigid-ring structural modes. |
-| Visual carcass deformation | Validated baseline | Single-authority TIRE41 flexible ring, pressure/load response, broad sidewall deformation, zero-pressure envelope, curb constraints, common visible/shadow state. Commercial calibration is not complete. |
+| Visual carcass deformation | Implemented / awaiting live validation | TIRE44 physics-owned 24x13 dynamic carcass with persistent displacement/velocity, 125 Hz structural solve, road-envelope unilateral contacts, rim/flange contact and copy-only visible/shadow presentation. The rejected support-plane lock is absent. Live resting/braking/acceleration/flat-tire calibration is still required. |
 | Thermal and pressure | Implemented | Tread/carcass/contained-gas/wheel-rim energy, brake-to-rim and rim-to-carcass conduction, ideal-gas pressure, grip/stiffness response and rate-stable integration. |
 | Spatial tread state | Implemented | Rotating 16x3 surface temperature, tread depth/wear, flat spots, retained water and contamination history. |
 | Wear and flat spots | Implemented | Slip-energy/load/temperature abrasion, local radius loss, grip change and vibration inputs. Graining/blistering/cord damage are absent. |

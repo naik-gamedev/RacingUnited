@@ -338,6 +338,71 @@ int LuaPhysicsBindingHandlers::luaPhysicsGetBodyContactCount(lua_State* state)
     return 1;
 }
 
+int LuaPhysicsBindingHandlers::luaPhysicsGetBodyContact(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    runtime->m_lastPhysicsError.clear();
+    if (!runtime->m_physics)
+    {
+        runtime->m_api.lua_pushnil(state);
+        return 1;
+    }
+
+    const heritage::physics::BodyHandle requestedBody =
+        LuaModuleRuntime::bodyHandleArgument(*runtime, state, 1);
+    const int requestedIndex = static_cast<int>(
+        LuaModuleRuntime::numberArgument(*runtime, state, 2, 1.0));
+    if (requestedBody == heritage::physics::InvalidBody || requestedIndex < 1)
+    {
+        runtime->m_api.lua_pushnil(state);
+        return 1;
+    }
+
+    heritage::physics::BodyContactEvidence evidence;
+    if (!runtime->m_physics->collisions().bodyContactEvidence(
+            requestedBody,
+            static_cast<std::size_t>(requestedIndex - 1),
+            evidence))
+    {
+        runtime->m_api.lua_pushnil(state);
+        return 1;
+    }
+
+    runtime->m_api.lua_createtable(state, 0, 15);
+    const auto pushNumberField = [&](const char* name, LuaNumber value) {
+        runtime->m_api.lua_pushnumber(state, value);
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    const auto pushIntegerField = [&](const char* name, LuaInteger value) {
+        runtime->m_api.lua_pushinteger(state, value);
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    const auto pushBooleanField = [&](const char* name, bool value) {
+        runtime->m_api.lua_pushboolean(state, value ? 1 : 0);
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+
+    pushIntegerField("selfBody", static_cast<LuaInteger>(evidence.selfBody));
+    pushIntegerField("otherBody", static_cast<LuaInteger>(evidence.otherBody));
+    pushIntegerField("selfCollider", static_cast<LuaInteger>(evidence.selfCollider));
+    pushIntegerField("otherCollider", static_cast<LuaInteger>(evidence.otherCollider));
+    pushNumberField("pointX", evidence.point.x);
+    pushNumberField("pointY", evidence.point.y);
+    pushNumberField("pointZ", evidence.point.z);
+    pushNumberField("normalX", evidence.normal.x);
+    pushNumberField("normalY", evidence.normal.y);
+    pushNumberField("normalZ", evidence.normal.z);
+    pushNumberField("penetrationM", evidence.penetration);
+    pushNumberField("normalImpulseNs", evidence.normalImpulse);
+    pushNumberField("tangentImpulseNs", evidence.tangentImpulse);
+    pushBooleanField("trigger", evidence.trigger);
+    pushBooleanField("warmStarted", evidence.warmStarted);
+    return 1;
+}
+
 int LuaPhysicsBindingHandlers::luaPhysicsIsBodyTouching(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
