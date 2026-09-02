@@ -1,11 +1,21 @@
 -- Racing United split runtime file. Loaded by Scripts/Main.lua through Script.Include.
 function OnDrawUI(framebufferWidth, framebufferHeight)
     local currentScene = Scene.GetCurrent()
+    UI.SetLayoutEditing(uiLayoutEditing)
+    if currentScene == "prototype"
+        and DrawVehicleMeasurementWorldLabels ~= nil then
+        DrawVehicleMeasurementWorldLabels()
+    end
+    if currentScene == "prototype"
+        and vehicleMeasurementOverlay ~= nil
+        and vehicleMeasurementOverlay.enabled
+        and DrawVehicleMeasurementHud ~= nil then
+        DrawVehicleMeasurementHud()
+    end
     if currentScene == "prototype" and not showPrototypeControls then
         return
     end
 
-    UI.SetLayoutEditing(uiLayoutEditing)
     if UI.BeginPanel("RacingUnitedLuaMain", 720, 700) then
         UI.ModuleLabel()
         UI.Spacing()

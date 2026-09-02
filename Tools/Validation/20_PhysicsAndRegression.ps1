@@ -11,6 +11,7 @@ $physicsRegressionRelativePaths = @(
     "Engine\HeritageEngine\Tests\VehicleDynamicsRegression.cpp",
     "Engine\HeritageEngine\Tests\CollisionTerrainRegression.cpp",
     "Engine\HeritageEngine\Tests\SuspensionRegression.cpp",
+    "Engine\HeritageEngine\Tests\SuspensionFinalCertificationRegression.cpp",
     "Engine\HeritageEngine\Tests\ChassisDynamicsRegression.cpp",
     "Engine\HeritageEngine\Tests\ChassisFlexRegression.cpp",
     "Engine\HeritageEngine\Tests\MassPropertiesRegression.cpp",
@@ -28,6 +29,7 @@ Check ($physicsTestProject.Contains('ClCompile Include="PhysicsRegressionSupport
 Check ($physicsTestProject.Contains('ClCompile Include="VehicleDynamicsRegression.cpp"')) "physics test project compiles vehicle dynamics regressions"
 Check ($physicsTestProject.Contains('ClCompile Include="CollisionTerrainRegression.cpp"')) "physics test project compiles collision/terrain regressions"
 Check ($physicsTestProject.Contains('ClCompile Include="SuspensionRegression.cpp"')) "physics test project compiles suspension regressions"
+Check ($physicsTestProject.Contains('ClCompile Include="SuspensionFinalCertificationRegression.cpp"')) "physics test project compiles final V3 suspension certification"
 Check ($physicsTestProject.Contains('ClCompile Include="ChassisDynamicsRegression.cpp"')) "physics test project compiles chassis-dynamics regressions"
 Check ($physicsTestProject.Contains('ClCompile Include="ChassisFlexRegression.cpp"')) "physics test project compiles chassis-flex regressions"
 Check ($physicsTestProject.Contains('ClCompile Include="MassPropertiesRegression.cpp"')) "physics test project compiles mass-property regressions"
@@ -62,6 +64,7 @@ Check ($physicsRegression.Contains("scalar unsprung-mass wheel-hop response")) "
 Check ($physicsRegression.Contains("live_unsprung_roundtrip")) "headless regression verifies live unsprung-mass tuning roundtrip"
 Check ($physicsRegression.Contains("authoritative suspension upright pose")) "headless regression verifies authoritative suspension geometry"
 Check ($physicsRegression.Contains("live_geometry_roundtrip")) "headless regression verifies live suspension-geometry tuning roundtrip"
+Check ($physicsRegression.Contains("suspensionFinalCertificationV3Passes") -and $physicsRegression.Contains("SUSP27-SUSP30 graph, damage, persistence and 150-vehicle certification")) "headless regression executes final suspension graph certification"
 Check ($physicsRegression.Contains("terrainContactDiagnosticsClassifyFailureModes")) "headless regression diagnoses terrain seams, gaps, bottom-out, tunnelling and bounds"
 Check ($physicsRegression.Contains("rigidBodyCenterOfMassOffsetGeneratesTorque")) "headless regression verifies offset COM generates physical torque"
 Check ($physicsRegression.Contains("vehicleChassisRollRespondsToCornering")) "headless regression verifies chassis body roll and left/right load transfer"
@@ -522,11 +525,15 @@ Check ($suspensionHeader.Contains("SuspensionModelOutput")) "suspension provider
 Check ($suspensionCpp.Contains('"linear_raycast_v1"')) "linear raycast suspension provider exists"
 Check ($suspensionCpp.Contains('"macpherson_strut_v1"')) "MacPherson strut suspension provider ID exists"
 Check ($suspensionCpp.Contains('"trailing_arm_torsion_bar_v1"')) "trailing-arm torsion-bar suspension provider ID exists"
+Check ($suspensionCpp.Contains('"double_wishbone_v1"')) "double-wishbone suspension provider ID exists"
 Check ($suspensionCpp.Contains("evaluateEquivalentTorsionBar")) "trailing-arm suspension evaluates rotational torsion-bar springing"
 Check ($suspensionCpp.Contains("digressiveDamperForce")) "suspension provider implements low/high-speed damping"
 Check ($suspensionCpp.Contains("damperDissipationW")) "suspension provider reports dissipated damper power"
+Check ($suspensionHeader.Contains("StaticRideHeightInput") -and $suspensionHeader.Contains("StaticRideHeightOutput")) "RIDE01 suspension owns an explicit static ride-height calibration contract"
+Check ($suspensionCpp.Contains("solveStaticRideHeight") -and $suspensionCpp.Contains("staticTireDeflectionM")) "RIDE01 static equilibrium includes tire compliance"
 Check ($vehicleCpp.Contains("evaluateSuspensionModel")) "VehicleSystem evaluates suspension through the provider boundary"
 Check ($luaRuntimeAndBindingsCpp.Contains("luaVehicleGetWheelSuspensionModel")) "Lua exposes exact native suspension readback"
+Check ($luaRuntimeAndBindingsCpp.Contains("luaVehicleSolveStaticRideHeight")) "Lua exposes deterministic static ride-height calibration"
 
 $unsprungHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\UnsprungMassModel.hpp"
 $unsprungHeader = if (Test-Path $unsprungHeaderPath) { [IO.File]::ReadAllText($unsprungHeaderPath) } else { "" }
@@ -570,6 +577,7 @@ $suspensionPanelPath = Join-Path $Root "Modules\RacingUnited\Scripts\UI\Vehicle\
 $suspensionPanel = if (Test-Path $suspensionPanelPath) { [IO.File]::ReadAllText($suspensionPanelPath) } else { "" }
 Check ($suspensionPanel.Contains("DrawSuspensionLiveTelemetry")) "vehicle suspension panel exposes live force telemetry"
 Check ($suspensionPanel.Contains("DrawSuspensionUnsprungControls")) "vehicle suspension panel exposes unsprung-mass tuning"
+Check ($suspensionPanel.Contains("DrawStaticRideHeightCalibration")) "RIDE01 suspension panel exposes static equilibrium and clearance diagnostics"
 Check ($suspensionPanel.Contains("DrawSuspensionGeometryControls")) "vehicle suspension panel exposes upright-geometry tuning"
 Check ($suspensionPanel.Contains("contactLossTransitions")) "vehicle suspension panel exposes live contact-loss diagnostics"
 

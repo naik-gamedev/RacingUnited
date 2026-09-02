@@ -164,10 +164,406 @@ SuspensionGeometryOutput evaluateSuspensionGeometry(
         output.travelClamped = macPherson.travelClamped;
         output.bumpSteerDegrees = macPherson.bumpSteerDegrees;
         output.strutCompressionM = macPherson.strutCompressionM;
+        output.springCompressionM = macPherson.strutCompressionM;
         output.springMotionRatio = macPherson.springMotionRatio;
         output.damperCompressionM = macPherson.strutCompressionM;
         output.damperMotionRatio = macPherson.springMotionRatio;
         output.localWheelCenter = macPherson.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::DoubleWishboneV1)
+    {
+        const DoubleWishboneKinematicsOutput wishbone =
+            evaluateDoubleWishboneKinematics(
+                description.doubleWishbone,
+                { input.compressionM,
+                  input.steeringDegrees,
+                  input.localSuspensionDirection,
+                  description.staticCamberDegrees,
+                  description.staticToeDegrees });
+        if (!wishbone.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        output.camberDegrees = wishbone.camberDegrees;
+        output.toeDegrees = wishbone.toeDegrees;
+        output.localSteeringAxis = wishbone.localSteeringAxis;
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = wishbone.localSteeringAxisPoint;
+        output.localWheelForward = wishbone.localWheelForward;
+        output.localWheelRight = wishbone.localWheelRight;
+        output.localWheelUp = wishbone.localWheelUp;
+        output.localUprightRotationDegrees =
+            wishbone.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = wishbone.travelClamped;
+        output.bumpSteerDegrees = wishbone.bumpSteerDegrees;
+        output.casterDegrees = wishbone.casterDegrees;
+        output.kingpinInclinationDegrees =
+            wishbone.kingpinInclinationDegrees;
+        output.springCompressionM = wishbone.damperCompressionM;
+        output.springMotionRatio = wishbone.springMotionRatio;
+        output.damperCompressionM = wishbone.damperCompressionM;
+        output.damperMotionRatio = wishbone.damperMotionRatio;
+        output.localWheelCenter = wishbone.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::PushrodDoubleWishboneV1)
+    {
+        const PushrodDoubleWishboneKinematicsOutput pushrod =
+            evaluatePushrodDoubleWishboneKinematics(
+                description.pushrodDoubleWishbone,
+                { input.compressionM,
+                  input.steeringDegrees,
+                  input.localSuspensionDirection,
+                  description.staticCamberDegrees,
+                  description.staticToeDegrees });
+        if (!pushrod.valid || !pushrod.linkage.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        const DoubleWishboneKinematicsOutput& wishbone = pushrod.linkage;
+        output.camberDegrees = wishbone.camberDegrees;
+        output.toeDegrees = wishbone.toeDegrees;
+        output.localSteeringAxis = wishbone.localSteeringAxis;
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = wishbone.localSteeringAxisPoint;
+        output.localWheelForward = wishbone.localWheelForward;
+        output.localWheelRight = wishbone.localWheelRight;
+        output.localWheelUp = wishbone.localWheelUp;
+        output.localUprightRotationDegrees = wishbone.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = pushrod.travelClamped;
+        output.bumpSteerDegrees = wishbone.bumpSteerDegrees;
+        output.casterDegrees = wishbone.casterDegrees;
+        output.kingpinInclinationDegrees = wishbone.kingpinInclinationDegrees;
+        output.springCompressionM = pushrod.springCompressionM;
+        output.springMotionRatio = pushrod.springMotionRatio;
+        output.damperCompressionM = pushrod.damperCompressionM;
+        output.damperMotionRatio = pushrod.damperMotionRatio;
+        output.localWheelCenter = wishbone.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::MultiLinkV1)
+    {
+        const MultiLinkKinematicsOutput multi = evaluateMultiLinkKinematics(
+            description.multiLink,
+            { input.compressionM,
+              input.steeringDegrees,
+              input.localSuspensionDirection,
+              description.staticCamberDegrees,
+              description.staticToeDegrees });
+        if (!multi.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        output.camberDegrees = multi.camberDegrees;
+        output.toeDegrees = multi.toeDegrees;
+        output.localSteeringAxis = multi.localSteeringAxis;
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = multi.localSteeringAxisPoint;
+        output.localWheelForward = multi.localWheelForward;
+        output.localWheelRight = multi.localWheelRight;
+        output.localWheelUp = multi.localWheelUp;
+        output.localUprightRotationDegrees = multi.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = multi.travelClamped;
+        output.bumpSteerDegrees = multi.bumpSteerDegrees;
+        output.casterDegrees = multi.casterDegrees;
+        output.kingpinInclinationDegrees = multi.kingpinInclinationDegrees;
+        output.springCompressionM = multi.springCompressionM;
+        output.springMotionRatio = multi.springMotionRatio;
+        output.damperCompressionM = multi.damperCompressionM;
+        output.damperMotionRatio = multi.damperMotionRatio;
+        output.multiLinkSteeringRackDisplacementM = multi.steeringRackDisplacementM;
+        output.localWheelCenter = multi.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::MotorcycleTelescopicForkV1)
+    {
+        const MotorcycleForkKinematicsOutput fork =
+            evaluateMotorcycleForkKinematics(
+                description.motorcycleFork,
+                { input.compressionM,
+                  input.steeringDegrees,
+                  input.localSuspensionDirection,
+                  description.staticCamberDegrees,
+                  description.staticToeDegrees });
+        if (!fork.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        output.camberDegrees = fork.camberDegrees;
+        output.toeDegrees = fork.toeDegrees;
+        output.localSteeringAxis = fork.localSteeringAxis;
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = fork.localSteeringAxisPoint;
+        output.localWheelForward = fork.localWheelForward;
+        output.localWheelRight = fork.localWheelRight;
+        output.localWheelUp = fork.localWheelUp;
+        output.localUprightRotationDegrees = fork.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = fork.travelClamped;
+        output.strutCompressionM = fork.forkCompressionM;
+        output.springCompressionM = fork.springCompressionM;
+        output.springMotionRatio = fork.springMotionRatio;
+        output.damperCompressionM = fork.damperCompressionM;
+        output.damperMotionRatio = fork.damperMotionRatio;
+        output.motorcycleRakeDegreesFromVertical = fork.rakeDegreesFromVertical;
+        output.wheelbaseDeltaM = fork.wheelbaseDeltaM;
+        output.localWheelCenter = fork.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::MotorcycleSwingarmLinkageV1)
+    {
+        const MotorcycleSwingarmKinematicsOutput swingarm =
+            evaluateMotorcycleSwingarmKinematics(
+                description.motorcycleSwingarm,
+                { input.compressionM, input.localSuspensionDirection });
+        if (!swingarm.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        output.camberDegrees = description.staticCamberDegrees;
+        output.toeDegrees = description.staticToeDegrees;
+        output.localSteeringAxis = normalized(
+            description.localSteeringAxis, { 0.0f, 1.0f, 0.0f });
+        output.steeringAxisPointValid = false;
+        output.localWheelForward = swingarm.localWheelForward;
+        output.localWheelRight = swingarm.localWheelRight;
+        output.localWheelUp = swingarm.localWheelUp;
+        output.localUprightRotationDegrees = swingarm.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = swingarm.travelClamped;
+        output.springCompressionM = swingarm.shockCompressionM;
+        output.springMotionRatio = swingarm.shockMotionRatio;
+        output.damperCompressionM = swingarm.shockCompressionM;
+        output.damperMotionRatio = swingarm.shockMotionRatio;
+        output.motorcycleSwingarmAngleRadians = swingarm.swingarmAngleRadians;
+        output.motorcycleRockerAngleRadians = swingarm.rockerAngleRadians;
+        output.motorcycleChainDistanceMotionRatio =
+            swingarm.chainCenterDistanceMotionRatio;
+        output.wheelbaseDeltaM = swingarm.wheelbaseDeltaM;
+        output.localWheelCenter = swingarm.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::KartChassisFlexV1)
+    {
+        const KartChassisKinematicsOutput kart = evaluateKartChassisKinematics(
+            description.kartChassis,
+            { input.compressionM,
+              input.steeringDegrees,
+              description.localSteeringAxisPoint,
+              description.staticCamberDegrees,
+              description.staticToeDegrees });
+        if (!kart.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        output.camberDegrees = kart.camberDegrees;
+        output.toeDegrees = kart.toeDegrees;
+        output.localSteeringAxis = kart.localSteeringAxis;
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = kart.localSteeringAxisPoint;
+        output.localWheelForward = kart.localWheelForward;
+        output.localWheelRight = kart.localWheelRight;
+        output.localWheelUp = kart.localWheelUp;
+        output.localUprightRotationDegrees = kart.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = kart.travelClamped;
+        output.casterDegrees = kart.casterDegrees;
+        output.kingpinInclinationDegrees = kart.kingpinInclinationDegrees;
+        output.springCompressionM = 0.0f;
+        output.springMotionRatio = 0.0f;
+        output.damperCompressionM = 0.0f;
+        output.damperMotionRatio = 0.0f;
+        output.kartSteeringJackingM = kart.steeringJackingM;
+        output.kartKingpinRadialOffsetM = kart.kingpinRadialOffsetM;
+        output.localWheelCenter = kart.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::LiveAxleV1)
+    {
+        if (!description.liveAxle.authored || !input.pairedCompressionValid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        const heritage::math::Vec3 toLeft = {
+            description.localSteeringAxisPoint.x - description.liveAxle.leftWheelCenter.x,
+            description.localSteeringAxisPoint.y - description.liveAxle.leftWheelCenter.y,
+            description.localSteeringAxisPoint.z - description.liveAxle.leftWheelCenter.z };
+        const heritage::math::Vec3 toRight = {
+            description.localSteeringAxisPoint.x - description.liveAxle.rightWheelCenter.x,
+            description.localSteeringAxisPoint.y - description.liveAxle.rightWheelCenter.y,
+            description.localSteeringAxisPoint.z - description.liveAxle.rightWheelCenter.z };
+        const bool leftSide = dot(toLeft, toLeft) <= dot(toRight, toRight);
+        const LiveAxleKinematicsOutput axle = evaluateLiveAxleKinematics(
+            description.liveAxle,
+            { leftSide ? input.compressionM : input.pairedCompressionM,
+              leftSide ? input.pairedCompressionM : input.compressionM,
+              leftSide,
+              input.steeringDegrees,
+              description.staticCamberDegrees,
+              description.staticToeDegrees });
+        if (!axle.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        output.camberDegrees = axle.camberDegrees;
+        output.toeDegrees = axle.toeDegrees;
+        output.localSteeringAxis = normalized(
+            rotateAroundAxis(
+                description.localSteeringAxis,
+                { 0.0f, 0.0f, 1.0f },
+                degrees(axle.axleRollRadians)),
+            { 0.0f, 1.0f, 0.0f });
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = axle.localWheelCenter;
+        output.localWheelForward = axle.localWheelForward;
+        output.localWheelRight = axle.localWheelRight;
+        output.localWheelUp = axle.localWheelUp;
+        output.localUprightRotationDegrees = axle.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = axle.travelClamped;
+        output.springCompressionM = axle.springCompressionM;
+        output.springMotionRatio = axle.springMotionRatio;
+        output.damperCompressionM = axle.damperCompressionM;
+        output.damperMotionRatio = axle.damperMotionRatio;
+        output.localWheelCenter = axle.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::LeafSpringLiveAxleV1)
+    {
+        if (!description.leafSpringLiveAxle.authored || !input.pairedCompressionValid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        const auto& h = description.leafSpringLiveAxle;
+        const heritage::math::Vec3 toLeft = {
+            description.localSteeringAxisPoint.x - h.axle.leftWheelCenter.x,
+            description.localSteeringAxisPoint.y - h.axle.leftWheelCenter.y,
+            description.localSteeringAxisPoint.z - h.axle.leftWheelCenter.z };
+        const heritage::math::Vec3 toRight = {
+            description.localSteeringAxisPoint.x - h.axle.rightWheelCenter.x,
+            description.localSteeringAxisPoint.y - h.axle.rightWheelCenter.y,
+            description.localSteeringAxisPoint.z - h.axle.rightWheelCenter.z };
+        const bool leftSide = dot(toLeft, toLeft) <= dot(toRight, toRight);
+        const LeafSpringLiveAxleOutput leaf = evaluateLeafSpringLiveAxle(
+            h,
+            { leftSide ? input.compressionM : input.pairedCompressionM,
+              leftSide ? input.pairedCompressionM : input.compressionM,
+              leftSide,
+              input.steeringDegrees,
+              description.staticCamberDegrees,
+              description.staticToeDegrees });
+        if (!leaf.valid || !leaf.axle.valid)
+        {
+            output.kinematicsValid = false;
+            return output;
+        }
+        const LiveAxleKinematicsOutput& axle = leaf.axle;
+        output.camberDegrees = axle.camberDegrees;
+        output.toeDegrees = axle.toeDegrees;
+        output.localSteeringAxis = normalized(
+            rotateAroundAxis(
+                description.localSteeringAxis,
+                { 0.0f, 0.0f, 1.0f },
+                degrees(axle.axleRollRadians)),
+            { 0.0f, 1.0f, 0.0f });
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = axle.localWheelCenter;
+        output.localWheelForward = axle.localWheelForward;
+        output.localWheelRight = axle.localWheelRight;
+        output.localWheelUp = axle.localWheelUp;
+        output.localUprightRotationDegrees = axle.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = axle.travelClamped;
+        output.springCompressionM = leaf.leafCompressionM;
+        output.springMotionRatio = std::abs(leaf.leafMotionRatio);
+        output.damperCompressionM = axle.damperCompressionM;
+        output.damperMotionRatio = axle.damperMotionRatio;
+        output.localWheelCenter = axle.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::SemiTrailingArmV1)
+    {
+        const SemiTrailingArmKinematicsOutput arm = evaluateSemiTrailingArmKinematics(
+            description.semiTrailingArm,
+            { input.compressionM, input.localSuspensionDirection,
+              description.staticCamberDegrees, description.staticToeDegrees });
+        if (!arm.valid) { output.kinematicsValid = false; return output; }
+        output.camberDegrees = arm.camberDegrees;
+        output.toeDegrees = arm.toeDegrees;
+        output.localSteeringAxis = description.localSteeringAxis;
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = arm.localWheelCenter;
+        output.localWheelForward = arm.localWheelForward;
+        output.localWheelRight = arm.localWheelRight;
+        output.localWheelUp = arm.localWheelUp;
+        output.localUprightRotationDegrees = arm.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = arm.travelClamped;
+        output.bumpSteerDegrees = arm.bumpSteerDegrees;
+        output.springCompressionM = arm.springCompressionM;
+        output.springMotionRatio = arm.springMotionRatio;
+        output.damperCompressionM = arm.damperCompressionM;
+        output.damperMotionRatio = arm.damperMotionRatio;
+        output.localWheelCenter = arm.localWheelCenter;
+        return output;
+    }
+    if (description.provider == SuspensionProviderKind::TwistBeamV1)
+    {
+        if (!description.twistBeam.authored || !input.pairedCompressionValid)
+        { output.kinematicsValid = false; return output; }
+        const auto& h = description.twistBeam;
+        const heritage::math::Vec3 toLeft{
+            description.localSteeringAxisPoint.x - h.leftArm.wheelCenter.x,
+            description.localSteeringAxisPoint.y - h.leftArm.wheelCenter.y,
+            description.localSteeringAxisPoint.z - h.leftArm.wheelCenter.z };
+        const heritage::math::Vec3 toRight{
+            description.localSteeringAxisPoint.x - h.rightArm.wheelCenter.x,
+            description.localSteeringAxisPoint.y - h.rightArm.wheelCenter.y,
+            description.localSteeringAxisPoint.z - h.rightArm.wheelCenter.z };
+        const bool leftSide = dot(toLeft,toLeft) <= dot(toRight,toRight);
+        const TwistBeamKinematicsOutput beam = evaluateTwistBeamKinematics(
+            h,
+            { leftSide ? input.compressionM : input.pairedCompressionM,
+              leftSide ? input.pairedCompressionM : input.compressionM,
+              leftSide ? input.compressionVelocityMps : input.pairedCompressionVelocityMps,
+              leftSide ? input.pairedCompressionVelocityMps : input.compressionVelocityMps,
+              leftSide, input.localSuspensionDirection,
+              description.staticCamberDegrees, description.staticToeDegrees });
+        if (!beam.valid) { output.kinematicsValid = false; return output; }
+        const auto& arm = beam.arm;
+        output.camberDegrees = arm.camberDegrees;
+        output.toeDegrees = arm.toeDegrees;
+        output.localSteeringAxis = description.localSteeringAxis;
+        output.steeringAxisPointValid = true;
+        output.localSteeringAxisPoint = arm.localWheelCenter;
+        output.localWheelForward = arm.localWheelForward;
+        output.localWheelRight = arm.localWheelRight;
+        output.localWheelUp = arm.localWheelUp;
+        output.localUprightRotationDegrees = arm.localUprightRotationDegrees;
+        output.kinematicsValid = true;
+        output.travelClamped = beam.travelClamped;
+        output.bumpSteerDegrees = arm.bumpSteerDegrees;
+        output.springCompressionM = arm.springCompressionM;
+        output.springMotionRatio = arm.springMotionRatio;
+        output.damperCompressionM = arm.damperCompressionM;
+        output.damperMotionRatio = arm.damperMotionRatio;
+        output.twistBeamTwistRadians = beam.beamTwistRadians;
+        output.twistBeamTwistRateRadiansPerSecond = beam.beamTwistRateRadiansPerSecond;
+        output.twistBeamAngularMotionRatioRadPerM = beam.beamAngularMotionRatioRadPerM;
+        output.localWheelCenter = arm.localWheelCenter;
         return output;
     }
     if (description.provider == SuspensionProviderKind::TrailingArmTorsionBarV1)
@@ -277,6 +673,161 @@ SuspensionGeometryOutput evaluateSuspensionGeometry(
         output.localWheelRight,
         output.localWheelUp,
         output.localWheelForward);
+    return output;
+}
+
+
+SuspensionSupportOffsetOutput evaluateSuspensionSupportOffset(
+    const SuspensionGeometryDescription& description,
+    const SuspensionGeometryInput& input)
+{
+    SuspensionSupportOffsetOutput output;
+    heritage::math::Vec3 referenceCenter{};
+    switch (description.provider)
+    {
+    case SuspensionProviderKind::MacPhersonStrutV1:
+        if (!description.macPherson.authored)
+            return output;
+        referenceCenter = description.macPherson.wheelCenter;
+        break;
+    case SuspensionProviderKind::DoubleWishboneV1:
+        if (!description.doubleWishbone.authored)
+            return output;
+        referenceCenter = description.doubleWishbone.wheelCenter;
+        break;
+    case SuspensionProviderKind::PushrodDoubleWishboneV1:
+        if (!description.pushrodDoubleWishbone.authored)
+            return output;
+        referenceCenter = description.pushrodDoubleWishbone.wishbone.wheelCenter;
+        break;
+    case SuspensionProviderKind::SemiTrailingArmV1:
+        if (!description.semiTrailingArm.authored) return output;
+        referenceCenter = description.semiTrailingArm.wheelCenter;
+        break;
+    case SuspensionProviderKind::TwistBeamV1:
+        if (!description.twistBeam.authored || !input.pairedCompressionValid) return output;
+        {
+            const auto& h = description.twistBeam;
+            const heritage::math::Vec3 toLeft{description.localSteeringAxisPoint.x-h.leftArm.wheelCenter.x,description.localSteeringAxisPoint.y-h.leftArm.wheelCenter.y,description.localSteeringAxisPoint.z-h.leftArm.wheelCenter.z};
+            const heritage::math::Vec3 toRight{description.localSteeringAxisPoint.x-h.rightArm.wheelCenter.x,description.localSteeringAxisPoint.y-h.rightArm.wheelCenter.y,description.localSteeringAxisPoint.z-h.rightArm.wheelCenter.z};
+            referenceCenter = dot(toLeft,toLeft)<=dot(toRight,toRight)?h.leftArm.wheelCenter:h.rightArm.wheelCenter;
+        }
+        break;
+    case SuspensionProviderKind::TrailingArmTorsionBarV1:
+        if (!description.trailingArm.authored)
+            return output;
+        referenceCenter = description.trailingArm.wheelCenter;
+        break;
+    case SuspensionProviderKind::MultiLinkV1:
+        if (!description.multiLink.authored)
+            return output;
+        referenceCenter = description.multiLink.wheelCenter;
+        break;
+    case SuspensionProviderKind::MotorcycleTelescopicForkV1:
+        if (!description.motorcycleFork.authored)
+            return output;
+        referenceCenter = description.motorcycleFork.wheelCenter;
+        break;
+    case SuspensionProviderKind::MotorcycleSwingarmLinkageV1:
+        if (!description.motorcycleSwingarm.authored)
+            return output;
+        referenceCenter = description.motorcycleSwingarm.wheelCenter;
+        break;
+    case SuspensionProviderKind::LeafSpringLiveAxleV1:
+        if (!description.leafSpringLiveAxle.authored || !input.pairedCompressionValid)
+            return output;
+        {
+            const auto& axle = description.leafSpringLiveAxle.axle;
+            const heritage::math::Vec3 toLeft{
+                description.localSteeringAxisPoint.x - axle.leftWheelCenter.x,
+                description.localSteeringAxisPoint.y - axle.leftWheelCenter.y,
+                description.localSteeringAxisPoint.z - axle.leftWheelCenter.z };
+            const heritage::math::Vec3 toRight{
+                description.localSteeringAxisPoint.x - axle.rightWheelCenter.x,
+                description.localSteeringAxisPoint.y - axle.rightWheelCenter.y,
+                description.localSteeringAxisPoint.z - axle.rightWheelCenter.z };
+            referenceCenter = dot(toLeft, toLeft) <= dot(toRight, toRight)
+                ? axle.leftWheelCenter : axle.rightWheelCenter;
+        }
+        break;
+    case SuspensionProviderKind::LiveAxleV1:
+        if (!description.liveAxle.authored || !input.pairedCompressionValid)
+            return output;
+        {
+            const heritage::math::Vec3 toLeft{
+                description.localSteeringAxisPoint.x - description.liveAxle.leftWheelCenter.x,
+                description.localSteeringAxisPoint.y - description.liveAxle.leftWheelCenter.y,
+                description.localSteeringAxisPoint.z - description.liveAxle.leftWheelCenter.z };
+            const heritage::math::Vec3 toRight{
+                description.localSteeringAxisPoint.x - description.liveAxle.rightWheelCenter.x,
+                description.localSteeringAxisPoint.y - description.liveAxle.rightWheelCenter.y,
+                description.localSteeringAxisPoint.z - description.liveAxle.rightWheelCenter.z };
+            referenceCenter = dot(toLeft, toLeft) <= dot(toRight, toRight)
+                ? description.liveAxle.leftWheelCenter
+                : description.liveAxle.rightWheelCenter;
+        }
+        break;
+    case SuspensionProviderKind::KartChassisFlexV1:
+        if (!description.kartChassis.authored)
+            return output;
+        {
+            const KartChassisKinematicsOutput kart = evaluateKartChassisKinematics(
+                description.kartChassis,
+                { input.compressionM, input.steeringDegrees,
+                  description.localSteeringAxisPoint,
+                  description.staticCamberDegrees, description.staticToeDegrees });
+            if (!kart.valid)
+                return output;
+            referenceCenter = kart.referenceWheelCenter;
+        }
+        break;
+    case SuspensionProviderKind::LinearRaycastV1:
+    default:
+        // Compatibility suspension intentionally has no hardpoint wheel path.
+        output.valid = true;
+        return output;
+    }
+
+    const SuspensionGeometryOutput geometry = evaluateSuspensionGeometry(
+        description, input);
+    if (!geometry.kinematicsValid)
+        return output;
+
+    const heritage::math::Vec3 delta{
+        geometry.localWheelCenter.x - referenceCenter.x,
+        geometry.localWheelCenter.y - referenceCenter.y,
+        geometry.localWheelCenter.z - referenceCenter.z
+    };
+    const heritage::math::Vec3 axis = normalized(
+        input.localSuspensionDirection, { 0.0f, -1.0f, 0.0f });
+    const float axial = dot(delta, axis);
+    const heritage::math::Vec3 transverse{
+        delta.x - axis.x * axial,
+        delta.y - axis.y * axial,
+        delta.z - axis.z * axial
+    };
+    // SUSP11 exception: kart front-wheel vertical movement is steering jacking,
+    // not suspension compression. It must therefore reach the road-support ray
+    // in full; removing the suspension-axis component would erase the physical
+    // mechanism that twists the kart frame and unloads the inside rear. Rear
+    // wheel delta is zero because the solid axle is rigidly chassis-mounted.
+    const heritage::math::Vec3 supportDelta =
+        description.provider == SuspensionProviderKind::KartChassisFlexV1
+            ? delta : transverse;
+    const float offsetMagnitudeSquared = dot(supportDelta, supportDelta);
+    const float maximumOffsetM =
+        description.provider == SuspensionProviderKind::MotorcycleTelescopicForkV1
+            ? 0.60f
+            : description.provider == SuspensionProviderKind::KartChassisFlexV1
+                ? 0.18f : 0.25f;
+    if (!std::isfinite(offsetMagnitudeSquared)
+        || offsetMagnitudeSquared > maximumOffsetM * maximumOffsetM)
+    {
+        return output;
+    }
+
+    output.localTransverseOffset = supportDelta;
+    output.valid = true;
     return output;
 }
 

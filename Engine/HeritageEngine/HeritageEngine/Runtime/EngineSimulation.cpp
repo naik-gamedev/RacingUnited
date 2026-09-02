@@ -384,6 +384,10 @@ void updateEngineSimulation(
         entityCameraFrame.valid = true;
     }
 
+    // UI world annotations must use the final render-facing camera after all
+    // camera authorities and the deterministic fallback have been resolved.
+    vehicleCamera.setPresentedFrame(entityCameraFrame);
+
     performanceMonitor.recordSection(
         PerformanceSection::GameUpdate,
         (glfwGetTime() - gameUpdateCpuStart) * 1000.0);

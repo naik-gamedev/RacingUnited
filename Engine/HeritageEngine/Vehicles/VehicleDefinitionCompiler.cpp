@@ -1,6 +1,16 @@
 #include "VehicleDefinitionCompiler.hpp"
 #include "Suspension/Geometry/MacPherson/MacPhersonKinematics.hpp"
+#include "Suspension/Geometry/DoubleWishbone/DoubleWishboneKinematics.hpp"
+#include "Suspension/Geometry/PushrodDoubleWishbone/PushrodDoubleWishboneKinematics.hpp"
 #include "Suspension/Geometry/TrailingArm/TrailingArmKinematics.hpp"
+#include "Suspension/Geometry/LiveAxle/LiveAxleKinematics.hpp"
+#include "Suspension/Springs/LeafSpring/LeafSpringLiveAxle.hpp"
+#include "Suspension/Geometry/MotorcycleFork/MotorcycleForkKinematics.hpp"
+#include "Suspension/Geometry/MotorcycleSwingarm/MotorcycleSwingarmKinematics.hpp"
+#include "Suspension/Geometry/Kart/KartChassisKinematics.hpp"
+#include "Suspension/Geometry/MultiLink/MultiLinkKinematics.hpp"
+#include "Suspension/Geometry/SemiTrailingArm/SemiTrailingArmKinematics.hpp"
+#include "Suspension/Geometry/TwistBeam/TwistBeamKinematics.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -61,6 +71,136 @@ bool buildMacPhersonHardpoints(
     return complete;
 }
 
+
+bool buildDoubleWishboneHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    DoubleWishboneHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readHardpoint(suspension, "upper_arm_inner_front", value.upperArmInnerFront)
+        && readHardpoint(suspension, "upper_arm_inner_rear", value.upperArmInnerRear)
+        && readHardpoint(suspension, "upper_ball_joint", value.upperBallJoint)
+        && readHardpoint(suspension, "lower_arm_inner_front", value.lowerArmInnerFront)
+        && readHardpoint(suspension, "lower_arm_inner_rear", value.lowerArmInnerRear)
+        && readHardpoint(suspension, "lower_ball_joint", value.lowerBallJoint)
+        && readHardpoint(suspension, "tie_rod_inner", value.tieRodInner)
+        && readHardpoint(suspension, "tie_rod_outer", value.tieRodOuter)
+        && readHardpoint(suspension, "wheel_center", value.wheelCenter)
+        && readHardpoint(suspension, "damper_upper_mount", value.damperUpperMount)
+        && readHardpoint(suspension, "damper_lower_mount", value.damperLowerMount);
+    value.authored = complete;
+    return complete;
+}
+bool buildPushrodDoubleWishboneHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    PushrodDoubleWishboneHardpoints& value)
+{
+    value = {};
+    DoubleWishboneHardpoints& wishbone = value.wishbone;
+    const bool complete =
+        readHardpoint(suspension, "upper_arm_inner_front", wishbone.upperArmInnerFront)
+        && readHardpoint(suspension, "upper_arm_inner_rear", wishbone.upperArmInnerRear)
+        && readHardpoint(suspension, "upper_ball_joint", wishbone.upperBallJoint)
+        && readHardpoint(suspension, "lower_arm_inner_front", wishbone.lowerArmInnerFront)
+        && readHardpoint(suspension, "lower_arm_inner_rear", wishbone.lowerArmInnerRear)
+        && readHardpoint(suspension, "lower_ball_joint", wishbone.lowerBallJoint)
+        && readHardpoint(suspension, "tie_rod_inner", wishbone.tieRodInner)
+        && readHardpoint(suspension, "tie_rod_outer", wishbone.tieRodOuter)
+        && readHardpoint(suspension, "wheel_center", wishbone.wheelCenter)
+        && readHardpoint(suspension, "pushrod_lower_arm_mount", value.pushrodLowerArmMount)
+        && readHardpoint(suspension, "rocker_pivot_front", value.rockerPivotFront)
+        && readHardpoint(suspension, "rocker_pivot_rear", value.rockerPivotRear)
+        && readHardpoint(suspension, "rocker_pushrod_mount", value.rockerPushrodMount)
+        && readHardpoint(suspension, "spring_chassis_mount", value.springChassisMount)
+        && readHardpoint(suspension, "spring_rocker_mount", value.springRockerMount)
+        && readHardpoint(suspension, "damper_chassis_mount", value.damperChassisMount)
+        && readHardpoint(suspension, "damper_rocker_mount", value.damperRockerMount);
+    wishbone.authored = complete;
+    value.authored = complete;
+    return complete;
+}
+
+
+bool buildMultiLinkHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    MultiLinkHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readHardpoint(suspension, "link1_inner", value.link1Inner)
+        && readHardpoint(suspension, "link1_outer", value.link1Outer)
+        && readHardpoint(suspension, "link2_inner", value.link2Inner)
+        && readHardpoint(suspension, "link2_outer", value.link2Outer)
+        && readHardpoint(suspension, "link3_inner", value.link3Inner)
+        && readHardpoint(suspension, "link3_outer", value.link3Outer)
+        && readHardpoint(suspension, "link4_inner", value.link4Inner)
+        && readHardpoint(suspension, "link4_outer", value.link4Outer)
+        && readHardpoint(suspension, "toe_link_inner", value.toeLinkInner)
+        && readHardpoint(suspension, "toe_link_outer", value.toeLinkOuter)
+        && readHardpoint(suspension, "wheel_center", value.wheelCenter)
+        && readHardpoint(suspension, "spring_upper_mount", value.springUpperMount)
+        && readHardpoint(suspension, "spring_lower_mount", value.springLowerMount)
+        && readHardpoint(suspension, "damper_upper_mount", value.damperUpperMount)
+        && readHardpoint(suspension, "damper_lower_mount", value.damperLowerMount)
+        && readHardpoint(suspension, "steering_rack_axis_start", value.steeringRackAxisStart)
+        && readHardpoint(suspension, "steering_rack_axis_end", value.steeringRackAxisEnd);
+    value.authored = complete;
+    return complete;
+}
+bool buildMotorcycleForkHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    MotorcycleForkHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readHardpoint(suspension, "steering_stem_upper", value.steeringStemUpper)
+        && readHardpoint(suspension, "steering_stem_lower", value.steeringStemLower)
+        && readHardpoint(suspension, "wheel_center", value.wheelCenter);
+    value.authored = complete;
+    return complete;
+}
+
+bool buildMotorcycleSwingarmHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    MotorcycleSwingarmHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readHardpoint(suspension, "swingarm_pivot_left", value.swingarmPivotLeft)
+        && readHardpoint(suspension, "swingarm_pivot_right", value.swingarmPivotRight)
+        && readHardpoint(suspension, "wheel_center", value.wheelCenter)
+        && readHardpoint(suspension, "linkage_swingarm_mount", value.linkageSwingarmMount)
+        && readHardpoint(suspension, "rocker_pivot_left", value.rockerPivotLeft)
+        && readHardpoint(suspension, "rocker_pivot_right", value.rockerPivotRight)
+        && readHardpoint(suspension, "rocker_link_mount", value.rockerLinkMount)
+        && readHardpoint(suspension, "shock_chassis_mount", value.shockChassisMount)
+        && readHardpoint(suspension, "shock_rocker_mount", value.shockRockerMount)
+        && readHardpoint(suspension, "countershaft_center", value.countershaftCenter);
+    value.authored = complete;
+    return complete;
+}
+
+bool buildKartChassisHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    KartChassisHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readHardpoint(suspension, "front_left_kingpin_upper", value.frontLeftKingpinUpper)
+        && readHardpoint(suspension, "front_left_kingpin_lower", value.frontLeftKingpinLower)
+        && readHardpoint(suspension, "front_left_wheel_center", value.frontLeftWheelCenter)
+        && readHardpoint(suspension, "front_right_kingpin_upper", value.frontRightKingpinUpper)
+        && readHardpoint(suspension, "front_right_kingpin_lower", value.frontRightKingpinLower)
+        && readHardpoint(suspension, "front_right_wheel_center", value.frontRightWheelCenter)
+        && readHardpoint(suspension, "rear_axle_bearing_left", value.rearAxleBearingLeft)
+        && readHardpoint(suspension, "rear_axle_bearing_right", value.rearAxleBearingRight)
+        && readHardpoint(suspension, "rear_left_wheel_center", value.rearLeftWheelCenter)
+        && readHardpoint(suspension, "rear_right_wheel_center", value.rearRightWheelCenter);
+    value.authored = complete;
+    return complete;
+}
+
 bool buildTrailingArmHardpoints(
     const VehicleSuspensionDefinition& suspension,
     TrailingArmHardpoints& value)
@@ -77,6 +217,86 @@ bool buildTrailingArmHardpoints(
     value.authored = complete;
     return complete;
 }
+
+
+bool buildSemiTrailingArmHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    SemiTrailingArmHardpoints& value,
+    const char* prefix = "")
+{
+    value = {};
+    const auto id = [&](const char* suffix) { return std::string(prefix) + suffix; };
+    const bool complete =
+        readHardpoint(suspension, id("arm_pivot_inner").c_str(), value.armPivotInner)
+        && readHardpoint(suspension, id("arm_pivot_outer").c_str(), value.armPivotOuter)
+        && readHardpoint(suspension, id("wheel_center").c_str(), value.wheelCenter)
+        && readHardpoint(suspension, id("spring_upper_mount").c_str(), value.springUpperMount)
+        && readHardpoint(suspension, id("spring_lower_mount").c_str(), value.springLowerMount)
+        && readHardpoint(suspension, id("damper_upper_mount").c_str(), value.damperUpperMount)
+        && readHardpoint(suspension, id("damper_lower_mount").c_str(), value.damperLowerMount);
+    value.authored = complete;
+    return complete;
+}
+
+bool buildTwistBeamHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    TwistBeamHardpoints& value)
+{
+    value = {};
+    const bool complete = buildSemiTrailingArmHardpoints(suspension,value.leftArm,"left_")
+        && buildSemiTrailingArmHardpoints(suspension,value.rightArm,"right_")
+        && readHardpoint(suspension,"beam_left_attachment",value.beamLeftAttachment)
+        && readHardpoint(suspension,"beam_right_attachment",value.beamRightAttachment);
+    value.authored = complete;
+    return complete;
+}
+
+bool buildLiveAxleHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    LiveAxleHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readHardpoint(suspension, "axle_center", value.axleCenter)
+        && readHardpoint(suspension, "left_wheel_center", value.leftWheelCenter)
+        && readHardpoint(suspension, "right_wheel_center", value.rightWheelCenter)
+        && readHardpoint(suspension, "panhard_chassis_mount", value.panhardChassisMount)
+        && readHardpoint(suspension, "panhard_axle_mount", value.panhardAxleMount)
+        && readHardpoint(suspension, "left_trailing_chassis_mount", value.leftTrailingChassisMount)
+        && readHardpoint(suspension, "left_trailing_axle_mount", value.leftTrailingAxleMount)
+        && readHardpoint(suspension, "right_trailing_chassis_mount", value.rightTrailingChassisMount)
+        && readHardpoint(suspension, "right_trailing_axle_mount", value.rightTrailingAxleMount)
+        && readHardpoint(suspension, "left_spring_chassis_mount", value.leftSpringChassisMount)
+        && readHardpoint(suspension, "left_spring_axle_mount", value.leftSpringAxleMount)
+        && readHardpoint(suspension, "right_spring_chassis_mount", value.rightSpringChassisMount)
+        && readHardpoint(suspension, "right_spring_axle_mount", value.rightSpringAxleMount)
+        && readHardpoint(suspension, "left_damper_chassis_mount", value.leftDamperChassisMount)
+        && readHardpoint(suspension, "left_damper_axle_mount", value.leftDamperAxleMount)
+        && readHardpoint(suspension, "right_damper_chassis_mount", value.rightDamperChassisMount)
+        && readHardpoint(suspension, "right_damper_axle_mount", value.rightDamperAxleMount);
+    value.authored = complete;
+    return complete;
+}
+
+bool buildLeafSpringLiveAxleHardpoints(
+    const VehicleSuspensionDefinition& suspension,
+    LeafSpringLiveAxleHardpoints& value)
+{
+    value = {};
+    const bool baseComplete = buildLiveAxleHardpoints(suspension, value.axle);
+    const bool complete = baseComplete
+        && readHardpoint(suspension, "left_leaf_front_eye", value.leftLeafFrontEye)
+        && readHardpoint(suspension, "left_leaf_rear_shackle_pivot", value.leftLeafRearShacklePivot)
+        && readHardpoint(suspension, "left_leaf_rear_eye", value.leftLeafRearEye)
+        && readHardpoint(suspension, "left_leaf_axle_clamp", value.leftLeafAxleClamp)
+        && readHardpoint(suspension, "right_leaf_front_eye", value.rightLeafFrontEye)
+        && readHardpoint(suspension, "right_leaf_rear_shackle_pivot", value.rightLeafRearShacklePivot)
+        && readHardpoint(suspension, "right_leaf_rear_eye", value.rightLeafRearEye)
+        && readHardpoint(suspension, "right_leaf_axle_clamp", value.rightLeafAxleClamp);
+    value.authored = complete;
+    return complete;
+}
+
 bool safeId(const std::string& value)
 {
     if (value.empty() || value.size() > 64)
@@ -492,6 +712,186 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
             }
         }
 
+        if (suspension.provider == "double_wishbone_v1")
+        {
+            DoubleWishboneHardpoints wishbone;
+            if (!buildDoubleWishboneHardpoints(suspension, wishbone))
+            {
+                addError(
+                    result,
+                    "double_wishbone_required_hardpoints",
+                    "Double-wishbone suspension '" + suspension.id
+                        + "' requires all eleven named hardpoints.");
+            }
+            else if (!validDoubleWishboneHardpoints(wishbone))
+            {
+                addError(
+                    result,
+                    "double_wishbone_hardpoint_geometry",
+                    "Double-wishbone suspension '" + suspension.id
+                        + "' has degenerate hardpoint geometry.");
+            }
+        }
+
+        if (suspension.provider == "pushrod_double_wishbone_v1")
+        {
+            PushrodDoubleWishboneHardpoints pushrod;
+            if (!buildPushrodDoubleWishboneHardpoints(suspension, pushrod))
+            {
+                addError(
+                    result,
+                    "pushrod_double_wishbone_required_hardpoints",
+                    "Pushrod double-wishbone suspension '" + suspension.id
+                        + "' requires all seventeen named hardpoints.");
+            }
+            else if (!validPushrodDoubleWishboneHardpoints(pushrod))
+            {
+                addError(
+                    result,
+                    "pushrod_double_wishbone_hardpoint_geometry",
+                    "Pushrod double-wishbone suspension '" + suspension.id
+                        + "' has degenerate wishbone/pushrod/rocker geometry.");
+            }
+        }
+
+
+        if (suspension.provider == "multilink_v1")
+        {
+            MultiLinkHardpoints multiLink;
+            if (!buildMultiLinkHardpoints(suspension, multiLink))
+            {
+                addError(result, "multilink_required_hardpoints",
+                    "Multi-link suspension '" + suspension.id
+                        + "' requires all seventeen named link/actuator/rack hardpoints.");
+            }
+            else if (!validMultiLinkHardpoints(multiLink))
+            {
+                addError(result, "multilink_hardpoint_geometry",
+                    "Multi-link suspension '" + suspension.id
+                        + "' has degenerate five-link/upright/actuator geometry.");
+            }
+        }
+
+        if (suspension.provider == "live_axle_v1")
+        {
+            LiveAxleHardpoints liveAxle;
+            if (!buildLiveAxleHardpoints(suspension, liveAxle))
+            {
+                addError(
+                    result,
+                    "live_axle_required_hardpoints",
+                    "Live-axle suspension '" + suspension.id
+                        + "' requires all seventeen named hardpoints.");
+            }
+            else if (!validLiveAxleHardpoints(liveAxle))
+            {
+                addError(
+                    result,
+                    "live_axle_hardpoint_geometry",
+                    "Live-axle suspension '" + suspension.id
+                        + "' has degenerate axle/link/spring geometry.");
+            }
+        }
+
+        if (suspension.provider == "live_axle_leaf_v1")
+        {
+            LeafSpringLiveAxleHardpoints leafAxle;
+            if (!buildLeafSpringLiveAxleHardpoints(suspension, leafAxle))
+            {
+                addError(result, "leaf_live_axle_required_hardpoints",
+                    "Leaf-spring live-axle suspension '" + suspension.id
+                        + "' requires the SUSP08 seventeen-point axle package plus eight leaf/shackle points.");
+            }
+            else if (!validLeafSpringLiveAxleHardpoints(leafAxle))
+            {
+                addError(result, "leaf_live_axle_hardpoint_geometry",
+                    "Leaf-spring live-axle suspension '" + suspension.id
+                        + "' has degenerate axle/leaf/shackle geometry.");
+            }
+        }
+
+        if (suspension.provider == "motorcycle_telescopic_fork_v1")
+        {
+            MotorcycleForkHardpoints fork;
+            if (!buildMotorcycleForkHardpoints(suspension, fork))
+            {
+                addError(result, "motorcycle_fork_required_hardpoints",
+                    "Motorcycle telescopic-fork suspension '" + suspension.id
+                        + "' requires steering_stem_upper, steering_stem_lower and wheel_center hardpoints.");
+            }
+            else if (!validMotorcycleForkHardpoints(fork))
+            {
+                addError(result, "motorcycle_fork_hardpoint_geometry",
+                    "Motorcycle telescopic-fork suspension '" + suspension.id
+                        + "' has degenerate steering-axis/axle geometry.");
+            }
+        }
+
+        if (suspension.provider == "motorcycle_swingarm_linkage_v1")
+        {
+            MotorcycleSwingarmHardpoints swingarm;
+            if (!buildMotorcycleSwingarmHardpoints(suspension, swingarm))
+            {
+                addError(result, "motorcycle_swingarm_required_hardpoints",
+                    "Motorcycle swingarm-linkage suspension '" + suspension.id
+                        + "' requires all ten named swingarm/linkage/chain hardpoints.");
+            }
+            else if (!validMotorcycleSwingarmHardpoints(swingarm))
+            {
+                addError(result, "motorcycle_swingarm_hardpoint_geometry",
+                    "Motorcycle swingarm-linkage suspension '" + suspension.id
+                        + "' has degenerate swingarm/dogbone/rocker/shock geometry.");
+            }
+        }
+
+        if (suspension.provider == "kart_chassis_flex_v1")
+        {
+            KartChassisHardpoints kart;
+            if (!buildKartChassisHardpoints(suspension, kart))
+            {
+                addError(result, "kart_chassis_required_hardpoints",
+                    "Kart chassis suspension '" + suspension.id
+                        + "' requires the complete ten-point front-kingpin/rear-axle package.");
+            }
+            else if (!validKartChassisHardpoints(kart))
+            {
+                addError(result, "kart_chassis_hardpoint_geometry",
+                    "Kart chassis suspension '" + suspension.id
+                        + "' has degenerate kingpin or rigid rear-axle geometry.");
+            }
+            if (std::abs(suspension.maximumCompressionM) > 1.0e-6f
+                || std::abs(suspension.maximumDroopM) > 1.0e-6f)
+            {
+                addError(result, "kart_chassis_no_suspension_travel",
+                    "Kart chassis suspension '" + suspension.id
+                        + "' must author zero bump/droop travel; tire compliance and frame torsion are the suspension.");
+            }
+            if (!source.chassisFlex.enabled
+                || source.chassisFlex.provider != "chassis_torsional_mode_v1")
+            {
+                addError(result, "kart_chassis_requires_frame_torsion",
+                    "Kart chassis suspension requires enabled chassis_torsional_mode_v1 frame compliance.");
+            }
+        }
+
+        if (suspension.provider == "semi_trailing_arm_v1")
+        {
+            SemiTrailingArmHardpoints arm;
+            if (!buildSemiTrailingArmHardpoints(suspension, arm))
+                addError(result,"semi_trailing_arm_required_hardpoints","Semi-trailing-arm suspension '"+suspension.id+"' requires seven named pivot/wheel/spring/damper hardpoints.");
+            else if (!validSemiTrailingArmHardpoints(arm))
+                addError(result,"semi_trailing_arm_hardpoint_geometry","Semi-trailing-arm suspension '"+suspension.id+"' has degenerate arm/actuator geometry.");
+        }
+
+        if (suspension.provider == "twist_beam_v1")
+        {
+            TwistBeamHardpoints beam;
+            if (!buildTwistBeamHardpoints(suspension, beam))
+                addError(result,"twist_beam_required_hardpoints","Twist-beam suspension '"+suspension.id+"' requires left/right seven-point semi-trailing-arm packages plus two beam attachment points.");
+            else if (!validTwistBeamHardpoints(beam))
+                addError(result,"twist_beam_hardpoint_geometry","Twist-beam suspension '"+suspension.id+"' has degenerate arm or crossbeam geometry.");
+        }
+
         if (suspension.provider == "trailing_arm_torsion_bar_v1")
         {
             TrailingArmHardpoints trailingArm;
@@ -513,6 +913,8 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
             }
         }
 
+        const bool kartRigidProvider = suspension.provider == "kart_chassis_flex_v1";
+
         if (!finite(suspension.restLengthM) || suspension.restLengthM <= 0.0f
             || !finite(suspension.maximumCompressionM)
             || suspension.maximumCompressionM < 0.0f
@@ -523,7 +925,8 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
             || suspension.springPreloadN < 0.0f
             || suspension.springPreloadN > 10000000.0f
             || !finite(suspension.springRateNPerM)
-            || suspension.springRateNPerM <= 0.0f
+            || suspension.springRateNPerM < 0.0f
+            || (!kartRigidProvider && suspension.springRateNPerM <= 0.0f)
             || suspension.springRateNPerM > 1000000000.0f
             || !finite(suspension.springProgressionNPerM2)
             || suspension.springProgressionNPerM2 < 0.0f
@@ -581,7 +984,28 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
             || suspension.motionRatio > 10.0f
             || !finite(suspension.maximumForceN)
             || suspension.maximumForceN <= 0.0f
-            || suspension.maximumForceN > 100000000.0f)
+            || suspension.maximumForceN > 100000000.0f
+            || !finite(suspension.leafInterleafFrictionN)
+            || suspension.leafInterleafFrictionN < 0.0f
+            || !finite(suspension.leafInterleafVelocityScaleMps)
+            || suspension.leafInterleafVelocityScaleMps <= 0.0001f
+            || !finite(suspension.leafInterleafViscousNsPerM)
+            || suspension.leafInterleafViscousNsPerM < 0.0f
+            || !finite(suspension.leafAxleWrapStiffnessNmPerRad)
+            || suspension.leafAxleWrapStiffnessNmPerRad < 0.0f
+            || !finite(suspension.leafAxleWrapDampingNmsPerRad)
+            || suspension.leafAxleWrapDampingNmsPerRad < 0.0f
+            || !finite(suspension.leafAxleWrapInertiaKgM2)
+            || suspension.leafAxleWrapInertiaKgM2 <= 0.01f
+            || !finite(suspension.leafAxleWrapJackingNPerRad)
+            || suspension.leafAxleWrapJackingNPerRad < 0.0f
+            || !finite(suspension.motorcycleRearSprocketPitchRadiusM)
+            || suspension.motorcycleRearSprocketPitchRadiusM < 0.02f
+            || suspension.motorcycleRearSprocketPitchRadiusM > 0.30f
+            || !finite(suspension.twistBeamTorsionalStiffnessNmPerRad)
+            || suspension.twistBeamTorsionalStiffnessNmPerRad < 0.0f
+            || !finite(suspension.twistBeamTorsionalDampingNmsPerRad)
+            || suspension.twistBeamTorsionalDampingNmsPerRad < 0.0f)
         {
             addError(
                 result,
@@ -837,6 +1261,16 @@ VehicleDefinitionCompileResult VehicleDefinitionCompiler::compile(
     {
         if (suspension.provider != "linear_raycast_v1"
             && suspension.provider != "macpherson_strut_v1"
+            && suspension.provider != "double_wishbone_v1"
+            && suspension.provider != "pushrod_double_wishbone_v1"
+            && suspension.provider != "live_axle_v1"
+            && suspension.provider != "live_axle_leaf_v1"
+            && suspension.provider != "motorcycle_telescopic_fork_v1"
+            && suspension.provider != "motorcycle_swingarm_linkage_v1"
+            && suspension.provider != "kart_chassis_flex_v1"
+            && suspension.provider != "multilink_v1"
+            && suspension.provider != "semi_trailing_arm_v1"
+            && suspension.provider != "twist_beam_v1"
             && suspension.provider != "trailing_arm_torsion_bar_v1")
         {
             addReason(

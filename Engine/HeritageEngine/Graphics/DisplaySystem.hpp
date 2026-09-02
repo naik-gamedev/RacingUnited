@@ -74,6 +74,7 @@ public:
 
     // Rendering helpers
     unsigned int spanFBO() const { return m_spanFBO; }
+    unsigned int spanColorTexture() const { return m_spanColor; }
     int spanWidth() const { return m_spanW; }
     int spanHeight() const { return m_spanH; }
     float spanScale() const { return m_spanScale; }

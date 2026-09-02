@@ -11,4 +11,5 @@ end
 IncludeVehicleWheelVisual("Vehicles/Visual/TransformMath.lua")
 IncludeVehicleWheelVisual("Vehicles/Visual/ArticulatedWheels.lua")
 IncludeVehicleWheelVisual("Vehicles/Visual/EmbeddedWheelBinding.lua")
+IncludeVehicleWheelVisual("Vehicles/Visual/MeasurementOverlay.lua")
 IncludeVehicleWheelVisual("Vehicles/Visual/VisualWheels.lua")

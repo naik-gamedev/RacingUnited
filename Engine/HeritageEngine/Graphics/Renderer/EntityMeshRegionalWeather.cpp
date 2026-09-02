@@ -62,9 +62,11 @@ EnvironmentLighting EntityMeshRenderer::weatherAdjustedLighting(
     // night darkness and moon visibility. Weather now only nudges colour and
     // transmission, and it does so primarily during the day/twilight.
     const float day = std::clamp(lighting.daylightFactor, 0.0f, 1.0f);
-    const float sunY = std::clamp(lighting.sunDirection.y, -1.0f, 1.0f);
-    const float twilight = (1.0f - weatherSmoothstep(0.08f, 0.32f, day))
-        * weatherSmoothstep(-0.18f, 0.10f, sunY);
+    // CELESTIAL06: weather evaluates the same normalized solar-cycle scalar as
+    // sky/material presentation. It cannot create a second twilight state by
+    // independently thresholding raw Sun elevation.
+    const float twilight = weatherSmoothstep(0.025f, 0.115f, day)
+        * (1.0f - weatherSmoothstep(0.24f, 0.46f, day));
     const float overcast = std::clamp(
         cloud * 0.72f + rain * 0.16f + storm * 0.08f + humidity * 0.04f,
         0.0f, 1.0f);
@@ -102,9 +104,15 @@ EnvironmentLighting EntityMeshRenderer::weatherAdjustedLighting(
     lighting.groundNadir = weatherMix(
         lighting.groundNadir, dayGroundNadir, daytimeWeatherWeight * 0.14f);
 
-    const float daylightTransmission = std::clamp(
+    // CELESTIAL08: cloud/weather may soften direct Sun light, but the previous
+    // broad attenuation was far too strong once the dedicated spatial cloud
+    // shadow receiver was also active. Preserve the old response shape, then
+    // apply exactly one tenth of its loss; visible cloud opacity is unchanged.
+    const float legacyDaylightTransmission = std::clamp(
         1.0f - overcast * 0.26f - rain * 0.05f - storm * 0.03f,
         0.45f, 1.0f);
+    const float daylightTransmission = 1.0f
+        + (legacyDaylightTransmission - 1.0f) * 0.10f;
     const float weatherSunWeight = weatherSmoothstep(0.04f, 0.28f, day);
     lighting.sunIntensity *= 1.0f + (daylightTransmission - 1.0f) * weatherSunWeight;
     lighting.sunColor = weatherMix(
@@ -270,6 +278,8 @@ void EntityMeshRenderer::shutdownRegionalWeatherMap()
     m_regionalWeatherAuthoredWindSpeedMps = -1.0;
     m_regionalWeatherAuthoredWindDirectionDeg = -1.0;
     m_regionalWeatherPixels.clear();
+    m_weatherHazeSmoothingInitialized = false;
+    m_weatherHazeLastElapsedSeconds = -1.0f;
 }
 
 
@@ -278,20 +288,23 @@ void EntityMeshRenderer::bindRegionalWeatherMaterialState(
     const heritage::math::DVec3& cameraGlobalForSurface,
     const heritage::physics::weather::RegionalWeatherSample& cameraRegionalWeather,
     bool regionalWeatherMapReady,
-    const EnvironmentLighting& lighting)
+    const EnvironmentLighting& lighting,
+    float elapsedSeconds)
 {
     const float day = std::clamp(lighting.daylightFactor, 0.0f, 1.0f);
-    const float sunY = std::clamp(lighting.sunDirection.y, -1.0f, 1.0f);
-    const float twilight = (1.0f - weatherSmoothstep(0.06f, 0.30f, day))
-        * weatherSmoothstep(-0.20f, 0.08f, sunY);
-    const float deepNight = 1.0f - weatherSmoothstep(-0.08f, 0.12f, sunY);
+    const float twilight = weatherSmoothstep(0.025f, 0.115f, day)
+        * (1.0f - weatherSmoothstep(0.24f, 0.46f, day));
 
     float rain = 0.0f;
     float cloud = 0.0f;
     float humidity = 0.55f;
+    float authoredCloud = 0.0f;
+    float authoredHumidity = 0.55f;
     if (surfaceWorld && surfaceWorld->weather().enabled)
     {
         const auto& weather = surfaceWorld->weather();
+        authoredCloud = std::clamp(static_cast<float>(weather.cloudCover), 0.0f, 1.0f);
+        authoredHumidity = std::clamp(static_cast<float>(weather.relativeHumidity), 0.0f, 1.0f);
         rain = std::clamp(
             static_cast<float>((cameraRegionalWeather.valid
                 ? cameraRegionalWeather.currentRateMmPerHour
@@ -309,18 +322,47 @@ void EntityMeshRenderer::bindRegionalWeatherMaterialState(
             0.0f, 1.0f);
     }
 
-    // J9: real-life atmospheric haze / aerial perspective. This is not dense
-    // mist; it is a permanent distance haze that gently brightens and cools the
-    // far horizon, then thickens with humidity, cloud cover and rain.
+    // CELESTIAL08: J9 haze is background atmosphere, not a binary property of
+    // whichever regional cloud cell happens to sit over the camera. Low-pass
+    // camera-local rain/cloud/humidity before they can modulate aerial haze,
+    // and let the authored scene climate own most of the permanent component.
+    if (!m_weatherHazeSmoothingInitialized
+        || !std::isfinite(elapsedSeconds)
+        || elapsedSeconds < m_weatherHazeLastElapsedSeconds)
+    {
+        m_weatherHazeRain01 = rain;
+        m_weatherHazeCloud01 = cloud;
+        m_weatherHazeHumidity01 = humidity;
+        m_weatherHazeSmoothingInitialized = true;
+    }
+    else
+    {
+        const float dt = std::clamp(elapsedSeconds - m_weatherHazeLastElapsedSeconds, 0.0f, 0.25f);
+        const float response = 1.0f - std::exp(-dt / 1.35f);
+        m_weatherHazeRain01 += (rain - m_weatherHazeRain01) * response;
+        m_weatherHazeCloud01 += (cloud - m_weatherHazeCloud01) * response;
+        m_weatherHazeHumidity01 += (humidity - m_weatherHazeHumidity01) * response;
+    }
+    m_weatherHazeLastElapsedSeconds = elapsedSeconds;
+
+    const float hazeCloud = std::clamp(authoredCloud * 0.90f + m_weatherHazeCloud01 * 0.10f, 0.0f, 1.0f);
+    const float hazeHumidity = std::clamp(authoredHumidity * 0.85f + m_weatherHazeHumidity01 * 0.15f, 0.0f, 1.0f);
+    const float hazeRain = std::clamp(m_weatherHazeRain01, 0.0f, 1.0f);
+
+    // J9: real-life atmospheric haze / aerial perspective. This permanent
+    // baseline never switches off; local weather can only move it continuously.
+    // CELESTIAL09: atmospheric particles still exist at night, but darkness
+    // does not create extra aerosol. The old deep-night density bonus made the
+    // nocturnal air look more opaque precisely when its visible air-light
+    // should be weakest. Preserve extinction; remove that artificial bonus.
     const float atmosphericHazeDensity =
         0.000045f
         + 0.000050f * day
         + 0.000030f * twilight
-        + 0.000065f * humidity
-        + 0.000025f * cloud
-        + 0.000020f * deepNight;
+        + 0.000065f * hazeHumidity
+        + 0.000025f * hazeCloud;
     float weatherFogDensity = atmosphericHazeDensity
-        + rain * (0.00105f + cloud * 0.00095f + humidity * 0.00025f);
+        + hazeRain * (0.00105f + hazeCloud * 0.00095f + hazeHumidity * 0.00025f);
 
     heritage::math::Vec3 atmosphericHazeColor = weatherMix(
         { 0.085f, 0.100f, 0.155f },
@@ -333,19 +375,37 @@ void EntityMeshRenderer::bindRegionalWeatherMaterialState(
     atmosphericHazeColor = weatherMix(
         atmosphericHazeColor,
         { 0.80f, 0.82f, 0.84f },
-        humidity * (0.25f + 0.45f * day));
+        hazeHumidity * (0.25f + 0.45f * day));
     atmosphericHazeColor = weatherMix(
         atmosphericHazeColor,
         lighting.skyHorizon,
         0.42f + 0.28f * twilight);
 
+    // CELESTIAL11: background nocturnal aerosol remains as extinction only.
+    // Without Sun illumination there is no global blue/grey air-light veil;
+    // deep night therefore fades distant geometry toward darkness instead of
+    // painting it with luminous haze. The Moon keeps its local halo but no
+    // longer lights the entire atmosphere as a uniform fog colour. Visible
+    // night mist belongs to a future low-altitude local-light scattering path
+    // (headlights/streetlights/floodlights), not this global aerial term.
+    const float solarAirlight = weatherSmoothstep(0.015f, 0.30f, day);
+    const float nightAirlight = solarAirlight;
+    atmosphericHazeColor = {
+        atmosphericHazeColor.x * nightAirlight,
+        atmosphericHazeColor.y * nightAirlight,
+        atmosphericHazeColor.z * nightAirlight };
+
     heritage::math::Vec3 weatherFogColor = atmosphericHazeColor;
     if (surfaceWorld && surfaceWorld->weather().enabled)
     {
+        const heritage::math::Vec3 illuminatedRainFog{
+            0.17f * nightAirlight,
+            0.19f * nightAirlight,
+            0.21f * nightAirlight };
         weatherFogColor = weatherMix(
             weatherFogColor,
-            { 0.17f, 0.19f, 0.21f },
-            rain * 0.52f);
+            illuminatedRainFog,
+            hazeRain * 0.52f);
     }
     glUniform1f(m_uniforms.weatherFogDensity, weatherFogDensity);
     glUniform3f(

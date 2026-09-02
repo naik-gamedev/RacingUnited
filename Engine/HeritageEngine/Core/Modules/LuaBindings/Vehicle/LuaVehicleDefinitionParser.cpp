@@ -615,6 +615,26 @@ bool parseLuaVehicleDefinitionV2(
                 api, state, -1, "motionRatio", 1.0));
             suspension.maximumForceN = static_cast<float>(luaFieldNumber(
                 api, state, -1, "maximumForceN", 250000.0));
+            suspension.leafInterleafFrictionN = static_cast<float>(luaFieldNumber(
+                api, state, -1, "leafInterleafFrictionN", 450.0));
+            suspension.leafInterleafVelocityScaleMps = static_cast<float>(luaFieldNumber(
+                api, state, -1, "leafInterleafVelocityScaleMps", 0.025));
+            suspension.leafInterleafViscousNsPerM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "leafInterleafViscousNsPerM", 250.0));
+            suspension.leafAxleWrapStiffnessNmPerRad = static_cast<float>(luaFieldNumber(
+                api, state, -1, "leafAxleWrapStiffnessNmPerRad", 16000.0));
+            suspension.leafAxleWrapDampingNmsPerRad = static_cast<float>(luaFieldNumber(
+                api, state, -1, "leafAxleWrapDampingNmsPerRad", 1200.0));
+            suspension.leafAxleWrapInertiaKgM2 = static_cast<float>(luaFieldNumber(
+                api, state, -1, "leafAxleWrapInertiaKgM2", 5.0));
+            suspension.leafAxleWrapJackingNPerRad = static_cast<float>(luaFieldNumber(
+                api, state, -1, "leafAxleWrapJackingNPerRad", 1800.0));
+            suspension.motorcycleRearSprocketPitchRadiusM = static_cast<float>(luaFieldNumber(
+                api, state, -1, "motorcycleRearSprocketPitchRadiusM", 0.105));
+            suspension.twistBeamTorsionalStiffnessNmPerRad = static_cast<float>(luaFieldNumber(
+                api, state, -1, "twistBeamTorsionalStiffnessNmPerRad", 14000.0));
+            suspension.twistBeamTorsionalDampingNmsPerRad = static_cast<float>(luaFieldNumber(
+                api, state, -1, "twistBeamTorsionalDampingNmsPerRad", 900.0));
             source.suspensions.push_back(std::move(suspension));
             popLuaValues(api, state);
         }

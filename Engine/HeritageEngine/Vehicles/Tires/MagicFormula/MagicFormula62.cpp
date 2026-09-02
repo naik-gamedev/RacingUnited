@@ -150,26 +150,27 @@ TurnSlipState evaluateTurnSlipState(
     // spin torque. These expressions are kept isolated so a future equation-
     // parity validation against a licensed/reference implementation can
     // replace individual terms without touching the vehicle solver.
-    const VehicleScalar Bxp = (p.pDxP1 + p.pDxP2 * s.dfz)
+    // MF6.2 turn-slip peak reductions use a multiplicative load term.
+    const VehicleScalar Bxp = p.pDxP1 * (1.0 + p.pDxP2 * s.dfz)
         * std::cos(std::atan(p.pDxP3 * s.kappa));
     out.zetaLongitudinalPeak = std::clamp(
         std::cos(std::atan(Bxp * out.normalizedSpin)),
         VehicleScalar{0.0}, VehicleScalar{1.0});
 
-    const VehicleScalar Byp = (p.pDyP1 + p.pDyP2 * s.dfz)
+    const VehicleScalar Byp = p.pDyP1 * (1.0 + p.pDyP2 * s.dfz)
         * std::cos(std::atan(p.pDyP3 * std::tan(s.alpha)));
-    const VehicleScalar signedRootSpin = signNonZero(out.normalizedSpin)
-        * std::sqrt(std::abs(out.normalizedSpin));
-    const VehicleScalar lateralSpinArgument = out.normalizedSpin
-        + p.pDyP4 * signedRootSpin;
+    // Grip/stiffness reductions are symmetric in turn-slip direction; PHYP
+    // below owns the signed lateral shift.
+    const VehicleScalar spinMagnitude = std::abs(out.normalizedSpin);
+    const VehicleScalar lateralSpinArgument = spinMagnitude
+        + p.pDyP4 * std::sqrt(spinMagnitude);
     out.zetaLateralPeak = std::clamp(
         std::cos(std::atan(Byp * lateralSpinArgument)),
         VehicleScalar{0.0}, VehicleScalar{1.0});
 
-    const VehicleScalar corneringCos = std::cos(
-        std::atan(p.pKyP1 * out.normalizedSpin));
     out.zetaCorneringStiffness = std::clamp(
-        corneringCos * corneringCos,
+        std::cos(std::atan(
+            p.pKyP1 * out.normalizedSpin * out.normalizedSpin)),
         VehicleScalar{0.0}, VehicleScalar{1.0});
 
     const VehicleScalar camberReduction = std::clamp(
@@ -189,7 +190,6 @@ TurnSlipState evaluateTurnSlipState(
     // QDRP1 defines the MF6.2 rolling turn-slip moment peak. QCRP1 is
     // intentionally *not* used here: its documented role is constant turning
     // at zero forward speed, which TIRE03 handles in TireContactPatch.
-    const VehicleScalar spinMagnitude = std::abs(out.normalizedSpin);
     const VehicleScalar build = (2.0 / kPi)
         * std::atan(spinMagnitude);
     const VehicleScalar sideSlipReduction = std::clamp(
@@ -310,38 +310,91 @@ LateralState evaluateLateral(
     const VehicleScalar Dy = out.mu * s.evaluatedLoadN
         * turn.zetaLateralPeak;
 
+    const VehicleScalar stiffnessScale = std::max(input.stiffnessScale, 0.0);
+    const VehicleScalar frictionScale = std::max(input.frictionScale, 0.0);
+
     const VehicleScalar loadDenominator =
         (p.pKy2 + p.pKy5 * gammaSquared)
         * (1.0 + p.ppY2 * s.dpi)
         * nominalLoad;
-    out.corneringStiffnessNPerRad = p.pKy1 * nominalLoad
+    const VehicleScalar corneringStiffnessWithoutTurn = p.pKy1 * nominalLoad
         * (1.0 + p.ppY1 * s.dpi)
         * std::sin(p.pKy4 * std::atan(
             s.evaluatedLoadN / safeDenominator(loadDenominator)))
         * (1.0 - p.pKy3 * std::abs(s.gamma))
         * p.lKya
-        * turn.zetaCorneringStiffness
-        * std::max(input.stiffnessScale, 0.0);
-    out.camberStiffnessNPerRad = (p.pKy6 + p.pKy7 * s.dfz)
+        * stiffnessScale;
+    out.corneringStiffnessNPerRad = corneringStiffnessWithoutTurn
+        * turn.zetaCorneringStiffness;
+
+    const VehicleScalar camberStiffness0 = (p.pKy6 + p.pKy7 * s.dfz)
         * (1.0 + p.ppY5 * s.dpi)
         * s.evaluatedLoadN
         * p.lKygamma
-        * turn.zetaCamberStiffness
-        * std::max(input.stiffnessScale, 0.0);
+        * stiffnessScale;
+    out.camberStiffnessNPerRad = camberStiffness0
+        * turn.zetaCamberStiffness;
 
+    // MF6.2 applies zeta2 to both lateral vertical-shift terms. This matters
+    // under turn slip because otherwise an unscaled offset can dominate while
+    // the lateral peak itself is being reduced.
     const VehicleScalar SVyGamma = s.evaluatedLoadN
         * (p.pVy3 + p.pVy4 * s.dfz)
         * s.gamma * p.lKygamma * p.lMuy
-        * std::max(input.frictionScale, 0.0);
-    const VehicleScalar SHyGamma =
-        (out.camberStiffnessNPerRad * s.gamma - SVyGamma)
-        / safeDenominator(out.corneringStiffnessNPerRad);
-    const VehicleScalar SHy0 = (p.pHy1 + p.pHy2 * s.dfz) * p.lHy;
-    out.SHy = SHy0 + SHyGamma;
-
+        * frictionScale
+        * turn.zetaLateralPeak;
     const VehicleScalar SVy0 = s.evaluatedLoadN
         * (p.pVy1 + p.pVy2 * s.dfz) * p.lVy * p.lMuy
-        * std::max(input.frictionScale, 0.0);
+        * frictionScale
+        * turn.zetaLateralPeak;
+
+    const VehicleScalar SHy0 = (p.pHy1 + p.pHy2 * s.dfz) * p.lHy;
+    const bool hasTurnSlip = std::abs(turn.normalizedSpin) > kEpsilon;
+    if (!hasTurnSlip)
+    {
+        const VehicleScalar SHyGamma =
+            (camberStiffness0 * s.gamma - SVyGamma)
+            / safeDenominator(out.corneringStiffnessNPerRad);
+        out.SHy = SHy0 + SHyGamma;
+    }
+    else
+    {
+        // Complete the public MF6.2 PHYP branch. With turn slip active zeta0
+        // is zero and zeta4 replaces the ordinary camber horizontal shift.
+        // Ky-alpha-0 is the zero-camber/no-turn cornering stiffness used by
+        // BHyPhi; epsilon-gamma is the PECP camber/spin reduction.
+        const VehicleScalar loadDenominator0 = p.pKy2
+            * (1.0 + p.ppY2 * s.dpi) * nominalLoad;
+        const VehicleScalar corneringStiffness0 = p.pKy1 * nominalLoad
+            * (1.0 + p.ppY1 * s.dpi)
+            * std::sin(p.pKy4 * std::atan(
+                s.evaluatedLoadN / safeDenominator(loadDenominator0)))
+            * p.lKya * stiffnessScale;
+        const VehicleScalar epsilonGamma = std::clamp(
+            p.pEcP1 * (1.0 + p.pEcP2 * s.dfz),
+            VehicleScalar{-0.95}, VehicleScalar{0.95});
+        const VehicleScalar KyRPhi0 = camberStiffness0
+            / safeDenominator(1.0 - epsilonGamma);
+        const VehicleScalar CHyPhi = p.pHyP1;
+        const VehicleScalar DHyPhi = p.pHyP2 + p.pHyP3 * s.dfz;
+        const VehicleScalar EHyPhi = p.pHyP4;
+
+        VehicleScalar SHyPhi = 0.0;
+        const VehicleScalar shapeDenominator =
+            CHyPhi * DHyPhi * corneringStiffness0;
+        if (std::abs(shapeDenominator) > kEpsilon)
+        {
+            const VehicleScalar BHyPhi = -KyRPhi0
+                / shapeDenominator;
+            const VehicleScalar x = BHyPhi * turn.normalizedSpin;
+            SHyPhi = DHyPhi * std::sin(CHyPhi * std::atan(
+                x - EHyPhi * (x - std::atan(x))));
+        }
+        const VehicleScalar zeta4 = 1.0 + SHyPhi
+            - SVyGamma / safeDenominator(out.corneringStiffnessNPerRad);
+        out.SHy = SHy0 + (zeta4 - 1.0);
+    }
+
     out.SVy = SVy0 + SVyGamma;
 
     const VehicleScalar alphaY = s.alpha + out.SHy;
@@ -363,7 +416,8 @@ LateralState evaluateLateral(
 
     const VehicleScalar DvyKappa = out.mu * s.evaluatedLoadN
         * (p.rVy1 + p.rVy2 * s.dfz + p.rVy3 * s.gamma)
-        * std::cos(std::atan(p.rVy4 * s.alpha));
+        * std::cos(std::atan(p.rVy4 * s.alpha))
+        * turn.zetaLateralPeak;
     out.SVyKappa = DvyKappa
         * std::sin(p.rVy5 * std::atan(p.rVy6 * s.kappa))
         * p.lVykappa;

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
 
 namespace heritage::vehicles {
@@ -299,6 +300,91 @@ bool VehicleSystem::wheelState(
         return false;
     }
     value = slot->record.wheels[wheelIndex].state;
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::measureWheelGeometry(
+    VehicleHandle handle,
+    std::size_t frontLeftWheelIndex,
+    std::size_t frontRightWheelIndex,
+    std::size_t rearLeftWheelIndex,
+    std::size_t rearRightWheelIndex,
+    VehicleWheelGeometryMeasurement& value) const
+{
+    value = {};
+    const Slot* slot = resolve(handle);
+    const std::size_t wheelCountValue = slot ? slot->record.wheels.size() : 0;
+    const std::size_t indices[] = {
+        frontLeftWheelIndex,
+        frontRightWheelIndex,
+        rearLeftWheelIndex,
+        rearRightWheelIndex
+    };
+    if (!slot
+        || frontLeftWheelIndex == frontRightWheelIndex
+        || frontLeftWheelIndex == rearLeftWheelIndex
+        || frontLeftWheelIndex == rearRightWheelIndex
+        || frontRightWheelIndex == rearLeftWheelIndex
+        || frontRightWheelIndex == rearRightWheelIndex
+        || rearLeftWheelIndex == rearRightWheelIndex
+        || std::any_of(std::begin(indices), std::end(indices),
+            [wheelCountValue](std::size_t index) {
+                return index >= wheelCountValue;
+            }))
+    {
+        setError("Vehicle.MeasureWheelGeometry received an invalid vehicle or four-corner wheel mapping.");
+        return false;
+    }
+
+    const WheelState& frontLeft = slot->record.wheels[frontLeftWheelIndex].state;
+    const WheelState& frontRight = slot->record.wheels[frontRightWheelIndex].state;
+    const WheelState& rearLeft = slot->record.wheels[rearLeftWheelIndex].state;
+    const WheelState& rearRight = slot->record.wheels[rearRightWheelIndex].state;
+
+    value.frontAxleCenterWorld = scale(
+        add(frontLeft.worldCenter, frontRight.worldCenter), 0.5);
+    value.rearAxleCenterWorld = scale(
+        add(rearLeft.worldCenter, rearRight.worldCenter), 0.5);
+
+    const heritage::math::Vec3 frontSpan = subtract(
+        frontRight.worldCenter, frontLeft.worldCenter);
+    const heritage::math::Vec3 rearSpan = subtract(
+        rearRight.worldCenter, rearLeft.worldCenter);
+    const heritage::math::Vec3 axleSpan = subtract(
+        value.frontAxleCenterWorld, value.rearAxleCenterWorld);
+    // Centre spans are unaffected by steering angle. They provide a much more
+    // stable lateral measurement axis than averaging steered front uprights.
+    // Symmetric camber cancels in the averaged up axis; their cross product is
+    // the chassis-forward axis used for projected wheelbase.
+    const heritage::math::Vec3 rightAxis = normalized(
+        add(frontSpan, rearSpan), { 1.0f, 0.0f, 0.0f });
+    const heritage::math::Vec3 upAxis = normalized(
+        add(add(frontLeft.worldWheelUp, frontRight.worldWheelUp),
+            add(rearLeft.worldWheelUp, rearRight.worldWheelUp)),
+        { 0.0f, 1.0f, 0.0f });
+    const heritage::math::Vec3 forwardAxis = normalized(
+        cross(rightAxis, upAxis), { 0.0f, 0.0f, 1.0f });
+    value.frontTrackM = std::abs(static_cast<VehicleScalar>(
+        dot(frontSpan, rightAxis)));
+    value.rearTrackM = std::abs(static_cast<VehicleScalar>(
+        dot(rearSpan, rightAxis)));
+    value.wheelbaseM = std::abs(static_cast<VehicleScalar>(
+        dot(axleSpan, forwardAxis)));
+    value.spatialFrontTrackM = static_cast<VehicleScalar>(length(frontSpan));
+    value.spatialRearTrackM = static_cast<VehicleScalar>(length(rearSpan));
+    value.spatialWheelbaseM = static_cast<VehicleScalar>(length(axleSpan));
+    value.valid = finiteFloat(static_cast<float>(value.frontTrackM))
+        && finiteFloat(static_cast<float>(value.rearTrackM))
+        && finiteFloat(static_cast<float>(value.wheelbaseM))
+        && value.frontTrackM > 0.0
+        && value.rearTrackM > 0.0
+        && value.wheelbaseM > 0.0;
+    if (!value.valid)
+    {
+        setError("Vehicle.MeasureWheelGeometry could not reconstruct finite four-corner geometry.");
+        return false;
+    }
     clearError();
     return true;
 }

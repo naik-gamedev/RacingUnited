@@ -51,6 +51,8 @@ uniform sampler3D uShapeNoise;
 uniform sampler3D uErosionNoise;
 uniform sampler2D uCurveLut;
 uniform samplerCube uEnvironmentMap;
+uniform samplerCube uEnvironmentMapPrevious;
+uniform float uEnvironmentBlend;
 uniform sampler2D uPbrTransmittanceLut;
 uniform bool uPbrAtmosphereValid;
 uniform bool uMicroErosion;
@@ -60,6 +62,7 @@ uniform sampler2D uSceneDepth;
 uniform sampler2DMS uSceneDepthMS;
 uniform int uSceneDepthSamples;
 uniform sampler2D uSceneColor;
+uniform sampler2DMS uSceneColorMS;
 uniform bool uPerceptualBlending;
 
 const float PI=3.14159265358979323846;
@@ -485,6 +488,15 @@ float sceneDepthAt(vec2 uv)
     ivec2 sizeMs=textureSize(uSceneDepthMS);ivec2 p=clamp(ivec2(uv*vec2(sizeMs)),ivec2(0),sizeMs-1);
     float d=0.0;int n=min(uSceneDepthSamples,16);for(int i=0;i<n;++i)d=max(d,texelFetch(uSceneDepthMS,p,i).r);return d;
 }
+vec3 sceneColorAt(vec2 uv)
+{
+    if(uSceneDepthSamples<=1)return texture(uSceneColor,uv).rgb;
+    ivec2 sizeMs=textureSize(uSceneColorMS);
+    ivec2 p=clamp(ivec2(uv*vec2(sizeMs)),ivec2(0),sizeMs-1);
+    vec3 color=vec3(0.0);int n=min(uSceneDepthSamples,16);
+    for(int i=0;i<n;++i)color+=texelFetch(uSceneColorMS,p,i).rgb;
+    return color/float(max(n,1));
+}
 vec3 reconstructRelativeAtDepth(vec2 uv,float depth)
 {
     vec4 v=inverse(uProjection)*vec4(uv*2.0-1.0,depth*2.0-1.0,1.0);
@@ -601,14 +613,20 @@ void main()
     vec3 sunDirection=normalize(uSunDirection);
     vec3 moonDirection=normalize(uMoonDirection);
     vec3 sunRadiance=uSunColor*PI*max(uSunIntensity,0.0)*physicalCelestialTransmission(meanPosition,sunDirection);
-    vec3 moonRadiance=uMoonColor*PI*max(uMoonIntensity,0.0)*MOON_CLOUD_SCATTER_EXPOSURE*physicalCelestialTransmission(meanPosition,moonDirection);
-    vec3 ambientTop=max(textureLod(uEnvironmentMap,vec3(0.0,1.0,0.0),4.0).rgb,vec3(0.0));
-    vec3 ambientBottom=max(textureLod(uEnvironmentMap,vec3(0.0,-1.0,0.0),4.0).rgb,vec3(0.0));
+    vec3 moonAtmosphereTransmission=physicalCelestialTransmission(meanPosition,moonDirection);
+    float moonAtmosphereVisibility=clamp(dot(moonAtmosphereTransmission,vec3(0.2126,0.7152,0.0722)),0.0,1.0);
+    // CELESTIAL05: atmospheric extinction may dim moonlight near the horizon,
+    // but its RGB transmittance must not turn cloud illumination into a red
+    // sunset. Preserve lunar colour and use atmospheric transmission as scalar
+    // visibility only.
+    vec3 moonRadiance=uMoonColor*PI*max(uMoonIntensity,0.0)*MOON_CLOUD_SCATTER_EXPOSURE*moonAtmosphereVisibility;
+    vec3 ambientTop=max(mix(textureLod(uEnvironmentMapPrevious,vec3(0.0,1.0,0.0),4.0).rgb,textureLod(uEnvironmentMap,vec3(0.0,1.0,0.0),4.0).rgb,uEnvironmentBlend),vec3(0.0));
+    vec3 ambientBottom=max(mix(textureLod(uEnvironmentMapPrevious,vec3(0.0,-1.0,0.0),4.0).rgb,textureLod(uEnvironmentMap,vec3(0.0,-1.0,0.0),4.0).rgb,uEnvironmentBlend),vec3(0.0));
     vec3 ambient=mix(ambientBottom,ambientTop,relativeHeight);
     // The PBSKY sky colors are a live-frame fallback for a reflection cubemap
     // that may update asynchronously; this keeps sunrise/sunset cloud ambient
     // synchronized with the current physical atmosphere without art-tint hacks.
-    ambient=mix(ambient,max(mix(uSkyHorizon,uSkyZenith,relativeHeight),vec3(0.0)),0.55);
+    ambient=mix(ambient,max(mix(uSkyHorizon,uSkyZenith,relativeHeight),vec3(0.0)),0.82);
     // CELESTIAL01: Sun and Moon illuminate the same physical cloud volume
     // independently. Twilight can therefore contain both warm solar and cool
     // lunar scattering without synthesizing a single cloud-light direction.
@@ -618,14 +636,15 @@ void main()
 
     vec4 clip=uProjection*uView*vec4(rayDirection*result.meanDistance,1.0);
     CloudDepth=clamp(clip.z/max(abs(clip.w),1e-8)*0.5+0.5,0.0,1.0);
-    float finalTransmittance=uPerceptualBlending?perceptualTransmittance(texture(uSceneColor,vUv).rgb,result.transmittance):result.transmittance;
+    float finalTransmittance=uPerceptualBlending?perceptualTransmittance(sceneColorAt(vUv),result.transmittance):result.transmittance;
     FragColor=vec4(max(color,vec3(0.0)),sat(finalTransmittance));
 }
 )glsl";
 
 const char* kCloudCombineFragmentShader = R"glsl(#version 460 core
 in vec2 vUv;out vec4 FragColor;
-uniform sampler2D uCloudTexture;uniform sampler2D uSceneTexture;uniform bool uBilateral;
+uniform sampler2D uCloudTexture;uniform sampler2D uSceneTexture;uniform sampler2DMS uSceneTextureMS;
+uniform int uSceneSamples;uniform bool uBilateral;
 // CLOUDURP15E6: upstream Pass 1 + Pass 2 translation. The cloud lighting is
 // upscaled, composed over the already-rendered scene, and the cloud
 // transmittance is stored in alpha as the temporal mask. The temporal resolve
@@ -660,10 +679,19 @@ vec4 upscaleCloud(vec2 uv)
     cloud.a=mix(center.a,blurred.a,0.16+0.32*softness);
     return cloud;
 }
+vec3 sceneColorAt(vec2 uv)
+{
+    if(uSceneSamples<=1)return texture(uSceneTexture,uv).rgb;
+    ivec2 sizeMs=textureSize(uSceneTextureMS);
+    ivec2 p=clamp(ivec2(uv*vec2(sizeMs)),ivec2(0),sizeMs-1);
+    vec3 color=vec3(0.0);int n=min(uSceneSamples,16);
+    for(int i=0;i<n;++i)color+=texelFetch(uSceneTextureMS,p,i).rgb;
+    return color/float(max(n,1));
+}
 void main()
 {
     vec4 cloud=upscaleCloud(vUv);
-    vec3 scene=texture(uSceneTexture,vUv).rgb;
+    vec3 scene=sceneColorAt(vUv);
     FragColor=vec4(cloud.rgb+scene*cloud.a,cloud.a);
 }
 )glsl";
@@ -673,7 +701,7 @@ void main()
 // resolve). All prior Heritage adaptive cloud-TAA classifiers are retired.
 const char* kCloudTemporalFragmentShader = R"glsl(#version 460 core
 in vec2 vUv;out vec4 FragColor;
-uniform sampler2D uCurrentTexture;uniform sampler2D uHistoryTexture;uniform bool uHistoryValid;
+uniform sampler2D uCurrentTexture;uniform sampler2D uHistoryTexture;uniform bool uHistoryValid;uniform float uLightingChange;
 uniform sampler2D uSceneDepth;uniform sampler2DMS uSceneDepthMS;uniform int uSceneDepthSamples;uniform bool uLocalClouds;
 uniform mat4 uCurrentView,uPreviousView,uCurrentProjection,uPreviousProjection;uniform vec3 uCameraDelta;
 const float accumulationFactor=0.985;
@@ -786,6 +814,14 @@ void main()
                                       adaptiveAccumulation-abs(velocity.y)*adaptiveAccumulation),0.0,1.0);
     intensity=max(intensity,adaptiveIntensity);
 
+    // CELESTIAL06: cloud history contains resolved scene+cloud RGB. During a
+    // fast day/night cycle, very strong history can otherwise preserve the
+    // previous lighting state long enough for the AABB clamp to accept/reject
+    // it on alternating stochastic frames. Fade history authority as the one
+    // shared day/night scalar moves; time jumps reject history immediately.
+    float lightingHistory=1.0-smoothstep(0.00005,0.00070,uLightingChange);
+    intensity*=lightingHistory;
+
     // CLOUDURP15EB: temporalize cloud transmittance as well as color. Clamp it
     // to the current five-pixel min/max before accumulation, so alpha grain can
     // converge without allowing stale cloud occupancy outside current evidence.
@@ -809,6 +845,7 @@ uniform mat4 uView;
 uniform mat4 uProjection;
 uniform vec3 uCelestialLightDirection;
 uniform float uDaylightFactor;
+uniform float uShadowStrength;
 
 float sceneDepthAt(vec2 uv)
 {
@@ -831,7 +868,7 @@ void main()
     // than an optional per-material side path.  The scene depth reconstructs
     // the opaque receiver in the same camera-relative world coordinates used
     // by the camera-centred cloud-shadow cookie.
-    if(!uCloudShadowValid||uCloudShadowHalfRangeM<=1.0||uCelestialLightDirection.y<=0.01)
+    if(!uCloudShadowValid||uCloudShadowHalfRangeM<=1.0||uShadowStrength<=0.0001)
     {
         FragColor=vec4(1.0);return;
     }
@@ -851,9 +888,12 @@ void main()
     // Sun shadows are stronger; moon shadows remain visible without crushing
     // the already-dark nighttime scene. Ambient sky still survives because
     // this pass intentionally applies only a bounded fraction of optical depth.
-    float receiverStrength=mix(0.44,0.64,daylight);
+    // CELESTIAL08: retain the moving cloud-shadow shape but reduce its direct
+    // scene-darkening authority to one tenth of CELESTIAL07.
+    float receiverStrength=mix(0.044,0.064,daylight)*clamp(uShadowStrength,0.0,1.0);
     float luminanceTransmission=mix(1.0,transmission,receiverStrength);
-    vec3 coolTint=mix(vec3(0.88,0.93,1.00),vec3(1.0),transmission);
+    vec3 fullCoolTint=mix(vec3(0.88,0.93,1.00),vec3(1.0),transmission);
+    vec3 coolTint=mix(vec3(1.0),fullCoolTint,clamp(uShadowStrength,0.0,1.0)*0.10);
     FragColor=vec4(clamp(coolTint*luminanceTransmission,vec3(0.0),vec3(1.0)),1.0);
 }
 )glsl";
@@ -1041,10 +1081,11 @@ void evaluateCloudProperties(vec3 positionPS,bool cheapVersion,bool lightSamplin
 }
 void main()
 {
-    // CELESTIAL01: one cloud optical-depth cookie follows Heritage's continuous
-    // astronomical key light. It is Sun-directed by day, Moon-directed by night
-    // and remains continuous through twilight. Trace the same 15 interior
-    // samples used by VolumetricCloudsShadows.hlsl (i=1..15 of 16 segments).
+    // CELESTIAL07: one cloud optical-depth cookie follows one *physical* body
+    // at a time. CPU ownership fades the Sun cookie out before low-angle tangent
+    // rays become unstable, leaves twilight ambient-dominated, then fades a real
+    // Moon cookie in. Never trace the synthetic Sun/Moon scene-key direction.
+    // Keep the same 15 interior samples used by VolumetricCloudsShadows.hlsl.
     vec2 rel=(vUv-0.5)*(2.0*uHalfRange);
     vec3 rayOrigin=vec3(uCameraGlobal.x+rel.x,EARTH_RADIUS+uCameraGlobal.y,uCameraGlobal.z+rel.y);
     vec3 rayDirection=normalize(uCelestialLightDirection);

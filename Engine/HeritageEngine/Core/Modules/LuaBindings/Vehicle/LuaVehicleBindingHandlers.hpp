@@ -53,6 +53,7 @@ struct LuaVehicleBindingHandlers
     static int luaVehicleEstimateMassProperties(lua_State* state);
     static int luaVehicleSetWheelSuspensionModel(lua_State* state);
     static int luaVehicleGetWheelSuspensionModel(lua_State* state);
+    static int luaVehicleSolveStaticRideHeight(lua_State* state);
     static int luaVehicleSetWheelSuspensionGeometry(lua_State* state);
     static int luaVehicleGetWheelSuspensionGeometry(lua_State* state);
     static int luaVehicleSetAntiRollBar(lua_State* state);
@@ -71,6 +72,7 @@ struct LuaVehicleBindingHandlers
     static int luaVehicleGetTotalHighRateStepCount(lua_State* state);
     static int luaVehicleGetWheelState(lua_State* state);
     static int luaVehicleGetWheelTelemetry(lua_State* state);
+    static int luaVehicleMeasureWheelGeometry(lua_State* state);
     static int luaVehicleGetWheelContactDiagnostic(lua_State* state);
     static int luaVehicleGetWheelUprightPose(lua_State* state);
     static int luaVehicleGetChassisFlexState(lua_State* state);
@@ -88,6 +90,8 @@ struct LuaVehicleBindingHandlers
     static int luaVehicleSetTireColdInflationPressure(lua_State* state);
     static int luaVehicleTriggerWheelTireFailure(lua_State* state);
     static int luaVehicleTriggerTireFailure(lua_State* state);
+    static int luaVehicleTriggerWheelTireDamageIncident(lua_State* state);
+    static int luaVehicleTriggerTireDamageIncident(lua_State* state);
     static int luaVehicleGetTireColdInflationPressureRange(lua_State* state);
     static int luaVehicleGetTireCarcassLabParameterCount(lua_State* state);
     static int luaVehicleGetTireCarcassLabParameterInfo(lua_State* state);

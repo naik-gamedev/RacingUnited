@@ -20,30 +20,50 @@ bool mapHeritageExtensions(
 #define MAP_THERMAL(KEY, MEMBER) mapScalar(raw, result.data, "HERITAGE_THERMAL", KEY, result.data.thermal.MEMBER)
     MAP_THERMAL("REFERENCE_TEMP_C", referenceTemperatureC);
     MAP_THERMAL("INITIAL_TREAD_C", initialTreadTemperatureC);
+    MAP_THERMAL("INITIAL_BELT_C", initialBeltTemperatureC);
     MAP_THERMAL("INITIAL_CARCASS_C", initialCarcassTemperatureC);
+    MAP_THERMAL("INITIAL_INNER_SIDEWALL_C", initialInnerSidewallTemperatureC);
+    MAP_THERMAL("INITIAL_OUTER_SIDEWALL_C", initialOuterSidewallTemperatureC);
     MAP_THERMAL("INITIAL_GAS_C", initialGasTemperatureC);
     MAP_THERMAL("INITIAL_RIM_C", initialRimTemperatureC);
     MAP_THERMAL("AMBIENT_TEMP_C", ambientTemperatureC);
     MAP_THERMAL("ROAD_TEMP_C", roadTemperatureC);
     MAP_THERMAL("AMBIENT_PRESSURE_PA", ambientPressurePa);
     MAP_THERMAL("TREAD_CAPACITY_JPK", treadHeatCapacityJPerK);
+    MAP_THERMAL("BELT_CAPACITY_JPK", beltHeatCapacityJPerK);
     MAP_THERMAL("CARCASS_CAPACITY_JPK", carcassHeatCapacityJPerK);
+    MAP_THERMAL("INNER_SIDEWALL_CAPACITY_JPK", innerSidewallHeatCapacityJPerK);
+    MAP_THERMAL("OUTER_SIDEWALL_CAPACITY_JPK", outerSidewallHeatCapacityJPerK);
     MAP_THERMAL("GAS_CAPACITY_JPK", gasHeatCapacityJPerK);
     MAP_THERMAL("RIM_CAPACITY_JPK", rimHeatCapacityJPerK);
+    MAP_THERMAL("K_TREAD_BELT_WPK", treadToBeltConductanceWPerK);
     MAP_THERMAL("K_TREAD_CARCASS_WPK", treadToCarcassConductanceWPerK);
+    MAP_THERMAL("K_BELT_CARCASS_WPK", beltToCarcassConductanceWPerK);
+    MAP_THERMAL("K_CARCASS_INNER_SIDEWALL_WPK", carcassToInnerSidewallConductanceWPerK);
+    MAP_THERMAL("K_CARCASS_OUTER_SIDEWALL_WPK", carcassToOuterSidewallConductanceWPerK);
     MAP_THERMAL("K_TREAD_ROAD_WPK", treadToRoadConductanceWPerK);
     MAP_THERMAL("K_TREAD_AIR_WPK", treadToAirConductanceWPerK);
     MAP_THERMAL("K_CARCASS_AIR_WPK", carcassToAirConductanceWPerK);
+    MAP_THERMAL("K_INNER_SIDEWALL_AIR_WPK", innerSidewallToAirConductanceWPerK);
+    MAP_THERMAL("K_OUTER_SIDEWALL_AIR_WPK", outerSidewallToAirConductanceWPerK);
     MAP_THERMAL("K_CARCASS_GAS_WPK", carcassToGasConductanceWPerK);
+    MAP_THERMAL("K_INNER_SIDEWALL_GAS_WPK", innerSidewallToGasConductanceWPerK);
+    MAP_THERMAL("K_OUTER_SIDEWALL_GAS_WPK", outerSidewallToGasConductanceWPerK);
     MAP_THERMAL("K_GAS_AMBIENT_WPK", gasToAmbientConductanceWPerK);
     MAP_THERMAL("K_CARCASS_RIM_WPK", carcassToRimConductanceWPerK);
+    MAP_THERMAL("K_INNER_SIDEWALL_RIM_WPK", innerSidewallToRimConductanceWPerK);
+    MAP_THERMAL("K_OUTER_SIDEWALL_RIM_WPK", outerSidewallToRimConductanceWPerK);
     MAP_THERMAL("K_RIM_AIR_WPK", rimToAirConductanceWPerK);
     MAP_THERMAL("K_TREAD_AIR_SPEED", treadAirSpeedConductanceWPerKPerMps);
     MAP_THERMAL("K_CARCASS_AIR_SPEED", carcassAirSpeedConductanceWPerKPerMps);
+    MAP_THERMAL("K_SIDEWALL_AIR_SPEED", sidewallAirSpeedConductanceWPerKPerMps);
     MAP_THERMAL("K_RIM_AIR_SPEED", rimAirSpeedConductanceWPerKPerMps);
     MAP_THERMAL("SLIP_HEAT_TREAD_FRACTION", slipHeatFractionToTread);
+    MAP_THERMAL("SLIP_HEAT_BELT_FRACTION", slipHeatFractionToBelt);
     MAP_THERMAL("SLIP_HEAT_EFFICIENCY", slipHeatEfficiency);
     MAP_THERMAL("CARCASS_LOSS_EFFICIENCY", carcassLossHeatEfficiency);
+    MAP_THERMAL("CARCASS_LOSS_BELT_FRACTION", carcassLossHeatFractionToBelt);
+    MAP_THERMAL("SIDEWALL_FLEX_HEAT_FRACTION", sidewallFlexHeatFraction);
     MAP_THERMAL("BRAKE_HEAT_TO_RIM_FRACTION", brakeHeatFractionToRim);
     MAP_THERMAL("OPTIMUM_TREAD_C", optimumTreadTemperatureC);
     MAP_THERMAL("COLD_SPAN_C", coldTemperatureSpanC);
@@ -64,6 +84,65 @@ bool mapHeritageExtensions(
             result.errorMessage = "Invalid [HERITAGE_THERMAL] clean-room thermal parameter set.";
             return false;
         }
+    }
+
+    // TIRE46 construction/damage model. Historical tire values may be
+    // evidence-informed estimates with explicit provenance/confidence; the
+    // section is Heritage-owned and does not imply proprietary manufacturer data.
+    int damageEnabled = 0;
+    if (integerFrom(raw, "HERITAGE_DAMAGE", "ENABLED", damageEnabled))
+    {
+        ++result.data.mappedAssignmentCount;
+        result.data.hasHeritageDamageModel = damageEnabled != 0;
+        result.data.failure.enabled = result.data.hasHeritageDamageModel;
+    }
+#define MAP_DAMAGE(KEY, MEMBER) mapScalar(raw, result.data, "HERITAGE_DAMAGE", KEY, result.data.failure.MEMBER)
+    MAP_DAMAGE("DISCHARGE_COEFFICIENT", dischargeCoefficient);
+    MAP_DAMAGE("SLOW_PUNCTURE_AREA_M2", slowPunctureAreaM2);
+    MAP_DAMAGE("RAPID_LOSS_AREA_M2", rapidPressureLossAreaM2);
+    MAP_DAMAGE("BLOWOUT_AREA_M2", blowoutAreaM2);
+    MAP_DAMAGE("TREAD_CUT_AREA_M2", treadCutAreaM2);
+    MAP_DAMAGE("SIDEWALL_CUT_AREA_M2", sidewallCutAreaM2);
+    MAP_DAMAGE("VALVE_LEAK_AREA_M2", valveLeakAreaM2);
+    MAP_DAMAGE("BEAD_LEAK_AREA_M2", beadLeakAreaM2);
+    MAP_DAMAGE("UNDERINFLATION_DAMAGE_START_RATIO", underinflationDamageStartRatio);
+    MAP_DAMAGE("COLLAPSED_PRESSURE_RATIO", collapsedPressureRatio);
+    MAP_DAMAGE("COLLAPSE_LOADED_DELAY_S", collapseLoadedDelaySeconds);
+    MAP_DAMAGE("MAX_SAFE_CARCASS_TEMP_C", maximumSafeCarcassTemperatureC);
+    MAP_DAMAGE("BELT_FATIGUE_REFERENCE_J", beltFatigueReferenceEnergyJ);
+    MAP_DAMAGE("CORD_FATIGUE_REFERENCE_J", cordFatigueReferenceEnergyJ);
+    MAP_DAMAGE("SIDEWALL_FATIGUE_REFERENCE_J", sidewallFatigueReferenceEnergyJ);
+    MAP_DAMAGE("FATIGUE_HEAT_ACCEL_PER_C", fatigueHeatAccelerationPerC);
+    MAP_DAMAGE("FATIGUE_OVERLOAD_EXPONENT", fatigueOverloadExponent);
+    MAP_DAMAGE("GRAINING_COLD_BELOW_OPTIMUM_C", grainingColdThresholdBelowOptimumC);
+    MAP_DAMAGE("GRAINING_BUILD_PER_KJ", grainingBuildPerKJ);
+    MAP_DAMAGE("GRAINING_RECOVERY_PER_S", grainingRecoveryPerSecond);
+    MAP_DAMAGE("BLISTER_TEMP_C", blisterTemperatureC);
+    MAP_DAMAGE("BLISTER_BUILD_PER_KJ", blisterBuildPerKJ);
+    MAP_DAMAGE("BLISTER_RECOVERY_PER_S", blisterRecoveryPerSecond);
+    MAP_DAMAGE("DELAMINATION_TEMP_C", delaminationTemperatureC);
+    MAP_DAMAGE("DELAMINATION_BUILD_PER_S", delaminationBuildPerSecond);
+    MAP_DAMAGE("BEAD_UNSEAT_PRESSURE_RATIO", beadUnseatPressureRatio);
+    MAP_DAMAGE("BEAD_UNSEAT_LATERAL_FORCE_RATIO", beadUnseatLateralForceRatio);
+    MAP_DAMAGE("BEAD_DAMAGE_PER_S", beadDamageRatePerSecond);
+    MAP_DAMAGE("RIM_DAMAGE_POWER_THRESHOLD_W", rimDamagePowerThresholdW);
+    MAP_DAMAGE("RIM_DAMAGE_PER_S", rimDamageRatePerSecond);
+    MAP_DAMAGE("RUNFLAT_LOAD_FRACTION", runFlatSupportLoadFraction);
+    MAP_DAMAGE("RUNFLAT_MAX_SPEED_MPS", runFlatMaximumSpeedMps);
+    MAP_DAMAGE("RUNFLAT_MAX_TEMP_C", runFlatMaximumTemperatureC);
+    MAP_DAMAGE("RUNFLAT_HEALTH_LOSS_PER_S", runFlatHealthLossPerSecond);
+#undef MAP_DAMAGE
+    int runFlatEnabled = 0;
+    if (integerFrom(raw, "HERITAGE_DAMAGE", "RUNFLAT_ENABLED", runFlatEnabled))
+    {
+        ++result.data.mappedAssignmentCount;
+        result.data.failure.runFlatSupportEnabled = runFlatEnabled != 0;
+    }
+    if (result.data.hasHeritageDamageModel
+        && !validTireFailureDescription(result.data.failure))
+    {
+        result.errorMessage = "Invalid [HERITAGE_DAMAGE] construction/failure parameter set.";
+        return false;
     }
 
     // TIRE08 Heritage-owned spatial tread temperature/wear state. This section

@@ -296,6 +296,8 @@ bool renderEngineScene(
                 const double sectionStart = glfwGetTime();
                 const heritage::graphics::EntityMeshRenderTargetState meshTarget{
                     display.spanFBO(),
+                    display.spanColorTexture(),
+                    0,
                     fboX, fboY, fboW, fboH,
                     1,
                     true,
@@ -403,6 +405,8 @@ bool renderEngineScene(
                 : state.resolveFBO.fbo;
             const heritage::graphics::EntityMeshRenderTargetState meshTarget{
                 sceneFramebuffer,
+                needMSAA ? state.msaaFBO.tex : state.resolveFBO.tex,
+                needMSAA ? state.msaaFBO.depthStencilTex : 0,
                 0, 0, rW, rH,
                 needMSAA ? antiAliasing.msaaSamples : 1,
                 false,

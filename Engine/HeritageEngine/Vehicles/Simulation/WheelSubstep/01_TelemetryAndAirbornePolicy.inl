@@ -7,7 +7,10 @@
         if (!thermal.valid)
         {
             state.tireTreadTemperatureC = 20.0;
+            state.tireBeltTemperatureC = 20.0;
             state.tireCarcassTemperatureC = 20.0;
+            state.tireInnerSidewallTemperatureC = 20.0;
+            state.tireOuterSidewallTemperatureC = 20.0;
             state.tireGasTemperatureC = 20.0;
             state.tireRimTemperatureC = 20.0;
             state.tireInflationPressurePa = wheel.tireModel.inflationPressurePa;
@@ -15,6 +18,7 @@
             state.tireThermalStiffnessScale = 1.0;
             state.tireSlipDissipationWatts = 0.0;
             state.tireThermalLossDissipationWatts = 0.0;
+            state.tireSidewallDissipationWatts = 0.0;
             state.tireRoadHeatFlowWatts = 0.0;
             state.tireAirHeatFlowWatts = 0.0;
             state.tireBrakeHeatInputWatts = 0.0;
@@ -22,7 +26,10 @@
             return;
         }
         state.tireTreadTemperatureC = thermal.treadTemperatureC;
+        state.tireBeltTemperatureC = thermal.beltTemperatureC;
         state.tireCarcassTemperatureC = thermal.carcassTemperatureC;
+        state.tireInnerSidewallTemperatureC = thermal.innerSidewallTemperatureC;
+        state.tireOuterSidewallTemperatureC = thermal.outerSidewallTemperatureC;
         state.tireGasTemperatureC = thermal.gasTemperatureC;
         state.tireRimTemperatureC = thermal.rimTemperatureC;
         state.tireInflationPressurePa = thermal.inflationPressurePa;
@@ -30,6 +37,7 @@
         state.tireThermalStiffnessScale = thermal.stiffnessScale;
         state.tireSlipDissipationWatts = thermal.slipDissipationWatts;
         state.tireThermalLossDissipationWatts = thermal.carcassDissipationWatts;
+        state.tireSidewallDissipationWatts = thermal.sidewallDissipationWatts;
         state.tireRoadHeatFlowWatts = thermal.roadHeatFlowWatts;
         state.tireAirHeatFlowWatts = thermal.airHeatFlowWatts;
         state.tireBrakeHeatInputWatts = thermal.brakeHeatInputWatts;
@@ -51,8 +59,26 @@
             ? failure.leakMassFlowKgPerSecond * VehicleScalar{1000.0} : VehicleScalar{0.0};
         state.tireStructuralIntegrity = failure.valid
             ? failure.structuralIntegrity : VehicleScalar{1.0};
+        state.tireBeltIntegrity = failure.valid
+            ? failure.beltIntegrity : VehicleScalar{1.0};
+        state.tireCordIntegrity = failure.valid
+            ? failure.cordIntegrity : VehicleScalar{1.0};
+        state.tireSidewallIntegrity = failure.valid
+            ? failure.sidewallIntegrity : VehicleScalar{1.0};
+        state.tireBeadRetention = failure.valid
+            ? failure.beadRetention : VehicleScalar{1.0};
         state.tireTreadAttachment = failure.valid
             ? failure.treadAttachment : VehicleScalar{1.0};
+        state.tireRimIntegrity = failure.valid
+            ? failure.rimIntegrity : VehicleScalar{1.0};
+        state.tireRunFlatSupportHealth = failure.valid
+            ? failure.runFlatSupportHealth : VehicleScalar{1.0};
+        state.tireTreadGraining = failure.valid
+            ? failure.treadGraining : VehicleScalar{0.0};
+        state.tireTreadBlistering = failure.valid
+            ? failure.treadBlistering : VehicleScalar{0.0};
+        state.tireDelaminationFraction = failure.valid
+            ? failure.delaminationFraction : VehicleScalar{0.0};
         state.tireRimContactFraction = failure.valid
             ? failure.rimContactFraction : VehicleScalar{0.0};
         state.tireFailureEventElapsedSeconds = failure.valid
@@ -283,8 +309,15 @@
     failureReadInput.longitudinalSlipVelocityMps = 0.0;
     failureReadInput.lateralSlipVelocityMps = previousLateralSpeed;
     failureReadInput.radialDissipationWatts = state.tireRadialDissipationWatts;
+    failureReadInput.treadTemperatureC = thermalBefore.valid
+        ? thermalBefore.treadTemperatureC : VehicleScalar{20.0};
+    failureReadInput.optimumTreadTemperatureC =
+        wheel.tireModel.thermal.optimumTreadTemperatureC;
     failureReadInput.carcassTemperatureC = thermalBefore.valid
         ? thermalBefore.carcassTemperatureC : VehicleScalar{20.0};
+    failureReadInput.rimTemperatureC = thermalBefore.valid
+        ? thermalBefore.rimTemperatureC : VehicleScalar{20.0};
+    failureReadInput.camberAngleRadians = radians(state.camberAngleDegrees);
     tires::TireFailureOutput failureBefore = tires::evaluateTireFailureState(
         wheel.tireModel.failure, failureReadInput, wheel.failureState);
     writeFailureTelemetry(failureBefore);
@@ -337,7 +370,12 @@
             failureInput.normalLoadN = 0.0;
             failureInput.forwardSpeedMps = previousLongitudinalSpeed;
             failureInput.gasTemperatureC = airborneThermal.gasTemperatureC;
+            failureInput.treadTemperatureC = airborneThermal.treadTemperatureC;
+            failureInput.optimumTreadTemperatureC =
+                wheel.tireModel.thermal.optimumTreadTemperatureC;
             failureInput.carcassTemperatureC = airborneThermal.carcassTemperatureC;
+            failureInput.rimTemperatureC = airborneThermal.rimTemperatureC;
+            failureInput.camberAngleRadians = radians(state.camberAngleDegrees);
             failureInput.inflationGaugePressurePa = airborneThermal.inflationPressurePa;
             failureBefore = tires::advanceTireFailure(
                 wheel.tireModel.failure, failureInput,

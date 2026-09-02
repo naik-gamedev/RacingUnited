@@ -8,6 +8,114 @@
 namespace heritage::graphics {
 using namespace gltf_internal;
 
+namespace {
+
+bool readPositionAccessorBounds(
+    const JsonValue& root,
+    int accessorIndex,
+    std::array<float, 3>& minimum,
+    std::array<float, 3>& maximum)
+{
+    const JsonValue* accessors = root.find("accessors");
+    if (!accessors || !accessors->isArray()
+        || accessorIndex < 0
+        || static_cast<std::size_t>(accessorIndex) >= accessors->arrayValue.size())
+    {
+        return false;
+    }
+
+    const JsonValue& accessor =
+        accessors->arrayValue[static_cast<std::size_t>(accessorIndex)];
+    const JsonValue* minimumValue = accessor.find("min");
+    const JsonValue* maximumValue = accessor.find("max");
+    if (!minimumValue || !maximumValue
+        || !minimumValue->isArray() || !maximumValue->isArray()
+        || minimumValue->arrayValue.size() < 3
+        || maximumValue->arrayValue.size() < 3)
+    {
+        return false;
+    }
+
+    for (std::size_t axis = 0; axis < 3; ++axis)
+    {
+        if (!minimumValue->arrayValue[axis].isNumber()
+            || !maximumValue->arrayValue[axis].isNumber())
+        {
+            return false;
+        }
+        minimum[axis] = static_cast<float>(
+            minimumValue->arrayValue[axis].asDouble());
+        maximum[axis] = static_cast<float>(
+            maximumValue->arrayValue[axis].asDouble());
+        if (!std::isfinite(minimum[axis]) || !std::isfinite(maximum[axis])
+            || minimum[axis] > maximum[axis])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void buildNodeGeometryBounds(
+    const JsonValue& root,
+    GlbMetadataDocument& document)
+{
+    document.nodeGeometryBounds.assign(document.nodes.size(), {});
+    const JsonValue* nodes = root.find("nodes");
+    const JsonValue* meshes = root.find("meshes");
+    if (!nodes || !nodes->isArray() || !meshes || !meshes->isArray())
+        return;
+
+    const std::size_t nodeCount = std::min(
+        document.nodes.size(), nodes->arrayValue.size());
+    for (std::size_t nodeIndex = 0; nodeIndex < nodeCount; ++nodeIndex)
+    {
+        const JsonValue* meshValue = nodes->arrayValue[nodeIndex].find("mesh");
+        const int meshIndex = meshValue ? meshValue->asInt(-1) : -1;
+        if (meshIndex < 0
+            || static_cast<std::size_t>(meshIndex) >= meshes->arrayValue.size())
+        {
+            continue;
+        }
+
+        const JsonValue* primitives = meshes->arrayValue[
+            static_cast<std::size_t>(meshIndex)].find("primitives");
+        if (!primitives || !primitives->isArray())
+            continue;
+
+        auto& bounds = document.nodeGeometryBounds[nodeIndex];
+        for (const JsonValue& primitive : primitives->arrayValue)
+        {
+            const int positionAccessor = attributeAccessorIndex(
+                primitive.find("attributes"), "POSITION");
+            std::array<float, 3> minimum{};
+            std::array<float, 3> maximum{};
+            if (!readPositionAccessorBounds(
+                    root, positionAccessor, minimum, maximum))
+            {
+                continue;
+            }
+
+            if (!bounds.valid)
+            {
+                bounds.minimum = minimum;
+                bounds.maximum = maximum;
+                bounds.valid = true;
+                continue;
+            }
+            for (std::size_t axis = 0; axis < 3; ++axis)
+            {
+                bounds.minimum[axis] = std::min(
+                    bounds.minimum[axis], minimum[axis]);
+                bounds.maximum[axis] = std::max(
+                    bounds.maximum[axis], maximum[axis]);
+            }
+        }
+    }
+}
+
+} // namespace
+
 bool extractGlbStaticCollisionScene(
     const std::filesystem::path& path,
     GlbStaticCollisionScene& scene,
@@ -124,6 +232,7 @@ bool inspectGlbMetadata(
 
     document.nodes = std::move(metadataMesh.nodes);
     document.rootNodeIndices = std::move(metadataMesh.rootNodeIndices);
+    buildNodeGeometryBounds(root, document);
     errorMessage.clear();
     return true;
 }

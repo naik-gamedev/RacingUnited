@@ -160,37 +160,31 @@ end
 
 MigrateFitmentFactoryDefaultsIfNeeded()
 
--- TIRE45F: the previous prototype startup profile silently applied the midpoint
--- Peugeot alignment (front toe-out, rear -1 degree camber + toe-in). Those
--- values are useful as reference/spec evidence, but they made a neutral GLB
--- wheel look tilted/deformed even when the user had authored no camber. Migrate
--- only untouched legacy factory values; preserve any genuinely customized setup.
-local function MigrateNeutralPrototypeAlignmentIfNeeded()
+-- PEUGEOT_SUSP01: runtime v2 deliberately migrated stock alignment to neutral.
+-- Restore the sourced stock midpoint only when a corner still contains that
+-- untouched all-zero v2 default. Any non-neutral user setup is preserved.
+local function MigrateStockPeugeotAlignmentIfNeeded()
     local versionKey = "vehicle.setup.fitment.runtime_alignment_version"
     local version = Save.GetNumber(versionKey, 1.0)
-    if version >= 2.0 then return end
+    if version >= 3.0 then return end
 
-    local oldFactory = {
-        front = { camber = 0.0, toe = -0.060000 },
-        rear = { camber = -1.0, toe = 0.260000 }
-    }
     for _, descriptor in ipairs(fitmentCorners) do
         local corner = vehicleFitment.corners[descriptor.index]
-        local old = oldFactory[descriptor.axle]
-        if corner ~= nil and old ~= nil then
-            if math.abs(corner.camberDegrees - old.camber) < 0.00001 then
-                corner.camberDegrees = 0.0
-            end
-            if math.abs(corner.toeInDegrees - old.toe) < 0.00001 then
-                corner.toeInDegrees = 0.0
-            end
+        local factory = FactoryAlignment(descriptor.axle)
+        if corner ~= nil
+            and math.abs(corner.camberDegrees) < 0.00001
+            and math.abs(corner.toeInDegrees) < 0.00001 then
+            corner.camberDegrees = factory.camberDegrees or 0.0
+            corner.toeInDegrees = factory.toeInDegrees or 0.0
+            corner.casterDegrees = factory.casterDegrees
+                or corner.casterDegrees
             SaveFitmentCorner(corner)
         end
     end
-    Save.SetNumber(versionKey, 2.0)
+    Save.SetNumber(versionKey, 3.0)
 end
 
-MigrateNeutralPrototypeAlignmentIfNeeded()
+MigrateStockPeugeotAlignmentIfNeeded()
 
 local function NativeAlignmentSigns(corner)
     -- Friendly symmetric setup -> native local rotation convention.

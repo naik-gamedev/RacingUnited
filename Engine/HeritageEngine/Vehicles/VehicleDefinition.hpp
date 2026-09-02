@@ -102,6 +102,16 @@ struct VehicleSuspensionDefinition
     float toeProgressionDegreesPerM2 = 0.0f;
     float motionRatio = 1.0f;
     float maximumForceN = 250000.0f;
+    float leafInterleafFrictionN = 450.0f;
+    float leafInterleafVelocityScaleMps = 0.025f;
+    float leafInterleafViscousNsPerM = 250.0f;
+    float leafAxleWrapStiffnessNmPerRad = 16000.0f;
+    float leafAxleWrapDampingNmsPerRad = 1200.0f;
+    float leafAxleWrapInertiaKgM2 = 5.0f;
+    float leafAxleWrapJackingNPerRad = 1800.0f;
+    float motorcycleRearSprocketPitchRadiusM = 0.105f;
+    float twistBeamTorsionalStiffnessNmPerRad = 14000.0f;
+    float twistBeamTorsionalDampingNmsPerRad = 900.0f;
 };
 
 struct VehicleContactUnitDefinition

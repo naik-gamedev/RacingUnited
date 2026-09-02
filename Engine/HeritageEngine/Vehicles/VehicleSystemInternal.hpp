@@ -346,8 +346,29 @@ inline bool validWheelDescription(const WheelDescription& value)
         && (value.suspensionProvider == SuspensionProviderKind::LinearRaycastV1
             || (value.suspensionProvider == SuspensionProviderKind::MacPhersonStrutV1
                 && validMacPhersonHardpoints(value.macPhersonHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::DoubleWishboneV1
+                && validDoubleWishboneHardpoints(value.doubleWishboneHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::PushrodDoubleWishboneV1
+                && validPushrodDoubleWishboneHardpoints(
+                    value.pushrodDoubleWishboneHardpoints))
             || (value.suspensionProvider == SuspensionProviderKind::TrailingArmTorsionBarV1
-                && validTrailingArmHardpoints(value.trailingArmHardpoints)))
+                && validTrailingArmHardpoints(value.trailingArmHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::LiveAxleV1
+                && validLiveAxleHardpoints(value.liveAxleHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::LeafSpringLiveAxleV1
+                && validLeafSpringLiveAxleHardpoints(value.leafSpringLiveAxleHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::MotorcycleTelescopicForkV1
+                && validMotorcycleForkHardpoints(value.motorcycleForkHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::MotorcycleSwingarmLinkageV1
+                && validMotorcycleSwingarmHardpoints(value.motorcycleSwingarmHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::KartChassisFlexV1
+                && validKartChassisHardpoints(value.kartChassisHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::MultiLinkV1
+                && validMultiLinkHardpoints(value.multiLinkHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::SemiTrailingArmV1
+                && validSemiTrailingArmHardpoints(value.semiTrailingArmHardpoints))
+            || (value.suspensionProvider == SuspensionProviderKind::TwistBeamV1
+                && validTwistBeamHardpoints(value.twistBeamHardpoints)))
         && finiteVec3(value.localSteeringAxis)
         && lengthSquared(value.localSteeringAxis) > kVectorEpsilon
         && finiteFloat(value.staticCamberDegrees)
@@ -372,6 +393,20 @@ inline bool validWheelDescription(const WheelDescription& value)
         && value.suspensionMotionRatio <= 10.0f
         && finiteFloat(value.maximumSuspensionForce)
         && value.maximumSuspensionForce > 0.0f
+        && finiteFloat(value.leafInterleafFrictionN) && value.leafInterleafFrictionN >= 0.0f
+        && finiteFloat(value.leafInterleafVelocityScaleMps) && value.leafInterleafVelocityScaleMps > 0.0001f
+        && finiteFloat(value.leafInterleafViscousNsPerM) && value.leafInterleafViscousNsPerM >= 0.0f
+        && finiteFloat(value.leafAxleWrapStiffnessNmPerRad) && value.leafAxleWrapStiffnessNmPerRad >= 0.0f
+        && finiteFloat(value.leafAxleWrapDampingNmsPerRad) && value.leafAxleWrapDampingNmsPerRad >= 0.0f
+        && finiteFloat(value.leafAxleWrapInertiaKgM2) && value.leafAxleWrapInertiaKgM2 > 0.01f
+        && finiteFloat(value.leafAxleWrapJackingNPerRad) && value.leafAxleWrapJackingNPerRad >= 0.0f
+        && finiteFloat(value.motorcycleRearSprocketPitchRadiusM)
+        && value.motorcycleRearSprocketPitchRadiusM >= 0.02f
+        && value.motorcycleRearSprocketPitchRadiusM <= 0.30f
+        && finiteFloat(value.twistBeamTorsionalStiffnessNmPerRad)
+        && value.twistBeamTorsionalStiffnessNmPerRad >= 0.0f
+        && finiteFloat(value.twistBeamTorsionalDampingNmsPerRad)
+        && value.twistBeamTorsionalDampingNmsPerRad >= 0.0f
         && finiteFloat(value.effectiveUnsprungMass)
         && value.effectiveUnsprungMass >= 0.0f
         && value.effectiveUnsprungMass <= 1000.0f
@@ -416,6 +451,16 @@ inline SuspensionModelDescription suspensionModelDescription(
     result.droopStopRateNPerM = value.droopStopRate;
     result.motionRatio = value.suspensionMotionRatio;
     result.maximumForceN = value.maximumSuspensionForce;
+    result.leafInterleafFrictionN = value.leafInterleafFrictionN;
+    result.leafInterleafVelocityScaleMps = value.leafInterleafVelocityScaleMps;
+    result.leafInterleafViscousNsPerM = value.leafInterleafViscousNsPerM;
+    result.leafAxleWrapStiffnessNmPerRad = value.leafAxleWrapStiffnessNmPerRad;
+    result.leafAxleWrapDampingNmsPerRad = value.leafAxleWrapDampingNmsPerRad;
+    result.leafAxleWrapInertiaKgM2 = value.leafAxleWrapInertiaKgM2;
+    result.leafAxleWrapJackingNPerRad = value.leafAxleWrapJackingNPerRad;
+    result.motorcycleRearSprocketPitchRadiusM = value.motorcycleRearSprocketPitchRadiusM;
+    result.twistBeamTorsionalStiffnessNmPerRad = value.twistBeamTorsionalStiffnessNmPerRad;
+    result.twistBeamTorsionalDampingNmsPerRad = value.twistBeamTorsionalDampingNmsPerRad;
     return result;
 }
 
@@ -437,7 +482,17 @@ inline SuspensionGeometryDescription suspensionGeometryDescription(
     result.toeProgressionDegreesPerM2 =
         value.toeProgressionDegreesPerM2;
     result.macPherson = value.macPhersonHardpoints;
+    result.doubleWishbone = value.doubleWishboneHardpoints;
+    result.pushrodDoubleWishbone = value.pushrodDoubleWishboneHardpoints;
     result.trailingArm = value.trailingArmHardpoints;
+    result.liveAxle = value.liveAxleHardpoints;
+    result.leafSpringLiveAxle = value.leafSpringLiveAxleHardpoints;
+    result.motorcycleFork = value.motorcycleForkHardpoints;
+    result.motorcycleSwingarm = value.motorcycleSwingarmHardpoints;
+    result.kartChassis = value.kartChassisHardpoints;
+    result.multiLink = value.multiLinkHardpoints;
+    result.semiTrailingArm = value.semiTrailingArmHardpoints;
+    result.twistBeam = value.twistBeamHardpoints;
     return result;
 }
 

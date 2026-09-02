@@ -126,6 +126,7 @@ void VehicleCameraController::reset()
     m_detachedRollDegrees = 0.0;
     m_detachedFlySpeedMetersPerSecond = 8.0;
     m_flySpeedMetersPerSecond = 1.5;
+    m_presentedFrame = {};
 }
 
 void VehicleCameraController::setActive(bool active)

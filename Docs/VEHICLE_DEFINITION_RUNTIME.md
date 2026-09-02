@@ -92,10 +92,16 @@ reference into an index. `SuspensionModel` is the high-rate force boundary;
 the current `linear_raycast_v1` provider returns spring, damper, and bounded
 normal force while honoring an authored motion ratio.
 
-Formula, IndyCar, kart, sprint-car, ATV, motorcycle, and truck templates now
-retain honest provider requests such as pushrod double-wishbone, kart chassis
-flex, motorcycle linkage, and live-axle leaf suspension. These definitions are
-valid and exportable but remain unresolved until those native providers exist.
+Formula and IndyCar templates name the live `pushrod_double_wishbone_v1`
+provider introduced by SUSP07 and require its complete 17-point hardpoint
+package. SUSP08/SUSP09 provide rigid/leaf live axles, SUSP10 provides native
+motorcycle fork and swingarm-linkage suspension mechanisms, and SUSP11 makes
+`kart_chassis_flex_v1` a native ten-point kart topology. Kart definitions must
+author zero conventional suspension travel and enable
+`chassis_torsional_mode_v1`; tire radial compliance plus frame torsion replace
+fictitious wheel springs. Whole-bike rider/lean/free-steering dynamics and any
+remaining specialty vehicle topologies stay explicit future vehicle-dynamics
+work rather than being silently approximated by another provider.
 
 The next extension is authoring and visualization of linkage anchors, steering
 axes, centers of mass, inertia, and collision volumes. That geometry will let
@@ -120,3 +126,15 @@ rejects non-finite or zero axes and out-of-range curve values before the loader
 copies them into `SuspensionGeometry`. The current `linear_raycast_v1` provider
 uses those curves to produce authoritative upright pose while preserving
 existing zero-curve definitions. See `SUSPENSION_GEOMETRY.md`.
+
+SUSP12 adds `multilink_v1` as a native 17-hardpoint independent-suspension
+provider. Five fixed-length links plus requested wheel travel solve one rigid
+upright. The fifth/toe link may be rack-actuated for front steering; with zero
+steering input it remains fixed and passive bump steer is preserved.
+
+SUSP13 adds `semi_trailing_arm_v1` and `twist_beam_v1`. The former requires a
+seven-point pivot/wheel/spring/damper package. The latter requires left/right
+prefixed copies of that seven-point package plus two crossbeam attachments (16
+points total). Twist-beam torsional stiffness and damping are authorable model
+parameters. Incomplete or geometrically invalid packages are rejected before
+runtime loading.

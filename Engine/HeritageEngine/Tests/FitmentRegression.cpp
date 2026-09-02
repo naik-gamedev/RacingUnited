@@ -104,6 +104,8 @@ bool wheelFitmentAndAlignmentAreReferenceSafe()
     heritage::vehicles::WheelFitmentGeometryState referenceRightGeometry;
     heritage::vehicles::WheelFitmentGeometryState modifiedLeftGeometry;
     heritage::vehicles::WheelFitmentGeometryState modifiedRightGeometry;
+    heritage::vehicles::VehicleWheelGeometryMeasurement referenceMeasurement;
+    heritage::vehicles::VehicleWheelGeometryMeasurement modifiedMeasurement;
     if (integrationPassed)
     {
         integrationPassed = world.vehicles.setWheelFitment(
@@ -121,7 +123,9 @@ bool wheelFitmentAndAlignmentAreReferenceSafe()
             && world.vehicles.wheelFitmentGeometry(
                 world.vehicle, 0, referenceLeftGeometry)
             && world.vehicles.wheelFitmentGeometry(
-                world.vehicle, 1, referenceRightGeometry);
+                world.vehicle, 1, referenceRightGeometry)
+            && world.vehicles.measureWheelGeometry(
+                world.vehicle, 0, 1, 2, 3, referenceMeasurement);
     }
     if (integrationPassed)
     {
@@ -140,7 +144,9 @@ bool wheelFitmentAndAlignmentAreReferenceSafe()
             && world.vehicles.wheelFitmentGeometry(
                 world.vehicle, 0, modifiedLeftGeometry)
             && world.vehicles.wheelFitmentGeometry(
-                world.vehicle, 1, modifiedRightGeometry);
+                world.vehicle, 1, modifiedRightGeometry)
+            && world.vehicles.measureWheelGeometry(
+                world.vehicle, 0, 1, 2, 3, modifiedMeasurement);
     }
     const double referenceVisualTrack =
         referenceRight.worldCenter.x - referenceLeft.worldCenter.x;
@@ -155,6 +161,21 @@ bool wheelFitmentAndAlignmentAreReferenceSafe()
             modifiedVisualTrack - referenceVisualTrack,
             0.046,
             2.0e-3)
+        && referenceMeasurement.valid
+        && modifiedMeasurement.valid
+        && nearlyEqual(
+            modifiedMeasurement.frontTrackM
+                - referenceMeasurement.frontTrackM,
+            0.046,
+            2.0e-3)
+        && nearlyEqual(
+            modifiedMeasurement.rearTrackM,
+            referenceMeasurement.rearTrackM,
+            1.0e-4)
+        && nearlyEqual(
+            modifiedMeasurement.wheelbaseM,
+            referenceMeasurement.wheelbaseM,
+            1.0e-4)
         && referenceLeftGeometry.steeringGroundGeometryValid
         && referenceRightGeometry.steeringGroundGeometryValid
         && modifiedLeftGeometry.steeringGroundGeometryValid
@@ -226,6 +247,9 @@ bool wheelFitmentAndAlignmentAreReferenceSafe()
         << " steering_track_m=" << modifiedSteering.detectedSteerTrack
         << " installed_track_delta_m="
         << (modifiedVisualTrack - referenceVisualTrack)
+        << " measured_front_track_m=" << modifiedMeasurement.frontTrackM
+        << " measured_rear_track_m=" << modifiedMeasurement.rearTrackM
+        << " measured_wheelbase_m=" << modifiedMeasurement.wheelbaseM
         << " hub_face_x_m=" << modifiedHub.referenceHubFaceCenterLocal.x
         << " inboard_extent_mm="
         << modifiedHub.inboardTireExtensionFromReferenceHubM * 1000.0

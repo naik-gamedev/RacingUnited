@@ -26,7 +26,7 @@ bool mapModelDimensionAndOperating(
     if (result.data.fitType == 70)
     {
         result.data.temperatureVelocityRequested = true;
-        result.warnings.push_back("FITTYP=70 loaded through the MF6.2 steady-state core; Temperature & Velocity coefficients are preserved as unsupported until the thermal milestone.");
+        result.warnings.push_back("FITTYP=70 uses Heritage's MF6.2 force core plus Heritage-owned thermal/velocity state. Vendor-specific T&V extensions remain explicit compatibility diagnostics unless mapped; they are not required by the TIRE46 solver freeze.");
     }
 
     loadUnits(raw, units, result.warnings);

@@ -220,12 +220,57 @@ local function DrawSuspensionLiveTelemetry()
         wheel.tireDeflection, wheel.tireDeflectionVelocity))
     UI.Text(string.format("Tire radial heat generation: %.1f W",
         wheel.tireRadialDissipationWatts))
-    UI.Text(string.format("Camber / toe: %.3f deg / %.3f deg",
+    UI.Text(string.format("Camber / toe (workshop): %.3f deg / %.3f deg",
+        wheel.workshopCamberDegrees or wheel.camberAngleDegrees,
+        wheel.workshopToeDegrees or wheel.toeAngleDegrees))
+    UI.TextDisabled(string.format(
+        "Native mirrored local rotations: %.3f / %.3f deg",
         wheel.camberAngleDegrees, wheel.toeAngleDegrees))
     UI.Text(string.format("Native upright XYZ: %.3f / %.3f / %.3f deg",
         wheel.uprightRotationX, wheel.uprightRotationY,
         wheel.uprightRotationZ))
     UI.TextDisabled("Damper watts will later feed oil/gas temperature, fade, cavitation and wear.")
+end
+
+local function DrawStaticRideHeightCalibration()
+    if vehicleRideHeight == nil or not vehicleRideHeight.valid then
+        UI.TextDisabled(vehicleRideHeight ~= nil
+            and vehicleRideHeight.message
+            or "Static ride height has not been calibrated.")
+        return
+    end
+
+    UI.Text(vehicleRideHeight.message)
+    UI.TextDisabled(
+        "Spring/torsion preload sets static height; dampers carry no load at rest.")
+    for _, corner in ipairs(vehicleRideHeight.corners) do
+        UI.Text(string.format(
+            "%s | load %.0f N | preload %.0f N | tire %.1f mm | travel %.1f mm",
+            tostring(corner.wheel_name),
+            corner.supported_load_n,
+            corner.spring_preload_n,
+            corner.static_tire_deflection_m * 1000.0,
+            corner.target_compression_m * 1000.0))
+        UI.TextDisabled("  " .. tostring(corner.provider)
+            .. " | " .. tostring(corner.diagnostic))
+    end
+
+    local geometry = vehicleRideHeight.assetGeometry
+    if geometry ~= nil and geometry.valid then
+        UI.Separator()
+        UI.Text(string.format(
+            "Authored chassis minima: front %.1f mm | rear %.1f mm",
+            geometry.front_clearance_m * 1000.0,
+            geometry.rear_clearance_m * 1000.0))
+        UI.TextDisabled(string.format(
+            "GLB road plane Y %.4f m | %d body nodes / %d tire nodes",
+            geometry.ground_plane_y,
+            geometry.body_node_count,
+            geometry.tire_node_count))
+    else
+        UI.TextDisabled(
+            "Load the Peugeot GLB to inspect front/rear underside clearances.")
+    end
 end
 
 function DrawVehicleSuspensionPanel()
@@ -276,6 +321,10 @@ function DrawVehicleSuspensionPanel()
         end
         if UI.BeginTabItem("LIVE") then
             DrawSuspensionLiveTelemetry()
+            UI.EndTabItem()
+        end
+        if UI.BeginTabItem("RIDE HEIGHT") then
+            DrawStaticRideHeightCalibration()
             UI.EndTabItem()
         end
         UI.EndTabBar()

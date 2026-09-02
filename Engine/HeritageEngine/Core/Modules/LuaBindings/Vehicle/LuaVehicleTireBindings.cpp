@@ -261,6 +261,52 @@ int LuaVehicleBindingHandlers::luaVehicleTriggerTireFailure(lua_State* state)
     return 1;
 }
 
+int LuaVehicleBindingHandlers::luaVehicleTriggerWheelTireDamageIncident(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime) return 0;
+    int wheelConverted = 0;
+    int incidentConverted = 0;
+    int severityConverted = 0;
+    const LuaInteger wheel = runtime->m_api.lua_tointegerx(state, 2, &wheelConverted);
+    const LuaInteger incident = runtime->m_api.lua_tointegerx(state, 3, &incidentConverted);
+    const LuaNumber severity = runtime->m_api.lua_tonumberx(state, 4, &severityConverted);
+    const bool validIncident = incidentConverted
+        && incident >= static_cast<LuaInteger>(heritage::vehicles::tires::TireDamageIncident::TreadPuncture)
+        && incident <= static_cast<LuaInteger>(heritage::vehicles::tires::TireDamageIncident::RepairPuncture);
+    const bool validSeverity = severityConverted && severity >= 0.0 && severity <= 1.0;
+    const bool result = wheelConverted && wheel >= 1 && validIncident && validSeverity
+        && runtime->m_physics
+        && runtime->m_physics->vehicles().triggerWheelTireDamageIncident(
+            LuaModuleRuntime::vehicleHandleArgument(*runtime, state, 1),
+            static_cast<std::size_t>(wheel - 1),
+            static_cast<heritage::vehicles::tires::TireDamageIncident>(incident),
+            static_cast<heritage::vehicles::VehicleScalar>(severity));
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
+int LuaVehicleBindingHandlers::luaVehicleTriggerTireDamageIncident(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime) return 0;
+    int incidentConverted = 0;
+    int severityConverted = 0;
+    const LuaInteger incident = runtime->m_api.lua_tointegerx(state, 2, &incidentConverted);
+    const LuaNumber severity = runtime->m_api.lua_tonumberx(state, 3, &severityConverted);
+    const bool validIncident = incidentConverted
+        && incident >= static_cast<LuaInteger>(heritage::vehicles::tires::TireDamageIncident::TreadPuncture)
+        && incident <= static_cast<LuaInteger>(heritage::vehicles::tires::TireDamageIncident::RepairPuncture);
+    const bool validSeverity = severityConverted && severity >= 0.0 && severity <= 1.0;
+    const bool result = validIncident && validSeverity && runtime->m_physics
+        && runtime->m_physics->vehicles().triggerTireDamageIncident(
+            LuaModuleRuntime::vehicleHandleArgument(*runtime, state, 1),
+            static_cast<heritage::vehicles::tires::TireDamageIncident>(incident),
+            static_cast<heritage::vehicles::VehicleScalar>(severity));
+    runtime->m_api.lua_pushboolean(state, result ? 1 : 0);
+    return 1;
+}
+
 int LuaVehicleBindingHandlers::luaVehicleResetTirePhysicalState(lua_State* state)
 {
     LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);

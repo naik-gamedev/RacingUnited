@@ -47,7 +47,12 @@
             suspensionGeometryDescription(description),
             { static_cast<float>(state.compression),
               static_cast<float>(state.steerAngleDegrees),
-              description.localSuspensionDirection });
+              description.localSuspensionDirection,
+              pairedCompressionValid,
+              pairedCompressionM,
+              pairedCompressionVelocityValid,
+              static_cast<float>(state.compressionVelocity),
+              pairedCompressionVelocityMps });
         const SuspensionGeometryOutput& geometryOutput =
             currentGeometryOutput;
         state.suspensionKinematicsValid = geometryOutput.kinematicsValid;
@@ -55,6 +60,8 @@
         state.bumpSteerDegrees = geometryOutput.bumpSteerDegrees;
         state.strutCompression = geometryOutput.strutCompressionM;
         state.instantaneousMotionRatio = geometryOutput.springMotionRatio;
+        state.kartSteeringJackingM = geometryOutput.kartSteeringJackingM;
+        state.kartKingpinRadialOffsetM = geometryOutput.kartKingpinRadialOffsetM;
         state.camberAngleDegrees = geometryOutput.camberDegrees;
         state.toeAngleDegrees = geometryOutput.toeDegrees;
         state.localUprightRotationDegrees =
@@ -111,7 +118,9 @@
         if (currentGeometryOutput.kinematicsValid)
         {
             if (description.suspensionProvider
-                    == SuspensionProviderKind::MacPhersonStrutV1)
+                    == SuspensionProviderKind::MacPhersonStrutV1
+                || description.suspensionProvider
+                    == SuspensionProviderKind::DoubleWishboneV1)
             {
                 model.motionRatio = std::clamp(
                     static_cast<VehicleScalar>(

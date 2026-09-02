@@ -396,10 +396,14 @@ TireModelDescription tireModelDescriptionFromPropertyFile(
     value.thermal = propertyFile.thermal;
     value.thermal.enabled = propertyFile.hasHeritageThermalModel;
     value.thermal.referenceGaugePressurePa = value.inflationPressurePa;
-    // TIRE19 is a native construction layer rather than proprietary .tir
-    // data. Any imported tire with a live gas/thermal state receives it, with
-    // cavity volume derived from that file's actual fitted dimensions.
-    value.failure.enabled = value.thermal.enabled;
+    // TIRE46: damage is a native construction layer. A property file may
+    // author its estimated/identified construction damage parameters explicitly;
+    // otherwise every thermally live tire receives the conservative family
+    // defaults. Air volume is always derived from the fitted dimensions.
+    value.failure = propertyFile.hasHeritageDamageModel
+        ? propertyFile.failure : tires::TireFailureDescription{};
+    value.failure.enabled = value.thermal.enabled
+        && (propertyFile.hasHeritageDamageModel || value.thermal.enabled);
     if (value.failure.enabled)
     {
         value.failure.containedAirVolumeM3 =

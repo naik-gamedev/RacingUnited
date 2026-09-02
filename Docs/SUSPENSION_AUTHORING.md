@@ -170,3 +170,18 @@ MacPherson derives alignment, bump steer, steering-axis motion, strut travel and
 instantaneous spring leverage. The trailing arm derives its wheel arc, arm/torsion
 rotation and separate-damper leverage. Compliance, structural flex/link loads,
 detailed jacking/scrub telemetry and compliant anti-roll-bar links/bushings remain future layers.
+
+## SUSP12 five-link independent package
+
+`multilink_v1` requires 17 hardpoints: `link1_inner`, `link1_outer`,
+`link2_inner`, `link2_outer`, `link3_inner`, `link3_outer`, `link4_inner`,
+`link4_outer`, `toe_link_inner`, `toe_link_outer`, `wheel_center`,
+`spring_upper_mount`, `spring_lower_mount`, `damper_upper_mount`,
+`damper_lower_mount`, `steering_rack_axis_start`, and
+`steering_rack_axis_end`.
+
+For a non-steered rear suspension the toe-link inner point remains fixed because
+steering input is zero; bump steer is therefore a physical result. For a
+steerable front suspension the rack axis defines toe-link inner travel. As with
+all hardpoint providers, measured/asset-authored coordinates are preferred and
+estimated coordinates must retain provenance/confidence labels.

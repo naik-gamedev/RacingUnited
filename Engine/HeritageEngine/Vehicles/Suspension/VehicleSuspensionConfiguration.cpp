@@ -42,6 +42,16 @@ bool VehicleSystem::setWheelSuspensionModel(
     updated.droopStopRate = static_cast<float>(value.droopStopRateNPerM);
     updated.suspensionMotionRatio = static_cast<float>(value.motionRatio);
     updated.maximumSuspensionForce = static_cast<float>(value.maximumForceN);
+    updated.leafInterleafFrictionN = static_cast<float>(value.leafInterleafFrictionN);
+    updated.leafInterleafVelocityScaleMps = static_cast<float>(value.leafInterleafVelocityScaleMps);
+    updated.leafInterleafViscousNsPerM = static_cast<float>(value.leafInterleafViscousNsPerM);
+    updated.leafAxleWrapStiffnessNmPerRad = static_cast<float>(value.leafAxleWrapStiffnessNmPerRad);
+    updated.leafAxleWrapDampingNmsPerRad = static_cast<float>(value.leafAxleWrapDampingNmsPerRad);
+    updated.leafAxleWrapInertiaKgM2 = static_cast<float>(value.leafAxleWrapInertiaKgM2);
+    updated.leafAxleWrapJackingNPerRad = static_cast<float>(value.leafAxleWrapJackingNPerRad);
+    updated.motorcycleRearSprocketPitchRadiusM = static_cast<float>(value.motorcycleRearSprocketPitchRadiusM);
+    updated.twistBeamTorsionalStiffnessNmPerRad = static_cast<float>(value.twistBeamTorsionalStiffnessNmPerRad);
+    updated.twistBeamTorsionalDampingNmsPerRad = static_cast<float>(value.twistBeamTorsionalDampingNmsPerRad);
     if (!validWheelDescription(updated))
     {
         setError("Vehicle.SetWheelSuspensionModel received suspension data outside the supported range.");
@@ -87,6 +97,16 @@ bool VehicleSystem::wheelSuspensionModel(
     value.droopStopRateNPerM = description.droopStopRate;
     value.motionRatio = description.suspensionMotionRatio;
     value.maximumForceN = description.maximumSuspensionForce;
+    value.leafInterleafFrictionN = description.leafInterleafFrictionN;
+    value.leafInterleafVelocityScaleMps = description.leafInterleafVelocityScaleMps;
+    value.leafInterleafViscousNsPerM = description.leafInterleafViscousNsPerM;
+    value.leafAxleWrapStiffnessNmPerRad = description.leafAxleWrapStiffnessNmPerRad;
+    value.leafAxleWrapDampingNmsPerRad = description.leafAxleWrapDampingNmsPerRad;
+    value.leafAxleWrapInertiaKgM2 = description.leafAxleWrapInertiaKgM2;
+    value.leafAxleWrapJackingNPerRad = description.leafAxleWrapJackingNPerRad;
+    value.motorcycleRearSprocketPitchRadiusM = description.motorcycleRearSprocketPitchRadiusM;
+    value.twistBeamTorsionalStiffnessNmPerRad = description.twistBeamTorsionalStiffnessNmPerRad;
+    value.twistBeamTorsionalDampingNmsPerRad = description.twistBeamTorsionalDampingNmsPerRad;
     clearError();
     return true;
 }
@@ -115,7 +135,17 @@ bool VehicleSystem::setWheelSuspensionGeometry(
     updated.toeProgressionDegreesPerM2 =
         value.toeProgressionDegreesPerM2;
     updated.macPhersonHardpoints = value.macPherson;
+    updated.doubleWishboneHardpoints = value.doubleWishbone;
+    updated.pushrodDoubleWishboneHardpoints = value.pushrodDoubleWishbone;
     updated.trailingArmHardpoints = value.trailingArm;
+    updated.liveAxleHardpoints = value.liveAxle;
+    updated.leafSpringLiveAxleHardpoints = value.leafSpringLiveAxle;
+    updated.motorcycleForkHardpoints = value.motorcycleFork;
+    updated.motorcycleSwingarmHardpoints = value.motorcycleSwingarm;
+    updated.kartChassisHardpoints = value.kartChassis;
+    updated.multiLinkHardpoints = value.multiLink;
+    updated.semiTrailingArmHardpoints = value.semiTrailingArm;
+    updated.twistBeamHardpoints = value.twistBeam;
     if (!validWheelDescription(updated))
     {
         setError("Vehicle.SetWheelSuspensionGeometry received geometry data outside the supported range.");

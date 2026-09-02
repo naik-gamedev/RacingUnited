@@ -18,10 +18,13 @@ references before a runtime vehicle can be created.
 
 Every executable suspension provider returns bounded spring, damping, and
 normal forces through `SuspensionModelInput` and `SuspensionModelOutput`.
-`linear_raycast_v1` is the first implementation. It preserves the proven
-high-rate contact geometry while adding authored motion ratio and maximum
-force. Provider IDs for future linkage systems may be stored and exported, but
-they do not become runnable until a matching native implementation exists.
+`linear_raycast_v1` was the first implementation. The same contract now has
+runnable native descendants for MacPherson strut, trailing-arm/torsion-bar,
+double wishbone, pushrod/rocker double wishbone, rigid live axle,
+leaf-spring live axle, motorcycle fork/swingarm, kart chassis and five-link
+independent suspension. Provider IDs for future linkage systems may still be
+stored and exported, but they do not become runnable until a matching native
+implementation exists.
 
 Vehicle classification is not consulted when choosing a suspension provider.
 
@@ -31,5 +34,8 @@ Vehicle classification is not consulted when choosing a suspension provider.
 - Multiple contacts may reference reusable suspension components.
 - Unsupported layouts remain valid authoring data and receive an explicit
   unresolved-provider diagnostic.
-- Linkage geometry, wheel pose, camber, toe, anti-roll, and axle coupling remain
-  future provider work rather than being faked by the linear model.
+- Implemented hardpoint providers own linkage geometry, wheel pose, camber/toe
+  where applicable, and axle coupling; unsupported future layouts remain
+  unresolved rather than being faked by the linear model.
+- Anti-roll coupling remains a separate reusable mechanism rather than being
+  hidden inside individual kinematic providers.

@@ -19,6 +19,17 @@ struct GlbMetadataDocument
     std::vector<MeshNode> nodes;
     std::vector<int> rootNodeIndices;
     AssetMetadataMap sceneMetadata;
+
+    // Conservative local-space bounds for geometry attached directly to each
+    // node. The lightweight inspector reads POSITION accessor min/max values;
+    // it does not decode vertex buffers or textures.
+    struct NodeGeometryBounds
+    {
+        bool valid = false;
+        std::array<float, 3> minimum{ 0.0f, 0.0f, 0.0f };
+        std::array<float, 3> maximum{ 0.0f, 0.0f, 0.0f };
+    };
+    std::vector<NodeGeometryBounds> nodeGeometryBounds;
 };
 
 // Lightweight metadata inspection path. Parses the GLB JSON/node hierarchy and

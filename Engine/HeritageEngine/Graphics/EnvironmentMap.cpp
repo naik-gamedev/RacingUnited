@@ -167,6 +167,16 @@ float environmentLightingDifference(
 
 } // namespace
 
+float EnvironmentMap::blendFactor() const
+{
+    if (!m_blendActive)
+        return 1.0f;
+    constexpr float kBlendSeconds = 0.18f;
+    const float elapsed = std::chrono::duration<float>(
+        std::chrono::steady_clock::now() - m_blendStartWallTime).count();
+    return std::clamp(elapsed / kBlendSeconds, 0.0f, 1.0f);
+}
+
 bool EnvironmentMap::allocateCube(GLuint& textureId)
 {
     constexpr int kFaceSize = 128;
@@ -227,8 +237,20 @@ bool EnvironmentMap::updateProcedural(
     if (force)
     {
         m_refreshInProgress = false;
+        m_blendActive = false;
         m_nextRefreshFace = 0;
         return uploadProcedural(lighting);
+    }
+
+    // CELESTIAL09: the active IBL no longer jumps atomically from one complete
+    // twilight snapshot to the next. After a staged swap, preserve the old map
+    // in the staging texture and cross-fade it in shader before reusing that
+    // texture for another refresh.
+    if (m_blendActive)
+    {
+        if (blendFactor() < 1.0f)
+            return true;
+        m_blendActive = false;
     }
 
     // Start a new staged refresh only when the environment changed enough.
@@ -240,8 +262,7 @@ bool EnvironmentMap::updateProcedural(
     // themselves were continuous. Full day and deep night keep the cheaper
     // cadence; twilight gets a denser sequence of much smaller IBL changes.
     const bool transitionLighting =
-        (lighting.daylightFactor > 0.002f && lighting.daylightFactor < 0.998f)
-        || (lighting.starIntensity > 0.002f && lighting.starIntensity < 0.998f);
+        lighting.daylightFactor > 0.005f && lighting.daylightFactor < 0.42f;
     const float refreshThresholdHours = transitionLighting ? 0.0030f : 0.010f;
     const auto minimumWallInterval = transitionLighting
         ? std::chrono::milliseconds(55)
@@ -360,6 +381,8 @@ bool EnvironmentMap::finishStagedRefresh()
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
     std::swap(m_textureId, m_stagingTextureId);
+    m_blendActive = true;
+    m_blendStartWallTime = std::chrono::steady_clock::now();
     m_maximumLod = std::floor(std::log2(static_cast<float>(kFaceSize)));
     m_lastGeneratedTimeHours = m_pendingLighting.timeOfDayHours;
     m_lastUploadWallTime = std::chrono::steady_clock::now();
@@ -398,6 +421,7 @@ bool EnvironmentMap::uploadProcedural(const EnvironmentLighting& lighting)
     m_lastUploadWallTime = std::chrono::steady_clock::now();
     m_hasUploadWallTime = true;
     m_refreshInProgress = false;
+    m_blendActive = false;
     m_nextRefreshFace = 0;
     m_pendingLighting = lighting;
     ++m_generationSerial;
@@ -426,6 +450,8 @@ void EnvironmentMap::shutdown()
     m_hasUploadWallTime = false;
     m_hasFaceStepWallTime = false;
     m_refreshInProgress = false;
+    m_blendActive = false;
+    m_blendStartWallTime = {};
     m_nextRefreshFace = 0;
     m_pendingLighting = {};
     m_generationSerial = 0;

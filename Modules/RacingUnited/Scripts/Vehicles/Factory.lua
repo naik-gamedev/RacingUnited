@@ -1,6 +1,9 @@
 -- Creates, resets and destroys the Step 29H prototype vehicle.
 function DestroyVehicleDemo()
     DestroySuspensionAuthoringGizmos()
+    if DestroyVehicleMeasurementOverlay ~= nil then
+        DestroyVehicleMeasurementOverlay()
+    end
     if nativeVehicleBody ~= 0 and Physics.BodyExists(nativeVehicleBody) then
         Physics.ClearFloatingOriginAnchor()
     end
@@ -214,13 +217,8 @@ function CreateNativeVehicleDemo(compiledSourceDefinition)
         return false
     end
 
-    -- TIRE18E: the locally controlled vehicle uses the bounded spatial tire
-    -- contact tier. AI/grid policy may retain aggregate mode explicitly; both
-    -- tiers consume the same fitted tire definition and 1000 Hz force state.
-    if not Vehicle.SetTireContactFidelity(nativeVehicle, 1) then
-        vehicleMessage = "VEHICLE ERROR: " .. Vehicle.GetLastError()
-        return false
-    end
+    -- TIRE46: Distributed3x3 is the native production default for every
+    -- vehicle. No Lua opt-in is allowed to be required for tire correctness.
 
     if not Vehicle.SetSteeringGeometry(
         nativeVehicle,

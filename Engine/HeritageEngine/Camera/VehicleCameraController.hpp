@@ -94,6 +94,13 @@ public:
         const heritage::math::DVec3& globalOrigin,
         CameraFrame& frame) const;
 
+    // The engine records the final frame after chase, authored, detached and
+    // fallback camera selection. Module UI can then project world annotations
+    // against the exact camera that presented the scene, without inventing a
+    // second camera authority.
+    void setPresentedFrame(const CameraFrame& frame) { m_presentedFrame = frame; }
+    const CameraFrame& presentedFrame() const { return m_presentedFrame; }
+
 private:
     static double wrapDegrees(double value);
     static void localCameraBasis(
@@ -117,6 +124,7 @@ private:
     double m_detachedRollDegrees = 0.0;
     double m_detachedFlySpeedMetersPerSecond = 8.0;
     double m_flySpeedMetersPerSecond = 1.5;
+    CameraFrame m_presentedFrame{};
 };
 
 } // namespace heritage::camera

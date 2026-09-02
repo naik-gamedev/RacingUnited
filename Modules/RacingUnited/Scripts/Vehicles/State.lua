@@ -76,6 +76,16 @@ for index, wheel in ipairs(definition.wheels) do
 end
 vehicleWheelVisualMessage = "Articulated wheel slots are ready"
 
+vehicleMeasurementOverlay = {
+    enabled = Save.GetBool("vehicle.visual.measurement_overlay", false),
+    entities = {},
+    labels = {},
+    lineThicknessM = 0.012,
+    bodyClearanceM = 0.30,
+    tireWidthClearanceM = 0.18,
+    message = "Live vehicle measurement presentation is ready"
+}
+
 vehicleHighRateHertz = definition.solver.highRateHertz
 vehicleMaximumDriveForce = definition.solver.maximumDriveForce
 vehicleMaximumBrakeForce = definition.solver.maximumBrakeForce
@@ -233,4 +243,3 @@ vehicleSuspensionAuthoring = {
     activeHardpointWheelCount = 0,
     message = "Suspension authoring gizmos are hidden"
 }
-

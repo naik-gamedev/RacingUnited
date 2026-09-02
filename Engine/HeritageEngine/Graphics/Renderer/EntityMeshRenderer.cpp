@@ -82,6 +82,7 @@ bool EntityMeshRenderer::initialize(
     m_uniforms.opacityMap = uniform("uOpacityMap");
     m_uniforms.specularFactorMap = uniform("uSpecularFactorMap");
     m_uniforms.environmentMap = uniform("uEnvironmentMap");
+    m_uniforms.environmentMapPrevious = uniform("uEnvironmentMapPrevious");
     m_uniforms.shadowMap = uniform("uShadowMap");
     m_uniforms.shadowDepthMap = uniform("uShadowDepthMap");
     m_uniforms.shadowFilterMode = uniform("uShadowFilterMode");
@@ -94,6 +95,7 @@ bool EntityMeshRenderer::initialize(
     m_uniforms.eye = uniform("uEye");
     m_uniforms.sunDirection = uniform("uSunDirection");
     m_uniforms.sunRadiance = uniform("uSunRadiance");
+    m_uniforms.dayNightCycle = uniform("uDayNightCycle");
     m_uniforms.gamma = uniform("uGamma");
     m_uniforms.brightness = uniform("uBrightness");
     m_uniforms.contrast = uniform("uContrast");
@@ -106,11 +108,9 @@ bool EntityMeshRenderer::initialize(
     m_uniforms.regionalWeatherAdvectionXZ = uniform("uRegionalWeatherAdvectionXZ");
     m_uniforms.regionalWeatherHalfRangeM = uniform("uRegionalWeatherHalfRangeM");
     m_uniforms.weatherCloudBaseM = uniform("uWeatherCloudBaseM");
-    m_uniforms.volumetricCloudShadow = uniform("uVolumetricCloudShadow");
-    m_uniforms.hasVolumetricCloudShadow = uniform("uHasVolumetricCloudShadow");
-    m_uniforms.volumetricCloudShadowHalfRangeM = uniform("uVolumetricCloudShadowHalfRangeM");
     m_uniforms.hasEnvironmentMap = uniform("uHasEnvironmentMap");
     m_uniforms.environmentMaxLod = uniform("uEnvironmentMaxLod");
+    m_uniforms.environmentBlend = uniform("uEnvironmentBlend");
     m_uniforms.model = uniform("uModel");
     m_uniforms.useSkinning = uniform("uUseSkinning");
     m_uniforms.jointMatrices = uniform("uJointMatrices");
@@ -175,11 +175,10 @@ bool EntityMeshRenderer::initialize(
     glUniform1i(m_uniforms.emissiveMap, 6);
     glUniform1i(m_uniforms.opacityMap, 7);
     glUniform1i(m_uniforms.specularFactorMap, 8);
-    glUniform1i(m_uniforms.environmentMap, 9);
+    glUniform1i(m_uniforms.environmentMap, 9); glUniform1i(m_uniforms.environmentMapPrevious, 12);
     glUniform1i(m_uniforms.regionalWeatherMap, 15);
     glUniform1i(m_uniforms.shadowMap, 10);
     glUniform1i(m_uniforms.shadowDepthMap, 11);
-    glUniform1i(m_uniforms.volumetricCloudShadow, 12);
     // WATER15C1: surface-state shader plumbing lives with the wetness module,
     // keeping this file as lifecycle/draw orchestration only.
     initializeSurfaceWetnessMaterialBindings();
@@ -403,6 +402,10 @@ void EntityMeshRenderer::draw(
             ? cameraRegionalWeather.cloudCover : weather.cloudCover);
         skyWeather.authoredCloudCover = static_cast<float>(std::clamp(
             weather.cloudCover, 0.0, 1.0));
+        skyWeather.atmosphereRelativeHumidity = static_cast<float>(std::clamp(
+            weather.relativeHumidity, 0.0, 1.0));
+        skyWeather.atmospherePrecipitationRateMmPerHour = static_cast<float>(std::max(
+            weather.precipitationRateMmPerHour, 0.0));
         skyWeather.relativeHumidity = static_cast<float>(cameraRegionalWeather.valid
             ? cameraRegionalWeather.relativeHumidity : weather.relativeHumidity);
         skyWeather.precipitationRateMmPerHour = static_cast<float>(
@@ -453,6 +456,8 @@ void EntityMeshRenderer::draw(
         skyWeather,
         SkyRenderTargetState{
             renderTargetState.framebuffer,
+            renderTargetState.colorTexture,
+            renderTargetState.depthStencilTexture,
             renderTargetState.viewportX, renderTargetState.viewportY,
             renderTargetState.viewportWidth, renderTargetState.viewportHeight,
             renderTargetState.samples,
@@ -472,6 +477,8 @@ void EntityMeshRenderer::draw(
             view, projection, lighting, skyWeather,
             SkyRenderTargetState{
                 renderTargetState.framebuffer,
+                renderTargetState.colorTexture,
+                renderTargetState.depthStencilTexture,
                 renderTargetState.viewportX, renderTargetState.viewportY,
                 renderTargetState.viewportWidth, renderTargetState.viewportHeight,
                 renderTargetState.samples,
@@ -510,6 +517,7 @@ void EntityMeshRenderer::draw(
         lighting.keyLightColor.x * lighting.keyLightIntensity,
         lighting.keyLightColor.y * lighting.keyLightIntensity,
         lighting.keyLightColor.z * lighting.keyLightIntensity);
+    glUniform1f(m_uniforms.dayNightCycle, lighting.daylightFactor);
     glUniform1f(
         m_uniforms.gamma,
         videoSettings.gamma);
@@ -527,7 +535,7 @@ void EntityMeshRenderer::draw(
         cameraGlobalForSurface,
         cameraRegionalWeather,
         regionalWeatherMapReady,
-        lighting);
+        lighting, elapsedSeconds);
     glUniform1i(
         m_uniforms.tireProbeDebugVisible,
         m_tireProbeDebugVisible ? 1 : 0);
@@ -535,26 +543,13 @@ void EntityMeshRenderer::draw(
     glUniform1i(
         m_uniforms.hasEnvironmentMap,
         m_environmentMap.valid() ? 1 : 0);
-    glUniform1f(
-        m_uniforms.environmentMaxLod,
-        m_environmentMap.maximumLod());
+    glUniform1f(m_uniforms.environmentMaxLod, m_environmentMap.maximumLod());
+    glUniform1f(m_uniforms.environmentBlend, m_environmentMap.blendFactor());
     if (m_environmentMap.valid())
     {
-        glActiveTexture(GL_TEXTURE0 + 9);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, m_environmentMap.textureId());
+        glActiveTexture(GL_TEXTURE0 + 9); glBindTexture(GL_TEXTURE_CUBE_MAP, m_environmentMap.textureId());
+        glActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_CUBE_MAP, m_environmentMap.previousTextureId());
     }
-
-    glUniform1i(
-        m_uniforms.hasVolumetricCloudShadow,
-        m_skyRenderer.cloudShadowValid() ? 1 : 0);
-    glUniform1f(
-        m_uniforms.volumetricCloudShadowHalfRangeM,
-        m_skyRenderer.cloudShadowHalfRangeM());
-    glActiveTexture(GL_TEXTURE0 + 12);
-    glBindTexture(
-        GL_TEXTURE_2D,
-        m_skyRenderer.cloudShadowValid() ? m_skyRenderer.cloudShadowTexture() : 0);
-    glActiveTexture(GL_TEXTURE0);
 
     // WATER15C1: bind the Dynamic Track surface-state clipmaps through the
     // dedicated wetness module; this draw function only orchestrates the pass.
@@ -1184,6 +1179,8 @@ void EntityMeshRenderer::draw(
         view, projection, lighting, skyWeather,
         SkyRenderTargetState{
             renderTargetState.framebuffer,
+            renderTargetState.colorTexture,
+            renderTargetState.depthStencilTexture,
             renderTargetState.viewportX, renderTargetState.viewportY,
             renderTargetState.viewportWidth, renderTargetState.viewportHeight,
             renderTargetState.samples,

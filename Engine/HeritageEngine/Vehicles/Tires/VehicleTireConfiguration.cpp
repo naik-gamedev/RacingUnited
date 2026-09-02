@@ -461,8 +461,14 @@ bool VehicleSystem::triggerWheelTireFailure(
     input.referenceTemperatureC = wheel.tireModel.thermal.referenceTemperatureC;
     input.gasTemperatureC = thermal.valid
         ? thermal.gasTemperatureC : wheel.tireModel.thermal.initialGasTemperatureC;
+    input.treadTemperatureC = thermal.valid
+        ? thermal.treadTemperatureC : wheel.tireModel.thermal.initialTreadTemperatureC;
+    input.optimumTreadTemperatureC = wheel.tireModel.thermal.optimumTreadTemperatureC;
     input.carcassTemperatureC = thermal.valid
         ? thermal.carcassTemperatureC : wheel.tireModel.thermal.initialCarcassTemperatureC;
+    input.rimTemperatureC = thermal.valid
+        ? thermal.rimTemperatureC : wheel.tireModel.thermal.initialRimTemperatureC;
+    input.camberAngleRadians = radians(wheel.state.camberAngleDegrees);
     input.inflationGaugePressurePa = thermal.valid
         ? thermal.inflationPressurePa : wheel.tireModel.inflationPressurePa;
     input.identifiedReferencePressurePa = wheel.tireModel.referenceInflationPressurePa;
@@ -491,6 +497,88 @@ bool VehicleSystem::triggerTireFailure(
         wheelIndex < slot->record.wheels.size(); ++wheelIndex)
     {
         if (!triggerWheelTireFailure(handle, wheelIndex, stage))
+            return false;
+    }
+    clearError();
+    return true;
+}
+
+
+bool VehicleSystem::triggerWheelTireDamageIncident(
+    VehicleHandle handle,
+    std::size_t wheelIndex,
+    tires::TireDamageIncident incident,
+    VehicleScalar severity01)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || wheelIndex >= slot->record.wheels.size())
+    {
+        setError("Vehicle.TriggerWheelTireDamageIncident received an invalid vehicle handle or wheel index.");
+        return false;
+    }
+    if (!std::isfinite(static_cast<double>(severity01))
+        || severity01 < VehicleScalar{0.0} || severity01 > VehicleScalar{1.0})
+    {
+        setError("Vehicle.TriggerWheelTireDamageIncident severity must be in [0,1].");
+        return false;
+    }
+
+    WheelRecord& wheel = slot->record.wheels[wheelIndex];
+    if (!wheel.tireModel.failure.enabled || !wheel.tireModel.thermal.enabled)
+    {
+        setError("Vehicle.TriggerWheelTireDamageIncident requires the fitted tire's thermal and failure providers.");
+        return false;
+    }
+
+    const tires::TireThermalOutput thermal = tires::evaluateTireThermalState(
+        wheel.tireModel.thermal, wheel.thermalState);
+    tires::TireFailureInput input;
+    input.ambientPressurePa = wheel.tireModel.thermal.ambientPressurePa;
+    input.referenceGaugePressurePa = wheel.tireModel.thermal.referenceGaugePressurePa;
+    input.referenceTemperatureC = wheel.tireModel.thermal.referenceTemperatureC;
+    input.gasTemperatureC = thermal.valid
+        ? thermal.gasTemperatureC : wheel.tireModel.thermal.initialGasTemperatureC;
+    input.treadTemperatureC = thermal.valid
+        ? thermal.treadTemperatureC : wheel.tireModel.thermal.initialTreadTemperatureC;
+    input.optimumTreadTemperatureC = wheel.tireModel.thermal.optimumTreadTemperatureC;
+    input.carcassTemperatureC = thermal.valid
+        ? thermal.carcassTemperatureC : wheel.tireModel.thermal.initialCarcassTemperatureC;
+    input.rimTemperatureC = thermal.valid
+        ? thermal.rimTemperatureC : wheel.tireModel.thermal.initialRimTemperatureC;
+    input.inflationGaugePressurePa = thermal.valid
+        ? thermal.inflationPressurePa : wheel.tireModel.inflationPressurePa;
+    input.identifiedReferencePressurePa = wheel.tireModel.referenceInflationPressurePa;
+    input.nominalLoadN = wheel.tireModel.nominalLoad;
+    input.normalLoadN = wheel.state.normalForce;
+    input.grounded = wheel.state.grounded;
+    input.forwardSpeedMps = wheel.state.longitudinalSpeed;
+    input.longitudinalForceN = wheel.state.longitudinalForce;
+    input.lateralForceN = wheel.state.lateralForce;
+    input.radialDissipationWatts = wheel.state.tireRadialDissipationWatts;
+    input.slipDissipationWatts = wheel.state.tireSlipDissipationWatts;
+    input.camberAngleRadians = radians(wheel.state.camberAngleDegrees);
+
+    tires::triggerTireDamageIncident(
+        wheel.tireModel.failure, input, incident, severity01, wheel.failureState);
+    wheel.thermalState.containedGasMassRatio = wheel.failureState.containedGasMassRatio;
+    clearError();
+    return true;
+}
+
+bool VehicleSystem::triggerTireDamageIncident(
+    VehicleHandle handle,
+    tires::TireDamageIncident incident,
+    VehicleScalar severity01)
+{
+    Slot* slot = resolve(handle);
+    if (!slot || slot->record.wheels.empty())
+    {
+        setError("Vehicle.TriggerTireDamageIncident requires a valid vehicle with wheels.");
+        return false;
+    }
+    for (std::size_t wheelIndex = 0; wheelIndex < slot->record.wheels.size(); ++wheelIndex)
+    {
+        if (!triggerWheelTireDamageIncident(handle, wheelIndex, incident, severity01))
             return false;
     }
     clearError();
@@ -611,7 +699,7 @@ TireContactFidelity VehicleSystem::tireContactFidelity(
 {
     const Slot* slot = resolve(handle);
     return slot ? slot->record.tireContactFidelity
-        : TireContactFidelity::Aggregate;
+        : TireContactFidelity::Distributed3x3;
 }
 
 bool VehicleSystem::setSurfacePreset(

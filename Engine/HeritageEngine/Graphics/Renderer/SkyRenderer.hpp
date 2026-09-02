@@ -14,6 +14,8 @@ namespace heritage::graphics {
 struct SkyRenderTargetState
 {
     GLuint framebuffer = 0;
+    GLuint colorTexture = 0;
+    GLuint depthStencilTexture = 0;
     GLint viewportX = 0;
     GLint viewportY = 0;
     GLsizei viewportWidth = 1;
@@ -114,6 +116,10 @@ struct SkyWeatherParameters
     // Scene-authored 0..1 coverage slider. CLOUDURP15C keeps this separate so
     // 100% can mean true overcast instead of merely sampling a cloudy FBM cell.
     float authoredCloudCover = 0.0f;
+    // CELESTIAL08: broad physical atmosphere follows stable scene-authored
+    // climate instead of the camera-local regional cloud-cell selector.
+    float atmosphereRelativeHumidity = 0.55f;
+    float atmospherePrecipitationRateMmPerHour = 0.0f;
     float relativeHumidity = 0.55f;
     float precipitationRateMmPerHour = 0.0f;
     float windVelocityXMps = 0.0f;
@@ -246,6 +252,8 @@ private:
     GLuint m_cloudErosionTexture = 0;
     GLuint m_cloudLutTexture = 0;
     GLuint m_environmentMapTexture = 0;
+    GLuint m_environmentMapPreviousTexture = 0;
+    float m_environmentMapBlend = 1.0f;
     Texture2DCache m_textureCache;
     GLuint m_moonTexture = 0;
     GLuint m_starMapTexture = 0;
@@ -274,6 +282,11 @@ private:
     int m_cloudShadowResolution = 256;
     float m_cloudShadowHalfRangeM = 8000.0f;
     bool m_cloudShadowReady = false;
+    // CELESTIAL07: the detailed ground cookie follows one real celestial body
+    // at a time. Its receiver strength fades to zero before ownership changes,
+    // so no synthetic Sun/Moon direction can sweep the cookie through twilight.
+    heritage::math::Vec3 m_cloudShadowLightDirection{ 0.0f, 1.0f, 0.0f };
+    float m_cloudShadowReceiverStrength = 0.0f;
 
     SkyRendererGpuStats m_gpuStats{};
     SkyRendererCpuStats m_cpuStats{};
@@ -288,6 +301,7 @@ private:
     heritage::math::Mat4 m_previousCloudView = heritage::math::identity();
     heritage::math::Mat4 m_previousCloudProjection = heritage::math::identity();
     heritage::math::DVec3 m_previousCloudCameraGlobal{ 0.0, 0.0, 0.0 };
+    float m_previousCloudDayNightCycle = -1.0f;
     std::uint32_t m_cloudTemporalFrameIndex = 0;
 
     struct RayUniforms {
@@ -298,22 +312,26 @@ private:
         GLint windVelocityXZ=-1, baseWindXZ=-1, topWindXZ=-1;
         GLint regionalMap=-1, regionalMapValid=-1, regionalCameraOffsetXZ=-1;
         GLint regionalAdvectionXZ=-1, regionalHalfRange=-1;
-        GLint shapeNoise=-1, erosionNoise=-1, curveLut=-1, environmentMap=-1;
+        GLint shapeNoise=-1, erosionNoise=-1, curveLut=-1, environmentMap=-1, environmentMapPrevious=-1, environmentBlend=-1;
         GLint pbrTransmittance=-1, pbrAtmosphereValid=-1;
         GLint microErosion=-1, physicallyBasedSun=-1, localClouds=-1;
         GLint sceneDepth=-1, sceneDepthMs=-1, sceneDepthSamples=-1;
-        GLint sceneColor=-1, perceptual=-1;
+        GLint sceneColor=-1, sceneColorMs=-1, perceptual=-1;
     } m_ray;
-    struct CombineUniforms { GLint cloud=-1, scene=-1, bilateral=-1; } m_combine;
+    struct CombineUniforms {
+        GLint cloud=-1, scene=-1, sceneMs=-1, sceneSamples=-1, bilateral=-1;
+    } m_combine;
     struct TemporalUniforms {
         GLint current=-1, history=-1, historyValid=-1;
         GLint currentView=-1, previousView=-1, currentProjection=-1, previousProjection=-1;
         GLint cameraDelta=-1, sceneDepth=-1, sceneDepthMs=-1, sceneDepthSamples=-1, localClouds=-1;
+        GLint lightingChange=-1;
     } m_temporal;
     struct GroundShadowUniforms {
         GLint sceneDepth=-1, sceneDepthMs=-1, sceneDepthSamples=-1;
         GLint cloudShadow=-1, cloudShadowValid=-1, cloudShadowHalfRangeM=-1;
         GLint view=-1, projection=-1, celestialLightDirection=-1, daylightFactor=-1;
+        GLint shadowStrength=-1;
     } m_groundShadow;
     struct PresentUniforms {
         GLint source=-1;

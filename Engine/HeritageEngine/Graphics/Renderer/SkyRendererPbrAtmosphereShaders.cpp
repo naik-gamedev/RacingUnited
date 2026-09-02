@@ -340,7 +340,13 @@ void main()
     vec3 lookupDir=normalize(vec3(direction.x,max(direction.y,0.0),direction.z));
     vec3 physicalSky=texture(uPbrSkyViewLut,mapSkyView(lookupDir)).rgb;
     vec3 fallback=mix(uSkyHorizon,uSkyZenith,pow(max(direction.y,0.0),0.45));
-    vec3 color=(uPbrSkyValid!=0)?physicalSky:fallback;
+    // CELESTIAL10: keep the authored twilight fallback authoritative until the
+    // physically based sky has real atmospheric solar scattering to contribute.
+    // CELESTIAL06 previously let PBSKY approach full authority while its
+    // ground-clamped Sun intensity was still zero, creating a black/haze-free
+    // notch immediately before dawn (and the symmetric dusk notch).
+    float physicalSkyAuthority=smoothstep(0.035,0.220,uDaylightFactor);
+    vec3 color=(uPbrSkyValid!=0)?mix(fallback,physicalSky,physicalSkyAuthority):fallback;
 
     // Below the geometric horizon only a narrow atmospheric shoulder remains;
     // opaque world geometry normally covers this region.
@@ -350,7 +356,8 @@ void main()
         float horizontalLength=max(length(horizontal),1.0e-5);
         horizontal/=horizontalLength;
         vec3 horizonDir=vec3(horizontal.x,0.0,horizontal.y);
-        vec3 horizon=(uPbrSkyValid!=0)?texture(uPbrSkyViewLut,mapSkyView(horizonDir)).rgb:uSkyHorizon;
+        vec3 physicalHorizon=texture(uPbrSkyViewLut,mapSkyView(horizonDir)).rgb;
+        vec3 horizon=(uPbrSkyValid!=0)?mix(uSkyHorizon,physicalHorizon,physicalSkyAuthority):uSkyHorizon;
         color=mix(horizon,vec3(0.018,0.022,0.030),smoothstep(0.0,0.18,-direction.y));
     }
 
@@ -424,7 +431,11 @@ void main()
             stellarBloom+=bloomSamples[i]*samplePeak*sourceScale;
         }
         stellarBloom*=0.25*0.026;
-        color+=(emissiveStarRadiance+stellarBloom)*uStarIntensity*horizonVisibility*starTransmission;
+        // CELESTIAL09: rural night visibility. Extinction still comes from the
+        // atmosphere LUT, but the HDR plate should remain legible once solar
+        // air-light is gone instead of being visually buried by the night sky.
+        float nightStarBoost=mix(1.22,1.0,smoothstep(0.02,0.18,uDaylightFactor));
+        color+=(emissiveStarRadiance+stellarBloom)*uStarIntensity*nightStarBoost*horizonVisibility*starTransmission;
     }
 
     // Keep the authored Moon texture and restore CLOUDURP15O's three persistent
@@ -446,8 +457,9 @@ void main()
     const float moonMiddleRadius=0.021;
     float moonMiddle=exp(-pow(moonAngle/moonMiddleRadius,2.0))*0.043;
     float moonOuter=exp(-pow(moonAngle/(moonMiddleRadius*10.0),2.0))*0.0042;
-    vec3 moonHaloColor=mix(vec3(0.90,0.94,1.00),vec3(1.00,0.78,0.56),
-        moonLowAltitude*0.48);
+    // CELESTIAL05: low Moon altitude may attenuate brightness, but it must not
+    // reuse a sunset-like orange presentation. Keep the lunar halo neutral/cool.
+    vec3 moonHaloColor=vec3(0.91,0.95,1.00);
     color+=moonTransmission*moonHaloColor
         *(moonNear+moonMiddle+moonOuter)*moonVisibility*moonWeatherHalo;
     vec3 refUp=abs(moonDir.y)>0.98?vec3(1,0,0):vec3(0,1,0);

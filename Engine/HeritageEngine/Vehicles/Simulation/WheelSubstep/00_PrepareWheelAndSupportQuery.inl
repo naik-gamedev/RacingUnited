@@ -18,9 +18,80 @@
         applyChassisSectionTwistToVector(
             wheelCenterlineFitmentOffsetLocal(description),
             chassisSectionTwistRadiansValue);
+
+    // SUSP08: a live axle is one rigid unsprung member, so each wheel needs
+    // the opposite wheel's compression from the common pre-loop snapshot.
+    // Prefer the authored axle id; the geometric fallback exists for native
+    // test/prototype wheels created without VehicleDefinition metadata.
+    bool pairedCompressionValid = false;
+    float pairedCompressionM = 0.0f;
+    bool pairedCompressionVelocityValid = false;
+    float pairedCompressionVelocityMps = 0.0f;
+    if (description.suspensionProvider == SuspensionProviderKind::LiveAxleV1
+        || description.suspensionProvider == SuspensionProviderKind::LeafSpringLiveAxleV1
+        || description.suspensionProvider == SuspensionProviderKind::TwistBeamV1)
+    {
+        std::size_t partner = vehicle.wheels.size();
+        float bestScore = 1.0e9f;
+        for (std::size_t index = 0; index < vehicle.wheels.size(); ++index)
+        {
+            if (index == wheelIndex
+                || vehicle.wheels[index].description.suspensionProvider
+                    != description.suspensionProvider)
+                continue;
+            const WheelDescription& candidate = vehicle.wheels[index].description;
+            const bool sameAuthoredAxle = !description.suspensionAxleId.empty()
+                && candidate.suspensionAxleId == description.suspensionAxleId;
+            const float dz = std::abs(candidate.localMount.z - description.localMount.z);
+            const bool oppositeSide = candidate.localMount.x * description.localMount.x <= 0.0f;
+            if (!sameAuthoredAxle && !(dz < 0.08f && oppositeSide))
+                continue;
+            const float score = sameAuthoredAxle ? dz : dz + 0.25f;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                partner = index;
+            }
+        }
+        if (partner < vehicle.wheels.size()
+            && partner < vehicle.suspensionCompressionScratch.size())
+        {
+            pairedCompressionValid = true;
+            pairedCompressionM = static_cast<float>(
+                vehicle.suspensionCompressionScratch[partner]);
+            pairedCompressionVelocityValid = true;
+            pairedCompressionVelocityMps = static_cast<float>(
+                vehicle.wheels[partner].state.compressionVelocity);
+        }
+    }
+
+    // SUSP05: hardpoint providers already solve the real wheel-centre path.
+    // Use the previous 1 kHz compression/steer state to move this substep's
+    // support query laterally/longitudinally with that path. Travel along the
+    // suspension axis remains owned by the ray/unsprung solve below, avoiding
+    // double-counting bump/droop. This one-substep predictor is the same bounded
+    // explicit ordering used by motorcycle crown contact and is effectively
+    // continuous at the native 1 kHz vehicle rate.
+    const SuspensionSupportOffsetOutput suspensionSupportOffset =
+        evaluateSuspensionSupportOffset(
+            suspensionGeometryDescription(description),
+            { static_cast<float>(state.compression),
+              static_cast<float>(state.steerAngleDegrees),
+              description.localSuspensionDirection,
+              pairedCompressionValid,
+              pairedCompressionM,
+              pairedCompressionVelocityValid,
+              static_cast<float>(state.compressionVelocity),
+              pairedCompressionVelocityMps });
+    const heritage::math::Vec3 flexedSuspensionSupportOffsetLocal =
+        applyChassisSectionTwistToVector(
+            suspensionSupportOffset.valid
+                ? suspensionSupportOffset.localTransverseOffset
+                : heritage::math::Vec3{},
+            chassisSectionTwistRadiansValue);
     const heritage::math::Vec3 flexedWheelRayLocalMount = add(
-        flexedLocalMount,
-        flexedCenterlineOffsetLocal);
+        add(flexedLocalMount, flexedCenterlineOffsetLocal),
+        flexedSuspensionSupportOffsetLocal);
     const heritage::math::Vec3 flexedSuspensionDirectionLocal =
         applyChassisSectionTwistToVector(
             description.localSuspensionDirection,
@@ -43,6 +114,12 @@
         state.tireEffectiveRollingRadius > 0.05
             ? state.tireEffectiveRollingRadius
             : static_cast<VehicleScalar>(description.radius);
+    // TIRE46 motorcycle contact authority uses the prior 1 kHz wheel-right
+    // basis to place the support ray under the rounded crown. Upright geometry
+    // is refreshed later in this same substep; a one-substep-old basis avoids a
+    // circular support/kinematics solve and is effectively continuous at 1 kHz.
+    const heritage::math::Vec3 previousWorldWheelRight = normalized(
+        state.worldWheelRight, { 1.0f, 0.0f, 0.0f });
 
     // TIRE10: query the material-fixed tread field before the support ray is
     // converted into a hub datum. This is what makes a real flat spot a
@@ -77,9 +154,26 @@
                     - VehicleScalar{0.05},
                 VehicleScalar{0.0}))
         : VehicleScalar{0.0};
-    const VehicleScalar physicalSupportRadiusM = std::max(
+    const VehicleScalar wornUnloadedRadiusM = std::max(
         static_cast<VehicleScalar>(description.radius) - currentTreadRadiusLossM,
         VehicleScalar{0.05});
+    VehicleScalar physicalSupportRadiusM = wornUnloadedRadiusM;
+    tires::MotorcycleTireContactGeometry motorcycleSupportContour;
+    if (wheel.tireModel.provider == TireProviderKind::MagicFormula62Motorcycle)
+    {
+        motorcycleSupportContour = tires::evaluateMotorcycleTireProfile(
+            wheel.tireModel.motorcycleProfile,
+            wornUnloadedRadiusM,
+            radians(state.camberAngleDegrees));
+        if (motorcycleSupportContour.valid)
+        {
+            // The rounded motorcycle crown is now contact geometry authority,
+            // not telemetry-only. Lean changes both centre-to-road support
+            // height and the lateral location of the actual road query.
+            physicalSupportRadiusM = std::max(
+                motorcycleSupportContour.centerToRoadM, VehicleScalar{0.05});
+        }
+    }
 
     // Keep the vehicle solver centred on its own chassis. The offset is
     // authoritative for high-rate local calculations; mountWorld exists
@@ -90,11 +184,20 @@
     const heritage::math::Vec3 mountOffsetFromCenterOfMass = rotateVector(
         chassisRotation,
         subtract(flexedLocalMount, chassisCenterOfMassLocal));
-    const heritage::math::Vec3 wheelRayOffset =
+    heritage::math::Vec3 wheelRayOffset =
         rotateVector(chassisRotation, flexedWheelRayLocalMount);
-    const heritage::math::Vec3 wheelRayOffsetFromCenterOfMass = rotateVector(
+    heritage::math::Vec3 wheelRayOffsetFromCenterOfMass = rotateVector(
         chassisRotation,
         subtract(flexedWheelRayLocalMount, chassisCenterOfMassLocal));
+    if (motorcycleSupportContour.valid)
+    {
+        const heritage::math::Vec3 crownOffset = scale(
+            previousWorldWheelRight,
+            motorcycleSupportContour.lateralContactOffsetM);
+        wheelRayOffset = add(wheelRayOffset, crownOffset);
+        wheelRayOffsetFromCenterOfMass = add(
+            wheelRayOffsetFromCenterOfMass, crownOffset);
+    }
     const heritage::math::Vec3 mountWorld = add(
         chassisPose.position,
         mountOffset);
@@ -107,10 +210,21 @@
             flexedSuspensionDirectionLocal),
         { 0.0f, -1.0f, 0.0f });
 
-    const VehicleScalar minimumLength = description.restLength
-        - description.maximumCompression;
-    const VehicleScalar maximumLength = description.restLength
-        + description.maximumDroop;
+    // SUSP11: a kart wheel hub has no conventional suspension travel. Keep the
+    // hub rigidly attached to the flexing frame/solid axle and let the pneumatic
+    // tire carry vertical compliance. Front kingpin steering jacking has already
+    // moved wheelRayOriginWorld above; fixing suspension length here prevents a
+    // hidden raycast spring from cancelling that physical jacking mechanism.
+    const bool kartRigidSupport = description.suspensionProvider
+        == SuspensionProviderKind::KartChassisFlexV1;
+    const VehicleScalar minimumLength = kartRigidSupport
+        ? static_cast<VehicleScalar>(description.restLength)
+        : static_cast<VehicleScalar>(description.restLength
+            - description.maximumCompression);
+    const VehicleScalar maximumLength = kartRigidSupport
+        ? static_cast<VehicleScalar>(description.restLength)
+        : static_cast<VehicleScalar>(description.restLength
+            + description.maximumDroop);
     const VehicleScalar rayDistance = maximumLength + description.radius;
 
     heritage::physics::CollisionQueryFilter filter;
@@ -172,6 +286,12 @@
     state.suspensionUnclampedForce = 0.0f;
     state.antiRollBarForce = antiRollBarForceN;
     state.damperDissipationWatts = 0.0f;
+    state.leafInterleafFrictionForceN = 0.0f;
+    state.leafInterleafDissipationWatts = 0.0f;
+    state.leafAxleWrapJackingForceN = 0.0f;
+    state.motorcycleChainJackingForceN = 0.0f;
+    state.twistBeamCouplingForceN = 0.0f;
+    state.twistBeamDissipationWatts = 0.0f;
     state.unsprungVelocity = 0.0f;
     state.tireDeflection = 0.0f;
     state.tireDeflectionVelocity = 0.0f;

@@ -161,9 +161,16 @@ local function UpdateEmbeddedVehicleWheelNodes()
                     -- an arbitrary live state sampled after the car has settled.
                     suspensionLength = EmbeddedWheelReferenceSuspensionLength(
                         wheel, telemetry),
-                    uprightRotationX = telemetry.uprightRotationX or 0.0,
-                    uprightRotationY = telemetry.uprightRotationY or 0.0,
-                    uprightRotationZ = telemetry.uprightRotationZ or 0.0,
+                    -- The Peugeot GLB WH_* roots/pivots are authored in a
+                    -- neutral upright pose.  The right-hand subtree is already
+                    -- mirrored by its creator transform, so the complete
+                    -- native upright must be applied on both sides. Capturing
+                    -- the first live (already cambered) upright here made that
+                    -- alignment the visual zero and erased factory camber until
+                    -- suspension travel changed it.
+                    uprightRotationX = 0.0,
+                    uprightRotationY = 0.0,
+                    uprightRotationZ = 0.0,
                     rotationDegrees = telemetry.rotationDegrees or 0.0
                 }
                 vehicleEmbeddedWheelBinding.bindPose[corner] = baseline

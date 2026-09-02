@@ -14,9 +14,10 @@ namespace heritage::graphics {
 // and roughness-aware specular reflections.
 //
 // PERF09 keeps two small procedural cubemaps. The active one is sampled by the
-// renderer while the staging one is refreshed one face per frame, then swapped
-// atomically after all six faces and mip levels are complete. This avoids a
-// single ~6-8 ms CPU/driver pulse when the day/night IBL updates.
+// renderer while the staging one is refreshed one face per frame. CELESTIAL09
+// keeps the completed previous map intact and cross-fades it into the new map
+// before staging reuse, avoiding both a synchronous six-face pulse and visible
+// atomic dawn/dusk IBL steps.
 class EnvironmentMap
 {
 public:
@@ -25,6 +26,8 @@ public:
     void shutdown();
 
     GLuint textureId() const { return m_textureId; }
+    GLuint previousTextureId() const { return m_blendActive ? m_stagingTextureId : m_textureId; }
+    float blendFactor() const;
     float maximumLod() const { return m_maximumLod; }
     bool valid() const { return m_textureId != 0; }
     std::uint64_t generationSerial() const { return m_generationSerial; }
@@ -50,6 +53,8 @@ private:
     bool m_hasUploadWallTime = false;
     bool m_hasFaceStepWallTime = false;
     bool m_refreshInProgress = false;
+    bool m_blendActive = false;
+    std::chrono::steady_clock::time_point m_blendStartWallTime{};
     int m_nextRefreshFace = 0;
     EnvironmentLighting m_pendingLighting{};
     std::uint64_t m_generationSerial = 0;

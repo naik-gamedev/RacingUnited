@@ -487,6 +487,11 @@ bool tireDistributedContactPatchIntegratesLocalShear()
 
 bool tireFleetBenchmarkExecutesBoundedWork()
 {
+    PrototypeWorld defaultWorld;
+    const bool nativeDefaultDistributed = createPrototypeWorld(defaultWorld, 1000.0f)
+        && defaultWorld.vehicles.tireContactFidelity(defaultWorld.vehicle)
+            == heritage::vehicles::TireContactFidelity::Distributed3x3;
+
     TireModelDescription tire;
     tire.provider = TireProviderKind::MagicFormula62;
     tire.thermal.enabled = true;
@@ -502,7 +507,7 @@ bool tireFleetBenchmarkExecutesBoundedWork()
     description.simulatedDurationSeconds = 0.050;
     description.tireRateHz = 1000.0;
     description.physicalStateRateHz = 100.0;
-    description.distributedContactVehicleCount = 1;
+    description.distributedContactVehicleCount = description.vehicleCount;
     const auto dry = heritage::vehicles::tires::runTireFleetBenchmark(
         tire, 0.316, description);
     description.wetWeather = true;
@@ -512,7 +517,7 @@ bool tireFleetBenchmarkExecutesBoundedWork()
     constexpr std::size_t expectedTires = 150 * 4;
     constexpr std::size_t expectedSteps = 50;
     constexpr std::size_t expectedStateUpdates = expectedTires * 5;
-    constexpr std::size_t expectedBrushCells = 4 * expectedSteps
+    constexpr std::size_t expectedBrushCells = expectedTires * expectedSteps
         * heritage::vehicles::tires::kDistributedContactCellCount;
     std::cout << "fleet_tire_benchmark dry_ms=" << dry.wallClockMilliseconds
         << " wet_ms=" << wet.wallClockMilliseconds
@@ -523,7 +528,8 @@ bool tireFleetBenchmarkExecutesBoundedWork()
         << " hydro_steps=" << wet.hydrologySteps
         << " hydro_contacts=" << wet.hydrologyTireContacts
         << '\n';
-    return dry.valid && wet.valid
+    return nativeDefaultDistributed
+        && dry.valid && wet.valid
         && dry.tireCount == expectedTires
         && dry.tireSteps == expectedSteps
         && dry.wholeTireForceEvaluations == expectedTires * expectedSteps
@@ -555,6 +561,11 @@ bool magicFormula62TurnSlipReducesGripAndTrail()
     tire.magicFormula.pDxP1 = 0.40;
     tire.magicFormula.pKyP1 = 1.00;
     tire.magicFormula.pDyP1 = 0.40;
+    tire.magicFormula.pHyP1 = 1.00;
+    tire.magicFormula.pHyP2 = 0.15;
+    tire.magicFormula.pHyP3 = 0.00;
+    tire.magicFormula.pHyP4 = -4.00;
+    tire.magicFormula.pKy6 = -1.00;
     tire.magicFormula.pEcP1 = 0.50;
     tire.magicFormula.qDtP1 = 10.0;
     tire.magicFormula.qBrP1 = 0.10;
@@ -574,19 +585,28 @@ bool magicFormula62TurnSlipReducesGripAndTrail()
     input.turnSlipPerM = 2.0;
     const TireForceResult turning = heritage::vehicles::evaluateAdvancedRoadTire(
         tire, input);
+    input.turnSlipPerM = -2.0;
+    const TireForceResult reverseTurning = heritage::vehicles::evaluateAdvancedRoadTire(
+        tire, input);
 
     return finite(baseline.longitudinalForce)
         && finite(turning.longitudinalForce)
         && finite(turning.lateralForce)
         && finite(turning.aligningTorque)
         && finite(turning.turnSlipMoment)
+        && finite(reverseTurning.lateralForce)
         && turning.normalizedTurnSlip > 0.50
+        && reverseTurning.normalizedTurnSlip < -0.50
         && turning.turnSlipLongitudinalReduction < 0.999
         && turning.turnSlipLateralReduction < 0.999
         && turning.turnSlipCorneringReduction < 0.999
         && turning.turnSlipTrailReduction < 0.999
         && std::abs(turning.longitudinalForce) < std::abs(baseline.longitudinalForce)
         && std::abs(turning.pneumaticTrail) < std::abs(baseline.pneumaticTrail)
+        // PDX/PDY/PKY/QDT reductions are direction-symmetric. A non-zero
+        // difference between +/- spin therefore proves the signed PHYP
+        // lateral-curve shift is active rather than merely parsed.
+        && std::abs(turning.lateralForce - reverseTurning.lateralForce) > 1.0
         && std::abs(turning.turnSlipMoment) > 1.0;
 }
 
@@ -1945,6 +1965,7 @@ bool tireThermalPressureAndGripStateAreRateStable()
     input.rollingResistanceDissipationWatts = 180.0;
     input.brakeDissipationWatts = 4000.0;
     input.contactPatchAreaM2 = 0.018;
+    input.camberAngleRadians = 0.22;
 
     const auto integrateFor = [&](VehicleScalar dt) {
         heritage::vehicles::tires::TireThermalState state;
@@ -1960,6 +1981,12 @@ bool tireThermalPressureAndGripStateAreRateStable()
 
     const auto highRate = integrateFor(0.001);
     const auto lowRate = integrateFor(1.0 / 120.0);
+
+    auto invalidHeatPartition = description;
+    invalidHeatPartition.carcassLossHeatFractionToBelt = 0.80;
+    invalidHeatPartition.sidewallFlexHeatFraction = 0.40;
+    const bool rejectsEnergyCreatingPartition =
+        !heritage::vehicles::tires::validTireThermalDescription(invalidHeatPartition);
 
     heritage::vehicles::tires::TireThermalState warmState;
     warmState.initialized = true;
@@ -1998,16 +2025,28 @@ bool tireThermalPressureAndGripStateAreRateStable()
     const auto stillCooling = coolWithWind(0.0);
     const auto windyCooling = coolWithWind(20.0);
 
-    return highRate.valid && lowRate.valid && warm.valid && hot.valid
+    return rejectsEnergyCreatingPartition
+        && highRate.valid && lowRate.valid && warm.valid && hot.valid
         && stillCooling.valid && windyCooling.valid
         && highRate.treadTemperatureC > 24.0
+        && highRate.beltTemperatureC > 20.2
         && highRate.carcassTemperatureC > 20.2
+        && highRate.innerSidewallTemperatureC > 20.0
+        && highRate.outerSidewallTemperatureC > 20.0
+        && std::abs(highRate.innerSidewallTemperatureC
+            - highRate.outerSidewallTemperatureC) > 0.001
+        && highRate.sidewallDissipationWatts > 0.0
         && highRate.gasTemperatureC > 20.0
         && highRate.rimTemperatureC > 20.2
         && highRate.inflationPressurePa > 220000.0
         && highRate.slipDissipationWatts > 1000.0
         && std::abs(highRate.treadTemperatureC - lowRate.treadTemperatureC) < 0.20
+        && std::abs(highRate.beltTemperatureC - lowRate.beltTemperatureC) < 0.20
         && std::abs(highRate.carcassTemperatureC - lowRate.carcassTemperatureC) < 0.20
+        && std::abs(highRate.innerSidewallTemperatureC
+            - lowRate.innerSidewallTemperatureC) < 0.20
+        && std::abs(highRate.outerSidewallTemperatureC
+            - lowRate.outerSidewallTemperatureC) < 0.20
         && std::abs(highRate.rimTemperatureC - lowRate.rimTemperatureC) < 0.20
         && std::abs(highRate.inflationPressurePa - lowRate.inflationPressurePa) < 250.0
         && warm.frictionScale > 1.0
@@ -2134,6 +2173,76 @@ bool tireFailurePressureLossAndStructuralStagesBehave()
     const auto preTickPressure = advanceTireThermal(
         thermal, {}, 0.001, preTickThermal);
 
+    // TIRE46 independent damage coordinates: incidents should damage the
+    // corresponding construction family without requiring a fake coarse stage.
+    TireFailureState sidewallCutState;
+    triggerTireDamageIncident(
+        failure, input, TireDamageIncident::SidewallCut, 0.80, sidewallCutState);
+    const auto sidewallCut = advanceTireFailure(
+        failure, input, 0.001, sidewallCutState);
+
+    TireFailureState rimImpactState;
+    triggerTireDamageIncident(
+        failure, input, TireDamageIncident::RimImpact, 0.75, rimImpactState);
+    const auto rimImpact = evaluateTireFailureState(
+        failure, input, rimImpactState);
+
+    TireFailureState beltSeparationState;
+    triggerTireDamageIncident(
+        failure, input, TireDamageIncident::BeltSeparation, 0.70,
+        beltSeparationState);
+    const auto beltSeparation = evaluateTireFailureState(
+        failure, input, beltSeparationState);
+
+    TireFailureState repairState;
+    triggerTireDamageIncident(
+        failure, input, TireDamageIncident::TreadPuncture, 0.60, repairState);
+    const VehicleScalar punctureBeforeRepair = repairState.punctureAreaM2;
+    triggerTireDamageIncident(
+        failure, input, TireDamageIncident::RepairPuncture, 0.85, repairState);
+
+    TireFailureDescription enduranceFailure = failure;
+    enduranceFailure.beltFatigueReferenceEnergyJ = 2.0e5;
+    enduranceFailure.cordFatigueReferenceEnergyJ = 2.6e5;
+    enduranceFailure.sidewallFatigueReferenceEnergyJ = 1.8e5;
+    enduranceFailure.delaminationBuildPerSecond = 0.15;
+    TireFailureState enduranceState;
+    TireFailureInput enduranceInput = input;
+    enduranceInput.normalLoadN = 6000.0;
+    enduranceInput.forwardSpeedMps = 35.0;
+    enduranceInput.longitudinalForceN = 4500.0;
+    enduranceInput.lateralForceN = 5200.0;
+    enduranceInput.longitudinalSlipVelocityMps = 2.8;
+    enduranceInput.lateralSlipVelocityMps = 2.2;
+    enduranceInput.slipDissipationWatts = 24000.0;
+    enduranceInput.radialDissipationWatts = 14000.0;
+    enduranceInput.treadTemperatureC = 175.0;
+    enduranceInput.optimumTreadTemperatureC = 75.0;
+    enduranceInput.carcassTemperatureC = 165.0;
+    enduranceInput.rimTemperatureC = 150.0;
+    enduranceInput.camberAngleRadians = 0.75;
+    TireFailureOutput enduranceDamage;
+    for (int step = 0; step < 300; ++step)
+        enduranceDamage = advanceTireFailure(
+            enduranceFailure, enduranceInput, 0.01, enduranceState);
+
+    TireFailureDescription runFlatFailure = failure;
+    runFlatFailure.runFlatSupportEnabled = true;
+    runFlatFailure.runFlatHealthLossPerSecond = 0.20;
+    TireFailureState runFlatState;
+    TireFailureInput runFlatInput = input;
+    triggerTireFailure(
+        runFlatFailure, runFlatInput, TireFailureStage::CollapsedCarcass,
+        runFlatState);
+    runFlatInput.inflationGaugePressurePa = 0.0;
+    runFlatInput.forwardSpeedMps = 40.0;
+    runFlatInput.carcassTemperatureC = 165.0;
+    runFlatInput.rimTemperatureC = 150.0;
+    TireFailureOutput runFlat;
+    for (int step = 0; step < 150; ++step)
+        runFlat = advanceTireFailure(
+            runFlatFailure, runFlatInput, 0.01, runFlatState);
+
     return slowHighRate.failure.valid && slowLowRate.failure.valid
         && slowHighRate.failure.stage == TireFailureStage::SlowPuncture
         && slowHighRate.failure.eventElapsedSeconds > 19.9
@@ -2147,7 +2256,26 @@ bool tireFailurePressureLossAndStructuralStagesBehave()
         && blowout.stage == TireFailureStage::BareRimRunning
         && blowoutThermal.inflationPressurePa < 100.0
         && blowout.treadAttachment < failure.bareRimTreadAttachmentThreshold
-        && preTickPressure.inflationPressurePa < 100.0;
+        && preTickPressure.inflationPressurePa < 100.0
+        && sidewallCut.valid
+        && sidewallCut.sidewallIntegrity < 0.55
+        && sidewallCut.effectiveLeakAreaM2 > 0.0
+        && rimImpact.valid
+        && rimImpact.rimIntegrity < 0.50
+        && rimImpact.beadRetention < 0.80
+        && beltSeparation.valid
+        && beltSeparation.beltIntegrity < 0.50
+        && beltSeparation.delaminationFraction > 0.60
+        && beltSeparation.stage >= TireFailureStage::PartiallyDetachedTread
+        && repairState.punctureAreaM2 < punctureBeforeRepair * 0.20
+        && enduranceDamage.valid
+        && enduranceDamage.beltIntegrity < 0.95
+        && enduranceDamage.cordIntegrity < 0.97
+        && enduranceDamage.sidewallIntegrity < 0.95
+        && enduranceDamage.treadBlistering > 0.0
+        && enduranceDamage.delaminationFraction > 0.0
+        && runFlat.valid
+        && runFlat.runFlatSupportHealth < 0.95;
 }
 
 
@@ -2930,25 +3058,51 @@ Q_BVT = 0.0
 ENABLED = 1
 REFERENCE_TEMP_C = 20.0
 INITIAL_TREAD_C = 20.0
-INITIAL_CARCASS_C = 20.0
+INITIAL_BELT_C = 21.0
+INITIAL_CARCASS_C = 22.0
+INITIAL_INNER_SIDEWALL_C = 23.0
+INITIAL_OUTER_SIDEWALL_C = 24.0
 INITIAL_GAS_C = 20.0
+INITIAL_RIM_C = 25.0
 AMBIENT_TEMP_C = 20.0
 ROAD_TEMP_C = 22.0
 AMBIENT_PRESSURE_PA = 101325.0
 TREAD_CAPACITY_JPK = 4200.0
-CARCASS_CAPACITY_JPK = 9500.0
+BELT_CAPACITY_JPK = 2800.0
+CARCASS_CAPACITY_JPK = 3600.0
+INNER_SIDEWALL_CAPACITY_JPK = 1550.0
+OUTER_SIDEWALL_CAPACITY_JPK = 1550.0
 GAS_CAPACITY_JPK = 220.0
-K_TREAD_CARCASS_WPK = 55.0
+RIM_CAPACITY_JPK = 18000.0
+K_TREAD_BELT_WPK = 75.0
+K_TREAD_CARCASS_WPK = 12.0
+K_BELT_CARCASS_WPK = 45.0
+K_CARCASS_INNER_SIDEWALL_WPK = 24.0
+K_CARCASS_OUTER_SIDEWALL_WPK = 24.0
 K_TREAD_ROAD_WPK = 90.0
 K_TREAD_AIR_WPK = 10.0
 K_CARCASS_AIR_WPK = 8.0
-K_CARCASS_GAS_WPK = 10.0
+K_INNER_SIDEWALL_AIR_WPK = 6.0
+K_OUTER_SIDEWALL_AIR_WPK = 6.0
+K_CARCASS_GAS_WPK = 5.0
+K_INNER_SIDEWALL_GAS_WPK = 2.5
+K_OUTER_SIDEWALL_GAS_WPK = 2.5
 K_GAS_AMBIENT_WPK = 2.0
+K_CARCASS_RIM_WPK = 5.0
+K_INNER_SIDEWALL_RIM_WPK = 4.0
+K_OUTER_SIDEWALL_RIM_WPK = 4.0
+K_RIM_AIR_WPK = 12.0
 K_TREAD_AIR_SPEED = 0.70
 K_CARCASS_AIR_SPEED = 0.35
+K_SIDEWALL_AIR_SPEED = 0.42
+K_RIM_AIR_SPEED = 0.65
 SLIP_HEAT_TREAD_FRACTION = 0.85
+SLIP_HEAT_BELT_FRACTION = 0.08
 SLIP_HEAT_EFFICIENCY = 0.92
 CARCASS_LOSS_EFFICIENCY = 0.95
+CARCASS_LOSS_BELT_FRACTION = 0.18
+SIDEWALL_FLEX_HEAT_FRACTION = 0.32
+BRAKE_HEAT_TO_RIM_FRACTION = 0.32
 OPTIMUM_TREAD_C = 70.0
 COLD_SPAN_C = 60.0
 HOT_SPAN_C = 70.0
@@ -2959,6 +3113,43 @@ MAX_FRICTION_SCALE = 1.12
 STIFFNESS_TEMP_SLOPE = -0.0012
 MIN_STIFFNESS_SCALE = 0.78
 MAX_STIFFNESS_SCALE = 1.10
+[HERITAGE_DAMAGE]
+ENABLED = 1
+DISCHARGE_COEFFICIENT = 0.71
+SLOW_PUNCTURE_AREA_M2 = 0.09e-6
+RAPID_LOSS_AREA_M2 = 7.0e-6
+BLOWOUT_AREA_M2 = 620.0e-6
+TREAD_CUT_AREA_M2 = 25.0e-6
+SIDEWALL_CUT_AREA_M2 = 56.0e-6
+VALVE_LEAK_AREA_M2 = 0.21e-6
+BEAD_LEAK_AREA_M2 = 1.3e-6
+UNDERINFLATION_DAMAGE_START_RATIO = 0.66
+COLLAPSED_PRESSURE_RATIO = 0.13
+COLLAPSE_LOADED_DELAY_S = 1.30
+MAX_SAFE_CARCASS_TEMP_C = 136.0
+BELT_FATIGUE_REFERENCE_J = 1.9e8
+CORD_FATIGUE_REFERENCE_J = 2.7e8
+SIDEWALL_FATIGUE_REFERENCE_J = 1.5e8
+FATIGUE_HEAT_ACCEL_PER_C = 0.019
+FATIGUE_OVERLOAD_EXPONENT = 2.3
+GRAINING_COLD_BELOW_OPTIMUM_C = 23.0
+GRAINING_BUILD_PER_KJ = 0.00046
+GRAINING_RECOVERY_PER_S = 0.00011
+BLISTER_TEMP_C = 126.0
+BLISTER_BUILD_PER_KJ = 0.00035
+BLISTER_RECOVERY_PER_S = 0.000026
+DELAMINATION_TEMP_C = 146.0
+DELAMINATION_BUILD_PER_S = 0.0013
+BEAD_UNSEAT_PRESSURE_RATIO = 0.19
+BEAD_UNSEAT_LATERAL_FORCE_RATIO = 0.91
+BEAD_DAMAGE_PER_S = 0.021
+RIM_DAMAGE_POWER_THRESHOLD_W = 9100.0
+RIM_DAMAGE_PER_S = 0.019
+RUNFLAT_ENABLED = 1
+RUNFLAT_LOAD_FRACTION = 0.63
+RUNFLAT_MAX_SPEED_MPS = 23.0
+RUNFLAT_MAX_TEMP_C = 126.0
+RUNFLAT_HEALTH_LOSS_PER_S = 0.0026
 [HERITAGE_TREAD_STATE]
 ENABLED = 1
 INITIAL_TREAD_DEPTH_M = 0.007
@@ -3128,6 +3319,10 @@ QDZ1 = 0.20
 PDXP1 = 0.40
 PKYP1 = 1.00
 PDYP1 = 0.40
+PHYP1 = 1.00
+PHYP2 = 0.15
+PHYP3 = 0.00
+PHYP4 = -4.00
 PECP1 = 0.50
 QDTP1 = 10.0
 QCRP1 = 0.20
@@ -3197,6 +3392,9 @@ PKY2 = 1.9
         && std::abs(loaded.data.pTy1 - 1.50) < 1.0e-12
         && std::abs(loaded.data.pTy2 - 1.0) < 1.0e-12
         && std::abs(loaded.data.magicFormula.pDxP1 - 0.40) < 1.0e-12
+        && std::abs(loaded.data.magicFormula.pHyP1 - 1.00) < 1.0e-12
+        && std::abs(loaded.data.magicFormula.pHyP2 - 0.15) < 1.0e-12
+        && std::abs(loaded.data.magicFormula.pHyP4 + 4.00) < 1.0e-12
         && std::abs(loaded.data.magicFormula.qCrP1 - 0.20) < 1.0e-12
         && loaded.data.hasEffectiveRollingRadiusModel
         && std::abs(loaded.data.bReff - 8.386) < 1.0e-12
@@ -3223,9 +3421,21 @@ PKY2 = 1.9
         && model.roadEnveloping.enabled
         && loaded.data.hasHeritageThermalModel
         && model.thermal.enabled
+        && std::abs(model.thermal.initialBeltTemperatureC - 21.0) < 1.0e-12
+        && std::abs(model.thermal.initialInnerSidewallTemperatureC - 23.0) < 1.0e-12
+        && std::abs(model.thermal.initialOuterSidewallTemperatureC - 24.0) < 1.0e-12
+        && std::abs(model.thermal.beltHeatCapacityJPerK - 2800.0) < 1.0e-12
+        && std::abs(model.thermal.carcassLossHeatFractionToBelt - 0.18) < 1.0e-12
+        && std::abs(model.thermal.sidewallFlexHeatFraction - 0.32) < 1.0e-12
         && std::abs(model.thermal.optimumTreadTemperatureC - 70.0) < 1.0e-12
         && std::abs(model.thermal.referenceGaugePressurePa - 230000.0) < 1.0
+        && loaded.data.hasHeritageDamageModel
         && model.failure.enabled
+        && std::abs(model.failure.sidewallCutAreaM2 - 56.0e-6) < 1.0e-12
+        && std::abs(model.failure.beltFatigueReferenceEnergyJ - 1.9e8) < 1.0
+        && std::abs(model.failure.grainingColdThresholdBelowOptimumC - 23.0) < 1.0e-12
+        && model.failure.runFlatSupportEnabled
+        && std::abs(model.failure.runFlatSupportLoadFraction - 0.63) < 1.0e-12
         && model.failure.containedAirVolumeM3 > 0.005
         && model.failure.containedAirVolumeM3 < 0.100
         && loaded.data.hasHeritageTreadState

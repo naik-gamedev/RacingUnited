@@ -355,6 +355,48 @@ int LuaVehicleBindingHandlers::luaVehicleInspectAssetMetadata(lua_State* state)
     }
     runtime->m_api.lua_setfield(state, -2, "suspension_hardpoints");
 
+    const auto& rideHeight = metadata.rideHeightGeometry;
+    runtime->m_api.lua_createtable(state, 0, 18);
+    setBool("valid", rideHeight.valid);
+    setNumber("ground_plane_y", rideHeight.referenceGroundPlaneLocalY);
+    setNumber("axle_split_z", rideHeight.axleSplitLocalZ);
+    setNumber("front_lowest_body_y", rideHeight.frontLowestBodyLocalY);
+    setNumber("rear_lowest_body_y", rideHeight.rearLowestBodyLocalY);
+    setNumber("front_clearance_m", rideHeight.frontAuthoredClearanceM);
+    setNumber("rear_clearance_m", rideHeight.rearAuthoredClearanceM);
+    setNumber("body_min_x", rideHeight.bodyMinimum.x);
+    setNumber("body_min_y", rideHeight.bodyMinimum.y);
+    setNumber("body_min_z", rideHeight.bodyMinimum.z);
+    setNumber("body_max_x", rideHeight.bodyMaximum.x);
+    setNumber("body_max_y", rideHeight.bodyMaximum.y);
+    setNumber("body_max_z", rideHeight.bodyMaximum.z);
+    setNumber("body_node_count", static_cast<double>(rideHeight.bodyNodeCount));
+    setNumber("tire_node_count", static_cast<double>(rideHeight.tireNodeCount));
+    setString("provenance", rideHeight.provenance);
+    runtime->m_api.lua_setfield(state, -2, "ride_height_geometry");
+
+    const auto& wheelGeometry = metadata.wheelGeometry;
+    runtime->m_api.lua_createtable(state, 0, 20);
+    setBool("valid", wheelGeometry.valid);
+    setNumber("wheelbase_m", wheelGeometry.wheelbaseM);
+    setNumber("front_track_m", wheelGeometry.frontTrackM);
+    setNumber("rear_track_m", wheelGeometry.rearTrackM);
+    setNumber("front_left_x", wheelGeometry.frontLeftCenter.x);
+    setNumber("front_left_y", wheelGeometry.frontLeftCenter.y);
+    setNumber("front_left_z", wheelGeometry.frontLeftCenter.z);
+    setNumber("front_right_x", wheelGeometry.frontRightCenter.x);
+    setNumber("front_right_y", wheelGeometry.frontRightCenter.y);
+    setNumber("front_right_z", wheelGeometry.frontRightCenter.z);
+    setNumber("rear_left_x", wheelGeometry.rearLeftCenter.x);
+    setNumber("rear_left_y", wheelGeometry.rearLeftCenter.y);
+    setNumber("rear_left_z", wheelGeometry.rearLeftCenter.z);
+    setNumber("rear_right_x", wheelGeometry.rearRightCenter.x);
+    setNumber("rear_right_y", wheelGeometry.rearRightCenter.y);
+    setNumber("rear_right_z", wheelGeometry.rearRightCenter.z);
+    setNumber("tire_node_count", static_cast<double>(wheelGeometry.tireNodeCount));
+    setString("provenance", wheelGeometry.provenance);
+    runtime->m_api.lua_setfield(state, -2, "wheel_geometry");
+
     runtime->m_api.lua_createtable(state, 0, static_cast<int>(metadata.warnings.size()));
     for (std::size_t index = 0; index < metadata.warnings.size(); ++index)
     {

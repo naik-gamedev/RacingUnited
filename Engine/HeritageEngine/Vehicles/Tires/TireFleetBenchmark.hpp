@@ -3,6 +3,7 @@
 #include "../TireModel.hpp"
 
 #include <cstddef>
+#include <limits>
 #include <string>
 
 namespace heritage::vehicles::tires {
@@ -18,7 +19,10 @@ struct TireFleetBenchmarkDescription
     VehicleScalar simulatedDurationSeconds = 0.25;
     VehicleScalar tireRateHz = 1000.0;
     VehicleScalar physicalStateRateHz = 100.0;
-    std::size_t distributedContactVehicleCount = 1;
+    // TIRE46: every tire is distributed by default. Tests/tools may still cap
+    // this explicitly when isolating Aggregate as a diagnostic fallback.
+    std::size_t distributedContactVehicleCount =
+        (std::numeric_limits<std::size_t>::max)();
     bool wetWeather = false;
     VehicleScalar roadWaterDepthM = 0.0020;
     VehicleScalar ambientTemperatureC = 18.0;

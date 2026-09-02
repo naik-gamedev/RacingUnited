@@ -1,6 +1,6 @@
 # ADR-075 — Deterministic Tire Calibration Evidence
 
-**Status:** Accepted for TIRE18A-E baseline (2026-08-14)
+**Status:** Accepted; calibration evidence policy retained under TIRE46 freeze (updated 2026-08-31)
 
 ## Context
 
@@ -50,8 +50,12 @@ Add a native, deterministic, reduced-order steady-state tire sweep runner.
 
 ## Consequences
 
-TIRE18 now has a stable native evidence foundation and CSV contract, an installed-tire A/B Lab,
-stateful transient/thermal/wear/failure scenarios, provenance-labelled acceptance-envelope checks
-and an experimental bounded 3x3 contact tier. Commercial fidelity still depends on lawful measured
-datasets; the existence of a plot or synthetic envelope does not prove accuracy. Large-grid work is
-algorithmically bounded but still requires an actual 150-car scene profile.
+TIRE18 remains the stable native evidence foundation and CSV contract used under the TIRE46 tire
+freeze. The production tire solver now uses bounded `Distributed3x3` contact universally; the
+150-car / 600-tire tire-only benchmark exercises the full distributed workload. Historical commercial
+tire fidelity is improved through the strongest lawful evidence available: measured/fitted data when
+it exists, otherwise explicitly labelled engineering estimates reconstructed from dimensions,
+construction era, period specifications/reviews, comparable tires, vehicle behavior and physical
+bounds. Measured data is not a completion gate and must never be fabricated. The existence of a plot
+or synthetic envelope still does not prove accuracy. Full 150-car scene performance remains a
+whole-engine profiling task.

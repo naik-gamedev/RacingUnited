@@ -18,6 +18,7 @@ void LuaModuleRuntime::registerVehicleBindings()
     registerFunction("Vehicle", "CheckTireWheelCompatibility", &LuaVehicleBindingHandlers::luaVehicleCheckTireWheelCompatibility);
     registerFunction("Vehicle", "SetWheelSuspensionModel", &LuaVehicleBindingHandlers::luaVehicleSetWheelSuspensionModel);
     registerFunction("Vehicle", "GetWheelSuspensionModel", &LuaVehicleBindingHandlers::luaVehicleGetWheelSuspensionModel);
+    registerFunction("Vehicle", "SolveStaticRideHeight", &LuaVehicleBindingHandlers::luaVehicleSolveStaticRideHeight);
     registerFunction("Vehicle", "SetWheelSuspensionGeometry", &LuaVehicleBindingHandlers::luaVehicleSetWheelSuspensionGeometry);
     registerFunction("Vehicle", "GetWheelSuspensionGeometry", &LuaVehicleBindingHandlers::luaVehicleGetWheelSuspensionGeometry);
     registerFunction("Vehicle", "SetWheelFitment", &LuaVehicleBindingHandlers::luaVehicleSetWheelFitment);
@@ -55,6 +56,8 @@ void LuaModuleRuntime::registerVehicleBindings()
     registerFunction("Vehicle", "SetTireColdInflationPressure", &LuaVehicleBindingHandlers::luaVehicleSetTireColdInflationPressure);
     registerFunction("Vehicle", "TriggerWheelTireFailure", &LuaVehicleBindingHandlers::luaVehicleTriggerWheelTireFailure);
     registerFunction("Vehicle", "TriggerTireFailure", &LuaVehicleBindingHandlers::luaVehicleTriggerTireFailure);
+    registerFunction("Vehicle", "TriggerWheelTireDamageIncident", &LuaVehicleBindingHandlers::luaVehicleTriggerWheelTireDamageIncident);
+    registerFunction("Vehicle", "TriggerTireDamageIncident", &LuaVehicleBindingHandlers::luaVehicleTriggerTireDamageIncident);
     registerFunction("Vehicle", "GetTireColdInflationPressureRange", &LuaVehicleBindingHandlers::luaVehicleGetTireColdInflationPressureRange);
     registerFunction("Vehicle", "GetTireCarcassLabParameterCount", &LuaVehicleBindingHandlers::luaVehicleGetTireCarcassLabParameterCount);
     registerFunction("Vehicle", "GetTireCarcassLabParameterInfo", &LuaVehicleBindingHandlers::luaVehicleGetTireCarcassLabParameterInfo);
@@ -97,6 +100,7 @@ void LuaModuleRuntime::registerVehicleBindings()
     registerFunction("Vehicle", "ExportDynamicsLabCsv", &LuaVehicleBindingHandlers::luaVehicleExportDynamicsLabCsv);
     registerFunction("Vehicle", "GetWheelState", &LuaVehicleBindingHandlers::luaVehicleGetWheelState);
     registerFunction("Vehicle", "GetWheelTelemetry", &LuaVehicleBindingHandlers::luaVehicleGetWheelTelemetry);
+    registerFunction("Vehicle", "MeasureWheelGeometry", &LuaVehicleBindingHandlers::luaVehicleMeasureWheelGeometry);
     registerFunction("Vehicle", "GetWheelContactDiagnostic", &LuaVehicleBindingHandlers::luaVehicleGetWheelContactDiagnostic);
     registerFunction("Vehicle", "GetWheelUprightPose", &LuaVehicleBindingHandlers::luaVehicleGetWheelUprightPose);
     registerFunction("Vehicle", "GetLastError", &LuaVehicleBindingHandlers::luaVehicleGetLastError);

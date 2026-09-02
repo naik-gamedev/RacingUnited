@@ -215,6 +215,31 @@ $wheelSubstepReadmePath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Simula
 $wheelSubstepReadme = if (Test-Path $wheelSubstepReadmePath) { [IO.File]::ReadAllText($wheelSubstepReadmePath) } else { "" }
 Check ($wheelSubstepReadme.Contains("exactly-four-wheel assumption") -and $wheelSubstepReadme.Contains("graduate")) "CLEAN03B phase contract documents arbitrary-wheel topology and future helper graduation"
 
+# TIRE46: final tire-physics freeze. Suspension may depend on these invariants;
+# future historical calibration changes data/provenance rather than silently
+# reintroducing simplified AI tires or a second thermal/damage architecture.
+$tire46StatusPath = Join-Path $Root "Docs\CURRENT_TIRE_STATUS.md"
+$tire46Status = ReadText $tire46StatusPath
+$tire46ReportPath = Join-Path $Root "Build\Reports\TIRE46_FinalTirePhysicsFreeze.txt"
+$tire46VehicleHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleSystem.hpp")
+$tire46Thermal = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireThermal.hpp")
+$tire46Failure = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\TireFailure.hpp")
+$tire46MagicFormula = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Tires\MagicFormula\MagicFormula62.cpp")
+$tire46Prepare = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Simulation\WheelSubstep\00_PrepareWheelAndSupportQuery.inl")
+$tire46BenchmarkTest = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\TireModelRegression.cpp")
+$tire46PlayerFactory = ReadText (Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Factory.lua")
+$tire46AiController = ReadText (Join-Path $Root "Modules\RacingUnited\Scripts\Runtime\RacingAIVehicleController.lua")
+$tire46FrontTir = ReadText (Join-Path $Root "Modules\RacingUnited\Data\Tires\PrototypeRoadFront_MF62.tir")
+$tire46RearTir = ReadText (Join-Path $Root "Modules\RacingUnited\Data\Tires\PrototypeRoadRear_MF62.tir")
+Check ((Test-Path $tire46ReportPath) -and $tire46Status.Contains("TIRE46_FINAL_TIRE_PHYSICS_FREEZE")) "TIRE46 final tire-physics freeze is documented by the authoritative status ledger/report"
+Check ($tire46VehicleHeader.Contains("TireContactFidelity::Distributed3x3;") -and $tire46BenchmarkTest.Contains("distributedContactVehicleCount = description.vehicleCount")) "TIRE46 Distributed3x3 is the native default and the 150-car benchmark exercises the full fleet"
+Check (-not $tire46PlayerFactory.Contains("SetTireContactFidelity(nativeVehicle, 1)") -and -not $tire46AiController.Contains("SetTireContactFidelity(vehicle,1)")) "TIRE46 player/AI tire correctness no longer depends on Lua 3x3 opt-in"
+Check ($tire46Thermal.Contains("beltTemperatureC") -and $tire46Thermal.Contains("innerSidewallTemperatureC") -and $tire46Thermal.Contains("outerSidewallTemperatureC") -and $tire46Thermal.Contains("carcassLossHeatFractionToBelt") -and $tire46Thermal.Contains("sidewallFlexHeatFraction") -and $tire46BenchmarkTest.Contains("rejectsEnergyCreatingPartition")) "TIRE46 seven-node thermal state retains belt/sidewalls and rejects energy-creating structural heat partitions"
+Check ($tire46Failure.Contains("beltIntegrity") -and $tire46Failure.Contains("cordIntegrity") -and $tire46Failure.Contains("treadGraining") -and $tire46Failure.Contains("treadBlistering") -and $tire46Failure.Contains("delaminationFraction") -and $tire46Failure.Contains("rimIntegrity") -and $tire46Failure.Contains("runFlatSupportHealth")) "TIRE46 construction damage/endurance coordinates remain explicit"
+Check ($tire46MagicFormula.Contains("Complete the public MF6.2 PHYP branch") -and $tire46BenchmarkTest.Contains("turning.lateralForce - reverseTurning.lateralForce")) "TIRE46 signed PHYP turn-slip lateral shift remains active and sign-regressed"
+Check ($tire46Prepare.Contains("motorcycleSupportContour.centerToRoadM") -and $tire46Prepare.Contains("motorcycleSupportContour.lateralContactOffsetM")) "TIRE46 motorcycle crown geometry owns live support radius and lateral road-query offset"
+Check ($tire46FrontTir.Contains("[HERITAGE_DAMAGE]") -and $tire46FrontTir.Contains("INITIAL_BELT_C") -and $tire46FrontTir.Contains("PHYP1") -and $tire46RearTir.Contains("[HERITAGE_DAMAGE]") -and $tire46RearTir.Contains("INITIAL_INNER_SIDEWALL_C") -and $tire46RearTir.Contains("PHYP4")) "TIRE46 production prototype .tir files explicitly author thermal construction, damage and PHYP estimates"
+
 
 # CLEAN04: shared quaternion algebra remains centralized and CLEAN04B now
 # compiles the collision implementation from stable responsibility units.
@@ -490,18 +515,29 @@ Check (
 Check (
     $opt05Sky.Contains("setup2D(GL_RGBA8,w,h,m_cloudSceneTexture)") -and
     $opt05Sky.Contains("glBindFramebuffer(GL_FRAMEBUFFER,m_cloudCombinedFbo)") -and
-    $opt05Sky.Contains("glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,m_cloudSceneTexture)") -and
+    $opt05Sky.Contains("const bool directSceneColor=t.colorTexture!=0") -and
+    $opt05Sky.Contains("const bool directSceneDepth=t.depthStencilTexture!=0") -and
     $opt05Sky.Contains("glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,m_cloudCombinedTexture)") -and
-    $opt05CloudShaders.Contains("uniform sampler2D uCloudTexture;uniform sampler2D uSceneTexture;uniform bool uBilateral") -and
+    $opt05CloudShaders.Contains("uniform sampler2DMS uSceneTextureMS") -and
+    $opt05CloudShaders.Contains("vec3 scene=sceneColorAt(vUv)") -and
     -not $opt05CloudShaders.Contains("uniform bool uCurrentLowResolution") -and
     -not $opt05Sky.Contains("temporalCurrentLowResolution=true")
 ) "CLOUDURP15E6 supersedes OPT05 pass fusion with the upstream full-resolution temporal accumulation path"
 Check (
     $opt05Sky.Contains("GL_COLOR_BUFFER_BIT,GL_NEAREST") -and
     $opt05Sky.Contains("GL_DEPTH_BUFFER_BIT,GL_NEAREST") -and
+    $opt05Sky.Contains("glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,directTextureTarget,0,0)") -and
+    $opt05Sky.Contains("t.depthStencilTexture") -and
     $opt05Sky.Contains("glBlendFuncSeparate(GL_ONE,GL_ZERO,GL_ZERO,GL_ONE)") -and
     $opt05CloudShaders.Contains("FragColor=vec4(cloud.rgb+scene*cloud.a,cloud.a)")
 ) "CLOUDURP15E6 keeps legal scene/depth resolves and presents the already-resolved temporal camera colour"
+
+$cloudFramebuffer = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Framebuffer\PostFramebuffer.cpp")
+Check (
+    $cloudFramebuffer.Contains("glTexImage2DMultisample(") -and
+    $cloudFramebuffer.Contains("GL_DEPTH32F_STENCIL8") -and
+    $cloudFramebuffer.Contains("depthStencilTex")
+) "CLOUDURP15EJ exposes exact multisample camera color/depth inputs without staging copies"
 
 # PBSKY01: replace the retired artistic sky fragment with one physical atmosphere
 # authority. The Earth preset follows UnityPhysicallyBasedSkyURP's Rayleigh,
@@ -1433,10 +1469,9 @@ Check (
 ) "VCLOUD01 volumetric clouds preserve the HDRP-derived Unity URP density/march/lighting/temporal/depth/shadow architecture"
 
 # CELESTIAL01 keeps astronomy/weather/cloud ownership singular while allowing
-# both physical celestial sources to illuminate the cloud volume. Ground cloud
-# attenuation reuses the one existing optical-depth cookie and follows the
-# EnvironmentSystem continuous key direction, so Sun/Moon transitions do not
-# create duplicate shadow textures or hard dawn/dusk ownership switches.
+# both physical celestial sources to illuminate the cloud volume. CELESTIAL07
+# retains the one existing optical-depth cookie but supersedes synthetic
+# Sun/Moon key-direction following with stable physical-source ownership.
 $celestial01DocPath = Join-Path $Root "Docs\CELESTIAL01_SUN_MOON_CLOUD_LIGHTING_SHADOWS.md"
 $celestial01MeshShader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshShaders.hpp")
 $celestial01RegionalWeather = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\EntityMeshRegionalWeather.cpp")
@@ -1447,13 +1482,15 @@ Check (
     $weather06Sky.Contains('moonRadiance=uMoonColor*PI*max(uMoonIntensity,0.0)') -and
     $weather06Sky.Contains('physicalCelestialTransmission(meanPosition,moonDirection)') -and
     $weather06Sky.Contains('uCelestialLightDirection') -and
-    $weather06Sky.Contains('lighting.keyLightDirection.y<=0.01f') -and
-    $weather06Sky.Contains('m_shadow.sunDirection,lighting.keyLightDirection.x') -and
+    $weather06Sky.Contains('m_cloudShadowLightDirection') -and
+    $weather06Sky.Contains('sunShadowStrength=hermite') -and
+    $weather06Sky.Contains('moonShadowStrength=hermite') -and
+    $weather06Sky.Contains('m_shadow.sunDirection,m_cloudShadowLightDirection.x') -and
     $celestial01MeshShader.Contains('vec3 volumetricCloudSunTransmission') -and
-    $celestial01MeshShader.Contains('spectralShape * combinedTransmission') -and
+    $celestial01MeshShader.Contains('return regionalCloudSunTransmission(surfacePosition, lightDirection);') -and
     $celestial01RegionalWeather.Contains('const float moonTransmission = std::clamp') -and
     $celestial01RegionalWeather.Contains('1.0f - overcast * 0.20f - rain * 0.06f - storm * 0.04f')
-) "CELESTIAL01 Sun/Moon cloud lighting shares VCLOUD density/PBSKY transmission and the ground cookie follows the continuous celestial key"
+) "CELESTIAL01+ Sun/Moon cloud lighting shares VCLOUD density/PBSKY transmission and one ground cookie remains authoritative with physical-source ownership"
 
 
 # CELESTIAL02 responds to visual validation: Moon-lit cloud interiors retain a
@@ -1466,8 +1503,8 @@ Check (
     $weather06Sky.Contains('MOON_INTERIOR_DENSITY_SCALE') -and
     $weather06Sky.Contains('moonInteriorFill') -and
     $weather06Sky.Contains('shadowBase=clamp(transmittance-0.02') -and
-    $celestial01MeshShader.Contains('float combinedTransmission=min(regionalLuminance,detailedTransmission)') -and
-    -not $celestial01MeshShader.Contains('spectralShape * detailedTransmission')
+    $celestial01MeshShader.Contains('return regionalCloudSunTransmission(surfacePosition, lightDirection);') -and
+    -not $celestial01MeshShader.Contains('detailedTransmission')
 ) "CELESTIAL02+ retains lunar cloud interior fill and stronger direct-light cloud attenuation without adding a second cloud/shadow authority"
 
 # CELESTIAL03 preserves one cloud/shadow authority while making the physically
@@ -1499,6 +1536,140 @@ Check (
     $weather06Sky.Contains('m_cloudGroundShadowProgram') -and
     $weather06Sky.Contains('MOON_CLOUD_SCATTER_EXPOSURE=5.0')
 ) "CELESTIAL04 routes one Sun/Moon cloud cookie through a dedicated opaque receiver pass without adding another shadow authority"
+
+# CELESTIAL05 established true solar ownership for material day/night state.
+# CELESTIAL06 supersedes the raw-solar-elevation transport with one normalized
+# solar-cycle scalar shared by sky, weather/fog and materials, while retaining
+# CELESTIAL05's neutral low-Moon cloud/halo behaviour.
+$celestial05DocPath = Join-Path $Root "Docs\CELESTIAL05_SOLAR_TWILIGHT_CONTINUITY.md"
+$celestial06DocPath = Join-Path $Root "Docs\CELESTIAL06_SINGLE_AUTHORITY_DAY_NIGHT_CYCLE.md"
+$celestial06NoticePath = Join-Path $Root "Docs\ThirdParty\EnricoMonese_DayNightCycle_NOTICE.txt"
+Check (
+    (Test-Path $celestial05DocPath) -and
+    (Test-Path (Join-Path $Root "Build\Reports\CELESTIAL05_SolarTwilightContinuity.txt")) -and
+    $celestial01MeshShader.Contains('uniform float uDayNightCycle;') -and
+    $weather06Entity.Contains('m_uniforms.dayNightCycle = uniform("uDayNightCycle")') -and
+    $weather06Entity.Contains('m_uniforms.dayNightCycle, lighting.daylightFactor') -and
+    -not $celestial01MeshShader.Contains('uSolarElevation') -and
+    $celestial01MeshShader.Contains('smoothstep(0.020, 0.280, uDayNightCycle)') -and
+    $weather06Sky.Contains('moonAtmosphereVisibility') -and
+    $weather06Sky.Contains('MOON_CLOUD_SCATTER_EXPOSURE*moonAtmosphereVisibility') -and
+    $weather06Sky.Contains('moonHaloColor=vec3(0.91,0.95,1.00)') -and
+    $weather06Sky.Contains('uSkyZenith,relativeHeight),vec3(0.0)),0.82)')
+) "CELESTIAL05 lunar colour fix remains intact while material day/night state is carried by the CELESTIAL06 shared solar-cycle scalar"
+
+Check (
+    (Test-Path $celestial06DocPath) -and
+    (Test-Path $celestial06NoticePath) -and
+    (Test-Path (Join-Path $Root "Build\Reports\CELESTIAL06_SingleAuthorityDayNightCycle.txt")) -and
+    (Test-Path (Join-Path $Root "Build\Reports\CELESTIAL06_DayNightCycleProbe.csv")) -and
+    $cloudUrp15EnvironmentSystem.Contains('kCycleMinimumSolarElevation = -0.20f') -and
+    $cloudUrp15EnvironmentSystem.Contains('const float dayNightCycle = clamp01') -and
+    $cloudUrp15EnvironmentSystem.Contains('lighting.daylightFactor = dayNightCycle') -and
+    $cloudUrp15EnvironmentSystem.Contains('lighting.starIntensity = 1.0f - smoothstep(0.050f, 0.190f, dayNightCycle)') -and
+    -not $cloudUrp15EnvironmentSystem.Contains('const float astronomicalDay') -and
+    -not $cloudUrp15EnvironmentSystem.Contains('const float deepNightHold') -and
+    -not $cloudUrp15EnvironmentSystem.Contains('const float twilightArrival') -and
+    $weather06Sky.Contains('physicalSkyAuthority=smoothstep(0.035,0.220,uDaylightFactor)') -and
+    $celestial01RegionalWeather.Contains('const float twilight = weatherSmoothstep(0.025f, 0.115f, day)') -and
+    -not $celestial01RegionalWeather.Contains('const float sunY = std::clamp(lighting.sunDirection.y') -and
+    $weather06Sky.Contains('uniform float uLightingChange;') -and
+    $weather06Sky.Contains('lightingHistory=1.0-smoothstep(0.00005,0.00070,uLightingChange)') -and
+    $weather06Sky.Contains('m_previousCloudDayNightCycle')
+) "CELESTIAL06 uses one EnricoMonese-style normalized solar-cycle authority and rejects stale cloud lighting history through accelerated dawn/dusk"
+
+
+# CELESTIAL07 removes the remaining twilight shadow instability. The ordinary
+# renderer key and the detailed cloud cookie may each follow only a real Sun or
+# Moon direction; ownership changes only through a zero/near-zero-strength
+# bridge. Detailed cloud attenuation is applied once by the dedicated receiver,
+# never once in materials and then again post-opaque.
+$celestial07DocPath = Join-Path $Root "Docs\CELESTIAL07_STABLE_PHYSICAL_SHADOW_OWNERSHIP.md"
+Check (
+    (Test-Path $celestial07DocPath) -and
+    (Test-Path (Join-Path $Root "Build\Reports\CELESTIAL07_StablePhysicalShadowOwnership.txt")) -and
+    $cloudUrp15EnvironmentSystem.Contains('const float sunOwnership = smoothstep(0.155f, 0.195f, day)') -and
+    $cloudUrp15EnvironmentSystem.Contains('const float moonOwnership = 1.0f - smoothstep(0.085f, 0.125f, day)') -and
+    $cloudUrp15EnvironmentSystem.Contains('stableSunPower') -and
+    $cloudUrp15EnvironmentSystem.Contains('stableMoonPower') -and
+    -not $cloudUrp15EnvironmentSystem.Contains('sphericalMix(') -and
+    $weather06Sky.Contains('m_cloudShadowReceiverStrength=0.0f') -and
+    $weather06Sky.Contains('m_cloudShadowLightDirection=lighting.sunDirection') -and
+    $weather06Sky.Contains('m_cloudShadowLightDirection=lighting.moonDirection') -and
+    $weather06Sky.Contains('uniform float uShadowStrength;') -and
+    $weather06Sky.Contains('receiverStrength=mix(0.044,0.064,daylight)*clamp(uShadowStrength,0.0,1.0)') -and
+    $celestial01MeshShader.Contains('return regionalCloudSunTransmission(surfacePosition, lightDirection);') -and
+    -not $celestial01MeshShader.Contains('uVolumetricCloudShadow') -and
+    -not $weather06Entity.Contains('m_uniforms.volumetricCloudShadow')
+) "CELESTIAL07 uses stable physical Sun/Moon shadow ownership and one detailed cloud-shadow receiver"
+
+# CELESTIAL08 preserves cloud geometry/opacity while reducing every receiver-side
+# direct-Sun attenuation path to one tenth and preventing camera-local regional
+# weather cells from toggling the broad physical atmosphere/haze state.
+$celestial08DocPath = Join-Path $Root "Docs\CELESTIAL08_GENTLE_CLOUD_SUN_HAZE_CONTINUITY.md"
+Check (
+    (Test-Path $celestial08DocPath) -and
+    (Test-Path (Join-Path $Root "Build\Reports\CELESTIAL08_CloudSunHazeContinuity.txt")) -and
+    $celestial01RegionalWeather.Contains('(legacyDaylightTransmission - 1.0f) * 0.10f') -and
+    $celestial01MeshShader.Contains('float transmission = mix(1.0, legacyTransmission, 0.10);') -and
+    $celestial01MeshShader.Contains('vec3 tint = mix(vec3(1.0), legacyTint, 0.10);') -and
+    $weather06Sky.Contains('receiverStrength=mix(0.044,0.064,daylight)*clamp(uShadowStrength,0.0,1.0)') -and
+    $weather06Sky.Contains('fullCoolTint') -and
+    $celestial01RegionalWeather.Contains('m_weatherHazeSmoothingInitialized') -and
+    $celestial01RegionalWeather.Contains('authoredCloud * 0.90f + m_weatherHazeCloud01 * 0.10f') -and
+    $celestial01RegionalWeather.Contains('authoredHumidity * 0.85f + m_weatherHazeHumidity01 * 0.15f')
+) "CELESTIAL08 keeps cloud Sun attenuation gentle and atmospheric haze continuous"
+
+# CELESTIAL09 removes the last atomic dawn/dusk IBL swap from visible material
+# and cloud ambient lighting, while night atmosphere keeps extinction but loses
+# the artificial deep-night luminous haze bonus.
+$celestial09DocPath = Join-Path $Root "Docs\CELESTIAL09_DAWN_IBL_NIGHT_AIRLIGHT.md"
+$celestial09EnvironmentMap = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\EnvironmentMap.cpp")
+$celestial09EnvironmentHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\EnvironmentMap.hpp")
+$celestial09PbrSky = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\SkyRendererPbrAtmosphereShaders.cpp")
+Check (
+    (Test-Path $celestial09DocPath) -and
+    (Test-Path (Join-Path $Root "Build\Reports\CELESTIAL09_DawnIblNightAirlight.txt")) -and
+    $celestial09EnvironmentMap.Contains('constexpr float kBlendSeconds = 0.18f;') -and
+    $celestial09EnvironmentMap.Contains('m_blendActive = true;') -and
+    $celestial09EnvironmentHeader.Contains('GLuint previousTextureId() const') -and
+    $clean05Shaders.Contains('uniform samplerCube uEnvironmentMapPrevious;') -and
+    $clean05Shaders.Contains('uniform float uEnvironmentBlend;') -and
+    $clean05Shaders.Contains('textureLod(uEnvironmentMapPrevious, normal, uEnvironmentMaxLod)') -and
+    ($celestial01RegionalWeather.Contains('const float nightAirlight = std::max(') -or $celestial01RegionalWeather.Contains('const float nightAirlight = solarAirlight;')) -and
+    -not $celestial01RegionalWeather.Contains('+ 0.000020f * deepNight') -and
+    $celestial09PbrSky.Contains('float nightStarBoost=mix(1.22,1.0')
+) "CELESTIAL09 cross-fades dawn/dusk IBL and keeps night air-light subordinate to extinction"
+
+# CELESTIAL10 removes the remaining dawn/dusk atmospheric dead zone. Night
+# extinction remains, but visible air-light falls to 10% of CELESTIAL09 and
+# PBSKY no longer receives a zero ground-Sun value while gaining sky authority.
+$celestial10DocPath = Join-Path $Root "Docs\CELESTIAL10_NIGHT_HAZE_DAWN_SCATTER_CONTINUITY.md"
+$celestial10PbrAtmosphere = ReadText (Join-Path $Root "Engine\HeritageEngine\Graphics\Renderer\SkyRendererPbrAtmosphere.cpp")
+Check (
+    (Test-Path $celestial10DocPath) -and
+    (Test-Path (Join-Path $Root "Build\Reports\CELESTIAL10_NightHazeDawnScatterContinuity.txt")) -and
+    ($celestial01RegionalWeather.Contains('0.034f + 0.966f * solarAirlight') -or $celestial01RegionalWeather.Contains('const float nightAirlight = solarAirlight;')) -and
+    ($celestial01RegionalWeather.Contains('0.034f + 0.016f * moonAirlight') -or $celestial01RegionalWeather.Contains('Moon keeps its local halo')) -and
+    $celestial01RegionalWeather.Contains('const heritage::math::Vec3 illuminatedRainFog') -and
+    $celestial10PbrAtmosphere.Contains('const float atmosphereSunIntensity = 3.40f * atmosphereSolarBlend;') -and
+    $celestial10PbrAtmosphere.Contains('m_pbrSkyView.sunIntensity, atmosphereSunIntensity') -and
+    $celestial09PbrSky.Contains('physicalSkyAuthority=smoothstep(0.035,0.220,uDaylightFactor)')
+) "CELESTIAL10 keeps night haze dark and dawn atmospheric scattering continuous"
+
+# CELESTIAL11 retires global night air-light completely while preserving
+# atmospheric extinction and the continuous CELESTIAL10 dawn scattering curve.
+$celestial11DocPath = Join-Path $Root "Docs\CELESTIAL11_BLACK_NIGHT_LOCAL_MIST_SEPARATION.md"
+Check (
+    (Test-Path $celestial11DocPath) -and
+    (Test-Path (Join-Path $Root "Build\Reports\CELESTIAL11_BlackNightLocalMistSeparation.txt")) -and
+    $celestial01RegionalWeather.Contains('const float solarAirlight = weatherSmoothstep(0.015f, 0.30f, day);') -and
+    $celestial01RegionalWeather.Contains('const float nightAirlight = solarAirlight;') -and
+    -not $celestial01RegionalWeather.Contains('0.034f + 0.966f * solarAirlight') -and
+    -not $celestial01RegionalWeather.Contains('0.034f + 0.016f * moonAirlight') -and
+    $celestial01RegionalWeather.Contains('float weatherFogDensity = atmosphericHazeDensity') -and
+    $clean05Shaders.Contains('color = mix(color, uWeatherFogColor, clamp(weatherFog, 0.0, 0.88));')
+) "CELESTIAL11 keeps normal deep night black while preserving extinction for future local-light mist"
 
 # CLOUDURP15E8 established the single selective upstream-derived temporal
 # denoiser architecture. Later tuning milestones may strengthen its history
@@ -1853,3 +2024,474 @@ Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-094-GPU-Compute-Precipitat
 Check (Test-Path (Join-Path $Root "Build\Reports\WEATHER07B7_GpuComputeRain.txt")) "WEATHER07B7 GPU-compute rain report is present"
 Check (Test-Path (Join-Path $Root "Docs\Decisions\ADR-095-Compacted-Rain-LOD-And-Indirect-Draw.md")) "WEATHER07C1 compacted rain LOD decision is documented"
 Check (Test-Path (Join-Path $Root "Build\Reports\WEATHER07C1_CompactedRainLOD.txt")) "WEATHER07C1 compacted rain LOD report is present"
+
+# SUSP05: mechanism-specific hardpoint wheel-centre paths must move the actual
+# high-rate tire support query laterally/longitudinally. Axial bump/droop remains
+# single-authority in the ray/unsprung solve, and linear_raycast_v1 stays zero-offset.
+$susp05Header = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.hpp")
+$susp05Geometry = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp")
+$susp05WheelPhase = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Simulation\WheelSubstep\00_PrepareWheelAndSupportQuery.inl")
+$susp05Regression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SuspensionRegression.cpp")
+Check (
+    $susp05Header.Contains("SuspensionSupportOffsetOutput") -and
+    $susp05Header.Contains("evaluateSuspensionSupportOffset") -and
+    $susp05Geometry.Contains("geometry.localWheelCenter.x - referenceCenter.x") -and
+    $susp05Geometry.Contains("delta.x - axis.x * axial") -and
+    $susp05Geometry.Contains("case SuspensionProviderKind::LinearRaycastV1")
+) "SUSP05 derives a bounded transverse support offset from authoritative hardpoint wheel-centre kinematics"
+Check (
+    $susp05WheelPhase.Contains("evaluateSuspensionSupportOffset") -and
+    $susp05WheelPhase.Contains("flexedSuspensionSupportOffsetLocal") -and
+    $susp05WheelPhase.Contains("add(flexedLocalMount, flexedCenterlineOffsetLocal)")
+) "SUSP05 applies hardpoint wheel-path motion to the physical 1 kHz tire support query"
+Check (
+    $susp05Regression.Contains("hardpointWheelPathMovesPhysicalSupportQuery") -and
+    $susp05Regression.Contains("bumpMagnitude > 0.005f") -and
+    $susp05Regression.Contains("steerMagnitude > 0.010f")
+) "SUSP05 native regression proves bump-path scrub, steering scrub, mirroring and linear-provider compatibility"
+Check (Test-Path (Join-Path $Root "Docs\SUSP05_HARDPOINT_WHEEL_PATH_CONTACT_AUTHORITY.md")) "SUSP05 contact-authority decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP05_HardpointWheelPathContactAuthority.txt")) "SUSP05 milestone report is present"
+
+
+# SUSP06: conventional unequal-length double wishbone is a real native
+# hardpoint provider. Both arm rotations solve a rigid upright + requested
+# wheel-centre travel, tie-rod length owns passive bump steer, and the lower-arm
+# damper mounting derives instantaneous motion ratio. SUSP05 remains the single
+# contact-query path for transverse wheel scrub.
+$susp06Header = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\DoubleWishbone\DoubleWishboneKinematics.hpp")
+$susp06Cpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\DoubleWishbone\DoubleWishboneKinematics.cpp")
+$susp06Model = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp")
+$susp06Geometry = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp")
+$susp06WheelPhase = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Simulation\WheelSubstep\02_SteeringBrakingAndFreeWheel.inl")
+$susp06Regression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SuspensionRegression.cpp")
+Check (
+    $susp06Header.Contains("DoubleWishboneHardpoints") -and
+    $susp06Header.Contains("upperArmInnerFront") -and
+    $susp06Header.Contains("upperBallJoint") -and
+    $susp06Header.Contains("damperLowerMount") -and
+    $susp06Cpp.Contains("rigid upright length") -and
+    $susp06Cpp.Contains("solveBumpSteerRadians") -and
+    $susp06Cpp.Contains("damperMotionRatio")
+) "SUSP06 implements reusable unequal-length double-wishbone hardpoint kinematics with tie-rod bump steer and geometry-derived damper leverage"
+Check (
+    $susp06Model.Contains('"double_wishbone_v1"') -and
+    $susp06Geometry.Contains("SuspensionProviderKind::DoubleWishboneV1") -and
+    $susp06Geometry.Contains("description.doubleWishbone") -and
+    $susp06WheelPhase.Contains("SuspensionProviderKind::DoubleWishboneV1")
+) "SUSP06 double-wishbone provider is wired through geometry, force motion-ratio and runtime provider contracts"
+Check (
+    $susp06Regression.Contains("doubleWishboneHardpointKinematicsAreDeterministic") -and
+    $susp06Regression.Contains("bump.camberDegrees < -0.5f") -and
+    $susp06Regression.Contains("mirroredBump.kingpinInclinationDegrees")
+) "SUSP06 regression covers bump/droop camber, mirroring, steering, motion ratio and SUSP05 physical scrub authority"
+Check (Test-Path (Join-Path $Root "Docs\SUSP06_DOUBLE_WISHBONE_HARDPOINT_KINEMATICS.md")) "SUSP06 double-wishbone decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP06_DoubleWishboneHardpointKinematics.txt")) "SUSP06 milestone report is present"
+
+# SUSP07: pushrod/rocker double wishbone is an indirect-actuation descendant
+# of SUSP06, not a second wheel-kinematics authority. The rigid pushrod drives a
+# chassis-axis rocker; spring and damper own independent inboard shaft geometry
+# and their current motion ratios map actual shaft force back to wheel force.
+$susp07Header = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\PushrodDoubleWishbone\PushrodDoubleWishboneKinematics.hpp")
+$susp07Cpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\PushrodDoubleWishbone\PushrodDoubleWishboneKinematics.cpp")
+$susp07Model = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp")
+$susp07Geometry = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp")
+$susp07Compiler = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionCompiler.cpp")
+$susp07Loader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionLoader.cpp")
+$susp07Regression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SuspensionRegression.cpp")
+$susp07DefinitionRegression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\VehicleDefinitionRegression.cpp")
+Check (
+    $susp07Header.Contains("PushrodDoubleWishboneHardpoints") -and
+    $susp07Header.Contains("pushrodLowerArmMount") -and
+    $susp07Header.Contains("rockerPivotFront") -and
+    $susp07Header.Contains("springRockerMount") -and
+    $susp07Header.Contains("damperRockerMount") -and
+    $susp07Cpp.Contains("solveRockerAngle") -and
+    $susp07Cpp.Contains("referencePushrodLength") -and
+    $susp07Cpp.Contains("springMotionRatio") -and
+    $susp07Cpp.Contains("damperMotionRatio")
+) "SUSP07 implements a rigid pushrod/chassis-axis rocker with independent nonlinear spring and damper leverage"
+Check (
+    $susp07Geometry.Contains("SuspensionProviderKind::PushrodDoubleWishboneV1") -and
+    $susp07Geometry.Contains("evaluatePushrodDoubleWishboneKinematics") -and
+    $susp07Geometry.Contains("springCompressionM = pushrod.springCompressionM") -and
+    $susp07Model.Contains('"pushrod_double_wishbone_v1"') -and
+    $susp07Model.Contains("input.springCompressionM") -and
+    $susp07Model.Contains("input.damperMotionRatio")
+) "SUSP07 routes actual rocker shaft displacement and separate virtual-work ratios through the common suspension force contract"
+Check (
+    $susp07Compiler.Contains("seventeen named hardpoints") -and
+    $susp07Loader.Contains("PushrodDoubleWishboneV1") -and
+    $susp07DefinitionRegression.Contains("pushrodRuntimeReady") -and
+    $susp07DefinitionRegression.Contains("incompletePushrodResult")
+) "SUSP07 VehicleDefinition compile/load/readback requires a complete 17-point provider contract"
+Check (
+    $susp07Regression.Contains("pushrodDoubleWishboneActuationIsNonlinearAndConservative") -and
+    $susp07Regression.Contains("bump.springCompressionM > 0.045f") -and
+    $susp07Regression.Contains("bump.springMotionRatio - droop.springMotionRatio") -and
+    $susp07Regression.Contains("expectedSpring") -and
+    $susp07Regression.Contains("expectedDamper")
+) "SUSP07 regression proves nonlinear rocker motion, rigid pushrod length, mirroring and force leverage"
+Check (Test-Path (Join-Path $Root "Docs\SUSP07_PUSHROD_ROCKER_DOUBLE_WISHBONE.md")) "SUSP07 pushrod/rocker decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP07_PushrodRockerDoubleWishbone.txt")) "SUSP07 milestone report is present"
+
+
+# SUSP08: live_axle_v1 is the first explicitly pair-coupled suspension provider.
+# Both wheel centres belong to one rigid axle body; a Panhard rod and paired
+# trailing links determine the axle path while each side's spring/damper shaft
+# geometry provides independent instantaneous leverage. A shared pre-wheel
+# compression snapshot prevents iteration-order dependence in the 1 kHz solve.
+$susp08Header = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\LiveAxle\LiveAxleKinematics.hpp")
+$susp08Cpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\LiveAxle\LiveAxleKinematics.cpp")
+$susp08Model = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp")
+$susp08Geometry = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp")
+$susp08SupportPhase = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Simulation\WheelSubstep\00_PrepareWheelAndSupportQuery.inl")
+$susp08Compiler = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionCompiler.cpp")
+$susp08Loader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionLoader.cpp")
+$susp08Regression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SuspensionRegression.cpp")
+$susp08DefinitionRegression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\VehicleDefinitionRegression.cpp")
+Check (
+    $susp08Header.Contains("LiveAxleHardpoints") -and
+    $susp08Header.Contains("panhardChassisMount") -and
+    $susp08Header.Contains("leftTrailingChassisMount") -and
+    $susp08Header.Contains("leftSpringAxleMount") -and
+    $susp08Header.Contains("rightDamperAxleMount") -and
+    $susp08Cpp.Contains("solvePanhardCenterX") -and
+    $susp08Cpp.Contains("trailingCenterZCandidate") -and
+    $susp08Cpp.Contains("springMotionRatio") -and
+    $susp08Cpp.Contains("damperMotionRatio")
+) "SUSP08 implements rigid live-axle pair kinematics with Panhard/trailing-link location and geometry-derived spring/damper leverage"
+Check (
+    $susp08Model.Contains('"live_axle_v1"') -and
+    $susp08Geometry.Contains("SuspensionProviderKind::LiveAxleV1") -and
+    $susp08Geometry.Contains("pairedCompressionValid") -and
+    $susp08Geometry.Contains("evaluateLiveAxleKinematics") -and
+    $susp08SupportPhase.Contains("suspensionCompressionScratch") -and
+    $susp08SupportPhase.Contains("suspensionAxleId") -and
+    $susp08SupportPhase.Contains("pairedCompressionValid")
+) "SUSP08 uses one shared 1 kHz pair snapshot for live-axle wheel path and SUSP05 physical support-query authority"
+Check (
+    $susp08Compiler.Contains("seventeen named hardpoints") -and
+    $susp08Compiler.Contains('"live_axle_v1"') -and
+    $susp08Loader.Contains("SuspensionProviderKind::LiveAxleV1") -and
+    $susp08DefinitionRegression.Contains("liveAxleRuntimeReady") -and
+    $susp08DefinitionRegression.Contains("incompleteLiveAxleResult")
+) "SUSP08 VehicleDefinition compile/load/readback requires a complete 17-point live-axle provider contract"
+Check (
+    $susp08Regression.Contains("liveAxleRigidPairKinematicsAreCoupledAndConservative") -and
+    $susp08Regression.Contains("track_error_mm") -and
+    $susp08Regression.Contains("expectedSpring") -and
+    $susp08Regression.Contains("expectedDamper")
+) "SUSP08 regression proves rigid track, paired articulation, linkage scrub and conservative spring/damper leverage"
+Check (Test-Path (Join-Path $Root "Docs\SUSP08_RIGID_LIVE_AXLE_LINKAGE_KINEMATICS.md")) "SUSP08 rigid live-axle decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP08_RigidLiveAxleKinematics.txt")) "SUSP08 milestone report is present"
+
+
+# SUSP09: live_axle_leaf_v1 is a physical leaf-pack descendant of the SUSP08
+# single rigid axle authority. Fixed leaf/shackle lengths own pack geometry,
+# interleaf hysteresis remains separate from shock energy, and one paired
+# axle-housing torsional DOF is driven by real tire longitudinal reaction torque.
+$susp09LeafHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Springs\LeafSpring\LeafSpringLiveAxle.hpp")
+$susp09LeafCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Springs\LeafSpring\LeafSpringLiveAxle.cpp")
+$susp09WrapHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Springs\LeafSpring\LeafSpringAxleDynamics.hpp")
+$susp09WrapCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Springs\LeafSpring\LeafSpringAxleDynamics.cpp")
+$susp09ModelHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.hpp")
+$susp09Model = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp")
+$susp09VehicleSimulation = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleSimulation.cpp")
+$susp09Compiler = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionCompiler.cpp")
+$susp09Loader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionLoader.cpp")
+$susp09Regression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SuspensionRegression.cpp")
+$susp09DefinitionRegression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\VehicleDefinitionRegression.cpp")
+Check (
+    $susp09LeafHeader.Contains("LeafSpringLiveAxleHardpoints") -and
+    $susp09LeafHeader.Contains("leftLeafRearShacklePivot") -and
+    $susp09LeafHeader.Contains("rightLeafAxleClamp") -and
+    $susp09LeafCpp.Contains("circleIntersectionsYZ") -and
+    $susp09LeafCpp.Contains("signedCamberYZ") -and
+    $susp09LeafCpp.Contains("leafMotionRatio")
+) "SUSP09 solves fixed-length leaf/shackle geometry and derives nonlinear leaf compression/leverage on the SUSP08 rigid axle"
+Check (
+    $susp09ModelHeader.Contains("leafInterleafFrictionN") -and
+    $susp09ModelHeader.Contains("leafInterleafDissipationW") -and
+    $susp09Model.Contains("frictionAtLeaf") -and
+    $susp09Model.Contains("output.leafInterleafDissipationW") -and
+    $susp09Model.Contains("leafWrapJackingForce")
+) "SUSP09 keeps interleaf hysteresis and bounded axle-wrap jacking explicit instead of hiding them in shock damping"
+Check (
+    $susp09WrapHeader.Contains("LeafSpringAxleWrapDescription") -and
+    $susp09WrapHeader.Contains("LeafSpringAxleWrapState") -and
+    $susp09WrapCpp.Contains("advanceLeafSpringAxleWrap") -and
+    $susp09WrapCpp.Contains("naturalFrequency") -and
+    $susp09VehicleSimulation.Contains("reactionTorque") -and
+    $susp09VehicleSimulation.Contains("leftWheel.state.leafAxleWrapAngleRadians") -and
+    $susp09VehicleSimulation.Contains("rightWheel.state.leafAxleWrapAngleRadians")
+) "SUSP09 advances one rate-stable paired axle-housing wind-up DOF from physical tire longitudinal reaction torque"
+Check (
+    $susp09Compiler.Contains('"live_axle_leaf_v1"') -and
+    $susp09Compiler.Contains("requires the SUSP08 seventeen-point axle package plus eight leaf/shackle points") -and
+    $susp09Loader.Contains("SuspensionProviderKind::LeafSpringLiveAxleV1") -and
+    $susp09DefinitionRegression.Contains("leafAxleRuntimeReady") -and
+    $susp09DefinitionRegression.Contains("incompleteLeafAxleResult")
+) "SUSP09 VehicleDefinition compile/load/readback requires a complete 25-point leaf-spring live-axle contract"
+Check (
+    $susp09Regression.Contains("leafSpringLiveAxleShackleAndHysteresisArePhysical") -and
+    $susp09Regression.Contains("leaf_mm=") -and
+    $susp09Regression.Contains("wrap_peak_deg=") -and
+    $susp09Regression.Contains("wrap_500_1000_delta_deg=")
+) "SUSP09 regression proves leaf/shackle motion, hysteresis leverage, rigid-axle articulation and rate-stable axle wrap/tramp"
+Check (Test-Path (Join-Path $Root "Docs\SUSP09_LEAF_SPRING_LIVE_AXLE_DYNAMICS.md")) "SUSP09 leaf-spring live-axle decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP09_LeafSpringLiveAxleDynamics.txt")) "SUSP09 milestone report is present"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP09_LinuxNativeRegression.txt")) "SUSP09 clean native regression report is present"
+$susp09Retirement = ReadText (Join-Path $Root "Tools\Diagnostics\ApplyOPT01Retirement.ps1")
+Check (
+    -not $susp09Retirement.Contains("LeafSpringLiveAxle.cpp") -and
+    -not $susp09Retirement.Contains("LeafSpringAxleDynamics.cpp")
+) "SUSP09 production leaf-spring sources are not listed in legacy retirement cleanup"
+
+
+# SUSP10: motorcycle suspension mechanisms are native providers while whole-bike
+# lean/rider/free-steering dynamics remain an explicit topology boundary.
+$susp10ForkHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\MotorcycleFork\MotorcycleForkKinematics.hpp")
+$susp10ForkCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\MotorcycleFork\MotorcycleForkKinematics.cpp")
+$susp10RearHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\MotorcycleSwingarm\MotorcycleSwingarmKinematics.hpp")
+$susp10RearCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\MotorcycleSwingarm\MotorcycleSwingarmKinematics.cpp")
+$susp10Geometry = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp")
+$susp10Model = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp")
+$susp10Compiler = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionCompiler.cpp")
+$susp10Loader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionLoader.cpp")
+$susp10Regression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SuspensionRegression.cpp")
+$susp10DefinitionRegression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\VehicleDefinitionRegression.cpp")
+$susp10EngineProject = ReadText (Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj")
+$susp10TestProject = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\HeritagePhysicsTests.vcxproj")
+Check (
+    $susp10ForkHeader.Contains("MotorcycleForkHardpoints") -and
+    $susp10ForkHeader.Contains("rakeDegreesFromVertical") -and
+    $susp10ForkCpp.Contains("rotatePointAroundLine") -and
+    $susp10ForkCpp.Contains("forkCompressionM") -and
+    $susp10Geometry.Contains("MotorcycleTelescopicForkV1")
+) "SUSP10 telescopic fork uses one physical steering/slide axis and exposes real axle path/rake"
+Check (
+    $susp10RearHeader.Contains("MotorcycleSwingarmHardpoints") -and
+    $susp10RearHeader.Contains("chainCenterDistanceMotionRatio") -and
+    $susp10RearCpp.Contains("solveRockerAngle") -and
+    $susp10RearCpp.Contains("dogboneError") -and
+    $susp10RearCpp.Contains("shockMotionRatio")
+) "SUSP10 rear suspension solves rigid swingarm, fixed dogbone, rocker and nonlinear shock leverage"
+Check (
+    $susp10Model.Contains("motorcycle_swingarm_linkage_v1") -and
+    $susp10Model.Contains("motorcycleChainJackingForce") -and
+    $susp10Model.Contains("previousLongitudinalTireForceN") -and
+    $susp10Model.Contains("motorcycleRearSprocketPitchRadiusM")
+) "SUSP10 maps chain-line geometry and real longitudinal tire force into bounded motorcycle anti-squat/jacking virtual work"
+Check (
+    $susp10Compiler.Contains('"motorcycle_telescopic_fork_v1"') -and
+    $susp10Compiler.Contains('"motorcycle_swingarm_linkage_v1"') -and
+    $susp10Compiler.Contains("requires steering_stem_upper, steering_stem_lower and wheel_center") -and
+    $susp10Compiler.Contains("requires all ten named swingarm/linkage/chain hardpoints") -and
+    $susp10Loader.Contains("SuspensionProviderKind::MotorcycleTelescopicForkV1") -and
+    $susp10Loader.Contains("SuspensionProviderKind::MotorcycleSwingarmLinkageV1")
+) "SUSP10 VehicleDefinition compile/load supports complete 3-point fork and 10-point rear packages"
+Check (
+    $susp10DefinitionRegression.Contains("motorcycleSuspensionRuntimeReady") -and
+    $susp10DefinitionRegression.Contains("incompleteMotorcycleForkResult") -and
+    $susp10DefinitionRegression.Contains("incompleteMotorcycleRearResult") -and
+    $susp10Regression.Contains("motorcycleForkAndSwingarmKinematicsArePhysical") -and
+    $susp10Regression.Contains("chain_jacking_n=")
+) "SUSP10 regression proves physical fork/swingarm/linkage behavior and rejects incomplete authoring"
+Check (
+    $susp10EngineProject.Contains("MotorcycleFork\MotorcycleForkKinematics.cpp") -and
+    $susp10EngineProject.Contains("MotorcycleSwingarm\MotorcycleSwingarmKinematics.cpp") -and
+    $susp10TestProject.Contains("MotorcycleFork\MotorcycleForkKinematics.cpp") -and
+    $susp10TestProject.Contains("MotorcycleSwingarm\MotorcycleSwingarmKinematics.cpp")
+) "SUSP10 motorcycle kinematics are compiled by both engine and native regression projects"
+Check (Test-Path (Join-Path $Root "Docs\SUSP10_MOTORCYCLE_FORK_SWINGARM_LINKAGE.md")) "SUSP10 motorcycle suspension decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP10_MotorcycleSuspensionKinematics.txt")) "SUSP10 milestone report is present"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP10_LinuxNativeRegression.txt")) "SUSP10 clean native regression report is present"
+$susp10Retirement = ReadText (Join-Path $Root "Tools\Diagnostics\ApplyOPT01Retirement.ps1")
+Check (
+    -not $susp10Retirement.Contains("MotorcycleForkKinematics.cpp") -and
+    -not $susp10Retirement.Contains("MotorcycleSwingarmKinematics.cpp")
+) "SUSP10 production motorcycle suspension sources are not listed in legacy retirement cleanup"
+
+# SUSP11: a racing kart has no fictitious independent wheel spring/damper.
+# Physical front kingpin jacking, tire radial compliance, rigid rear axle and
+# chassis_torsional_mode_v1 frame twist are the suspension/support mechanisms.
+$susp11KartHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\Kart\KartChassisKinematics.hpp")
+$susp11KartCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\Kart\KartChassisKinematics.cpp")
+$susp11Geometry = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp")
+$susp11Model = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp")
+$susp11Prepare = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Simulation\WheelSubstep\00_PrepareWheelAndSupportQuery.inl")
+$susp11Resolve = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Simulation\WheelSubstep\05_SuspensionAndContactResolution.inl")
+$susp11Compiler = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionCompiler.cpp")
+$susp11Loader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionLoader.cpp")
+$susp11Regression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SuspensionRegression.cpp")
+$susp11DefinitionRegression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\VehicleDefinitionRegression.cpp")
+$susp11EngineProject = ReadText (Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj")
+$susp11TestProject = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\HeritagePhysicsTests.vcxproj")
+Check (
+    $susp11KartHeader.Contains("KartChassisHardpoints") -and
+    $susp11KartHeader.Contains("steeringJackingM") -and
+    $susp11KartCpp.Contains("rotatePointAroundLine") -and
+    $susp11KartCpp.Contains("RearLeft") -and
+    $susp11KartCpp.Contains("RearRight")
+) "SUSP11 solves physical inclined front kingpins while rear wheel centres remain rigid-axle authored points"
+Check (
+    $susp11Geometry.Contains("SUSP11 exception: kart front-wheel vertical movement is steering jacking") -and
+    $susp11Geometry.Contains("description.provider == SuspensionProviderKind::KartChassisFlexV1") -and
+    $susp11Geometry.Contains("? delta : transverse")
+) "SUSP11 preserves kart steering jacking in the physical 1 kHz support-query offset instead of filtering it as suspension travel"
+Check (
+    $susp11Model.Contains("if (description.provider == SuspensionProviderKind::KartChassisFlexV1)") -and
+    $susp11Model.Contains("prevents a hidden coilover") -and
+    $susp11Prepare.Contains("kartRigidSupport") -and
+    $susp11Prepare.Contains("description.restLength") -and
+    $susp11Resolve.Contains("kartRigidSupport") -and
+    $susp11Resolve.Contains("? state.normalForce : suspensionLinkForce")
+) "SUSP11 removes hidden kart wheel springs/travel and transmits pneumatic tire support directly to the chassis"
+Check (
+    $susp11Compiler.Contains('"kart_chassis_flex_v1"') -and
+    $susp11Compiler.Contains("complete ten-point front-kingpin/rear-axle package") -and
+    $susp11Compiler.Contains("zero bump/droop travel") -and
+    $susp11Compiler.Contains("chassis_torsional_mode_v1 frame compliance") -and
+    $susp11Loader.Contains("SuspensionProviderKind::KartChassisFlexV1")
+) "SUSP11 VehicleDefinition requires the complete ten-point kart package, zero conventional travel and frame torsion"
+Check (
+    $susp11Regression.Contains("kartChassisKingpinJackingAndRigidRearArePhysical") -and
+    $susp11Regression.Contains("inside_jack_mm=") -and
+    $susp11Regression.Contains("rear_independent_travel_mm=") -and
+    $susp11Regression.Contains("hidden_spring_force_n=") -and
+    $susp11DefinitionRegression.Contains("kartRuntimeReady") -and
+    $susp11DefinitionRegression.Contains("incompleteKartResult") -and
+    $susp11DefinitionRegression.Contains("kartWithFakeTravelResult") -and
+    $susp11DefinitionRegression.Contains("kartWithoutFlexResult")
+) "SUSP11 regressions prove kingpin jacking, rigid rear axle, no hidden spring and invalid kart authoring rejection"
+Check (
+    $susp11EngineProject.Contains("Kart\KartChassisKinematics.cpp") -and
+    $susp11TestProject.Contains("Kart\KartChassisKinematics.cpp")
+) "SUSP11 kart kinematics are compiled by both engine and native regression projects"
+Check (Test-Path (Join-Path $Root "Docs\SUSP11_KART_CHASSIS_KINGPIN_FRAME_FLEX.md")) "SUSP11 kart suspension decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP11_KartChassisKingpinFrameFlex.txt")) "SUSP11 milestone report is present"
+$susp11Retirement = ReadText (Join-Path $Root "Tools\Diagnostics\ApplyOPT01Retirement.ps1")
+Check (
+    -not $susp11Retirement.Contains("Suspension\Geometry\Kart\KartChassisKinematics.cpp")
+) "SUSP11 production kart suspension source is not listed in legacy retirement cleanup"
+
+# SUSP12: five-link independent suspension is a real native rigid-upright
+# constraint provider, not the retired architecture scaffold.
+$susp12Header = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\MultiLink\MultiLinkKinematics.hpp")
+$susp12Cpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\MultiLink\MultiLinkKinematics.cpp")
+$susp12Geometry = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp")
+$susp12Model = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp")
+$susp12Compiler = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionCompiler.cpp")
+$susp12Loader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionLoader.cpp")
+$susp12Lua = ReadText (Join-Path $Root "Engine\HeritageEngine\Core\Modules\LuaBindings\Vehicle\LuaVehicleSuspensionBindings.cpp")
+$susp12Regression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SuspensionRegression.cpp")
+$susp12EngineProject = ReadText (Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj")
+$susp12TestProject = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\HeritagePhysicsTests.vcxproj")
+$susp12Retirement = ReadText (Join-Path $Root "Tools\Diagnostics\ApplyOPT01Retirement.ps1")
+Check (
+    $susp12Header.Contains("MultiLinkHardpoints") -and
+    $susp12Cpp.Contains("solveLinear6") -and
+    $susp12Cpp.Contains("solvePoseCore")
+) "SUSP12 implements a bounded rigid-upright five-link constraint solve"
+Check (
+    $susp12Cpp.Contains("toeLinkInner") -and
+    $susp12Cpp.Contains("steeringRackAxis") -and
+    $susp12Cpp.Contains("solveRackDisplacement") -and
+    $susp12Geometry.Contains("SuspensionProviderKind::MultiLinkV1")
+) "SUSP12 toe link/rack steering and passive multi-link geometry are native"
+Check (
+    $susp12Model.Contains("SuspensionProviderKind::MultiLinkV1") -and
+    $susp12Cpp.Contains("springMotionRatio") -and
+    $susp12Cpp.Contains("damperMotionRatio")
+) "SUSP12 spring and damper leverage use geometry-derived generalized coordinates"
+Check (
+    $susp12Compiler.Contains('"multilink_v1"') -and
+    $susp12Compiler.Contains("all seventeen named link/actuator/rack hardpoints") -and
+    $susp12Loader.Contains("SuspensionProviderKind::MultiLinkV1") -and
+    $susp12Lua.Contains("readMultiLinkHardpoints")
+) "SUSP12 VehicleDefinition and Lua support the complete seventeen-point package"
+Check (
+    $susp12Regression.Contains("multiLinkRigidUprightConstraintsAndRackSteeringArePhysical") -and
+    $susp12Regression.Contains("rack_10deg_mm=") -and
+    $susp12Regression.Contains("scrub_x_mm=")
+) "SUSP12 native regression covers bump camber, passive bump steer, rack steering, leverage and scrub"
+Check (
+    $susp12EngineProject.Contains("MultiLink\MultiLinkKinematics.cpp") -and
+    $susp12TestProject.Contains("MultiLink\MultiLinkKinematics.cpp")
+) "SUSP12 multi-link kinematics are compiled by engine and native regression projects"
+Check (-not $susp12Retirement.Contains("Suspension\Geometry\MultiLink\MultiLinkKinematics.cpp")) "SUSP12 production multi-link source is not listed in legacy retirement cleanup"
+Check (Test-Path (Join-Path $Root "Docs\SUSP12_FIVE_LINK_INDEPENDENT_SUSPENSION.md")) "SUSP12 multi-link suspension decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP12_FiveLinkIndependentSuspension.txt")) "SUSP12 milestone report is present"
+
+# SUSP13: older-European/FWD semi-independent suspension is represented by
+# physical semi-trailing-arm geometry and structural twist-beam coupling rather
+# than authored camber/toe curves or two independent arms plus a generic ARB.
+$susp13SemiHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\SemiTrailingArm\SemiTrailingArmKinematics.hpp")
+$susp13SemiCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\SemiTrailingArm\SemiTrailingArmKinematics.cpp")
+$susp13BeamHeader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\TwistBeam\TwistBeamKinematics.hpp")
+$susp13BeamCpp = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Geometry\TwistBeam\TwistBeamKinematics.cpp")
+$susp13Geometry = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionGeometry.cpp")
+$susp13Model = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\SuspensionModel.cpp")
+$susp13Compiler = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionCompiler.cpp")
+$susp13Loader = ReadText (Join-Path $Root "Engine\HeritageEngine\Vehicles\VehicleDefinitionLoader.cpp")
+$susp13Lua = ReadText (Join-Path $Root "Engine\HeritageEngine\Core\Modules\LuaBindings\Vehicle\LuaVehicleSuspensionBindings.cpp")
+$susp13Regression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\SuspensionRegression.cpp")
+$susp13DefinitionRegression = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\VehicleDefinitionRegression.cpp")
+$susp13EngineProject = ReadText (Join-Path $Root "Engine\HeritageEngine\HeritageEngine\HeritageEngine.vcxproj")
+$susp13TestProject = ReadText (Join-Path $Root "Engine\HeritageEngine\Tests\HeritagePhysicsTests.vcxproj")
+$susp13Retirement = ReadText (Join-Path $Root "Tools\Diagnostics\ApplyOPT01Retirement.ps1")
+Check (
+    $susp13SemiHeader.Contains("SemiTrailingArmHardpoints") -and
+    $susp13SemiCpp.Contains("armPivotInner") -and
+    $susp13SemiCpp.Contains("armRotationRadians") -and
+    $susp13SemiCpp.Contains("springMotionRatio") -and
+    $susp13SemiCpp.Contains("damperMotionRatio")
+) "SUSP13 semi-trailing arm uses physical swept-pivot rigid-arm geometry and independent actuator leverage"
+Check (
+    $susp13BeamHeader.Contains("TwistBeamHardpoints") -and
+    $susp13BeamCpp.Contains("axisConvention") -and
+    $susp13BeamCpp.Contains("beamTwistRadians=leftAngle-rightAngle") -and
+    $susp13BeamCpp.Contains("beamTwistRateRadiansPerSecond") -and
+    $susp13BeamCpp.Contains("beamAngularMotionRatioRadPerM")
+) "SUSP13 twist beam uses paired relative-arm torsion with mirrored-axis normalization and live twist rate"
+Check (
+    $susp13Geometry.Contains("SuspensionProviderKind::SemiTrailingArmV1") -and
+    $susp13Geometry.Contains("SuspensionProviderKind::TwistBeamV1") -and
+    $susp13Model.Contains("twistBeamTorsionalStiffnessNmPerRad") -and
+    $susp13Model.Contains("twistBeamTorsionalDampingNmsPerRad") -and
+    $susp13Model.Contains("twistBeamCouplingForceN") -and
+    $susp13Model.Contains("twistBeamDissipationW")
+) "SUSP13 geometry and force paths apply structural twist-beam torque through signed generalized leverage"
+Check (
+    $susp13Compiler.Contains('"semi_trailing_arm_v1"') -and
+    $susp13Compiler.Contains("requires seven named pivot/wheel/spring/damper hardpoints") -and
+    $susp13Compiler.Contains('"twist_beam_v1"') -and
+    $susp13Compiler.Contains("requires left/right seven-point semi-trailing-arm packages plus two beam attachment points") -and
+    $susp13Loader.Contains("SuspensionProviderKind::SemiTrailingArmV1") -and
+    $susp13Loader.Contains("SuspensionProviderKind::TwistBeamV1")
+) "SUSP13 VehicleDefinition compile/load supports complete seven-point and sixteen-point packages"
+Check (
+    $susp13Lua.Contains("readSemiTrailingArmHardpoints") -and
+    $susp13Lua.Contains("readTwistBeamHardpoints") -and
+    $susp13Lua.Contains("geometry.semiTrailingArm") -and
+    $susp13Lua.Contains("geometry.twistBeam")
+) "SUSP13 Lua live hardpoint bridge supports semi-trailing-arm and twist-beam providers"
+Check (
+    $susp13Regression.Contains("semiTrailingArmAndTwistBeamArePhysical") -and
+    $susp13Regression.Contains("symmetric_twist_deg=") -and
+    $susp13Regression.Contains("split_twist_deg=") -and
+    $susp13DefinitionRegression.Contains("semiTrailingRuntimeReady") -and
+    $susp13DefinitionRegression.Contains("twistBeamRuntimeReady") -and
+    $susp13DefinitionRegression.Contains("incompleteSemiTrailingResult") -and
+    $susp13DefinitionRegression.Contains("incompleteTwistBeamResult")
+) "SUSP13 regressions prove physical semi-trailing/twist-beam behavior and reject incomplete authoring"
+Check (
+    $susp13EngineProject.Contains("SemiTrailingArm\SemiTrailingArmKinematics.cpp") -and
+    $susp13EngineProject.Contains("TwistBeam\TwistBeamKinematics.cpp") -and
+    $susp13TestProject.Contains("SemiTrailingArm\SemiTrailingArmKinematics.cpp") -and
+    $susp13TestProject.Contains("TwistBeam\TwistBeamKinematics.cpp")
+) "SUSP13 kinematics are compiled by both engine and native regression projects"
+Check (-not $susp13Retirement.Contains("Suspension\Geometry\SemiTrailingArm\SemiTrailingArmKinematics.cpp")) "SUSP13 production semi-trailing-arm source is not listed in legacy retirement cleanup"
+Check (Test-Path (Join-Path $Root "Docs\SUSP13_SEMI_TRAILING_ARM_TWIST_BEAM.md")) "SUSP13 suspension decision is documented"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP13_SemiTrailingArmTwistBeam.txt")) "SUSP13 milestone report is present"
+Check (Test-Path (Join-Path $Root "Build\Reports\SUSP13_LinuxNativeRegression.txt")) "SUSP13 clean native regression report is present"

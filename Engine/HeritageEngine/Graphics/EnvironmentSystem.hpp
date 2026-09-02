@@ -47,6 +47,9 @@ struct EnvironmentLighting
     heritage::math::Vec3 groundHorizon{ 0.30f, 0.29f, 0.25f };
     heritage::math::Vec3 groundNadir{ 0.085f, 0.10f, 0.075f };
     float starIntensity = 0.0f;
+    // CELESTIAL06: single normalized Sun/up cycle authority (0 deep night,
+    // increasing continuously through twilight/day). All render paths derive
+    // their own gradients/curves from this value rather than re-thresholding.
     float daylightFactor = 1.0f;
     float skyExposure = 1.0f;
     float atmosphereThickness = 0.40f;
@@ -59,10 +62,10 @@ struct EnvironmentLighting
     heritage::math::Vec3 worldToCelestialRow2{ 0.0f, 0.0f, 1.0f };
 };
 
-// Resolve the renderer's single directional celestial key from the physically
-// overlapping Sun and Moon contributions. Keeping this in the astronomical
-// environment authority prevents individual render paths from reintroducing
-// hard dawn/dusk ownership switches.
+// Resolve the renderer's legacy single directional celestial key from one real
+// body at a time. CELESTIAL07 fades direct authority to zero through a narrow
+// twilight bridge before switching Sun/Moon ownership, preventing synthetic
+// shadow directions from sweeping across the world.
 void resolveCelestialKeyLight(EnvironmentLighting& lighting);
 
 // Single authoritative environment clock + astronomy state.

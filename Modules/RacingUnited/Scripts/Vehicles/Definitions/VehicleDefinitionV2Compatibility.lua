@@ -31,7 +31,17 @@ function ValidateVehicleDefinitionV2Compatibility(report, definition, context)
     local currentSuspensionProviders = {
         linear_raycast_v1 = true,
         macpherson_strut_v1 = true,
-        trailing_arm_torsion_bar_v1 = true
+        double_wishbone_v1 = true,
+        pushrod_double_wishbone_v1 = true,
+        live_axle_v1 = true,
+        live_axle_leaf_v1 = true,
+        motorcycle_telescopic_fork_v1 = true,
+        motorcycle_swingarm_linkage_v1 = true,
+        trailing_arm_torsion_bar_v1 = true,
+        kart_chassis_flex_v1 = true,
+        multilink_v1 = true,
+        semi_trailing_arm_v1 = true,
+        twist_beam_v1 = true
     }
     local suspensionReasons = {}
     for _, suspension in ipairs(suspensions) do

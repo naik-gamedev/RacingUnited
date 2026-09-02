@@ -1,7 +1,8 @@
 # Current Project State
 
-> **Tire-status note (2026-08-14):** use `CURRENT_TIRE_STATUS.md` for the authoritative mechanism
-> ledger and `TIRE_SUSPENSION_HANDOFF.md` for the current development boundary.
+> **Tire-status note (2026-08-31):** `CURRENT_TIRE_STATUS.md` is authoritative. `TIRE46_FINAL_TIRE_PHYSICS_FREEZE` closes the production road-car and motorcycle tire-solver architecture before the suspension completion phase; historical tire numbers remain provenance-labelled evidence-informed data work.
+
+> **Suspension-status note (2026-08-31):** `SUSP13_SEMI_TRAILING_ARM_TWIST_BEAM` adds native semi-trailing-arm and structurally coupled twist-beam providers with geometry-derived camber/toe/scrub, actuator leverage, relative-beam torsion and damping. SUSP05-SUSP12 providers remain intact.
 
 ## Current checkpoint
 
@@ -21,22 +22,26 @@
 
 
 
-**Current tire baseline:** TIRE41 + TIRE18A-E. The user-validated single-authority flexible-ring
-deformation is retained; installed-tire steady-state sweeps, A/B plots and CSV/build manifests,
-stateful relaxation/thermal/wear/failure/brake-rim scenarios, provenance-labelled acceptance checks,
-the experimental bounded `Distributed3x3` contact tier, deterministic rain/road-film weather and an
-executable 150-car / 600-tire workload laboratory compile and pass native regressions. Measured
-commercial datasets and a real complete 150-car scene profile remain external evidence gates rather
-than blockers for suspension development. The older “current tire candidate” paragraph above is
-retained only as historical context and is superseded by this baseline.
+**Current tire baseline:** `TIRE46_FINAL_TIRE_PHYSICS_FREEZE`. The single-authority flexible-ring
+architecture is retained and the production road-car/motorcycle tire solver is frozen for the
+suspension phase. `Distributed3x3` is the native default for every vehicle and the 150-car / 600-tire
+laboratory exercises it universally. MF6.2 force/moment/combined-slip behavior includes the signed
+PHYP turn-slip branch; the rounded motorcycle crown owns physical support/contact geometry at lean.
+Construction thermals use tread/belt/carcass/inner-sidewall/outer-sidewall/gas/rim nodes plus the
+rotating 16x3 tread surface, with energy-conserving structural-loss heat partitioning. Damage/endurance
+covers punctures/cuts/leaks, bead loss, belt/cord/sidewall fatigue, graining, blistering, delamination,
+collapse/blowout, rim damage and optional run-flat support. Historical tire parameters may remain
+explicit evidence-informed estimates; measured commercial data is optional evidence, not a solver
+completion gate. A real complete 150-car scene profile remains a whole-engine performance task, not
+a reason to keep tire architecture open. The older tire-candidate paragraphs above are historical.
 
 **Current Dynamic Surface candidate:** OPT03C4/OPT06 — production spatial water is the prebaked `.hhyd v15` path plus the explicitly named `DynamicSurfaceGpuRuntime`. Authored collision triangles bake 10 m tiles with 256 x 256 near payloads (3.90625 cm/texel) and 32 x 32 far payloads through 500 m. The cache stores standing-depth ceiling, downhill flow and total contributing MFD runoff area; runtime reconstructs standing/running water from live weather exposure and GPU tire dry-line state without a second production CFD solver.
 
 **Water/tire authority:** `DynamicSurfaceGpuRuntime` is the single production spatial-water authority. Tire contacts clear the same GPU field used by presentation, and tire physics samples that filtered field through OPT03B's fenced three-slot SSBO bridge. The bridge never performs a full atlas readback and never waits for the GPU; a stale/unavailable sample temporarily falls back to scalar weather film rather than advancing another hydrology simulation. The historical CPU `DynamicSurfaceHydrology` implementation exists only under `Tests/Reference` as a regression oracle.
 
-**Presentation and performance (current):** OPT06 freezes the OPT00-OPT05 optimization chain. The renderer-side `DynamicSurfaceGpuPagePool` duplicate and production CPU Hydro are retired; `.hhyd v15` remains unchanged. OPT04A splits large renderer owners, OPT04B removes redundant synchronous GL state/name work, OPT04C shares mesh/animation preparation across shadow and material passes without reducing CSM/PCSS quality, and OPT05 removes cloud history-copy/pass bandwidth without reducing the 32-step volumetric cloud model. F8/OPT00 asynchronous CPU/GPU timers remain the evidence source for any future targeted optimization.
+**Presentation and performance (current):** OPT06 freezes the OPT00-OPT05 optimization chain. The renderer-side `DynamicSurfaceGpuPagePool` duplicate and production CPU Hydro are retired; `.hhyd v15` remains unchanged. OPT04A splits large renderer owners, OPT04B removes redundant synchronous GL state/name work, OPT04C shares mesh/animation preparation across shadow and material passes without reducing CSM/PCSS quality, and OPT05 removes cloud history-copy/pass bandwidth without reducing the 32-step volumetric cloud model. CLOUDURP15EJ makes the post framebuffer's MSAA color and depth attachments directly shader-readable, allowing volumetric-cloud raymarch, reconstruction, temporal resolve and combine to consume the authoritative camera attachments without a redundant full-resolution scene blit. Exact per-sample MSAA averaging, all ray/light steps, bilateral reconstruction, temporal filtering, morphology and cloud shadows remain enabled; at the profiled 3840 x 2100 MSAA x4 configuration the eliminated copy recovered approximately 2.8 ms per frame. F8/OPT00 asynchronous CPU/GPU timers remain the evidence source for any future targeted optimization.
 
-**Current atmosphere/cloud candidate:** PBSKY01/PBSKY01A provide the Heritage-native OpenGL/GLSL physically based atmosphere derived from jiaozi158's MIT-licensed UnityPhysicallyBasedSkyURP architecture. VCLOUD01 replaces the accumulated CLOUDURP15 artistic marcher with a clean HDRP-derived UnityVolumetricCloudsURP translation: four upstream preset curve families, 32-step adaptive/empty-space ray integration, two light steps, dual-HG two-octave multiple scattering, PBSKY transmittance coupling and the upstream 16-segment cloud-shadow trace. CELESTIAL01 adds independent physical Sun and Moon illumination inside that same cloud volume and makes the existing ground cloud-shadow cookie follow Heritage's continuous astronomical celestial key: Sun-directed by day, Moon-directed by night, continuous through twilight. Heritage's astronomical sun/moon/star/day-night authority and regional radar/rain/hydrology weather field remain authoritative.
+**Current atmosphere/cloud candidate:** PBSKY01/PBSKY01A provide the Heritage-native OpenGL/GLSL physically based atmosphere derived from jiaozi158's MIT-licensed UnityPhysicallyBasedSkyURP architecture. VCLOUD01 replaces the accumulated CLOUDURP15 artistic marcher with a clean HDRP-derived UnityVolumetricCloudsURP translation: four upstream preset curve families, 32-step adaptive/empty-space ray integration, two light steps, dual-HG two-octave multiple scattering, PBSKY transmittance coupling and the upstream 16-segment cloud-shadow trace. CELESTIAL01 keeps independent physical Sun and Moon illumination inside that same cloud volume; CELESTIAL07 supersedes the old synthetic Sun/Moon shadow-direction interpolation so the legacy directional/CSM path and the one detailed ground cloud-shadow cookie follow one real celestial body at a time, fading through a zero-strength twilight bridge before ownership changes. CELESTIAL04's post-opaque receiver is the sole detailed-cookie application. CELESTIAL08 reduces all receiver-side cloud direct-Sun attenuation to one tenth of CELESTIAL07 while preserving volumetric opacity, and decouples permanent haze/PBSKY aerosol state from fast camera-local regional cloud-cell transitions. CELESTIAL09 removes the remaining atomic dawn/dusk IBL presentation step by cross-fading completed procedural cubemap generations, and separates nighttime atmospheric extinction from visible air-light so night haze is darker while stars remain legible. CELESTIAL10 reduces deep-night visible air-light to one tenth of CELESTIAL09 and removes the remaining PBSKY dawn/dusk dead zone by separating atmospheric twilight illumination from ground direct-Sun visibility. Heritage's astronomical sun/moon/star/day-night authority and regional radar/rain/hydrology weather field remain authoritative.
 
 **Superseded water layouts:** DSURF04G fixed 10 m / 512² live GPU CFD, DSURF04F9/F10 high-resolution rings, LIVETRACK01 CPU sensor Hydro as production authority, and WATER15-18 renderer-owned puddle experiments are historical only. The live rule is one production GPU spatial-water authority backed by immutable prebaked `.hhyd v15` topology/capacity/flow data; there is no production CPU water solver or camera-owned puddle memory.
 
@@ -138,7 +143,7 @@ The current Peugeot 206 RC wheel/tire mesh is not treated as manufacturing-accur
 
 ## Immediate roadmap after CLEAN13
 
-1. Begin the suspension program against the contract in `TIRE_SUSPENSION_HANDOFF.md`.
+1. Continue the suspension program from `SUSP13_SEMI_TRAILING_ARM_TWIST_BEAM`; independent, live-axle, motorcycle, kart, five-link, semi-trailing and twist-beam geometry families are now native. The next target is non-steel spring/actuator technology (air/hydropneumatic/self-levelling), followed by active/semi-active damping, suspension damage/endurance and a suspension-wide validation/freeze pass.
 2. Acquire lawful measured tire/suspension evidence when available; do not invent commercial fits.
 3. Return to TIRE18F for an actual 150-car scene profile once the AI/grid scene exists.
 4. Continue full motorcycle dynamics, FFB, aero and other vehicle domains after the suspension baseline.
@@ -237,3 +242,21 @@ reprojection velocity still reduce stale history to limit visible ghost trails.
 ## CLOUDURP15E6 checkpoint — upstream temporal denoiser replaces experimental cloud TAA
 
 CLOUDURP15E6 retires the post-VCLOUD01 adaptive cloud-TAA experiments as runtime code and restores the temporal denoising architecture used by the HDRP-derived `jiaozi158/UnityVolumetricCloudsURP` path. The authoritative sequence is low-resolution stochastic cloud raymarch, full-resolution scene/cloud composition with cloud transmittance in alpha, point-clamped reprojected history, a five-pixel current-frame RGB clamp box, and the source-default 0.95 history accumulation reduced by screen-space camera motion. The raymarch integration jitter also matches the upstream semantics: one per-frame stochastic scalar starts the ray at a raw 0..1 offset and is used only for the first relative step. The former 20/60/50:1 classifier, stochastic-noise classifier, low-frequency reactive rejection, sigma clipping, cloud-depth temporal reprojection, and GL_LINEAR history override are no longer active cloud-TAA paths. CELESTIAL04 ground cloud shadows remain outside temporal history.
+
+## CELESTIAL07 checkpoint — stable physical shadow ownership
+
+CELESTIAL07 identifies the remaining dawn/dusk flashing as a shadow-transport issue rather than a day/night-curve issue. The renderer's legacy single directional key no longer spherically interpolates between widely separated Sun/Moon directions: outgoing direct authority fades to zero, ownership changes in a zero-intensity bridge, and the incoming physical source fades in. The single 256x256 detailed cloud-shadow cookie follows the real Sun or Moon with a low-altitude safety fade, eliminating near-tangent spherical-shell traces and synthetic-key sweeps. The duplicate detailed-cookie material path is retired; CELESTIAL04's post-opaque receiver is the sole detailed cloud-shadow authority, while material shading retains continuous regional cloud transmission.
+
+
+## CELESTIAL08 checkpoint — gentle cloud sunlight + continuous haze
+
+CELESTIAL08 keeps cloud geometry and optical appearance unchanged while reducing broad weather Sun loss, regional material Sun filtering and the detailed post-opaque ground cookie to 10% of their CELESTIAL07 darkening authority. Atmospheric haze is now a permanent scene-climate field: authored humidity/cloud cover own most of the baseline, regional modulation is temporally filtered, and PBSKY aerosol LUTs consume stable authored climate rather than a moving binary-ish camera-local cloud cell.
+
+## CELESTIAL09 checkpoint — dawn IBL continuity + night air-light
+
+CELESTIAL09 identifies the remaining night-to-morning pop as a presentation-cache issue rather than another astronomical state-machine fault. The existing double-buffered 128x128 procedural environment cubemap still refreshes incrementally one face per frame, but a completed generation now cross-fades from the previous map over 0.18 s before the staging texture may be reused. Entity diffuse/specular IBL and volumetric-cloud ambient consume the same blend, eliminating one-frame dawn/dusk ambient/reflection jumps. Night haze keeps real extinction but removes the artificial deep-night density bonus; visible air-light falls to 34% in deep night with a small Moon lift, while the HDR star plate receives a restrained 1.22x night visibility boost.
+
+
+## CELESTIAL10 checkpoint — night haze + dawn scatter continuity
+
+CELESTIAL10 fixes the remaining atmospheric presentation discontinuity. Deep-night visible haze air-light is 0.10x CELESTIAL09 while extinction remains physical. PBSKY sky-view scattering now has its own continuous twilight solar illumination derived from the shared day/night cycle instead of inheriting the direct-ground Sun value that is zero below the horizon. The physical-sky handoff is delayed/expanded to overlap meaningful scattering, removing the temporary haze-free notch before dawn and after dusk.

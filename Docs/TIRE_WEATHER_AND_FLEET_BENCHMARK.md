@@ -23,19 +23,27 @@ footprints displace water. See `SURFACE_HYDROLOGY.md` for the cache and authorin
 
 The Racing United Surfaces panel provides Dry, Light Rain, Heavy Rain and Storm presets plus live
 rain, humidity, wind and cloud controls. A reset clears accumulated water without changing the
-chosen weather configuration.
+chosen weather configuration. Production spatial water is GPU-owned; the CPU tire benchmark does
+not instantiate a second hydrology authority.
 
 ## 150-car workload laboratory
 
 The Tire Lab can execute a timed, single-threaded workload using the tire fitted to the spawned
 vehicle. The default case runs 150 vehicles / 600 tires at a 1000 Hz tire force rate, with thermal,
-wear and wet-state work at 100 Hz. Four player tires use the bounded 3x3 distributed contact patch;
-the remaining tires use the same whole-tire physical provider at aggregate contact fidelity.
+wear and wet-state work at 100 Hz. TIRE46 requires the bounded 3x3 distributed contact patch for all
+600 tires. Aggregate contact remains an explicit diagnostic mode only and is never selected merely
+because a vehicle is AI-controlled or outside the camera range.
 
 Results include wall-clock time, simulated time, real-time factor, tire evaluations per second,
-microseconds per vehicle per 1 ms step, state-update counts and a force checksum. Wet mode also builds
-a synthetic spatial road, advances its 30 Hz hydrology and submits all 600 tires' 1000 Hz swept-contact
-water-clearing work. Hydrology cell, step and contact counts are reported separately.
+microseconds per vehicle per 1 ms step, state-update counts and a force checksum. Wet mode exercises
+the tire's wet-film/drainage/hydroplaning state. Spatial GPU water is profiled in the renderer runtime;
+the compatibility hydrology counters in this CPU-only benchmark therefore remain zero.
+
+The 2026-08-31 Windows Release regression measured its 50 ms / 150-car case at 58.16 ms dry and
+59.33 ms wet, or 0.86x and 0.84x real time on one CPU thread. This is useful evidence that the tire
+stack is bounded and close to one-core real time. It is not a reason to camera-cull tire physics:
+full-race scaling belongs at the vehicle/job-system level, while the 24x13 visual carcass already
+uses a visibility-demand lease.
 
 This is an executable tire-stack benchmark, not a complete race benchmark. It deliberately excludes:
 

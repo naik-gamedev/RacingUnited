@@ -86,7 +86,6 @@ function RacingAIVehicleController.Spawn(agent,gridMarker)
         and addWheel(-track*0.5,rearZ,0.5,0.0,0.25,0.5)
         and addWheel(track*0.5,rearZ,0.5,0.0,0.25,0.5)
     if not ok then Vehicle.Destroy(vehicle); Physics.DestroyBody(body); Entity.Destroy(entity); return nil end
-    if Vehicle.SetTireContactFidelity then Vehicle.SetTireContactFidelity(vehicle,1) end
     if Vehicle.SetSteeringGeometry then Vehicle.SetSteeringGeometry(vehicle,0.90,8.5,11.0,0.52,55.0) end
     if Vehicle.SetDriverAids then Vehicle.SetDriverAids(vehicle,true,true,0.16,0.12,2.5,18.0,3500.0) end
     Vehicle.SetGear(vehicle,1)

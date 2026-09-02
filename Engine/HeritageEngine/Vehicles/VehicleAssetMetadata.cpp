@@ -4,8 +4,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <unordered_map>
 #include <utility>
@@ -190,6 +192,251 @@ heritage::math::Vec3 matrixXAxis(const Mat4& matrix)
     return { x / magnitude, y / magnitude, z / magnitude };
 }
 
+heritage::math::Vec3 transformPoint(
+    const Mat4& matrix,
+    float x,
+    float y,
+    float z)
+{
+    return {
+        matrix.m[0] * x + matrix.m[4] * y + matrix.m[8] * z + matrix.m[12],
+        matrix.m[1] * x + matrix.m[5] * y + matrix.m[9] * z + matrix.m[13],
+        matrix.m[2] * x + matrix.m[6] * y + matrix.m[10] * z + matrix.m[14] };
+}
+
+std::string lowerAscii(std::string value)
+{
+    std::transform(
+        value.begin(), value.end(), value.begin(),
+        [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
+    return value;
+}
+
+bool wheelAssemblyNode(
+    const heritage::graphics::MeshNode& node)
+{
+    const std::string lowerName = lowerAscii(node.name);
+    const std::string partType = lowerAscii(stringProperty(
+        node.metadata, "heritage.part_type"));
+    const std::string role = lowerAscii(stringProperty(
+        node.metadata, "heritage.role"));
+    return lowerName.rfind("wh_", 0) == 0
+        || partType == "wheel" || partType == "tire" || partType == "tyre"
+        || partType == "brake" || role.find("wheel") != std::string::npos
+        || role.find("tire") != std::string::npos
+        || role.find("tyre") != std::string::npos;
+}
+
+bool tireGeometryNode(
+    const heritage::graphics::MeshNode& node)
+{
+    const std::string lowerName = lowerAscii(node.name);
+    const std::string partType = lowerAscii(stringProperty(
+        node.metadata, "heritage.part_type"));
+    return partType == "tire" || partType == "tyre"
+        || lowerName.find("tire") != std::string::npos
+        || lowerName.find("tyre") != std::string::npos;
+}
+
+struct WorldBounds
+{
+    bool valid = false;
+    heritage::math::Vec3 minimum{};
+    heritage::math::Vec3 maximum{};
+};
+
+WorldBounds transformedBounds(
+    const heritage::graphics::GlbMetadataDocument::NodeGeometryBounds& local,
+    const Mat4& world)
+{
+    WorldBounds result;
+    if (!local.valid)
+        return result;
+    for (int xIndex = 0; xIndex < 2; ++xIndex)
+    {
+        for (int yIndex = 0; yIndex < 2; ++yIndex)
+        {
+            for (int zIndex = 0; zIndex < 2; ++zIndex)
+            {
+                const heritage::math::Vec3 point = transformPoint(
+                    world,
+                    xIndex ? local.maximum[0] : local.minimum[0],
+                    yIndex ? local.maximum[1] : local.minimum[1],
+                    zIndex ? local.maximum[2] : local.minimum[2]);
+                if (!result.valid)
+                {
+                    result.minimum = point;
+                    result.maximum = point;
+                    result.valid = true;
+                }
+                else
+                {
+                    result.minimum.x = std::min(result.minimum.x, point.x);
+                    result.minimum.y = std::min(result.minimum.y, point.y);
+                    result.minimum.z = std::min(result.minimum.z, point.z);
+                    result.maximum.x = std::max(result.maximum.x, point.x);
+                    result.maximum.y = std::max(result.maximum.y, point.y);
+                    result.maximum.z = std::max(result.maximum.z, point.z);
+                }
+            }
+        }
+    }
+    return result;
+}
+
+void inspectRideHeightGeometry(
+    const heritage::graphics::GlbMetadataDocument& document,
+    std::vector<Mat4>& worldMatrices,
+    std::vector<unsigned char>& worldMatrixState,
+    VehicleAssetRideHeightGeometryMetadata& output,
+    VehicleAssetWheelGeometryMetadata& wheelOutput)
+{
+    output = {};
+    wheelOutput = {};
+    if (document.nodeGeometryBounds.size() != document.nodes.size())
+        return;
+
+    std::vector<WorldBounds> bodyBounds;
+    std::vector<WorldBounds> tireBounds;
+    bodyBounds.reserve(document.nodes.size());
+    tireBounds.reserve(4);
+    for (std::size_t index = 0; index < document.nodes.size(); ++index)
+    {
+        const WorldBounds bounds = transformedBounds(
+            document.nodeGeometryBounds[index],
+            worldNodeMatrix(document, static_cast<int>(index),
+                worldMatrices, worldMatrixState));
+        if (!bounds.valid)
+            continue;
+        if (tireGeometryNode(document.nodes[index]))
+            tireBounds.push_back(bounds);
+        else if (!wheelAssemblyNode(document.nodes[index]))
+            bodyBounds.push_back(bounds);
+    }
+    if (tireBounds.empty())
+        return;
+
+    float groundSum = 0.0f;
+    float frontTireCenterZ = -std::numeric_limits<float>::infinity();
+    float rearTireCenterZ = std::numeric_limits<float>::infinity();
+    for (const WorldBounds& bounds : tireBounds)
+    {
+        groundSum += bounds.minimum.y;
+        const float centerZ = 0.5f * (bounds.minimum.z + bounds.maximum.z);
+        frontTireCenterZ = std::max(frontTireCenterZ, centerZ);
+        rearTireCenterZ = std::min(rearTireCenterZ, centerZ);
+    }
+    const float axleSplitZ = 0.5f * (frontTireCenterZ + rearTireCenterZ);
+    float lateralSplitX = 0.0f;
+    for (const WorldBounds& bounds : tireBounds)
+        lateralSplitX += 0.5f * (bounds.minimum.x + bounds.maximum.x);
+    lateralSplitX /= static_cast<float>(tireBounds.size());
+
+    heritage::math::Vec3 cornerCenterSums[4]{};
+    std::size_t cornerCenterCounts[4]{};
+    for (const WorldBounds& bounds : tireBounds)
+    {
+        const heritage::math::Vec3 center{
+            0.5f * (bounds.minimum.x + bounds.maximum.x),
+            0.5f * (bounds.minimum.y + bounds.maximum.y),
+            0.5f * (bounds.minimum.z + bounds.maximum.z)
+        };
+        const bool front = center.z >= axleSplitZ;
+        const bool right = center.x >= lateralSplitX;
+        const std::size_t corner = front
+            ? (right ? 1u : 0u)
+            : (right ? 3u : 2u);
+        cornerCenterSums[corner].x += center.x;
+        cornerCenterSums[corner].y += center.y;
+        cornerCenterSums[corner].z += center.z;
+        ++cornerCenterCounts[corner];
+    }
+    bool completeWheelGeometry = true;
+    heritage::math::Vec3 cornerCenters[4]{};
+    for (std::size_t corner = 0; corner < 4; ++corner)
+    {
+        if (cornerCenterCounts[corner] == 0)
+        {
+            completeWheelGeometry = false;
+            continue;
+        }
+        const float inverseCount = 1.0f
+            / static_cast<float>(cornerCenterCounts[corner]);
+        cornerCenters[corner] = {
+            cornerCenterSums[corner].x * inverseCount,
+            cornerCenterSums[corner].y * inverseCount,
+            cornerCenterSums[corner].z * inverseCount
+        };
+    }
+    if (completeWheelGeometry)
+    {
+        wheelOutput.frontLeftCenter = cornerCenters[0];
+        wheelOutput.frontRightCenter = cornerCenters[1];
+        wheelOutput.rearLeftCenter = cornerCenters[2];
+        wheelOutput.rearRightCenter = cornerCenters[3];
+        wheelOutput.frontTrackM = std::abs(
+            cornerCenters[1].x - cornerCenters[0].x);
+        wheelOutput.rearTrackM = std::abs(
+            cornerCenters[3].x - cornerCenters[2].x);
+        const float frontCenterZ = 0.5f
+            * (cornerCenters[0].z + cornerCenters[1].z);
+        const float rearCenterZ = 0.5f
+            * (cornerCenters[2].z + cornerCenters[3].z);
+        wheelOutput.wheelbaseM = std::abs(frontCenterZ - rearCenterZ);
+        wheelOutput.tireNodeCount = tireBounds.size();
+        wheelOutput.valid = std::isfinite(wheelOutput.wheelbaseM)
+            && std::isfinite(wheelOutput.frontTrackM)
+            && std::isfinite(wheelOutput.rearTrackM)
+            && wheelOutput.wheelbaseM > 0.0f
+            && wheelOutput.frontTrackM > 0.0f
+            && wheelOutput.rearTrackM > 0.0f;
+    }
+
+    if (bodyBounds.empty())
+        return;
+    output.referenceGroundPlaneLocalY =
+        groundSum / static_cast<float>(tireBounds.size());
+    output.axleSplitLocalZ = axleSplitZ;
+    output.frontLowestBodyLocalY = std::numeric_limits<float>::infinity();
+    output.rearLowestBodyLocalY = std::numeric_limits<float>::infinity();
+    output.bodyMinimum = bodyBounds.front().minimum;
+    output.bodyMaximum = bodyBounds.front().maximum;
+    for (const WorldBounds& bounds : bodyBounds)
+    {
+        output.bodyMinimum.x = std::min(output.bodyMinimum.x, bounds.minimum.x);
+        output.bodyMinimum.y = std::min(output.bodyMinimum.y, bounds.minimum.y);
+        output.bodyMinimum.z = std::min(output.bodyMinimum.z, bounds.minimum.z);
+        output.bodyMaximum.x = std::max(output.bodyMaximum.x, bounds.maximum.x);
+        output.bodyMaximum.y = std::max(output.bodyMaximum.y, bounds.maximum.y);
+        output.bodyMaximum.z = std::max(output.bodyMaximum.z, bounds.maximum.z);
+        if (bounds.maximum.z >= output.axleSplitLocalZ)
+        {
+            output.frontLowestBodyLocalY = std::min(
+                output.frontLowestBodyLocalY, bounds.minimum.y);
+        }
+        if (bounds.minimum.z <= output.axleSplitLocalZ)
+        {
+            output.rearLowestBodyLocalY = std::min(
+                output.rearLowestBodyLocalY, bounds.minimum.y);
+        }
+    }
+    if (!std::isfinite(output.frontLowestBodyLocalY)
+        || !std::isfinite(output.rearLowestBodyLocalY))
+    {
+        return;
+    }
+    output.frontAuthoredClearanceM = output.frontLowestBodyLocalY
+        - output.referenceGroundPlaneLocalY;
+    output.rearAuthoredClearanceM = output.rearLowestBodyLocalY
+        - output.referenceGroundPlaneLocalY;
+    output.bodyNodeCount = bodyBounds.size();
+    output.tireNodeCount = tireBounds.size();
+    output.valid = std::isfinite(output.frontAuthoredClearanceM)
+        && std::isfinite(output.rearAuthoredClearanceM);
+}
+
 bool validWheelDatumRole(const std::string& role)
 {
     return role == "hub_face_center"
@@ -353,6 +600,9 @@ bool inspectVehicleAssetMetadata(
     std::unordered_map<std::string, int> hardpointOwners;
     std::vector<Mat4> worldMatrices(document.nodes.size());
     std::vector<unsigned char> worldMatrixState(document.nodes.size(), 0);
+    inspectRideHeightGeometry(
+        document, worldMatrices, worldMatrixState,
+        output.rideHeightGeometry, output.wheelGeometry);
     for (std::size_t nodeIndex = 0; nodeIndex < document.nodes.size(); ++nodeIndex)
     {
         const auto& node = document.nodes[nodeIndex];
@@ -563,6 +813,10 @@ bool inspectVehicleAssetMetadata(
         << " asset=" << glbPath.filename().string()
         << " parts=" << output.parts.size()
         << " suspension_hardpoints=" << output.suspensionHardpoints.size()
+        << " ride_height_geometry="
+        << (output.rideHeightGeometry.valid ? "yes" : "no")
+        << " wheel_geometry="
+        << (output.wheelGeometry.valid ? "yes" : "no")
         << " warnings=" << output.warnings.size() << '\n';
 
     errorMessage.clear();

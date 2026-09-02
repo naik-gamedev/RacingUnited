@@ -181,8 +181,11 @@ void SkyRenderer::updatePhysicallyBasedAtmosphereLuts(
     if (!ensurePhysicallyBasedAtmosphereTargets())
         return;
 
-    const float rain01 = std::clamp(weather.precipitationRateMmPerHour / 80.0f, 0.0f, 1.0f);
-    const float humidity01 = std::clamp(weather.relativeHumidity, 0.0f, 1.0f);
+    // CELESTIAL08: the physical air column is scene climate, not a binary
+    // camera-local cloud cell. Regional cloud/rain still drives visible clouds,
+    // but cannot make the atmosphere LUT suddenly jump between clear/hazy.
+    const float rain01 = std::clamp(weather.atmospherePrecipitationRateMmPerHour / 80.0f, 0.0f, 1.0f);
+    const float humidity01 = std::clamp(weather.atmosphereRelativeHumidity, 0.0f, 1.0f);
     // The upstream Earth preset uses 10e-6 /m aerosol extinction. Heritage's
     // regional weather modulates only that aerosol amount; molecular air and
     // ozone remain immutable physical atmosphere coefficients.
@@ -190,6 +193,20 @@ void SkyRenderer::updatePhysicallyBasedAtmosphereLuts(
         0.82f + humidity01 * 0.42f + rain01 * 0.36f,
         0.65f,
         1.60f);
+
+    // CELESTIAL10: direct surface illumination and atmospheric illumination
+    // are not the same thing around the horizon. The upper atmosphere is
+    // already Sun-lit before geometric sunrise (and remains lit after sunset),
+    // so PBSKY must not receive the ground/direct-light value that is clamped
+    // to zero below the horizon. Drive sky scattering continuously from the
+    // shared solar-cycle authority instead.
+    const float atmosphereCycle = std::clamp(lighting.daylightFactor, 0.0f, 1.0f);
+    const float atmosphereT = std::clamp(
+        (atmosphereCycle - 0.015f) / (0.30f - 0.015f),
+        0.0f,
+        1.0f);
+    const float atmosphereSolarBlend = atmosphereT * atmosphereT * (3.0f - 2.0f * atmosphereT);
+    const float atmosphereSunIntensity = 3.40f * atmosphereSolarBlend;
 
     glBindVertexArray(m_vao);
     glBindFramebuffer(GL_FRAMEBUFFER, m_pbrAtmosphereFbo);
@@ -201,7 +218,7 @@ void SkyRenderer::updatePhysicallyBasedAtmosphereLuts(
     // Transmittance and multiple-scattering depend on atmospheric composition,
     // not Sun azimuth. Refresh them only when weather materially changes.
     if (m_pbrLastAerosolMultiplier < 0.0f
-        || std::abs(aerosolMultiplier - m_pbrLastAerosolMultiplier) > 0.01f)
+        || std::abs(aerosolMultiplier - m_pbrLastAerosolMultiplier) > 0.002f)
     {
         glFramebufferTexture2D(
             GL_FRAMEBUFFER,
@@ -250,7 +267,7 @@ void SkyRenderer::updatePhysicallyBasedAtmosphereLuts(
         lighting.sunColor.x,
         lighting.sunColor.y,
         lighting.sunColor.z);
-    glUniform1f(m_pbrSkyView.sunIntensity, lighting.sunIntensity);
+    glUniform1f(m_pbrSkyView.sunIntensity, atmosphereSunIntensity);
     glUniform1f(
         m_pbrSkyView.cameraAltitude,
         std::clamp(static_cast<float>(weather.cameraGlobal.y), 0.0f, 59990.0f));

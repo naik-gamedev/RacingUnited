@@ -33,6 +33,8 @@ inline constexpr float kTireVisualDeformationMaximumDistanceM = 50.0f;
 struct EntityMeshRenderTargetState
 {
     GLuint framebuffer = 0;
+    GLuint colorTexture = 0;
+    GLuint depthStencilTexture = 0;
     GLint viewportX = 0;
     GLint viewportY = 0;
     GLsizei viewportWidth = 1;
@@ -358,6 +360,7 @@ private:
         GLint opacityMap = -1;
         GLint specularFactorMap = -1;
         GLint environmentMap = -1;
+        GLint environmentMapPrevious = -1;
         GLint shadowMap = -1;
         GLint shadowDepthMap = -1;
         GLint shadowFilterMode = -1;
@@ -370,6 +373,7 @@ private:
         GLint eye = -1;
         GLint sunDirection = -1;
         GLint sunRadiance = -1;
+        GLint dayNightCycle = -1;
         GLint gamma = -1;
         GLint brightness = -1;
         GLint contrast = -1;
@@ -382,9 +386,6 @@ private:
         GLint regionalWeatherAdvectionXZ = -1;
         GLint regionalWeatherHalfRangeM = -1;
         GLint weatherCloudBaseM = -1;
-        GLint volumetricCloudShadow = -1;
-        GLint hasVolumetricCloudShadow = -1;
-        GLint volumetricCloudShadowHalfRangeM = -1;
         // Scene material wetness uses the fixed LIVETRACK11 prebaked GPU path.
         // The legacy CPU Hydro page mirror is intentionally not bindable here.
         GLint surfaceWetnessReceiver = -1;
@@ -416,6 +417,7 @@ private:
         GLint rainRateMmPerHour = -1;
         GLint hasEnvironmentMap = -1;
         GLint environmentMaxLod = -1;
+        GLint environmentBlend = -1;
         GLint model = -1;
         GLint useSkinning = -1;
         GLint jointMatrices = -1;
@@ -543,7 +545,8 @@ private:
         const heritage::math::DVec3& cameraGlobalForSurface,
         const heritage::physics::weather::RegionalWeatherSample& cameraRegionalWeather,
         bool regionalWeatherMapReady,
-        const EnvironmentLighting& lighting);
+        const EnvironmentLighting& lighting,
+        float elapsedSeconds);
     bool initializeSurfaceWetnessMaterialBindings();
     void bindSurfaceWetnessMaterialState(
         const heritage::math::DVec3& cameraGlobal,
@@ -606,6 +609,9 @@ private:
     double m_regionalWeatherAuthoredWindSpeedMps = -1.0;
     double m_regionalWeatherAuthoredWindDirectionDeg = -1.0;
     std::vector<std::uint8_t> m_regionalWeatherPixels;
+    bool m_weatherHazeSmoothingInitialized = false;
+    float m_weatherHazeRain01 = 0.0f, m_weatherHazeCloud01 = 0.0f;
+    float m_weatherHazeHumidity01 = 0.55f, m_weatherHazeLastElapsedSeconds = -1.0f;
     GLuint m_program = 0;
     UniformLocations m_uniforms{};
     // Artist-authored shoreline breakup remains optical relief only. Water

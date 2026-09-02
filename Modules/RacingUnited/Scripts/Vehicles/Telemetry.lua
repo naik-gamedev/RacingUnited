@@ -78,8 +78,19 @@ function RefreshVehicleTelemetry()
         -- CLEAN01: the native bridge returns one named table containing the
         -- complete wheel/contact/upright snapshot. This replaces the fragile
         -- 169-value positional ABI in first-party Racing United scripts.
-        vehicleWheelTelemetry[index] =
-            Vehicle.GetWheelTelemetry(nativeVehicle, index) or {}
+        local telemetry = Vehicle.GetWheelTelemetry(nativeVehicle, index) or {}
+        if VehicleAlignmentToWorkshopConvention ~= nil then
+            telemetry.workshopCamberDegrees,
+                telemetry.workshopToeDegrees =
+                VehicleAlignmentToWorkshopConvention(
+                    index,
+                    telemetry.camberAngleDegrees,
+                    telemetry.toeAngleDegrees)
+        end
+        vehicleWheelTelemetry[index] = telemetry
+    end
+    if RefreshVehicleGeometryMeasurement ~= nil then
+        RefreshVehicleGeometryMeasurement()
     end
 
     -- ROLL02: keep anti-roll state synchronized with the same live chassis and

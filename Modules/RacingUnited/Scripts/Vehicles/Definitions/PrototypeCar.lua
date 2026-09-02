@@ -22,8 +22,14 @@ PrototypeCarDefinition = {
     referenceGeometry = {
         name = "2003 Peugeot 206 RC",
         wheelbaseM = 2.442,
-        frontTrackM = 1.437,
-        rearTrackM = 1.428,
+        frontTrackM = 1.425,
+        rearTrackM = 1.416,
+        provenance = "peugeot_period_dimensions",
+        measurementConvention = "wheel_centre_to_wheel_centre",
+        sources = {
+            "https://manuals.plus/m/766a1624154f6c6404f288b58a71c4ac0d3a525d10ed67b7e7f4c4c5206bb8a0.pdf",
+            "https://pscuk.net/wp-content/uploads/2024/05/3090-206-hatch-spec.pdf"
+        },
         tireSize = "205/40 ZR17",
         rimSize = "17x7J",
         tireWidthM = 0.205,
@@ -51,20 +57,37 @@ PrototypeCarDefinition = {
     factorySetup = Peugeot206RCWorkshopAlignmentDefault,
     audio = Peugeot206RCAudioDefinition,
 
+    suspensionEvidence = {
+        provenance = "peugeot_press_and_technical_specification",
+        confidence = 0.90,
+        frontArchitecture = "independent_macpherson_strut_coil_spring",
+        rearArchitecture = "independent_trailing_arm_transverse_torsion_bar",
+        frontAntiRollBar = true,
+        rearAntiRollBar = true,
+        rearStabilityTieRodCount = 2,
+        sources = {
+            "https://www.peugeotpress.co.uk/releases/843",
+            "https://pscuk.net/wp-content/uploads/2024/05/3090-206-hatch-spec.pdf"
+        }
+    },
+
     -- Suspension estimates are chassis authoring data, NOT wheel-fitment data.
     -- These package scales stay fixed when the player installs a different rim,
     -- offset or tire size. Rebuild them only when the suspension reference itself
     -- is intentionally revised from better measurements/asset geometry.
     suspensionEstimation = {
         frontReferencePackageScaleM = 0.2979,
-        rearReferencePackageScaleM = 0.2979
+        rearReferencePackageScaleM = 0.2979,
+        provenance = "reference_constrained_peugeot_206_rc_packaging_v1",
+        confidence = 0.35
     },
 
-    -- SUS03A authoring architecture. macpherson_strut_v1 is a real native
-    -- provider. linear_raycast_v1 remains the safe data-file fallback. TIRE45D
-    -- keeps deterministic low-confidence estimates authoring-only; a hardpoint
-    -- provider becomes runtime physics authority only after every required point
-    -- on that corner is legacy-authored, GLB/asset-authored, or measured.
+    -- SUS03A authoring architecture. macpherson_strut_v1 and
+    -- trailing_arm_torsion_bar_v1 are real native providers. The 206 RC opts in
+    -- to a bounded, reference-constrained package estimate because Peugeot did
+    -- not publish hardpoint coordinates. This opt-in is local to this vehicle;
+    -- ordinary generic estimates remain authoring-only. Asset-authored or
+    -- measured hardpoints still supersede every estimate independently.
     -- SUS04: reusable anti-roll bars couple the left/right suspension on each
     -- axle. These are low-confidence project estimates, not claimed Peugeot
     -- factory rates. The native mechanism is torsional (Nm/rad) with explicit
@@ -106,6 +129,9 @@ PrototypeCarDefinition = {
             kinematics = "macpherson_strut",
             preferredProvider = "macpherson_strut_v1",
             runtimeProvider = "linear_raycast_v1",
+            minimumPhysicsProvenance = "reference_constrained_estimate",
+            referenceConstrainedEstimateProfile =
+                "peugeot_206_rc_macpherson_reference_constrained_v1",
             spring = "coil_spring",
             damper = "strut_damper",
             antiRollGroup = "front",
@@ -128,6 +154,15 @@ PrototypeCarDefinition = {
             kinematics = "trailing_arm",
             preferredProvider = "trailing_arm_torsion_bar_v1",
             runtimeProvider = "linear_raycast_v1",
+            minimumPhysicsProvenance = "reference_constrained_estimate",
+            referenceConstrainedEstimateProfile =
+                "peugeot_206_rc_trailing_arm_reference_constrained_v1",
+            -- Peugeot documents two rear stability tie rods. The current
+            -- trailing-arm provider represents their road-car effect with the
+            -- fixed stock rear toe setup; compliance-steer requires measured
+            -- link coordinates and is deliberately not fabricated here.
+            stabilityTieRodCount = 2,
+            stabilityTieRodModel = "fixed_alignment_constraint",
             spring = "torsion_bar",
             damper = "separate_damper",
             antiRollGroup = "rear",
@@ -153,7 +188,11 @@ PrototypeCarDefinition = {
         fallbackBodyAsset = "Vehicles/Step27E_LowPolyHatchback.obj",
         normalize = false,
         doubleSided = false,
-        color = { 0.10, 0.42, 0.92 },
+        -- Peugeot 206 RC presentation: light neutral aluminium silver.  This
+        -- tint is deliberately close to white so the authored PBR material,
+        -- sky reflections and body curvature provide the metallic character
+        -- instead of a flat grey diffuse colour.
+        color = { 0.78, 0.81, 0.84 },
         -- Creator-authored vehicle geometry is authoritative at 1:1 scale.
         -- The temporary OBJ body slot is imported through the same Blender
         -- authoring-axis conversion as the Player Scene. No automatic visual
@@ -174,7 +213,10 @@ PrototypeCarDefinition = {
             defaultAsset = "Vehicles/Player/PlayerWheel.obj",
             normalize = false,
             doubleSided = false,
-            color = { 0.055, 0.060, 0.070 },
+            -- Bright silver alloy finish for separate/proxy wheel assets.
+            -- Embedded wheels in the complete Peugeot GLB inherit the body
+            -- mesh's aluminium tint and retain their authored material values.
+            color = { 0.86, 0.88, 0.90 },
 
             -- Step 29J.2 rule: authored wheel dimensions are authoritative.
             -- Heritage Engine no longer resizes creator wheel geometry by default.
@@ -185,7 +227,11 @@ PrototypeCarDefinition = {
     },
 
     chassis = {
-        massKg = 1100.0,
+        -- Peugeot's 30 November 2005 UK technical sheet lists 1125 kg kerb
+        -- weight for the three-door 2.0 16v GTi 180 (the UK name for RC).
+        massKg = 1125.0,
+        massProvenance = "peugeot_uk_technical_specification_2005",
+        massConfidence = 0.95,
 
         -- ROLL01: the prefab/root origin is an authoring datum close to road
         -- level, not the physical centre of mass. Keeping these separate lets
@@ -203,7 +249,7 @@ PrototypeCarDefinition = {
         -- These low-confidence values are generated by the native road-car
         -- mass-property estimator and may later be replaced by CAD/component
         -- reconstruction without changing the rigid-body solver.
-        inertiaLocalKgM2 = { 1212.8886, 1511.3550, 564.3155 },
+        inertiaLocalKgM2 = { 1240.4543, 1545.7040, 577.1409 },
         frontStaticLoadFraction = 0.5819001,
         leftStaticLoadFraction = 0.50,
         massPropertiesProvenance = "estimated_mass_properties_road_car_v1",
@@ -298,6 +344,38 @@ PrototypeCarDefinition = {
         maximumTireNormalForceN = 250000.0
     },
 
+    -- RIDE01 static equilibrium. The Peugeot GLB is authored at its intended
+    -- kerb-mass stance: unloaded tire bottoms define Y=0 and its wheel centres
+    -- coincide with the suspension reference centres. The solver therefore
+    -- targets zero body offset and derives each corner's preload from supported
+    -- mass, tire compliance, spring curve and motion ratio. Dampers are absent
+    -- from this solve because a velocity damper carries no static load.
+    rideHeight = {
+        provider = "static_equilibrium_v1",
+        condition = "kerb_mass_driverless",
+        targetFrontBodyOffsetM = 0.0,
+        targetRearBodyOffsetM = 0.0,
+        equilibriumToleranceM = 0.005,
+        authoredGroundPlaneLocalY = 0.0,
+        authoredFrontLowestVisiblePointM = 0.153,
+        authoredRearLowestVisiblePointM = 0.168,
+        publishedMinimumGroundClearanceReferenceM = 0.110,
+        datumProvenance = "vehicle_glb_position_accessor_bounds",
+        rateProvenance = "estimated_compact_sport_hatch_pending_measurement",
+        confidence = 0.35,
+        notes = {
+            "Peugeot workshop H1/H2 sill datums remain the preferred measured replacement",
+            "110 mm is a secondary published minimum-clearance cross-check, not a bumper target",
+            "spring and torsion-bar rates are estimates; calculated preload is not presented as a factory rate"
+        },
+        sources = {
+            "https://www.peugeot206cc.co.uk/repair-206/206/info/gb/b3bf05k3.htm",
+            "https://www.peugeotpress.co.uk/releases/843",
+            "https://pscuk.net/wp-content/uploads/2024/05/3090-206-hatch-spec.pdf",
+            "https://www.largus.fr/fiche-technique/Peugeot/206/I/2003/Berline%2B3%2BPortes/20%2B16v%2B%2BRC%2B3p-719068.html"
+        }
+    },
+
     -- Vehicle-wide default. Each wheel below can override this with a named
     -- preset; the native solver owns a separate TireModelDescription per wheel.
     tire = TirePresets.prototype_road_front,
@@ -344,7 +422,7 @@ PrototypeCarDefinition = {
     wheels = {
         {
             name = "front_left",
-            mount = { -0.7185, 0.85, 1.221 },
+            mount = { -0.7125, 0.85, 1.221 },
             driveFactor = 0.5,
             steerFactor = 1.0,
             axle = "front",
@@ -358,7 +436,7 @@ PrototypeCarDefinition = {
         },
         {
             name = "front_right",
-            mount = { 0.7185, 0.85, 1.221 },
+            mount = { 0.7125, 0.85, 1.221 },
             driveFactor = 0.5,
             steerFactor = 1.0,
             axle = "front",
@@ -372,7 +450,7 @@ PrototypeCarDefinition = {
         },
         {
             name = "rear_left",
-            mount = { -0.7140, 0.85, -1.221 },
+            mount = { -0.7080, 0.85, -1.221 },
             driveFactor = 0.0,
             steerFactor = 0.0,
             axle = "rear",
@@ -386,7 +464,7 @@ PrototypeCarDefinition = {
         },
         {
             name = "rear_right",
-            mount = { 0.7140, 0.85, -1.221 },
+            mount = { 0.7080, 0.85, -1.221 },
             driveFactor = 0.0,
             steerFactor = 0.0,
             axle = "rear",

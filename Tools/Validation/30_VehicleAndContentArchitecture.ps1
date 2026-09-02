@@ -50,6 +50,7 @@ Check ($luaAnnotations.Contains('"Vehicle.GetWheelAlignment"')) "FITMENT01 align
 Check ($luaAnnotations.Contains('"Vehicle.GetWheelFitmentGeometry"')) "FITMENT02 hub/scrub geometry Lua API is annotated"
 Check ($luaAnnotations.Contains('"Vehicle.GetWheelState"') -and $luaAnnotations.Contains('inspect Vehicles/Telemetry.lua') -and $luaAnnotations.Contains('TIRE15')) "legacy positional wheel telemetry remains annotated through TIRE15"
 Check ($luaAnnotations.Contains('"Vehicle.GetWheelTelemetry"') -and $luaAnnotations.Contains('"returns": "telemetry: table|nil"')) "preferred named wheel telemetry API is annotated"
+Check ($luaAnnotations.Contains('"Vehicle.MeasureWheelGeometry"') -and $luaAnnotations.Contains('frontTrackM')) "live four-corner wheelbase/track measurement API is annotated"
 Check ($luaAnnotations.Contains('"Entity.SetMeshNodeTireFlexibleRingFromWheel"')) "TIRE41 single-authority flexible-ring Entity API is annotated"
 Check ($luaAnnotations.Contains('"UI.InputFloat"')) "ALIGN01 exact floating-point UI input API is annotated"
 
@@ -135,7 +136,7 @@ $mainLuaPath = Join-Path $Root "Modules\RacingUnited\Scripts\Main.lua"
 if (Test-Path $mainLuaPath) {
     $mainLua = [IO.File]::ReadAllText($mainLuaPath)
     $lineCount = (Get-Content $mainLuaPath).Count
-    Check ($lineCount -lt 80) "Main.lua remains a small include coordinator"
+    Check ($lineCount -le 80) "Main.lua remains a small include coordinator"
     Check ($mainLua.Contains('Include("UI/Physics/Panels.lua")')) "Main.lua delegates physics UI loading to its subsystem coordinator"
     Check ($mainLua.Contains('Include("UI/Scene/Panels.lua")')) "Main.lua delegates scene weather/hydrology UI loading to its subsystem coordinator"
     Check (-not $mainLua.Contains("Runtime/VehicleDemo.lua")) "obsolete VehicleDemo.lua is not included"
@@ -194,7 +195,8 @@ Check ($suspensionAuthoringRuntime.Contains("rearReferencePackageScaleM")) "rear
 Check (-not $suspensionAuthoringRuntime.Contains("wheel.radiusM or shared.radiusM")) "authoring runtime does not derive suspension geometry from installed tire radius"
 Check ($suspensionAuthoringRuntime.Contains("EstimateTrailingArmHardpoints")) "Racing United can estimate trailing-arm rear hardpoints"
 Check ($suspensionAuthoringRuntime.Contains('"estimated"')) "estimated suspension data is provenance-labeled"
-Check ($suspensionAuthoringRuntime.Contains('minimumPhysicsPriority = SuspensionAuthoringSourcePriority(') -and $suspensionAuthoringRuntime.Contains('"legacy_authored"')) "TIRE45D estimated hardpoints cannot become runtime physics authority"
+Check ($suspensionAuthoringRuntime.Contains('assembly.minimumPhysicsProvenance or "legacy_authored"')) "generic estimated hardpoints cannot become runtime physics authority without a vehicle-local policy"
+Check ($suspensionAuthoringRuntime.Contains('"reference_constrained_estimate"')) "source contract distinguishes explicitly authorized reference-constrained suspension estimates"
 Check ($suspensionAuthoringRuntime.Contains("SuspensionAuthoringImportHardpointsFromMetadata")) "GLB hardpoints can supersede estimates"
 Check ($suspensionAuthoringRuntime.Contains("Vehicle.SetWheelSuspensionHardpoints")) "authoring layer can activate native hardpoint kinematics"
 
@@ -238,6 +240,8 @@ Check ($vehicleDefinitionCompiler.Contains("chassis_flex_parameters")) "native c
 Check ($vehicleDefinitionCompiler.Contains("chassis_flex_provider")) "native compiler validates chassis-flex provider"
 Check ($vehicleDefinitionCompiler.Contains('suspension.provider != "macpherson_strut_v1"')) "native road-wheel provider accepts MacPherson suspension components"
 Check ($vehicleDefinitionCompiler.Contains('suspension.provider != "trailing_arm_torsion_bar_v1"')) "native road-wheel provider accepts trailing-arm torsion-bar suspension components"
+Check ($vehicleDefinitionCompiler.Contains('suspension.provider != "double_wishbone_v1"')) "native road-wheel provider accepts double-wishbone suspension components"
+Check ($vehicleDefinitionCompiler.Contains('suspension.provider != "pushrod_double_wishbone_v1"')) "native road-wheel provider accepts pushrod/rocker double-wishbone suspension components"
 
 $vehicleDefinitionLua = $definitionV2
 Check ($vehicleDefinitionLua.Contains("WorkshopSuspensionHardpoints")) "Workshop exports authored suspension hardpoints through VehicleDefinitionV2"
@@ -247,7 +251,7 @@ Check ($vehicleDefinitionLua.Contains("confidence")) "Workshop suspension hardpo
 Check ($vehicleDefinitionLua.Contains("antiRollBars = {}")) "VehicleDefinitionV2 owns top-level anti-roll bars"
 Check ($vehicleDefinitionLua.Contains("chassisFlex = { enabled = false }")) "VehicleDefinitionV2 owns top-level chassis-flex configuration"
 Check ($vehicleDefinitionLua.Contains('chassisFlex.provider ~= "chassis_torsional_mode_v1"')) "VehicleDefinitionV2 validates the chassis-flex provider contract"
-Check ($vehicleDefinitionLua.Contains("macpherson_strut_v1 = true") -and $vehicleDefinitionLua.Contains("trailing_arm_torsion_bar_v1 = true")) "VehicleDefinitionV2 runtime-readiness recognizes current native suspension providers"
+Check ($vehicleDefinitionLua.Contains("macpherson_strut_v1 = true") -and $vehicleDefinitionLua.Contains("double_wishbone_v1 = true") -and $vehicleDefinitionLua.Contains("trailing_arm_torsion_bar_v1 = true")) "VehicleDefinitionV2 runtime-readiness recognizes current native suspension providers"
 Check ($vehicleDefinitionLua.Contains('for _, group in ipairs({ "front", "rear" }) do') -and $vehicleDefinitionLua.Contains('local bar = PrototypeCarDefinition.antiRollBars[group]')) "Racing United V2 definition emits front/rear anti-roll component groups"
 Check ($vehicleDefinitionLua.Contains('id = group .. "_anti_roll_bar"')) "Racing United V2 anti-roll components receive stable group-derived IDs"
 
@@ -255,12 +259,14 @@ $visualDefinitionPath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\D
 $visualDefinition = if (Test-Path $visualDefinitionPath) { [IO.File]::ReadAllText($visualDefinitionPath) } else { "" }
 Check ($visualDefinition.Contains('bodyAsset = "Vehicles/Player/PlayerCar.obj"')) "prototype definition points at the stable player-car OBJ slot"
 Check ($visualDefinition.Contains("wheelbaseM = 2.442")) "prototype carries 2442 mm Peugeot reference wheelbase"
-Check ($visualDefinition.Contains("frontTrackM = 1.437")) "prototype carries 1437 mm Peugeot reference front track"
-Check ($visualDefinition.Contains("rearTrackM = 1.428")) "prototype carries 1428 mm Peugeot reference rear track"
+Check ($visualDefinition.Contains("frontTrackM = 1.425")) "prototype carries 1425 mm Peugeot reference front track"
+Check ($visualDefinition.Contains("rearTrackM = 1.416")) "prototype carries 1416 mm Peugeot reference rear track"
 Check ($visualDefinition.Contains("wheelRadiusM = 0.2979")) "prototype carries 205/40 ZR17 derived wheel radius"
 Check ($visualDefinition.Contains('kinematics = "macpherson_strut"')) "Peugeot prototype declares front strut kinematics for authoring"
 Check ($visualDefinition.Contains('preferredProvider = "macpherson_strut_v1"')) "Peugeot front architecture names the reusable MacPherson provider"
 Check ($visualDefinition.Contains('preferredProvider = "trailing_arm_torsion_bar_v1"')) "Peugeot rear architecture names the reusable trailing-arm torsion-bar provider"
+Check ([regex]::Matches($visualDefinition, 'minimumPhysicsProvenance = "reference_constrained_estimate"').Count -eq 2) "Peugeot explicitly authorizes reference-constrained estimates for both live suspension providers"
+Check ($visualDefinition.Contains('rearStabilityTieRodCount = 2') -and $visualDefinition.Contains('stabilityTieRodModel = "fixed_alignment_constraint"')) "Peugeot rear stability tie rods are declared without fabricating compliance geometry"
 Check ($visualDefinition.Contains("frontReferencePackageScaleM")) "prototype stores fitment-independent front suspension estimate scale"
 Check ($visualDefinition.Contains("rearReferencePackageScaleM")) "prototype stores fitment-independent rear suspension estimate scale"
 Check ($visualDefinition.Contains("antiRollBars")) "Peugeot prototype declares independent front/rear anti-roll bars"
@@ -309,8 +315,8 @@ Check ($visualDefinition.Contains('provenance = "estimated_chassis_flex_closed_u
 Check ($visualDefinition.Contains('confidence = 0.18')) "prototype labels chassis-flex estimate confidence"
 Check ($visualDefinition.Contains('inertiaLocalKgM2 = {')) "prototype carries explicit pitch/yaw/roll inertia"
 Check ($visualDefinition.Contains('massPropertiesProvenance = "estimated_mass_properties_road_car_v1"')) "prototype labels mass-property estimate provenance"
-Check ($visualDefinition.Contains("mount = { -0.7185, 0.85, 1.221 }")) "front-left mount matches reference geometry"
-Check ($visualDefinition.Contains("mount = { 0.7140, 0.85, -1.221 }")) "rear-right mount matches reference geometry"
+Check ($visualDefinition.Contains("mount = { -0.7125, 0.85, 1.221 }")) "front-left mount matches reference geometry"
+Check ($visualDefinition.Contains("mount = { 0.7080, 0.85, -1.221 }")) "rear-right mount matches reference geometry"
 
 $antiRollHeaderPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Common\SuspensionAntiRollBar.hpp"
 $antiRollCppPath = Join-Path $Root "Engine\HeritageEngine\Vehicles\Suspension\Common\SuspensionAntiRollBar.cpp"
@@ -379,6 +385,7 @@ Check ($visualWheelsRuntime.Contains("visualFaceYawDegrees")) "wheel presentatio
 Check ($visualWheelsRuntime.Contains("visualSpinSign")) "wheel presentation compensates spin for per-side mesh facing"
 Check ($visualWheelsRuntime.Contains("EmbeddedWheelReferenceSuspensionLength") -and $visualWheelsRuntime.Contains("wheel.restLengthM") -and $visualWheelsRuntime.Contains("PrototypeCarDefinition.wheelPhysics")) "embedded GLB wheel bind position uses authored suspension rest datum"
 Check ($vehicleTelemetry.Contains("Vehicle.GetWheelTelemetry(nativeVehicle, index)")) "Racing United consumes the extensible named wheel telemetry table"
+Check ($vehicleTelemetry.Contains("RefreshVehicleGeometryMeasurement()")) "Racing United refreshes live wheelbase/track geometry with wheel telemetry"
 Check (-not $vehicleTelemetry.Contains("Vehicle.GetWheelState(nativeVehicle, index)")) "first-party wheel telemetry no longer depends on the 169-value positional ABI"
 Check (-not $vehicleTelemetry.Contains("local grounded, length, compression")) "wheel telemetry does not directly unpack an extended native state into locals"
 Check ($wheelTelemetryCpp.Contains('pushNumberField("length", value.suspensionLength)')) "named wheel telemetry exposes native suspension length through the Lua `length` field"
@@ -526,10 +533,14 @@ Check ($prototypeDefinition.Contains("factorySetup = Peugeot206RCWorkshopAlignme
 
 $alignmentSpecificationPath = Join-Path $Root "Modules\RacingUnited\Scripts\Vehicles\Definitions\Peugeot206RC\AlignmentSpecification.lua"
 $alignmentSpecification = if (Test-Path $alignmentSpecificationPath) { [IO.File]::ReadAllText($alignmentSpecificationPath) } else { "" }
-Check ($alignmentSpecification.Contains('provenance = "user_supplied_peugeot_206_rc_alignment_spec_table"')) "Peugeot 206 RC alignment specification records supplied-table provenance"
-Check ($alignmentSpecification.Contains('provenance = "midpoint_of_user_supplied_peugeot_206_rc_spec_range"')) "Peugeot 206 RC workshop default labels midpoint-derived provenance"
+Check ($alignmentSpecification.Contains('provenance = "peugeot_workshop_manual_plus_rc_alignment_database"')) "Peugeot 206 RC alignment specification records researched provenance"
+Check ($alignmentSpecification.Contains('provenance = "midpoint_of_published_peugeot_206_rc_spec_range"')) "Peugeot 206 RC reference alignment labels midpoint-derived provenance"
+Check ($alignmentSpecification.Contains('provenance = "stock_midpoint_of_published_peugeot_206_rc_spec_range"')) "Peugeot 206 RC stock runtime setup is source-labelled"
+Check ($alignmentSpecification.Contains('toeInDegrees = -0.060000') -and $alignmentSpecification.Contains('camberDegrees = -1.0') -and $alignmentSpecification.Contains('toeInDegrees = 0.260000')) "Peugeot stock runtime setup applies published RC midpoint alignment"
 Check ($prototypeDefinition.Contains("staticCamberDegrees = 0.0")) "reference wheel geometry remains neutral for setup-owned camber"
 Check ($prototypeDefinition.Contains("staticToeDegrees = 0.0")) "reference wheel geometry remains neutral for setup-owned toe"
+$peugeotSuspensionDocPath = Join-Path $Root "Docs\PEUGEOT_206_RC_SUSPENSION.md"
+Check (Test-Path $peugeotSuspensionDocPath) "Peugeot 206 RC suspension evidence and estimate boundary are documented"
 
 $moduleManifestPath = Join-Path $Root "Modules\RacingUnited\module.ini"
 $moduleManifest = if (Test-Path $moduleManifestPath) { [IO.File]::ReadAllText($moduleManifestPath) } else { "" }

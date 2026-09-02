@@ -1,212 +1,125 @@
 # Current Tire Physics Status
 
-**Authority date:** 2026-08-29
-**Scope:** Heritage Engine native tire, contact, driven-surface, failure, presentation and authoring systems.
+**Authority date:** 2026-08-31
+**Active completion milestone:** `TIRE46_FINAL_TIRE_PHYSICS_FREEZE`
+**Scope:** Heritage Engine native tire force/contact, construction, thermal, wear, failure, surface coupling, carcass presentation and tire authoring data.
 
-This is the authoritative tire-status ledger. It records what the current source tree actually
-contains, what has automated evidence, what still relies on estimates or live visual judgement, and
-what is genuinely absent. Older TIRE roadmaps and ADRs retain design history, but their status prose
-is not authoritative when it conflicts with this file or the current source/tests.
+This is the authoritative tire-status ledger. Current compiled source plus deterministic regressions
+establish what exists; this file establishes whether that mechanism is still open for architecture
+work. Older TIRE roadmaps/ADRs remain design history only when their status prose conflicts here.
 
-Update this ledger in the same commit as every material tire milestone. Do not infer completion from
-a chat message, screenshot, filename, numbered milestone, or the presence of a scaffold.
+## TIRE46 freeze decision
 
-## Status vocabulary
+The production **road-car and motorcycle tire solver is feature-complete and frozen as a dependency
+for the suspension phase**. New suspension work must consume this tire system instead of adding a
+parallel tire model or replacing its contact/thermal/damage architecture.
 
-- **Validated:** compiled implementation with deterministic regression evidence and, where visual or
-  driving behaviour matters, recorded user validation.
-- **Implemented:** active compiled implementation with automated evidence, but still awaiting measured
-  data, broader live testing, or production calibration.
-- **Partial:** a useful bounded mechanism exists, but it does not yet satisfy the final physical scope.
-- **Scaffold:** an ownership/file boundary exists without active runtime behaviour.
-- **Missing:** no current implementation should be assumed.
-- **Deferred:** intentionally outside the current completion gate.
+"Frozen" does **not** mean every historical tire parameter is known. For tires such as a 2003
+Pirelli P7000, proprietary compound chemistry and complete tire-rig data may never be available.
+Heritage therefore accepts **evidence-informed reconstruction** as production data when it is clearly
+labelled with source/provenance/confidence. Period specifications, contemporary reviews, known
+construction technology, comparable measured tires, vehicle tests and physical bounds may all
+constrain an estimate. Better evidence may improve `.tir` values later without reopening the solver.
+Measured datasets remain welcome but are not a completion gate.
 
-## Current architecture checkpoint
+## Frozen architecture
 
-The tire is a deterministic reduced-order physical system. It is not an unrestricted soft body. The
-1000 Hz vehicle loop owns force/contact transients; thermal, wear, surface and presentation work may
-use bounded lower-rate state where doing so does not change authoritative forces unpredictably.
+- **1000 Hz force/contact authority** with deterministic longitudinal/lateral relaxation and separate
+  standstill contact-patch torsion.
+- **MF6.2-style clean-room force/moment provider**: pure/combined Fx/Fy, Mx/My/Mz, load, pressure,
+  camber and public turn-slip coefficient semantics including the signed PHYP lateral-shift branch.
+- **Universal `Distributed3x3` contact** for every newly created native vehicle. One calibrated
+  whole-tire target is distributed through nine bounded local contact cells; homogeneous contact
+  reproduces the aggregate target while split friction/support/water can redistribute/cap local
+  shear and generate hub moments. `Aggregate` remains only an explicit diagnostic/performance
+  fallback, never the implicit AI physics model.
+- **Finite contact geometry**: loaded/effective radius, finite footprint, adaptive 2D road envelope,
+  SWIFT-like rigid-ring structural modes and unilateral road/rim boundaries.
+- **Physics-owned flexible carcass**: persistent 24x13 displacement/velocity lattice at 125 Hz,
+  consuming real pressure/contact/rigid-ring state. TIRE45K distributes real Fy as lower-tread shear
+  and Mz as an equal/opposed footprint shear pair. Render code copies the physics field; it does not
+  solve a second tire. The expensive lattice is activated by a short presentation-demand lease;
+  tires outside visual demand keep their authoritative force/contact/thermal/wear/failure state
+  without paying for an unseen deforming render mesh.
+- **Seven-node construction thermal network**: tread, belt/undertread, carcass, inner sidewall,
+  outer sidewall, contained gas and rim, plus the rotating 16x3 / 48-cell tread-surface thermal field.
+  Structural-loss heat is partitioned energy-conservatively between belt/carcass/sidewalls; authored
+  fractions above 100% are rejected instead of creating heat.
+- **Pressure coupling** from contained gas temperature/mass and reference cavity state.
+- **Complete physical damage/endurance coordinates** underneath the compatible coarse failure stage:
+  tread puncture/cut, sidewall cut, valve/bead leaks, bead unseating, belt/cord/sidewall fatigue,
+  graining, blistering, delamination/tread separation, underinflation collapse, blowout, rim contact,
+  rim damage and optional run-flat support degradation. Damage feeds force capacity, carcass support,
+  pressure and rolling resistance rather than existing as telemetry only.
+- **Spatial tread state**: 48 rotating cells for temperature offsets, tread depth/wear, flat spots,
+  retained water and contamination.
+- **Surface/weather coupling**: wet-film lubrication, drainage, retained water, progressive
+  hydroplaning, compacted snow/hard ice, gravel/hard dirt and persistent deformable mud/sand/deep-snow
+  terrain interaction, plus track rubber/marbles/tire-mark evolution.
+- **Motorcycle tire physics**: high-camber MF branch, camber thrust/moments, rounded crown contact
+  geometry as the actual support/query authority, crown lateral contact offset, 3x3 local contact,
+  seven-node thermal state, 48-cell tread state, wet/winter/granular behavior and the same complete
+  construction/failure model. Fork/swingarm/steering-head geometry, rider mass motion and whole-bike
+  balance/lean dynamics are vehicle/suspension responsibilities and are not missing tire physics.
 
-TIRE44 / ADR-140 is the active carcass-deformation architecture, with the TIRE45B moving-wheel
-road-cache correction. One persistent 24x13 physics-owned displacement/velocity lattice advances at
-125 Hz from the 1000 Hz wheel path while its visible readback lease is active. It reuses actual
-tire-force road-envelope collision points/normals/misses as unilateral contacts, includes an internal
-rim/flange contact boundary, and consumes pressure plus rigid-ring/tread structural state. Road-envelope
-samples cached across 1 kHz wheel substeps store point offsets from the envelope's centre contact, not
-absolute world points; each carcass solve re-anchors that local road shape to the live centre contact.
-This prevents vehicle translation between envelope refreshes from masquerading as carcass deformation.
-The 24 circumferential lattice stations are Eulerian wheel-frame stations: whole-field state is not
-convected by wheel angular velocity; material-fixed effects such as flat spots use wheel rotation
-explicitly. Physical `tireDeflection` remains contact/force telemetry but is not prescribed as a
-carcass-node shape. Historical shader dents, support-plane locks, stacked bulges, render-time carcass
-solvers and whole-field wheel-spin advection must not be restored.
+## Validation status
 
-Visual flexible-ring vertex deformation is evaluated only for tire-node centres within 50 metres
-of the active camera. Distant tires retain their complete physical, thermal, wear and failure state;
-only close-range mesh displacement and its matching deformed shadow are omitted. The F8 performance
-overlay reports active and distance-culled tire deformation ranges.
-
-Hard road now has two explicit contact-fidelity tiers around the same calibrated whole-tire force
-target. `Aggregate` remains the scalable/default tier. `Distributed3x3` allocates load and shear
-through a bounded nine-cell local brush, admits split material/support state and integrates local
-forces and moments back to the hub without evaluating nine unrelated MF tires. Racing United opts
-the player vehicle into this tier; other vehicles remain aggregate until a measured proximity/LOD
-policy selects otherwise. The persistent 16x3 tread field remains the authority for rotating
-temperature, wear and contamination history; the 3x3 force cells are an ephemeral contact solve.
-
-## Implemented and evidenced
-
-| Area | Status | Current evidence / boundary |
+| Area | TIRE46 status | Evidence / boundary |
 | --- | --- | --- |
-| MF6.2-style road tire | Implemented | Pure and combined Fx/Fy, Mx/My/Mz, pressure/load/camber sensitivity, stiffness and trail telemetry; seeded estimates remain distinct from fitted `.tir` data. |
-| Turn slip and low speed | Implemented | Rolling turn-slip modifiers plus separate deterministic standstill contact-patch torsion. Full public PHYP equation parity remains partial. |
-| Transient slip | Implemented | Longitudinal/lateral relaxation state is rate-stable at 1000 Hz and 120 Hz. |
-| Motorcycle tire contour | Partial | High-camber contour/contact telemetry and force branch exist; a complete two-wheel vehicle solver is a separate vehicle-topology milestone. |
-| Contact geometry | Implemented | Loaded/effective radius, finite footprint, adaptive road envelope and SWIFT-like rigid-ring structural modes. |
-| Visual carcass deformation | Implemented / awaiting live validation | TIRE44 physics-owned 24x13 dynamic carcass with persistent displacement/velocity, 125 Hz structural solve, road-envelope unilateral contacts, rim/flange contact and copy-only visible/shadow presentation. The rejected support-plane lock is absent. Live resting/braking/acceleration/flat-tire calibration is still required. |
-| Thermal and pressure | Implemented | Tread/carcass/contained-gas/wheel-rim energy, brake-to-rim and rim-to-carcass conduction, ideal-gas pressure, grip/stiffness response and rate-stable integration. |
-| Spatial tread state | Implemented | Rotating 16x3 surface temperature, tread depth/wear, flat spots, retained water and contamination history. |
-| Wear and flat spots | Implemented | Slip-energy/load/temperature abrasion, local radius loss, grip change and vibration inputs. Graining/blistering/cord damage are absent. |
-| Contamination | Implemented | Dirt, grass, gravel, rubber and water pickup/cleaning with local grip and heat-transfer effects. |
-| Wet road and weather | Implemented baseline | Deterministic rainfall, bounded road film, drainage, evaporation, wind/road temperature, footprint water-depth sampling, film lubrication, tread drainage, hydrodynamic lift, water memory and progressive hydroplaning. Spatial puddle flow is absent. |
-| Winter | Implemented baseline | Temperature-sensitive hard ice, melt film, compacted snow, siping/stud response and packed-snow tread state. Dynamic world temperature/accumulation is absent. |
-| Gravel and hard dirt | Implemented baseline | Reduced-order shallow granular interaction with tread engagement and bulldozing terms. Coefficients are largely estimated. |
-| Mud, sand and deformable terrain | Implemented baseline | Persistent SurfaceField sinkage/shear/rut state and reduced direct hard-interface force. Specialty flotation calibration remains incomplete. |
-| Track evolution | Implemented baseline | Dynamic rubber, marbles, shedding, washing/migration, tire marks and bounded LOD/presentation caches. Endurance streaming/performance remains open. |
-| Tire failures | Implemented baseline | Healthy, slow puncture, rapid loss, blowout, detached tread, collapsed carcass and bare-rim logical stages; gas loss and structural progression are regression tested. Full mesh destruction/rim damage are deferred. |
-| Reusable tire parts | Implemented baseline | Family taxonomy, engineering dimensions, optional authoritative `.tir`, creator biases, provenance and per-wheel fitment cold pressure. |
-| TIRE18 steady-state calibration runner | Implemented | Native deterministic 1D/2D sweeps for pure longitudinal, pure lateral, combined slip, load, pressure, camber and turn slip, with CSV-ready output and regression evidence. |
-| TIRE18 installed-tire laboratory | Implemented | Selected installed wheel/tire sweeps, native plots, A/B comparison without axis normalization, CSV plus provenance/validity/build manifest. |
-| TIRE18 stateful scenario laboratory | Implemented | Relaxation, heating/cooling, sustained-corner wear, flat spots, brake/rim heat soak, slow puncture and blowout scenarios with common CSV/plot schema. |
-| Calibration acceptance envelopes | Implemented infrastructure | Provenance-labelled synthetic/measured envelope type; finite, validity, sign, continuity and force/moment bounds are regression tested. No measured tire-rig envelope ships in the repository. |
-| Distributed contact-force tier | Implemented experimental tier | Bounded 3x3 load/shear allocation behind an explicit switch; homogeneous-baseline, split-friction, partial-support, moment and work-bound regressions pass. Broader live driving calibration remains required before making it the universal default. |
+| MF6.2-style dry force/moment core | **Frozen** | Deterministic force/moment regression, combined-slip checks and turn-slip sign/reduction checks pass. |
+| Turn slip / PHYP | **Frozen** | PDXP/PDYP/PKYP/PECP/QDTP/QBRP/QDRP and signed PHYP branch are parsed/evaluated; +/- spin regression proves the signed lateral shift is active. |
+| Low-speed torsion / relaxation | **Frozen** | Standstill torsion and 1000/120 Hz relaxation rate-stability regressions pass. |
+| Universal 3x3 contact | **Frozen** | Native vehicle default is `Distributed3x3`; homogeneous, split-friction, partial-support and moment regressions pass. 150-car benchmark exercises 600 distributed tires. |
+| Contact geometry / rigid ring | **Frozen** | Effective radius, finite footprint, adaptive 2D road envelope and rigid-ring rate-stability regressions pass. |
+| Flexible carcass | **Frozen architecture** | 24x13 solver, road/rim constraints, zero-lateral symmetry and TIRE45K physical Fy/Mz distribution regressions pass. Per-tire visual calibration remains data tuning. |
+| Thermal / pressure | **Frozen** | Seven construction nodes + 48-cell surface field; brake/rim heat, camber sidewall asymmetry, gas pressure, energy-conserving structural-loss partition and rate stability are exercised by regression. |
+| Wear / flat spots / distress | **Frozen** | Spatial abrasion/flat spots plus graining/blistering/delamination and their force effects are active and regression-tested. |
+| Failure / endurance / rim | **Frozen** | Gas leaks, cuts, bead, fatigue, blowout, collapse, rim/run-flat progression and incident API are deterministic and tested. |
+| Wet / hydroplaning | **Frozen tire side** | Drainage, water memory, lubrication, hydrodynamic lift/drag and progressive hydroplaning regression pass; water field ownership remains Dynamic Surface. |
+| Winter / granular / deformable terrain | **Frozen tire side** | Ice/snow, gravel/dirt and mud/sand/deep-snow tire interactions pass deterministic regressions; world material values remain surface data. |
+| Motorcycle tire | **Frozen tire scope** | Rounded crown owns support geometry at lean; +/- camber symmetry and high-lean force/moment regressions pass. Whole-bike dynamics move to suspension/vehicle work. |
+| `.tir` import / provenance | **Frozen** | MF + Heritage thermal/damage/tread/surface extensions parse with unit conversion and provenance; prototype files explicitly exercise TIRE46 nodes/parameters. |
+| Historical tire calibration | **Ongoing data work, not solver work** | Estimates must retain provenance/confidence. No measured dataset is required to keep TIRE46 frozen. |
+| 150-car tire-stack workload | **Correctness proven; isolated single-thread cost measured** | All 150 cars / 600 tires execute 3x3. On the 2026-08-31 Windows Release verification, 50 ms of isolated tire work took 58.16 ms dry and 59.33 ms wet (0.86x/0.84x real time on one thread). This is a deliberately pessimistic single-thread tire-only benchmark, not a complete race or final multicore performance claim. |
 
-## Partial mechanisms that must not be described as finished
+## Production data policy for historical tires
 
-### Distributed contact-patch promotion
+A tire definition may be production-usable even when some parameters are inferred. Every parameter
+set must make its epistemic status visible:
 
-The bounded 3x3 tier is implemented and deterministic, but remains an explicit high-fidelity tier.
-Promotion to every nearby vehicle requires more live curb, split-water and transient validation. It
-intentionally preserves one calibrated whole-tire target rather than pretending that nine standalone
-MF evaluations are physically identified local tread blocks.
+1. **Measured/fitted** where reliable source data exist.
+2. **Derived** where dimensions/physics determine a value from sourced facts.
+3. **Evidence-informed estimate** where period reviews, construction, comparable tires and vehicle
+   behavior constrain a plausible range.
+4. **Low-confidence placeholder** only when no better evidence exists; it must never be silently
+   presented as a manufacturer measurement.
 
-### Thermal depth and wheel coupling
+For the Peugeot/Pirelli work, the existing prototype `.tir` files remain explicit synthetic/evidence
+seeds. A later P7000 reconstruction should improve those values with research and validation runs,
+not create another tire solver.
 
-The active thermal network has bulk tread, carcass, contained gas and wheel/rim nodes plus 16x3
-spatial tread-surface offsets. Brake friction power heats the rim and conducts into the carcass; the
-Tire Lab has a dedicated heat-soak/cooldown scenario. Explicit inner/outer sidewall nodes and
-multiple through-thickness rubber layers remain an optional higher-order model requiring identified
-capacities/conductances; the existing surface-plus-bulk network must not be described as measured
-depthwise thermodynamics.
+## Things intentionally outside the TIRE46 solver freeze
 
-### Structural tire constructions
+These may be implemented later without reopening tire-force physics:
 
-The family/bias system supplies coherent parameter baselines, but it is not equivalent to measured
-construction-specific structural solvers. Radial, cross-ply, historical tall-sidewall, slick,
-motorcycle, kart, commercial, run-flat and low-pressure/off-road tires still require identified data,
-specialized mechanisms where justified, and calibration. `LowPressureTireModel.cpp` is currently a
-non-compiled scaffold, not a working provider.
+- Visual mesh tearing/chunk detachment, rim mesh deformation/fragmentation and decal/particle polish.
+- Heritage Studio tire-parts UX and topology-aware `All -> axle/group -> wheel` assignment UI.
+- Better historical tire datasets and family-specific estimates.
+- Whole-vehicle motorcycle dynamics and rider controller.
+- Full-scene 150-car performance work across suspension, chassis, collision, AI, rendering, audio,
+  networking and streaming.
+- Compatibility with proprietary/obfuscated vendor MF-Swift/T&V extensions that Heritage does not
+  own. Unknown assignments stay visible in importer diagnostics; Heritage's own thermal/velocity
+  physics remains authoritative rather than pretending unsupported vendor equations are active.
 
-### Damage and endurance
+## Rules after TIRE46
 
-Pressure loss and reduced-order stage progression exist. Missing physical depth includes puncture
-object/material differences, valve and bead leaks, repairs, belt/cord fatigue, graining, blistering,
-delamination, impact cuts, bead unseating, run-flat support, rim damage and authoritative detached
-tread geometry/interaction.
-
-### Dynamic environment input
-
-The world now authors deterministic global rainfall, a bounded road-water film, drainage,
-humidity/wind evaporation and road temperature. Tire contacts consume the exact hard-surface film
-depth and wind affects thermal convection. This is not yet a complete spatial weather field: local
-rain cells, puddle geometry/flow, racing-line drying, spray coupling, snow accumulation/compaction
-and ice formation/melt remain open.
-
-## Genuine remaining completion gates
-
-### TIRE18A - deterministic steady-state evidence — implemented
-
-- Pure longitudinal-slip curve.
-- Pure lateral-slip curve.
-- Combined slip-ratio/slip-angle map.
-- Load, pressure, camber and turn-slip sensitivity curves.
-- Canonical SI inputs, deterministic sample ordering and CSV-ready complete force/moment telemetry.
-- Regression checks for repeatability, curve direction and sensitivity.
-
-### TIRE18B - active fitted-tire laboratory UI — implemented
-
-- Run TIRE18A sweeps against a selected installed tire part/wheel in the Vehicle/Tire Lab.
-- Plot Fx, Fy, Mz, trail, stiffness and grip utilization.
-- Compare two runs or tire definitions without silently normalizing their axes.
-- Export CSV plus tire identity, parameter provenance, confidence and validity envelope.
-- Save a compact machine-readable run manifest for later automated comparison.
-
-### TIRE18C - transient, thermal and endurance scenarios — implemented core
-
-- Relaxation step response at multiple speeds and rates.
-- Loaded/effective-radius, cleat, curb and rough-road enveloping tests.
-- Heating/cooling, pressure growth and brake/rim heat soak/cooldown.
-- Sustained cornering, braking flat spot, wear and contamination scenarios.
-- Split-mu, split-water, hydroplaning, winter, gravel, mud/sand and motorcycle high-camber cases.
-
-### TIRE18D - measured-data calibration and acceptance envelopes — infrastructure implemented; data external
-
-- Import measured/fitted datasets with source, units, conditions and confidence.
-- Store expected curve envelopes rather than tuning only to one exact synthetic result.
-- Reject changes that create non-finite values, discontinuities, wrong force signs, energy creation or
-  out-of-envelope behaviour.
-- Keep synthetic datasets visibly labelled as estimates.
-
-### TIRE18E - distributed contact-force tier — implemented experimental tier
-
-- Add local cell force/shear integration behind an explicit fidelity tier.
-- Compare integrated results against the current aggregate-MF baseline.
-- Preserve deterministic 1000 Hz behaviour and bounded work.
-- Prove split-surface, curb and partial-water improvements before promoting it.
-
-### TIRE18F - large-grid scalability — executable tire-stack benchmark implemented; full scene pending
-
-- Profile player/full-fidelity, near-AI and distant-AI tiers.
-- Validate a 150-car field without changing physical definitions between tiers.
-- Permit deterministic rate/spatial reduction for distant vehicles; never silently select arcade
-  physics because a vehicle is AI-controlled.
-
-The native Tire Lab now executes and times a 150-car / 600-tire workload at 1000 Hz, including
-thermal, wear and wet-state work at 100 Hz and the player's bounded `Distributed3x3` cells. Native
-regression verifies exact work counts without asserting a hardware-specific time threshold. This is
-still a single-threaded tire-stack diagnostic, not a claim that a 150-car Nürburgring scene—including
-collision, suspension, AI, rendering, audio, networking and streaming—has been profiled.
-
-## Remaining authoring/tooling work
-
-- Topology-aware `All -> axle/group -> wheel` tire assignment for cars, motorcycles, trikes,
-  dual-wheel trucks and multi-axle vehicles.
-- Tire/Vehicle Parts Lab for identity, dimensions, pressure ranges, construction, tread, provenance,
-  creator biases, measured property files and calibration results.
-- Explicit engineering displays for cold/hot pressure, temperature window, construction, load/speed
-  rating, mass/inertia, tread void/sipes/studs and data confidence.
-
-## Deliberately deferred or rejected
-
-- Unrestricted soft-body tires for every vehicle.
-- Dozens of independently simulated rigid bodies per tire.
-- Proprietary MF-Tyre/Simcenter equation or dataset cloning.
-- GPU-only deformation that disagrees with authoritative physics.
-- Manufacturer/model names selecting performance without engineering data.
-- Full detached-tread mesh cutting, bare-rim visual destruction and rim fragmentation until the
-  underlying damage/contact architecture and performance budgets are ready.
-
-## Documentation precedence and continuity rules
-
-1. Current compiled source and passing regression tests establish what exists.
-2. This ledger establishes current completion status and priority.
-3. Accepted ADRs establish architecture decisions and invariants.
-4. `TIRE_MODEL.md`, `TIRE_SURFACE_ROADMAP.md` and `TIRE_PART_AUTHORING_ROADMAP.md` provide detailed
-   mechanism history and planned scope.
-5. `TireDeformation_IMPORTANT/` is a postmortem. Its abandoned attempts are evidence, not selectable
-   alternative implementations.
-
-Before changing tire physics, an AI or human contributor must read this ledger, the relevant accepted
-ADR, the active provider source and its regression. A material change is incomplete until this ledger
-is updated with its actual evidence level.
+1. Suspension/chassis systems consume current tire outputs; they do not duplicate tire physics.
+2. A tire change requires a demonstrated missing physical mechanism or regression failure—not merely
+   a desire to add more parameters.
+3. Historical evidence normally changes data/provenance/calibration envelopes, not architecture.
+4. `Aggregate` may be selected explicitly for diagnostics, but AI status must never select it
+   implicitly.
+5. Tire visual presentation may improve independently provided it remains a copy of authoritative
+   physical state.
+6. Any future material tire-physics change must update this ledger and add deterministic evidence.

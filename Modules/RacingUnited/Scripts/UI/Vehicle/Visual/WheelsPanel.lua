@@ -12,6 +12,14 @@ function DrawVehicleVisualWheelsPanel()
     UI.TextWrapped("Do not resize a correct wheel in Heritage Engine. Fix dimensions and origin placement in Blender.")
     UI.Spacing()
 
+    local measurementEnabled, measurementChanged = UI.Checkbox(
+        "Show live measurement presentation",
+        vehicleMeasurementOverlay.enabled)
+    if measurementChanged then
+        SetVehicleMeasurementOverlayEnabled(measurementEnabled)
+    end
+    UI.TextDisabled("White/cyan geometry uses live native wheel centres. Hide or reopen this laboratory with Tab.")
+
     vehicleWheelVisual.enabled, changed = UI.Checkbox(
         "Enable articulated wheel meshes", vehicleWheelVisual.enabled)
     if changed then
@@ -20,12 +28,49 @@ function DrawVehicleVisualWheelsPanel()
 
     UI.Spacing()
     UI.Separator()
-    UI.TextDisabled("2003 PEUGEOT 206 RC REFERENCE GEOMETRY")
-    UI.Text(string.format("Wheelbase: %.0f mm", geometry.wheelbaseM * 1000.0))
-    UI.Text(string.format("Front track: %.0f mm", geometry.frontTrackM * 1000.0))
-    UI.Text(string.format("Rear track: %.0f mm", geometry.rearTrackM * 1000.0))
+    UI.TextDisabled("2003 PEUGEOT 206 RC GEOMETRY AUDIT")
+    UI.Text("Factory reference (published):")
+    UI.Text(string.format(
+        "  wheelbase %.0f mm | front track %.0f mm | rear track %.0f mm",
+        geometry.wheelbaseM * 1000.0,
+        geometry.frontTrackM * 1000.0,
+        geometry.rearTrackM * 1000.0))
+    local authored = vehicleGeometry ~= nil and vehicleGeometry.authored or nil
+    if authored ~= nil and authored.valid then
+        UI.Text(string.format(
+            "Authored GLB tire centres: %.0f / %.0f / %.0f mm",
+            authored.wheelbaseM * 1000.0,
+            authored.frontTrackM * 1000.0,
+            authored.rearTrackM * 1000.0))
+        UI.TextDisabled(string.format(
+            "  asset-reference delta: wheelbase %+.1f | front %+.1f | rear %+.1f mm",
+            (authored.wheelbaseM - geometry.wheelbaseM) * 1000.0,
+            (authored.frontTrackM - geometry.frontTrackM) * 1000.0,
+            (authored.rearTrackM - geometry.rearTrackM) * 1000.0))
+    else
+        UI.TextDisabled("Authored GLB tire-centre geometry: unavailable")
+    end
+    local live = vehicleGeometry ~= nil and vehicleGeometry.live or nil
+    if live ~= nil and live.valid then
+        UI.Text(string.format(
+            "Live native hub centres: %.0f / %.0f / %.0f mm",
+            live.wheelbaseM * 1000.0,
+            live.frontTrackM * 1000.0,
+            live.rearTrackM * 1000.0))
+        UI.TextDisabled(string.format(
+            "  live-reference delta: wheelbase %+.1f | front %+.1f | rear %+.1f mm",
+            (live.wheelbaseM - geometry.wheelbaseM) * 1000.0,
+            (live.frontTrackM - geometry.frontTrackM) * 1000.0,
+            (live.rearTrackM - geometry.rearTrackM) * 1000.0))
+    else
+        UI.TextDisabled(vehicleGeometry ~= nil
+            and vehicleGeometry.message
+            or "Live native geometry: unavailable")
+    end
+    UI.TextWrapped("Order is wheelbase / front track / rear track. Track is measured centre-to-centre at the native hub plane. Camber is reported separately and does not redefine nominal track.")
     UI.Text("Wheel / tire: " .. geometry.rimSize .. " | " .. geometry.tireSize)
     UI.Text(string.format("Reference tire radius: %.1f mm", geometry.wheelRadiusM * 1000.0))
+    UI.TextDisabled(tostring(vehicleMeasurementOverlay.message or ""))
 
     UI.Spacing()
     UI.Separator()
@@ -60,9 +105,10 @@ function DrawVehicleVisualWheelsPanel()
         local telemetry = vehicleWheelTelemetry[index]
         if telemetry ~= nil then
             UI.Text(string.format(
-                "%s center (%+.3f, %+.3f, %+.3f) m | steer %+6.2f | spin %+7.1f",
+                "%s center (%+.3f, %+.3f, %+.3f) m | camber %+.2f | steer %+6.2f",
                 labels[index], telemetry.centerX, telemetry.centerY, telemetry.centerZ,
-                telemetry.steerAngle, telemetry.rotationDegrees))
+                telemetry.workshopCamberDegrees or telemetry.camberAngleDegrees,
+                telemetry.steerAngle))
         end
     end
 

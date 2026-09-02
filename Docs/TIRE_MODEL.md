@@ -451,9 +451,11 @@ loaded-radius calculation and future rigid-ring dynamics belong to contact/
 structural mechanisms rather than the steady-state force law.
 
 The present four-wheel `raycast_wheel_v1` vehicle topology still does not claim
-to be a complete motorcycle solver: lean dynamics, fork/swingarm kinematics and
-motorcycle body balance remain separate future providers. The tire branch is
-already motorcycle-capable and can be reused by that solver.
+to be a complete motorcycle vehicle solver. SUSP10 now supplies native
+conventional telescopic-fork and swingarm/linkage suspension kinematics; lean
+balance, rider dynamics, free steering-head dynamics and other two-wheel
+whole-vehicle coordination remain separate topology work. The TIRE46 branch is
+already motorcycle-capable and is reused by those suspension providers.
 
 ## Transient slip
 

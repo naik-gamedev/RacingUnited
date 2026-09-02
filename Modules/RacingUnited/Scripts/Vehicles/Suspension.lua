@@ -147,7 +147,8 @@ end
 local function CopyDefinitionSuspensionToEditor(wheel)
     local suspension = PrototypeCarDefinition.wheelPhysics
     local steeringAxis = wheel.steeringAxis or suspension.steeringAxis
-    vehicleSuspension.springPreloadN = suspension.springPreloadN
+    vehicleSuspension.springPreloadN =
+        wheel.springPreloadN or suspension.springPreloadN
     vehicleSuspension.springRateNPerM = suspension.springRateNPerM
     vehicleSuspension.springProgressionNPerM2 =
         suspension.springProgressionNPerM2

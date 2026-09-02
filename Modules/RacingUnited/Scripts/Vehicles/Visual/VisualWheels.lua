@@ -43,4 +43,5 @@ function UpdateVehicleWheelPresentation()
     end
 
     UpdateEmbeddedVehicleWheelNodes()
+    UpdateVehicleMeasurementOverlay()
 end

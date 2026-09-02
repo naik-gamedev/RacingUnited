@@ -190,11 +190,65 @@ int main()
         << " authoritative suspension upright pose\n";
     failed += suspensionGeometryPassed ? 0 : 1;
 
+    const bool supportPathPassed =
+        hardpointWheelPathMovesPhysicalSupportQuery();
+    std::cout << (supportPathPassed ? "PASS" : "FAIL")
+        << " hardpoint wheel-path physical support authority\n";
+    failed += supportPathPassed ? 0 : 1;
+
     const bool macPhersonPassed =
         macPhersonHardpointKinematicsAreDeterministic();
     std::cout << (macPhersonPassed ? "PASS" : "FAIL")
         << " MacPherson hardpoint kinematics\n";
     failed += macPhersonPassed ? 0 : 1;
+
+    const bool doubleWishbonePassed =
+        doubleWishboneHardpointKinematicsAreDeterministic();
+    std::cout << (doubleWishbonePassed ? "PASS" : "FAIL")
+        << " double-wishbone hardpoint kinematics\n";
+    failed += doubleWishbonePassed ? 0 : 1;
+
+    const bool pushrodWishbonePassed =
+        pushrodDoubleWishboneActuationIsNonlinearAndConservative();
+    std::cout << (pushrodWishbonePassed ? "PASS" : "FAIL")
+        << " pushrod/rocker double-wishbone actuation\n";
+    failed += pushrodWishbonePassed ? 0 : 1;
+
+    const bool liveAxlePassed =
+        liveAxleRigidPairKinematicsAreCoupledAndConservative();
+    std::cout << (liveAxlePassed ? "PASS" : "FAIL")
+        << " rigid live-axle coupled kinematics and leverage\n";
+    failed += liveAxlePassed ? 0 : 1;
+
+    const bool leafAxlePassed =
+        leafSpringLiveAxleShackleAndHysteresisArePhysical();
+    std::cout << (leafAxlePassed ? "PASS" : "FAIL")
+        << " leaf-spring live-axle shackle, hysteresis and leverage\n";
+    failed += leafAxlePassed ? 0 : 1;
+
+    const bool motorcycleSuspensionPassed =
+        motorcycleForkAndSwingarmKinematicsArePhysical();
+    std::cout << (motorcycleSuspensionPassed ? "PASS" : "FAIL")
+        << " motorcycle fork/swingarm/linkage suspension physics\n";
+    failed += motorcycleSuspensionPassed ? 0 : 1;
+
+    const bool kartSuspensionPassed =
+        kartChassisKingpinJackingAndRigidRearArePhysical();
+    std::cout << (kartSuspensionPassed ? "PASS" : "FAIL")
+        << " kart kingpin jacking, rigid axle and no-coil suspension physics\n";
+    failed += kartSuspensionPassed ? 0 : 1;
+
+    const bool multiLinkPassed =
+        multiLinkRigidUprightConstraintsAndRackSteeringArePhysical();
+    std::cout << (multiLinkPassed ? "PASS" : "FAIL")
+        << " five-link independent suspension constraints and rack steering\n";
+    failed += multiLinkPassed ? 0 : 1;
+
+    const bool semiTrailingTwistBeamPassed =
+        semiTrailingArmAndTwistBeamArePhysical();
+    std::cout << (semiTrailingTwistBeamPassed ? "PASS" : "FAIL")
+        << " semi-trailing arm and twist-beam suspension physics\n";
+    failed += semiTrailingTwistBeamPassed ? 0 : 1;
 
     const bool assistedMacPhersonPassed =
         assistedMacPhersonEstimateIsPlausibleAndMirrored();
@@ -225,6 +279,18 @@ int main()
     std::cout << (antiRollBarPassed ? "PASS" : "FAIL")
         << " reusable suspension anti-roll-bar coupling\n";
     failed += antiRollBarPassed ? 0 : 1;
+
+    const bool staticRideHeightPassed =
+        staticRideHeightCalibrationReconstructsPeugeotStance();
+    std::cout << (staticRideHeightPassed ? "PASS" : "FAIL")
+        << " kerb-mass static ride-height preload calibration\n";
+    failed += staticRideHeightPassed ? 0 : 1;
+
+    const bool suspensionFinalCertificationPassed =
+        suspensionFinalCertificationV3Passes();
+    std::cout << (suspensionFinalCertificationPassed ? "PASS" : "FAIL")
+        << " SUSP27-SUSP30 graph, damage, persistence and 150-vehicle certification\n";
+    failed += suspensionFinalCertificationPassed ? 0 : 1;
 
     const bool definitionCompilerPassed =
         vehicleDefinitionCompilerAndLoaderWork();

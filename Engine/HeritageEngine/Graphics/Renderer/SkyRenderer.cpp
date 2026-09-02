@@ -177,11 +177,14 @@ bool SkyRenderer::initialize(const std::filesystem::path& moduleAssetRoot)
     // temporal denoising.
     glGenSamplers(1,&m_cloudHistorySampler);glSamplerParameteri(m_cloudHistorySampler,GL_TEXTURE_MIN_FILTER,GL_NEAREST);glSamplerParameteri(m_cloudHistorySampler,GL_TEXTURE_MAG_FILTER,GL_NEAREST);glSamplerParameteri(m_cloudHistorySampler,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);glSamplerParameteri(m_cloudHistorySampler,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     glUseProgram(m_program);glUniform1i(glGetUniformLocation(m_program,"uEnvironmentMap"),0);glUniform1i(glGetUniformLocation(m_program,"uMoonTexture"),1);glUniform1i(glGetUniformLocation(m_program,"uStarMapTexture"),2);glUniform1i(glGetUniformLocation(m_program,"uPbrSkyViewLut"),3);glUniform1i(glGetUniformLocation(m_program,"uPbrTransmittanceLut"),4);m_uniformView=glGetUniformLocation(m_program,"uView");m_uniformProjection=glGetUniformLocation(m_program,"uProjection");m_uniformGamma=glGetUniformLocation(m_program,"uGamma");m_uniformBrightness=glGetUniformLocation(m_program,"uBrightness");m_uniformContrast=glGetUniformLocation(m_program,"uContrast");m_uniformSaturation=glGetUniformLocation(m_program,"uSaturation");m_uniformSunDirection=glGetUniformLocation(m_program,"uSunDirection");m_uniformSunColor=glGetUniformLocation(m_program,"uSunColor");m_uniformSunIntensity=glGetUniformLocation(m_program,"uSunIntensity");m_uniformDaylightFactor=glGetUniformLocation(m_program,"uDaylightFactor");m_uniformSkyHorizon=glGetUniformLocation(m_program,"uSkyHorizon");m_uniformSkyZenith=glGetUniformLocation(m_program,"uSkyZenith");m_uniformSkyExposure=glGetUniformLocation(m_program,"uSkyExposure");m_uniformAtmosphereThickness=glGetUniformLocation(m_program,"uAtmosphereThickness");m_uniformStarIntensity=glGetUniformLocation(m_program,"uStarIntensity");m_uniformWorldToCelestialRow0=glGetUniformLocation(m_program,"uWorldToCelestialRow0");m_uniformWorldToCelestialRow1=glGetUniformLocation(m_program,"uWorldToCelestialRow1");m_uniformWorldToCelestialRow2=glGetUniformLocation(m_program,"uWorldToCelestialRow2");m_uniformMoonDirection=glGetUniformLocation(m_program,"uMoonDirection");m_uniformMoonIntensity=glGetUniformLocation(m_program,"uMoonIntensity");m_uniformMoonPhase=glGetUniformLocation(m_program,"uMoonPhase");m_uniformWeatherCloudCover=glGetUniformLocation(m_program,"uWeatherCloudCover");m_uniformWeatherHumidity=glGetUniformLocation(m_program,"uWeatherHumidity");m_uniformWeatherPrecipitation=glGetUniformLocation(m_program,"uWeatherPrecipitationMmPerHour");m_uniformPbrSkyView=glGetUniformLocation(m_program,"uPbrSkyViewLut");m_uniformPbrSkyValid=glGetUniformLocation(m_program,"uPbrSkyValid");m_uniformPbrCameraAltitude=glGetUniformLocation(m_program,"uPbrCameraAltitudeM");
-    auto R=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudRaymarchProgram,n);};R(m_ray.view,"uView");R(m_ray.projection,"uProjection");R(m_ray.cameraGlobalXZ,"uCameraGlobal");R(m_ray.sunDirection,"uSunDirection");R(m_ray.sunColor,"uSunColor");R(m_ray.sunIntensity,"uSunIntensity");R(m_ray.moonDirection,"uMoonDirection");R(m_ray.moonColor,"uMoonColor");R(m_ray.moonIntensity,"uMoonIntensity");R(m_ray.skyHorizon,"uSkyHorizon");R(m_ray.skyZenith,"uSkyZenith");R(m_ray.time,"uTime");R(m_ray.temporalFrameIndex,"uTemporalFrameIndex");R(m_ray.cloudCover,"uCloudCover");R(m_ray.humidity,"uHumidity");R(m_ray.precipitation,"uPrecipitationMmPerHour");R(m_ray.windVelocityXZ,"uWindVelocityXZ");R(m_ray.baseWindXZ,"uCloudBaseWindVelocityXZ");R(m_ray.topWindXZ,"uCloudTopWindVelocityXZ");R(m_ray.regionalMap,"uRegionalWeatherMap");R(m_ray.regionalMapValid,"uRegionalWeatherMapValid");R(m_ray.regionalCameraOffsetXZ,"uRegionalWeatherCameraOffsetXZ");R(m_ray.regionalAdvectionXZ,"uRegionalWeatherAdvectionXZ");R(m_ray.regionalHalfRange,"uRegionalWeatherHalfRangeM");R(m_ray.shapeNoise,"uShapeNoise");R(m_ray.erosionNoise,"uErosionNoise");R(m_ray.curveLut,"uCurveLut");R(m_ray.environmentMap,"uEnvironmentMap");R(m_ray.pbrTransmittance,"uPbrTransmittanceLut");R(m_ray.pbrAtmosphereValid,"uPbrAtmosphereValid");R(m_ray.microErosion,"uMicroErosion");R(m_ray.physicallyBasedSun,"uPhysicallyBasedSun");R(m_ray.localClouds,"uLocalClouds");R(m_ray.sceneDepth,"uSceneDepth");R(m_ray.sceneDepthMs,"uSceneDepthMS");R(m_ray.sceneDepthSamples,"uSceneDepthSamples");R(m_ray.sceneColor,"uSceneColor");R(m_ray.perceptual,"uPerceptualBlending");
-    auto C=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudCombineProgram,n);};C(m_combine.cloud,"uCloudTexture");C(m_combine.scene,"uSceneTexture");C(m_combine.bilateral,"uBilateral");auto T=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudTemporalProgram,n);};T(m_temporal.current,"uCurrentTexture");T(m_temporal.history,"uHistoryTexture");T(m_temporal.historyValid,"uHistoryValid");T(m_temporal.currentView,"uCurrentView");T(m_temporal.previousView,"uPreviousView");T(m_temporal.currentProjection,"uCurrentProjection");T(m_temporal.previousProjection,"uPreviousProjection");T(m_temporal.cameraDelta,"uCameraDelta");T(m_temporal.sceneDepth,"uSceneDepth");T(m_temporal.sceneDepthMs,"uSceneDepthMS");T(m_temporal.sceneDepthSamples,"uSceneDepthSamples");T(m_temporal.localClouds,"uLocalClouds");auto G=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudGroundShadowProgram,n);};G(m_groundShadow.sceneDepth,"uSceneDepth");G(m_groundShadow.sceneDepthMs,"uSceneDepthMS");G(m_groundShadow.sceneDepthSamples,"uSceneDepthSamples");G(m_groundShadow.cloudShadow,"uCloudShadow");G(m_groundShadow.cloudShadowValid,"uCloudShadowValid");G(m_groundShadow.cloudShadowHalfRangeM,"uCloudShadowHalfRangeM");G(m_groundShadow.view,"uView");G(m_groundShadow.projection,"uProjection");G(m_groundShadow.celestialLightDirection,"uCelestialLightDirection");G(m_groundShadow.daylightFactor,"uDaylightFactor");m_present.source=glGetUniformLocation(m_cloudPresentProgram,"uSourceTexture");m_present.sceneDepth=glGetUniformLocation(m_cloudPresentProgram,"uSceneDepth");m_present.sceneDepthMs=glGetUniformLocation(m_cloudPresentProgram,"uSceneDepthMS");m_present.sceneDepthSamples=glGetUniformLocation(m_cloudPresentProgram,"uSceneDepthSamples");m_present.sunScreenUv=glGetUniformLocation(m_cloudPresentProgram,"uSunScreenUv");m_present.sunColor=glGetUniformLocation(m_cloudPresentProgram,"uSunColor");m_present.sunIntensity=glGetUniformLocation(m_cloudPresentProgram,"uSunIntensity");m_present.sunElevation=glGetUniformLocation(m_cloudPresentProgram,"uSunElevation");m_present.sunScreenVisible=glGetUniformLocation(m_cloudPresentProgram,"uSunScreenVisible");m_present.cloudCover=glGetUniformLocation(m_cloudPresentProgram,"uCloudCover");m_present.humidity=glGetUniformLocation(m_cloudPresentProgram,"uHumidity");m_present.precipitation=glGetUniformLocation(m_cloudPresentProgram,"uPrecipitation");
+    auto R=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudRaymarchProgram,n);};R(m_ray.view,"uView");R(m_ray.projection,"uProjection");R(m_ray.cameraGlobalXZ,"uCameraGlobal");R(m_ray.sunDirection,"uSunDirection");R(m_ray.sunColor,"uSunColor");R(m_ray.sunIntensity,"uSunIntensity");R(m_ray.moonDirection,"uMoonDirection");R(m_ray.moonColor,"uMoonColor");R(m_ray.moonIntensity,"uMoonIntensity");R(m_ray.skyHorizon,"uSkyHorizon");R(m_ray.skyZenith,"uSkyZenith");R(m_ray.time,"uTime");R(m_ray.temporalFrameIndex,"uTemporalFrameIndex");R(m_ray.cloudCover,"uCloudCover");R(m_ray.humidity,"uHumidity");R(m_ray.precipitation,"uPrecipitationMmPerHour");R(m_ray.windVelocityXZ,"uWindVelocityXZ");R(m_ray.baseWindXZ,"uCloudBaseWindVelocityXZ");R(m_ray.topWindXZ,"uCloudTopWindVelocityXZ");R(m_ray.regionalMap,"uRegionalWeatherMap");R(m_ray.regionalMapValid,"uRegionalWeatherMapValid");R(m_ray.regionalCameraOffsetXZ,"uRegionalWeatherCameraOffsetXZ");R(m_ray.regionalAdvectionXZ,"uRegionalWeatherAdvectionXZ");R(m_ray.regionalHalfRange,"uRegionalWeatherHalfRangeM");R(m_ray.shapeNoise,"uShapeNoise");R(m_ray.erosionNoise,"uErosionNoise");R(m_ray.curveLut,"uCurveLut");R(m_ray.environmentMap,"uEnvironmentMap");R(m_ray.environmentMapPrevious,"uEnvironmentMapPrevious");R(m_ray.environmentBlend,"uEnvironmentBlend");R(m_ray.pbrTransmittance,"uPbrTransmittanceLut");R(m_ray.pbrAtmosphereValid,"uPbrAtmosphereValid");R(m_ray.microErosion,"uMicroErosion");R(m_ray.physicallyBasedSun,"uPhysicallyBasedSun");R(m_ray.localClouds,"uLocalClouds");R(m_ray.sceneDepth,"uSceneDepth");R(m_ray.sceneDepthMs,"uSceneDepthMS");R(m_ray.sceneDepthSamples,"uSceneDepthSamples");R(m_ray.sceneColor,"uSceneColor");R(m_ray.perceptual,"uPerceptualBlending");
+    R(m_ray.sceneColorMs,"uSceneColorMS");
+    auto C=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudCombineProgram,n);};C(m_combine.cloud,"uCloudTexture");C(m_combine.scene,"uSceneTexture");C(m_combine.bilateral,"uBilateral");auto T=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudTemporalProgram,n);};T(m_temporal.current,"uCurrentTexture");T(m_temporal.history,"uHistoryTexture");T(m_temporal.historyValid,"uHistoryValid");T(m_temporal.currentView,"uCurrentView");T(m_temporal.previousView,"uPreviousView");T(m_temporal.currentProjection,"uCurrentProjection");T(m_temporal.previousProjection,"uPreviousProjection");T(m_temporal.cameraDelta,"uCameraDelta");T(m_temporal.sceneDepth,"uSceneDepth");T(m_temporal.sceneDepthMs,"uSceneDepthMS");T(m_temporal.sceneDepthSamples,"uSceneDepthSamples");T(m_temporal.localClouds,"uLocalClouds");T(m_temporal.lightingChange,"uLightingChange");auto G=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudGroundShadowProgram,n);};G(m_groundShadow.sceneDepth,"uSceneDepth");G(m_groundShadow.sceneDepthMs,"uSceneDepthMS");G(m_groundShadow.sceneDepthSamples,"uSceneDepthSamples");G(m_groundShadow.cloudShadow,"uCloudShadow");G(m_groundShadow.cloudShadowValid,"uCloudShadowValid");G(m_groundShadow.cloudShadowHalfRangeM,"uCloudShadowHalfRangeM");G(m_groundShadow.view,"uView");G(m_groundShadow.projection,"uProjection");G(m_groundShadow.celestialLightDirection,"uCelestialLightDirection");G(m_groundShadow.daylightFactor,"uDaylightFactor");G(m_groundShadow.shadowStrength,"uShadowStrength");m_present.source=glGetUniformLocation(m_cloudPresentProgram,"uSourceTexture");m_present.sceneDepth=glGetUniformLocation(m_cloudPresentProgram,"uSceneDepth");m_present.sceneDepthMs=glGetUniformLocation(m_cloudPresentProgram,"uSceneDepthMS");m_present.sceneDepthSamples=glGetUniformLocation(m_cloudPresentProgram,"uSceneDepthSamples");m_present.sunScreenUv=glGetUniformLocation(m_cloudPresentProgram,"uSunScreenUv");m_present.sunColor=glGetUniformLocation(m_cloudPresentProgram,"uSunColor");m_present.sunIntensity=glGetUniformLocation(m_cloudPresentProgram,"uSunIntensity");m_present.sunElevation=glGetUniformLocation(m_cloudPresentProgram,"uSunElevation");m_present.sunScreenVisible=glGetUniformLocation(m_cloudPresentProgram,"uSunScreenVisible");m_present.cloudCover=glGetUniformLocation(m_cloudPresentProgram,"uCloudCover");m_present.humidity=glGetUniformLocation(m_cloudPresentProgram,"uHumidity");m_present.precipitation=glGetUniformLocation(m_cloudPresentProgram,"uPrecipitation");
+    C(m_combine.sceneMs,"uSceneTextureMS");C(m_combine.sceneSamples,"uSceneSamples");
     auto D=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudDepthMergeProgram,n);};D(m_depthMerge.sceneDepth,"uSceneDepth");D(m_depthMerge.sceneDepthMs,"uSceneDepthMS");D(m_depthMerge.sceneDepthSamples,"uSceneDepthSamples");D(m_depthMerge.cloudDepth,"uCloudDepth");
     auto S=[&](GLint& x,const char*n){x=glGetUniformLocation(m_cloudShadowProgram,n);};S(m_shadow.cameraGlobalXZ,"uCameraGlobal");S(m_shadow.sunDirection,"uCelestialLightDirection");S(m_shadow.time,"uTime");S(m_shadow.cloudCover,"uCloudCover");S(m_shadow.humidity,"uHumidity");S(m_shadow.precipitation,"uPrecipitation");S(m_shadow.baseWindXZ,"uBaseWindXZ");S(m_shadow.topWindXZ,"uTopWindXZ");S(m_shadow.regionalMap,"uRegionalWeatherMap");S(m_shadow.regionalMapValid,"uRegionalWeatherMapValid");S(m_shadow.regionalCameraOffsetXZ,"uRegionalCameraOffsetXZ");S(m_shadow.regionalAdvectionXZ,"uRegionalAdvectionXZ");S(m_shadow.regionalHalfRange,"uRegionalHalfRange");S(m_shadow.shapeNoise,"uShapeNoise");S(m_shadow.erosionNoise,"uErosionNoise");S(m_shadow.curveLut,"uCurveLut");S(m_shadow.microErosion,"uMicroErosion");S(m_shadow.halfRange,"uHalfRange");m_shadowFilter.source=glGetUniformLocation(m_cloudShadowFilterProgram,"uSource");m_shadowFilter.texelSize=glGetUniformLocation(m_cloudShadowFilterProgram,"uTexelSize");
-    glUseProgram(m_cloudRaymarchProgram);glUniform1i(m_ray.regionalMap,0);glUniform1i(m_ray.shapeNoise,1);glUniform1i(m_ray.erosionNoise,2);glUniform1i(m_ray.curveLut,3);glUniform1i(m_ray.environmentMap,4);glUniform1i(m_ray.sceneDepth,5);glUniform1i(m_ray.sceneDepthMs,6);glUniform1i(m_ray.sceneColor,7);glUniform1i(m_ray.pbrTransmittance,8);glUseProgram(m_cloudCombineProgram);glUniform1i(m_combine.cloud,0);glUniform1i(m_combine.scene,1);glUseProgram(m_cloudTemporalProgram);glUniform1i(m_temporal.current,0);glUniform1i(m_temporal.history,1);glUniform1i(m_temporal.sceneDepth,2);glUniform1i(m_temporal.sceneDepthMs,3);glUseProgram(m_cloudPresentProgram);glUniform1i(m_present.source,0);glUniform1i(m_present.sceneDepth,2);glUniform1i(m_present.sceneDepthMs,3);glUseProgram(m_cloudGroundShadowProgram);glUniform1i(m_groundShadow.sceneDepth,0);glUniform1i(m_groundShadow.sceneDepthMs,1);glUniform1i(m_groundShadow.cloudShadow,2);glUseProgram(m_cloudDepthMergeProgram);glUniform1i(m_depthMerge.sceneDepth,0);glUniform1i(m_depthMerge.sceneDepthMs,1);glUniform1i(m_depthMerge.cloudDepth,2);glUseProgram(m_cloudShadowProgram);glUniform1i(m_shadow.regionalMap,0);glUniform1i(m_shadow.shapeNoise,1);glUniform1i(m_shadow.erosionNoise,2);glUniform1i(m_shadow.curveLut,3);glUseProgram(m_cloudShadowFilterProgram);glUniform1i(m_shadowFilter.source,0);glUseProgram(0);
+    glUseProgram(m_cloudRaymarchProgram);glUniform1i(m_ray.regionalMap,0);glUniform1i(m_ray.shapeNoise,1);glUniform1i(m_ray.erosionNoise,2);glUniform1i(m_ray.curveLut,3);glUniform1i(m_ray.environmentMap,4);glUniform1i(m_ray.environmentMapPrevious,9);glUniform1i(m_ray.sceneDepth,5);glUniform1i(m_ray.sceneDepthMs,6);glUniform1i(m_ray.sceneColor,7);glUniform1i(m_ray.pbrTransmittance,8);glUseProgram(m_cloudCombineProgram);glUniform1i(m_combine.cloud,0);glUniform1i(m_combine.scene,1);glUseProgram(m_cloudTemporalProgram);glUniform1i(m_temporal.current,0);glUniform1i(m_temporal.history,1);glUniform1i(m_temporal.sceneDepth,2);glUniform1i(m_temporal.sceneDepthMs,3);glUseProgram(m_cloudPresentProgram);glUniform1i(m_present.source,0);glUniform1i(m_present.sceneDepth,2);glUniform1i(m_present.sceneDepthMs,3);glUseProgram(m_cloudGroundShadowProgram);glUniform1i(m_groundShadow.sceneDepth,0);glUniform1i(m_groundShadow.sceneDepthMs,1);glUniform1i(m_groundShadow.cloudShadow,2);glUseProgram(m_cloudDepthMergeProgram);glUniform1i(m_depthMerge.sceneDepth,0);glUniform1i(m_depthMerge.sceneDepthMs,1);glUniform1i(m_depthMerge.cloudDepth,2);glUseProgram(m_cloudShadowProgram);glUniform1i(m_shadow.regionalMap,0);glUniform1i(m_shadow.shapeNoise,1);glUniform1i(m_shadow.erosionNoise,2);glUniform1i(m_shadow.curveLut,3);glUseProgram(m_cloudShadowFilterProgram);glUniform1i(m_shadowFilter.source,0);glUseProgram(0);
+    glUseProgram(m_cloudRaymarchProgram);glUniform1i(m_ray.sceneColorMs,10);glUseProgram(m_cloudCombineProgram);glUniform1i(m_combine.sceneMs,2);glUseProgram(0);
     std::string moonError; if(const Texture2D* moon=m_textureCache.acquire(m_assetRoot/"Scenes"/"Moon.png",TextureColorSpace::SRgb,2,false,moonError)) m_moonTexture=moon->id;
     std::string starError; if(const Texture2D* stars=m_textureCache.acquire(m_assetRoot/"Scenes"/"Sky"/"Scene_NightSky.ktx2",TextureColorSpace::Linear,2,false,starError)) m_starMapTexture=stars->id; else if(!starError.empty()) std::cerr<<"Heritage sky: "<<starError<<'\n';
     const auto cloudRoot=m_assetRoot/"Weather"/"Clouds"/"UnityVolumetricCloudsURP";loadCloudVolumeTexture(cloudRoot/"WorleyNoise128R.hvol",m_cloudShapeTexture,128,128,128);loadCloudVolumeTexture(cloudRoot/"PerlinNoise32R.hvol",m_cloudErosionTexture,32,32,32);ensureCloudLut();
@@ -198,7 +201,7 @@ bool SkyRenderer::initialize(const std::filesystem::path& moduleAssetRoot)
     return true;
 }
 
-void SkyRenderer::resetCloudHistory(){m_cloudHistoryValid=false;m_cloudTemporalFrameIndex=0;m_previousCloudView=heritage::math::identity();m_previousCloudProjection=heritage::math::identity();m_previousCloudCameraGlobal={0,0,0};}
+void SkyRenderer::resetCloudHistory(){m_cloudHistoryValid=false;m_cloudTemporalFrameIndex=0;m_previousCloudView=heritage::math::identity();m_previousCloudProjection=heritage::math::identity();m_previousCloudCameraGlobal={0,0,0};m_previousCloudDayNightCycle=-1.0f;}
 void SkyRenderer::destroyCloudTargets()
 {
     GLuint ts[]={m_cloudRaymarchTexture,m_cloudRaymarchDepthTexture,m_cloudSceneTexture,m_cloudSceneDepthTexture,m_cloudCombinedTexture,m_cloudTemporalTexture,m_cloudHistoryTexture};
@@ -272,7 +275,7 @@ void SkyRenderer::shutdown()
     m_cloudTemporalGpuTimer.shutdown();
     m_cloudPresentGpuTimer.shutdown();
     m_gpuStats={};
-    destroyCloudTargets();destroyCloudShadowTargets();GLuint ps[]={m_program,m_cloudRaymarchProgram,m_cloudCombineProgram,m_cloudTemporalProgram,m_cloudPresentProgram,m_cloudGroundShadowProgram,m_cloudDepthMergeProgram,m_cloudShadowProgram,m_cloudShadowFilterProgram};for(GLuint p:ps)if(p)glDeleteProgram(p);m_program=m_cloudRaymarchProgram=m_cloudCombineProgram=m_cloudTemporalProgram=m_cloudPresentProgram=m_cloudGroundShadowProgram=m_cloudDepthMergeProgram=m_cloudShadowProgram=m_cloudShadowFilterProgram=0;m_volumetricCloudProgramsLinked=m_cloudDepthMergeProgramLinked=m_cloudShadowProgramsLinked=false;if(m_cloudShapeTexture)glDeleteTextures(1,&m_cloudShapeTexture);if(m_cloudErosionTexture)glDeleteTextures(1,&m_cloudErosionTexture);if(m_cloudLutTexture)glDeleteTextures(1,&m_cloudLutTexture);m_cloudShapeTexture=m_cloudErosionTexture=m_cloudLutTexture=0;m_textureCache.clear();m_moonTexture=0;m_starMapTexture=0;if(m_cloudHistorySampler)glDeleteSamplers(1,&m_cloudHistorySampler);m_cloudHistorySampler=0;if(m_vbo)glDeleteBuffers(1,&m_vbo);if(m_vao)glDeleteVertexArrays(1,&m_vao);m_vbo=m_vao=0;m_environmentMapTexture=0;
+    destroyCloudTargets();destroyCloudShadowTargets();GLuint ps[]={m_program,m_cloudRaymarchProgram,m_cloudCombineProgram,m_cloudTemporalProgram,m_cloudPresentProgram,m_cloudGroundShadowProgram,m_cloudDepthMergeProgram,m_cloudShadowProgram,m_cloudShadowFilterProgram};for(GLuint p:ps)if(p)glDeleteProgram(p);m_program=m_cloudRaymarchProgram=m_cloudCombineProgram=m_cloudTemporalProgram=m_cloudPresentProgram=m_cloudGroundShadowProgram=m_cloudDepthMergeProgram=m_cloudShadowProgram=m_cloudShadowFilterProgram=0;m_volumetricCloudProgramsLinked=m_cloudDepthMergeProgramLinked=m_cloudShadowProgramsLinked=false;if(m_cloudShapeTexture)glDeleteTextures(1,&m_cloudShapeTexture);if(m_cloudErosionTexture)glDeleteTextures(1,&m_cloudErosionTexture);if(m_cloudLutTexture)glDeleteTextures(1,&m_cloudLutTexture);m_cloudShapeTexture=m_cloudErosionTexture=m_cloudLutTexture=0;m_textureCache.clear();m_moonTexture=0;m_starMapTexture=0;if(m_cloudHistorySampler)glDeleteSamplers(1,&m_cloudHistorySampler);m_cloudHistorySampler=0;if(m_vbo)glDeleteBuffers(1,&m_vbo);if(m_vao)glDeleteVertexArrays(1,&m_vao);m_vbo=m_vao=0;m_environmentMapTexture=0;m_environmentMapPreviousTexture=0;m_environmentMapBlend=1.0f;
 }
 
 void SkyRenderer::pollGpuTimers()
@@ -332,6 +335,7 @@ void SkyRenderer::updateCloudShadows(const EnvironmentLighting& lighting,const S
 
     const auto eligibilityStart=PerfClock::now();
     m_cloudShadowReady=false;
+    m_cloudShadowReceiverStrength=0.0f;
     const bool eligible=w.cloudShadows&&w.enabled&&volumetricCloudsValid()
         &&m_cloudShadowProgramsLinked;
     m_cpuStats.cloudShadowEligibilityMs=millisecondsSince(eligibilityStart);
@@ -341,16 +345,38 @@ void SkyRenderer::updateCloudShadows(const EnvironmentLighting& lighting,const S
         return;
     }
 
-    // Keep the original short-circuit order: shadow targets are ensured before
-    // the sun-direction/intensity early-outs, exactly as before PERF04.
+    // CELESTIAL07: the one detailed cookie never follows Heritage's synthetic
+    // scene key. A nearly horizontal spherical-shell trace is numerically hostile
+    // and the old Sun->Moon key interpolation could rotate tens of degrees per
+    // simulated minute. Fade low-angle Sun shadows away, leave a short ambient-
+    // dominated twilight bridge, then fade Moon shadows in on the real Moon.
+    const float day=std::clamp(lighting.daylightFactor,0.0f,1.0f);
+    const float sunShadowStrength=hermite(0.025f,0.10f,lighting.sunDirection.y)
+        *hermite(0.155f,0.20f,day)*hermite(0.02f,0.30f,lighting.sunIntensity);
+    const float moonShadowStrength=hermite(0.025f,0.10f,lighting.moonDirection.y)
+        *(1.0f-hermite(0.085f,0.13f,day))*hermite(0.02f,0.30f,lighting.moonIntensity);
+    if(sunShadowStrength>0.001f)
+    {
+        m_cloudShadowLightDirection=lighting.sunDirection;
+        m_cloudShadowReceiverStrength=std::clamp(sunShadowStrength,0.0f,1.0f);
+    }
+    else if(moonShadowStrength>0.001f)
+    {
+        m_cloudShadowLightDirection=lighting.moonDirection;
+        m_cloudShadowReceiverStrength=std::clamp(moonShadowStrength,0.0f,1.0f);
+    }
+    else
+    {
+        m_cpuStats.cloudShadowInternalTotalMs=millisecondsSince(internalTotalStart);
+        return;
+    }
+
     const auto targetStart=PerfClock::now();
     const bool targetsReady=ensureCloudShadowTargets();
     m_cpuStats.cloudShadowTargetEnsureMs=millisecondsSince(targetStart);
-    // CELESTIAL01: cloud-ground attenuation follows the same continuous
-    // astronomical key used by scene direct lighting. Daytime therefore traces
-    // toward the Sun; nighttime traces toward the Moon without a second cookie.
-    if(!targetsReady||lighting.keyLightDirection.y<=0.01f||lighting.keyLightIntensity<=0.0001f)
+    if(!targetsReady)
     {
+        m_cloudShadowReceiverStrength=0.0f;
         m_cpuStats.cloudShadowInternalTotalMs=millisecondsSince(internalTotalStart);
         return;
     }
@@ -376,7 +402,7 @@ void SkyRenderer::updateCloudShadows(const EnvironmentLighting& lighting,const S
 
     const auto uniformStart=PerfClock::now();
     glUniform3f(m_shadow.cameraGlobalXZ,float(w.cameraGlobal.x),float(w.cameraGlobal.y),float(w.cameraGlobal.z));
-    glUniform3f(m_shadow.sunDirection,lighting.keyLightDirection.x,lighting.keyLightDirection.y,lighting.keyLightDirection.z);
+    glUniform3f(m_shadow.sunDirection,m_cloudShadowLightDirection.x,m_cloudShadowLightDirection.y,m_cloudShadowLightDirection.z);
     glUniform1f(m_shadow.time,w.elapsedSeconds);glUniform1f(m_shadow.cloudCover,w.authoredCloudCover);
     glUniform1f(m_shadow.humidity,w.relativeHumidity);glUniform1f(m_shadow.precipitation,w.precipitationRateMmPerHour);
     glUniform2f(m_shadow.baseWindXZ,w.cloudBaseWindVelocityXMps,w.cloudBaseWindVelocityZMps);
@@ -532,7 +558,7 @@ void SkyRenderer::draw(
     updatePhysicallyBasedAtmosphereLuts(lighting, w);
 
     const auto stateSetupStart = PerfClock::now();
-    m_environmentMapTexture = env.textureId();
+    m_environmentMapTexture = env.textureId(); m_environmentMapPreviousTexture=env.previousTextureId(); m_environmentMapBlend=env.blendFactor();
     glBindFramebuffer(GL_FRAMEBUFFER, t.framebuffer);
     glViewport(t.viewportX, t.viewportY, t.viewportWidth, t.viewportHeight);
     if (t.scissorEnabled)
@@ -671,23 +697,47 @@ void SkyRenderer::drawVolumetricCloudsAfterOpaque(
 
     glBindVertexArray(m_vao);
 
+    // CLOUDURP15EJ: PostFramebuffer exposes texture-backed camera attachments.
+    // Sample those attachments directly while cloud passes render into their
+    // own FBOs. This removes a full-resolution color resolve and a same-sample
+    // depth copy without changing resolution, cloud steps, filtering, or MSAA.
+    const bool directSceneColor=t.colorTexture!=0;
+    const bool directSceneDepth=t.depthStencilTexture!=0
+        && !(w.outputCloudDepth&&w.outputCloudDepthToScene);
+    const GLenum directTextureTarget=sceneDepthSamples>1
+        ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+    const GLuint sceneColorTexture=directSceneColor
+        ? t.colorTexture : m_cloudSceneTexture;
+    const GLenum sceneColorTarget=directSceneColor
+        ? directTextureTarget : GL_TEXTURE_2D;
+    const GLuint sceneDepthTexture=directSceneDepth
+        ? t.depthStencilTexture : m_cloudSceneDepthTexture;
+    const GLenum sceneDepthTarget=directSceneDepth
+        ? directTextureTarget : m_cloudSceneDepthTarget;
+
     const auto sceneCopyStart=PerfClock::now();
     const bool sceneCopyGpuTimerActive=m_cloudSceneCopyGpuTimer.begin();
     // Match URP's camera color + depth inputs. Color resolves into a full-resolution
     // single-sample RGBA8 staging target; depth stays multisampled when the source is multisampled so
     // local-cloud intersection can inspect the nearest reversed-Z sample.
-    glBindFramebuffer(GL_READ_FRAMEBUFFER,t.framebuffer);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER,m_cloudSceneFbo);
-    const auto sceneColorBlitStart=PerfClock::now();
-    glBlitFramebuffer(t.viewportX,t.viewportY,t.viewportX+t.viewportWidth,t.viewportY+t.viewportHeight,
-        0,0,m_cloudFullWidth,m_cloudFullHeight,GL_COLOR_BUFFER_BIT,GL_NEAREST);
-    m_cpuStats.cloudSceneColorBlitMs=millisecondsSince(sceneColorBlitStart);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER,t.framebuffer);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER,m_cloudSceneDepthFbo);
-    const auto sceneDepthBlitStart=PerfClock::now();
-    glBlitFramebuffer(t.viewportX,t.viewportY,t.viewportX+t.viewportWidth,t.viewportY+t.viewportHeight,
-        0,0,m_cloudFullWidth,m_cloudFullHeight,GL_DEPTH_BUFFER_BIT,GL_NEAREST);
-    m_cpuStats.cloudSceneDepthBlitMs=millisecondsSince(sceneDepthBlitStart);
+    if(!directSceneColor)
+    {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER,t.framebuffer);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER,m_cloudSceneFbo);
+        const auto sceneColorBlitStart=PerfClock::now();
+        glBlitFramebuffer(t.viewportX,t.viewportY,t.viewportX+t.viewportWidth,t.viewportY+t.viewportHeight,
+            0,0,m_cloudFullWidth,m_cloudFullHeight,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+        m_cpuStats.cloudSceneColorBlitMs=millisecondsSince(sceneColorBlitStart);
+    }
+    if(!directSceneDepth)
+    {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER,t.framebuffer);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER,m_cloudSceneDepthFbo);
+        const auto sceneDepthBlitStart=PerfClock::now();
+        glBlitFramebuffer(t.viewportX,t.viewportY,t.viewportX+t.viewportWidth,t.viewportY+t.viewportHeight,
+            0,0,m_cloudFullWidth,m_cloudFullHeight,GL_DEPTH_BUFFER_BIT,GL_NEAREST);
+        m_cpuStats.cloudSceneDepthBlitMs=millisecondsSince(sceneDepthBlitStart);
+    }
     m_cloudSceneCopyGpuTimer.end(sceneCopyGpuTimerActive);
     m_cpuStats.cloudSceneCopyMs=millisecondsSince(sceneCopyStart);
 
@@ -710,16 +760,18 @@ void SkyRenderer::drawVolumetricCloudsAfterOpaque(
     glUniform1f(m_ray.time,w.elapsedSeconds);glUniform1ui(m_ray.temporalFrameIndex,m_cloudTemporalFrameIndex++);glUniform1f(m_ray.cloudCover,w.authoredCloudCover);glUniform1f(m_ray.humidity,w.relativeHumidity);glUniform1f(m_ray.precipitation,w.precipitationRateMmPerHour);
     glUniform2f(m_ray.windVelocityXZ,w.windVelocityXMps,w.windVelocityZMps);glUniform2f(m_ray.baseWindXZ,w.cloudBaseWindVelocityXMps,w.cloudBaseWindVelocityZMps);glUniform2f(m_ray.topWindXZ,w.cloudTopWindVelocityXMps,w.cloudTopWindVelocityZMps);
     glUniform1i(m_ray.regionalMapValid,w.regionalWeatherTexture?1:0);glUniform2f(m_ray.regionalCameraOffsetXZ,w.regionalWeatherCameraOffsetX,w.regionalWeatherCameraOffsetZ);glUniform2f(m_ray.regionalAdvectionXZ,w.regionalWeatherAdvectionOffsetX,w.regionalWeatherAdvectionOffsetZ);glUniform1f(m_ray.regionalHalfRange,w.regionalWeatherHalfRangeM);
-    glUniform1i(m_ray.microErosion,w.microErosion?1:0);glUniform1i(m_ray.physicallyBasedSun,w.physicallyBasedSun?1:0);glUniform1i(m_ray.pbrAtmosphereValid,m_pbrAtmosphereReady?1:0);glUniform1i(m_ray.localClouds,w.localVolumetricClouds?1:0);glUniform1i(m_ray.sceneDepthSamples,sceneDepthSamples);glUniform1i(m_ray.perceptual,w.perceptualBlending?1:0);
+    glUniform1f(m_ray.environmentBlend,m_environmentMapBlend);glUniform1i(m_ray.microErosion,w.microErosion?1:0);glUniform1i(m_ray.physicallyBasedSun,w.physicallyBasedSun?1:0);glUniform1i(m_ray.pbrAtmosphereValid,m_pbrAtmosphereReady?1:0);glUniform1i(m_ray.localClouds,w.localVolumetricClouds?1:0);glUniform1i(m_ray.sceneDepthSamples,sceneDepthSamples);glUniform1i(m_ray.perceptual,w.perceptualBlending?1:0);
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,w.regionalWeatherTexture);
     glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_3D,m_cloudShapeTexture);
     glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_3D,m_cloudErosionTexture);
     glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D,m_cloudLutTexture);
     glActiveTexture(GL_TEXTURE4);glBindTexture(GL_TEXTURE_CUBE_MAP,m_environmentMapTexture);
-    glActiveTexture(GL_TEXTURE5);glBindTexture(GL_TEXTURE_2D,m_cloudSceneDepthTarget==GL_TEXTURE_2D?m_cloudSceneDepthTexture:0);
-    glActiveTexture(GL_TEXTURE6);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,m_cloudSceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?m_cloudSceneDepthTexture:0);
-    glActiveTexture(GL_TEXTURE7);glBindTexture(GL_TEXTURE_2D,m_cloudSceneTexture);
+    glActiveTexture(GL_TEXTURE5);glBindTexture(GL_TEXTURE_2D,sceneDepthTarget==GL_TEXTURE_2D?sceneDepthTexture:0);
+    glActiveTexture(GL_TEXTURE6);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,sceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?sceneDepthTexture:0);
+    glActiveTexture(GL_TEXTURE7);glBindTexture(GL_TEXTURE_2D,sceneColorTarget==GL_TEXTURE_2D?sceneColorTexture:0);
     glActiveTexture(GL_TEXTURE8);glBindTexture(GL_TEXTURE_2D,m_pbrTransmittanceTexture);
+    glActiveTexture(GL_TEXTURE9);glBindTexture(GL_TEXTURE_CUBE_MAP,m_environmentMapPreviousTexture);
+    glActiveTexture(GL_TEXTURE10);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,sceneColorTarget==GL_TEXTURE_2D_MULTISAMPLE?sceneColorTexture:0);
     const auto raymarchDrawStart=PerfClock::now();
     glDrawArrays(GL_TRIANGLES,0,3);
     m_cpuStats.cloudRaymarchDrawCallMs=millisecondsSince(raymarchDrawStart);
@@ -733,9 +785,10 @@ void SkyRenderer::drawVolumetricCloudsAfterOpaque(
     const auto upscaleStart=PerfClock::now();
     const bool upscaleGpuTimerActive=m_cloudUpscaleGpuTimer.begin();
     glBindFramebuffer(GL_FRAMEBUFFER,m_cloudCombinedFbo);glViewport(0,0,m_cloudFullWidth,m_cloudFullHeight);
-    glUseProgram(m_cloudCombineProgram);glUniform1i(m_combine.bilateral,w.bilateralUpscale?1:0);
+    glUseProgram(m_cloudCombineProgram);glUniform1i(m_combine.bilateral,w.bilateralUpscale?1:0);glUniform1i(m_combine.sceneSamples,sceneDepthSamples);
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,m_cloudRaymarchTexture);
-    glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,m_cloudSceneTexture);
+    glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,sceneColorTarget==GL_TEXTURE_2D?sceneColorTexture:0);
+    glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,sceneColorTarget==GL_TEXTURE_2D_MULTISAMPLE?sceneColorTexture:0);
     const auto upscaleDrawStart=PerfClock::now();glDrawArrays(GL_TRIANGLES,0,3);m_cpuStats.cloudUpscaleDrawCallMs=millisecondsSince(upscaleDrawStart);
     m_cloudUpscaleGpuTimer.end(upscaleGpuTimerActive);
     m_cpuStats.cloudUpscaleMs=millisecondsSince(upscaleStart);
@@ -751,24 +804,38 @@ void SkyRenderer::drawVolumetricCloudsAfterOpaque(
     const bool temporalGpuTimerActive=m_cloudTemporalGpuTimer.begin();
     glBindFramebuffer(GL_FRAMEBUFFER,m_cloudTemporalFbo);glViewport(0,0,m_cloudFullWidth,m_cloudFullHeight);glUseProgram(m_cloudTemporalProgram);
     glUniform1i(m_temporal.historyValid,m_cloudHistoryValid?1:0);glUniform1i(m_temporal.localClouds,w.localVolumetricClouds?1:0);glUniform1i(m_temporal.sceneDepthSamples,sceneDepthSamples);
+    const float cloudLightingChange=m_previousCloudDayNightCycle>=0.0f?std::abs(lighting.daylightFactor-m_previousCloudDayNightCycle):1.0f;glUniform1f(m_temporal.lightingChange,cloudLightingChange);
     glUniformMatrix4fv(m_temporal.currentView,1,GL_FALSE,view.m);glUniformMatrix4fv(m_temporal.previousView,1,GL_FALSE,m_previousCloudView.m);glUniformMatrix4fv(m_temporal.currentProjection,1,GL_FALSE,projection.m);glUniformMatrix4fv(m_temporal.previousProjection,1,GL_FALSE,m_previousCloudProjection.m);
     glUniform3f(m_temporal.cameraDelta,float(w.cameraGlobal.x-m_previousCloudCameraGlobal.x),float(w.cameraGlobal.y-m_previousCloudCameraGlobal.y),float(w.cameraGlobal.z-m_previousCloudCameraGlobal.z));
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,m_cloudCombinedTexture);
     glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,m_cloudHistoryTexture);glBindSampler(1,m_cloudHistorySampler);
-    glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,m_cloudSceneDepthTarget==GL_TEXTURE_2D?m_cloudSceneDepthTexture:0);
-    glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,m_cloudSceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?m_cloudSceneDepthTexture:0);
+    glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,sceneDepthTarget==GL_TEXTURE_2D?sceneDepthTexture:0);
+    glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,sceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?sceneDepthTexture:0);
     const auto temporalDrawStart=PerfClock::now();glDrawArrays(GL_TRIANGLES,0,3);m_cpuStats.cloudTemporalDrawCallMs=millisecondsSince(temporalDrawStart);
     glBindSampler(1,0);
     m_cloudTemporalGpuTimer.end(temporalGpuTimerActive);
     m_cpuStats.cloudTemporalMs=millisecondsSince(temporalStart);
-    m_cloudHistoryValid=true;m_previousCloudView=view;m_previousCloudProjection=projection;m_previousCloudCameraGlobal=w.cameraGlobal;
+    m_cloudHistoryValid=true;m_previousCloudView=view;m_previousCloudProjection=projection;m_previousCloudCameraGlobal=w.cameraGlobal;m_previousCloudDayNightCycle=lighting.daylightFactor;
 
     // CLOUDURP15E6: the temporal target is now the fully resolved scene+cloud RGB,
     // matching the upstream denoiser's camera-colour result. Copy RGB back to the
     // scene while preserving the destination alpha channel.
     const auto presentStart=PerfClock::now();
     const bool presentGpuTimerActive=m_cloudPresentGpuTimer.begin();
-    glBindFramebuffer(GL_FRAMEBUFFER,t.framebuffer);glViewport(t.viewportX,t.viewportY,t.viewportWidth,t.viewportHeight);
+    // Direct depth sampling is safe for the offscreen cloud passes. Before
+    // presenting into the camera color attachment, detach that same depth image
+    // to avoid an OpenGL framebuffer feedback loop; restore it before returning.
+    if(directSceneColor)
+    {
+        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,0);
+        glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,0);
+        glActiveTexture(GL_TEXTURE7);glBindTexture(GL_TEXTURE_2D,0);
+        glActiveTexture(GL_TEXTURE10);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,0);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER,t.framebuffer);
+    if(directSceneDepth)
+        glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,directTextureTarget,0,0);
+    glViewport(t.viewportX,t.viewportY,t.viewportWidth,t.viewportHeight);
     if(t.scissorEnabled){glEnable(GL_SCISSOR_TEST);glScissor(t.scissorX,t.scissorY,t.scissorWidth,t.scissorHeight);}else glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);glDepthMask(GL_FALSE);glDisable(GL_CULL_FACE);glEnable(GL_BLEND);glBlendEquation(GL_FUNC_ADD);
     glBlendFuncSeparate(GL_ONE,GL_ZERO,GL_ZERO,GL_ONE);glUseProgram(m_cloudPresentProgram);
@@ -785,15 +852,15 @@ void SkyRenderer::drawVolumetricCloudsAfterOpaque(
     glUniform1f(m_present.humidity,w.relativeHumidity);
     glUniform1f(m_present.precipitation,w.precipitationRateMmPerHour);
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,m_cloudTemporalTexture);
-    glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,m_cloudSceneDepthTarget==GL_TEXTURE_2D?m_cloudSceneDepthTexture:0);
-    glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,m_cloudSceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?m_cloudSceneDepthTexture:0);
+    glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,sceneDepthTarget==GL_TEXTURE_2D?sceneDepthTexture:0);
+    glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,sceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?sceneDepthTexture:0);
     const auto presentDrawStart=PerfClock::now();glDrawArrays(GL_TRIANGLES,0,3);m_cpuStats.cloudPresentDrawCallMs=millisecondsSince(presentDrawStart);
 
     // CELESTIAL04 remains a separate opaque-receiver multiplier. Apply it after
     // the resolved camera colour is restored; sky pixels have zero reversed-Z
     // depth and are therefore untouched. This keeps cloud-shadow state out of
     // temporal history and avoids ghosting a moving ground cookie.
-    if(m_cloudShadowReady&&m_cloudShadowTexture&&lighting.keyLightDirection.y>0.01f)
+    if(m_cloudShadowReady&&m_cloudShadowTexture&&m_cloudShadowReceiverStrength>0.001f)
     {
         glBlendFuncSeparate(GL_ZERO,GL_SRC_COLOR,GL_ZERO,GL_ONE);
         glUseProgram(m_cloudGroundShadowProgram);
@@ -802,10 +869,11 @@ void SkyRenderer::drawVolumetricCloudsAfterOpaque(
         glUniform1f(m_groundShadow.cloudShadowHalfRangeM,m_cloudShadowHalfRangeM);
         glUniformMatrix4fv(m_groundShadow.view,1,GL_FALSE,view.m);
         glUniformMatrix4fv(m_groundShadow.projection,1,GL_FALSE,projection.m);
-        glUniform3f(m_groundShadow.celestialLightDirection,lighting.keyLightDirection.x,lighting.keyLightDirection.y,lighting.keyLightDirection.z);
+        glUniform3f(m_groundShadow.celestialLightDirection,m_cloudShadowLightDirection.x,m_cloudShadowLightDirection.y,m_cloudShadowLightDirection.z);
         glUniform1f(m_groundShadow.daylightFactor,lighting.daylightFactor);
-        glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,m_cloudSceneDepthTarget==GL_TEXTURE_2D?m_cloudSceneDepthTexture:0);
-        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,m_cloudSceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?m_cloudSceneDepthTexture:0);
+        glUniform1f(m_groundShadow.shadowStrength,m_cloudShadowReceiverStrength);
+        glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,sceneDepthTarget==GL_TEXTURE_2D?sceneDepthTexture:0);
+        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,sceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?sceneDepthTexture:0);
         glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,m_cloudShadowTexture);
         glDrawArrays(GL_TRIANGLES,0,3);
     }
@@ -816,13 +884,24 @@ void SkyRenderer::drawVolumetricCloudsAfterOpaque(
     if(w.outputCloudDepth&&w.outputCloudDepthToScene&&m_cloudDepthMergeProgramLinked)
     {
         glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE);glDepthMask(GL_TRUE);glDisable(GL_DEPTH_TEST);glUseProgram(m_cloudDepthMergeProgram);glUniform1i(m_depthMerge.sceneDepthSamples,sceneDepthSamples);
-        glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,m_cloudSceneDepthTarget==GL_TEXTURE_2D?m_cloudSceneDepthTexture:0);
-        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,m_cloudSceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?m_cloudSceneDepthTexture:0);
+        glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,sceneDepthTarget==GL_TEXTURE_2D?sceneDepthTexture:0);
+        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D_MULTISAMPLE,sceneDepthTarget==GL_TEXTURE_2D_MULTISAMPLE?sceneDepthTexture:0);
         glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,m_cloudRaymarchDepthTexture);
         const auto depthMergeDrawStart=PerfClock::now();glDrawArrays(GL_TRIANGLES,0,3);m_cpuStats.cloudDepthMergeDrawCallMs=millisecondsSince(depthMergeDrawStart);glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
     }
     m_cloudPresentGpuTimer.end(presentGpuTimerActive);
     m_cpuStats.cloudPresentMs=millisecondsSince(presentStart);
+
+    if(directSceneDepth)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER,t.framebuffer);
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER,
+            GL_DEPTH_STENCIL_ATTACHMENT,
+            directTextureTarget,
+            t.depthStencilTexture,
+            0);
+    }
 
     const auto restoreStart=PerfClock::now();
     // The texture just presented becomes next frame's history. Swap both texture

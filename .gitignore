@@ -45,3 +45,6 @@ __pycache__/
 *.py[cod]
 *.log
 *.tmp
+
+# Local extensionless native smoke-test binary (sources and reports are tracked)
+/Tests/susp14_smoke

@@ -55,9 +55,10 @@ enum class TireSurface
     Ice = 5
 };
 
-// TIRE18E/F: physical definitions remain identical between tiers. This switch
-// changes only the bounded spatial integration work performed around the same
-// calibrated whole-tire target.
+// TIRE18E/F: physical definitions remain identical between tiers. TIRE46 makes
+// the bounded 3x3 contact integration the native production default for every
+// vehicle. Aggregate remains only as an explicit diagnostic/performance fallback
+// and cannot be reached merely because a creator forgot to opt in.
 enum class TireContactFidelity
 {
     Aggregate = 0,
@@ -150,7 +151,18 @@ struct WheelDescription
     SuspensionProviderKind suspensionProvider =
         SuspensionProviderKind::LinearRaycastV1;
     MacPhersonHardpoints macPhersonHardpoints;
+    DoubleWishboneHardpoints doubleWishboneHardpoints;
+    PushrodDoubleWishboneHardpoints pushrodDoubleWishboneHardpoints;
     TrailingArmHardpoints trailingArmHardpoints;
+    LiveAxleHardpoints liveAxleHardpoints;
+    LeafSpringLiveAxleHardpoints leafSpringLiveAxleHardpoints;
+    MotorcycleForkHardpoints motorcycleForkHardpoints;
+    MotorcycleSwingarmHardpoints motorcycleSwingarmHardpoints;
+    KartChassisHardpoints kartChassisHardpoints;
+    MultiLinkHardpoints multiLinkHardpoints;
+    SemiTrailingArmHardpoints semiTrailingArmHardpoints;
+    TwistBeamHardpoints twistBeamHardpoints;
+    std::string suspensionAxleId;
     heritage::math::Vec3 localSteeringAxis{ 0.0f, 1.0f, 0.0f };
     float staticCamberDegrees = 0.0f;
     float camberGainDegreesPerM = 0.0f;
@@ -162,6 +174,16 @@ struct WheelDescription
     float toeProgressionDegreesPerM2 = 0.0f;
     float suspensionMotionRatio = 1.0f;
     float maximumSuspensionForce = 250000.0f;
+    float leafInterleafFrictionN = 450.0f;
+    float leafInterleafVelocityScaleMps = 0.025f;
+    float leafInterleafViscousNsPerM = 250.0f;
+    float leafAxleWrapStiffnessNmPerRad = 16000.0f;
+    float leafAxleWrapDampingNmsPerRad = 1200.0f;
+    float leafAxleWrapInertiaKgM2 = 5.0f;
+    float leafAxleWrapJackingNPerRad = 1800.0f;
+    float motorcycleRearSprocketPitchRadiusM = 0.105f;
+    float twistBeamTorsionalStiffnessNmPerRad = 14000.0f;
+    float twistBeamTorsionalDampingNmsPerRad = 900.0f;
     float effectiveUnsprungMass = 0.0f;
     float tireRadialStiffness = 220000.0f;
     float tireRadialDamping = 1800.0f;
@@ -277,6 +299,18 @@ struct WheelState
     VehicleScalar suspensionUnclampedForce = 0.0f;
     VehicleScalar antiRollBarForce = 0.0f;
     VehicleScalar damperDissipationWatts = 0.0f;
+    // SUSP09 shared live-axle housing wind-up state. Paired leaf-spring wheels
+    // receive the same values from the pre-wheel-loop axle integration.
+    VehicleScalar leafAxleWrapAngleRadians = 0.0f;
+    VehicleScalar leafAxleWrapRateRadiansPerSecond = 0.0f;
+    VehicleScalar leafInterleafFrictionForceN = 0.0f;
+    VehicleScalar leafInterleafDissipationWatts = 0.0f;
+    VehicleScalar leafAxleWrapJackingForceN = 0.0f;
+    VehicleScalar motorcycleChainJackingForceN = 0.0f;
+    VehicleScalar twistBeamCouplingForceN = 0.0f;
+    VehicleScalar twistBeamDissipationWatts = 0.0f;
+    VehicleScalar kartSteeringJackingM = 0.0f;
+    VehicleScalar kartKingpinRadialOffsetM = 0.0f;
     VehicleScalar unsprungVelocity = 0.0f;
     VehicleScalar tireDeflection = 0.0f;
     VehicleScalar tireDeflectionVelocity = 0.0f;
@@ -313,10 +347,13 @@ struct WheelState
     VehicleScalar tireRingYawRateDegreesPerSecond = 0.0f;
     VehicleScalar tireRingWindupDegrees = 0.0f;
     VehicleScalar tireRingWindupRateDegreesPerSecond = 0.0f;
-    // TIRE07 lumped thermal/pressure telemetry. Temperatures are stateful at
-    // the 1000 Hz tire rate; inflation pressure is gauge pressure.
+    // TIRE46 seven-node thermal/pressure telemetry. The 16x3 surface field
+    // remains separate and material-fixed; these are construction bulk nodes.
     VehicleScalar tireTreadTemperatureC = 20.0f;
+    VehicleScalar tireBeltTemperatureC = 20.0f;
     VehicleScalar tireCarcassTemperatureC = 20.0f;
+    VehicleScalar tireInnerSidewallTemperatureC = 20.0f;
+    VehicleScalar tireOuterSidewallTemperatureC = 20.0f;
     VehicleScalar tireGasTemperatureC = 20.0f;
     VehicleScalar tireRimTemperatureC = 20.0f;
     VehicleScalar tireInflationPressurePa = 220000.0f;
@@ -328,13 +365,23 @@ struct WheelState
     VehicleScalar tireEffectiveLeakAreaMm2 = 0.0f;
     VehicleScalar tireLeakMassFlowGramsPerSecond = 0.0f;
     VehicleScalar tireStructuralIntegrity = 1.0f;
+    VehicleScalar tireBeltIntegrity = 1.0f;
+    VehicleScalar tireCordIntegrity = 1.0f;
+    VehicleScalar tireSidewallIntegrity = 1.0f;
+    VehicleScalar tireBeadRetention = 1.0f;
     VehicleScalar tireTreadAttachment = 1.0f;
+    VehicleScalar tireRimIntegrity = 1.0f;
+    VehicleScalar tireRunFlatSupportHealth = 1.0f;
+    VehicleScalar tireTreadGraining = 0.0f;
+    VehicleScalar tireTreadBlistering = 0.0f;
+    VehicleScalar tireDelaminationFraction = 0.0f;
     VehicleScalar tireRimContactFraction = 0.0f;
     VehicleScalar tireFailureEventElapsedSeconds = 0.0f;
     VehicleScalar tireThermalFrictionScale = 1.0f;
     VehicleScalar tireThermalStiffnessScale = 1.0f;
     VehicleScalar tireSlipDissipationWatts = 0.0f;
     VehicleScalar tireThermalLossDissipationWatts = 0.0f;
+    VehicleScalar tireSidewallDissipationWatts = 0.0f;
     VehicleScalar tireRoadHeatFlowWatts = 0.0f;
     VehicleScalar tireAirHeatFlowWatts = 0.0f;
     VehicleScalar tireBrakeHeatInputWatts = 0.0f;
@@ -509,6 +556,24 @@ struct WheelState
     heritage::math::Vec3 contactNormal{ 0.0f, 1.0f, 0.0f };
 };
 
+// Read-only four-corner geometry measured from the authoritative live wheel
+// centres. Values are projected onto axes reconstructed from the wheel
+// uprights, so chassis pitch/roll and visual mesh transforms cannot inflate a
+// nominal track or wheelbase measurement. The spatial values remain available
+// as diagnostics for split-height/kerb tests.
+struct VehicleWheelGeometryMeasurement
+{
+    bool valid = false;
+    VehicleScalar wheelbaseM = 0.0;
+    VehicleScalar frontTrackM = 0.0;
+    VehicleScalar rearTrackM = 0.0;
+    VehicleScalar spatialWheelbaseM = 0.0;
+    VehicleScalar spatialFrontTrackM = 0.0;
+    VehicleScalar spatialRearTrackM = 0.0;
+    heritage::math::Vec3 frontAxleCenterWorld{};
+    heritage::math::Vec3 rearAxleCenterWorld{};
+};
+
 const char* wheelContactStatusName(WheelContactStatus value);
 
 // Step 29H: generation-checked arbitrary-wheel vehicle foundation with
@@ -535,6 +600,13 @@ public:
     bool addWheel(VehicleHandle handle, const WheelDescription& description);
     std::size_t wheelCount(VehicleHandle handle) const;
     bool wheelState(VehicleHandle handle, std::size_t wheelIndex, WheelState& value) const;
+    bool measureWheelGeometry(
+        VehicleHandle handle,
+        std::size_t frontLeftWheelIndex,
+        std::size_t frontRightWheelIndex,
+        std::size_t rearLeftWheelIndex,
+        std::size_t rearRightWheelIndex,
+        VehicleWheelGeometryMeasurement& value) const;
     bool wheelTireFlexibleRingField(
         VehicleHandle handle,
         std::size_t wheelIndex,
@@ -777,6 +849,12 @@ public:
         tires::TireFailureStage stage);
     bool triggerTireFailure(
         VehicleHandle handle, tires::TireFailureStage stage);
+    bool triggerWheelTireDamageIncident(
+        VehicleHandle handle, std::size_t wheelIndex,
+        tires::TireDamageIncident incident, VehicleScalar severity01);
+    bool triggerTireDamageIncident(
+        VehicleHandle handle, tires::TireDamageIncident incident,
+        VehicleScalar severity01);
     bool tireColdInflationPressureRange(
         VehicleHandle handle, VehicleScalar& minimumPa,
         VehicleScalar& maximumPa, VehicleScalar& representativePressurePa) const;
@@ -991,7 +1069,7 @@ private:
         DriverAidDescription driverAids;
         TireSurface surface = TireSurface::DryAsphalt;
         TireContactFidelity tireContactFidelity =
-            TireContactFidelity::Aggregate;
+            TireContactFidelity::Distributed3x3;
         int currentGear = 1;
         int requestedGear = 1;
         bool shifting = false;
@@ -1025,6 +1103,9 @@ private:
         // wheel iteration order cannot change anti-roll-bar forces.
         std::vector<AntiRollBarRecord> antiRollBars;
         std::vector<VehicleScalar> antiRollForcesScratch;
+        // SUSP08 samples all wheel compressions before the per-wheel loop so
+        // rigid live-axle geometry never depends on wheel iteration order.
+        std::vector<VehicleScalar> suspensionCompressionScratch;
         ChassisTorsionalComplianceDescription chassisFlex;
         ChassisTorsionalComplianceState chassisFlexState;
     };

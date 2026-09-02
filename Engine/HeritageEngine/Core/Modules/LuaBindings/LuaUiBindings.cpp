@@ -1165,6 +1165,7 @@ void LuaModuleRuntime::registerUiBindings()
     registerFunction("UI", "GetCursorPos", &LuaCoreBindingHandlers::luaUiGetCursorPos);
     registerFunction("UI", "Dummy", &LuaCoreBindingHandlers::luaUiDummy);
     registerFunction("UI", "TextColored", &LuaCoreBindingHandlers::luaUiTextColored);
+    registerFunction("UI", "WorldLabel", &LuaCoreBindingHandlers::luaUiWorldLabel);
     registerFunction("UI", "ProgressBar", &LuaCoreBindingHandlers::luaUiProgressBar);
     registerFunction("UI", "PlotLines", &LuaCoreBindingHandlers::luaUiPlotLines);
     registerFunction("UI", "PlotLinesRange", &LuaCoreBindingHandlers::luaUiPlotLinesRange);

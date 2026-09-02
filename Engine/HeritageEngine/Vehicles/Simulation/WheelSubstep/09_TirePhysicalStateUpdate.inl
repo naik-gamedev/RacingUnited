@@ -27,6 +27,7 @@
         thermalInput.brakeDissipationWatts = std::abs(
             state.appliedBrakeTorque * state.wheelAngularVelocity);
         thermalInput.contactPatchAreaM2 = state.tireContactPatchArea;
+        thermalInput.camberAngleRadians = radians(state.camberAngleDegrees);
         thermalInput.roadHeatTransferScale =
             (contaminationBefore.valid
                 ? contaminationBefore.roadHeatTransferScale : VehicleScalar{1.0})
@@ -44,8 +45,20 @@
             circumferentialSpeed - structuralLongitudinalSpeed;
         failureInput.lateralSlipVelocityMps = structuralLateralSpeed;
         failureInput.radialDissipationWatts = state.tireRadialDissipationWatts;
+        failureInput.longitudinalForceN =
+            longitudinalForce - rollingResistanceForce;
+        failureInput.lateralForceN = lateralForce;
+        failureInput.slipDissipationWatts =
+            std::abs((longitudinalForce - rollingResistanceForce)
+                * (circumferentialSpeed - structuralLongitudinalSpeed))
+            + std::abs(lateralForce * structuralLateralSpeed);
         failureInput.gasTemperatureC = thermalAfter.gasTemperatureC;
+        failureInput.treadTemperatureC = thermalAfter.treadTemperatureC;
+        failureInput.optimumTreadTemperatureC =
+            wheel.tireModel.thermal.optimumTreadTemperatureC;
         failureInput.carcassTemperatureC = thermalAfter.carcassTemperatureC;
+        failureInput.rimTemperatureC = thermalAfter.rimTemperatureC;
+        failureInput.camberAngleRadians = radians(state.camberAngleDegrees);
         failureInput.inflationGaugePressurePa = thermalAfter.inflationPressurePa;
         failureBefore = tires::advanceTireFailure(
             wheel.tireModel.failure, failureInput,

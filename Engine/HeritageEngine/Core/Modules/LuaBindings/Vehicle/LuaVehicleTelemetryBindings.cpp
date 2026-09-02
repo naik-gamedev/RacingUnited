@@ -412,7 +412,10 @@ int LuaVehicleBindingHandlers::luaVehicleGetWheelTelemetry(lua_State* state)
     pushNumberField("tireRingWindupDegrees", value.tireRingWindupDegrees);
     pushNumberField("tireRingWindupRateDegreesPerSecond", value.tireRingWindupRateDegreesPerSecond);
     pushNumberField("tireTreadTemperatureC", value.tireTreadTemperatureC);
+    pushNumberField("tireBeltTemperatureC", value.tireBeltTemperatureC);
     pushNumberField("tireCarcassTemperatureC", value.tireCarcassTemperatureC);
+    pushNumberField("tireInnerSidewallTemperatureC", value.tireInnerSidewallTemperatureC);
+    pushNumberField("tireOuterSidewallTemperatureC", value.tireOuterSidewallTemperatureC);
     pushNumberField("tireGasTemperatureC", value.tireGasTemperatureC);
     pushNumberField("tireRimTemperatureC", value.tireRimTemperatureC);
     pushNumberField("tireInflationPressurePa", value.tireInflationPressurePa);
@@ -425,13 +428,23 @@ int LuaVehicleBindingHandlers::luaVehicleGetWheelTelemetry(lua_State* state)
     pushNumberField("tireEffectiveLeakAreaMm2", value.tireEffectiveLeakAreaMm2);
     pushNumberField("tireLeakMassFlowGramsPerSecond", value.tireLeakMassFlowGramsPerSecond);
     pushNumberField("tireStructuralIntegrity", value.tireStructuralIntegrity);
+    pushNumberField("tireBeltIntegrity", value.tireBeltIntegrity);
+    pushNumberField("tireCordIntegrity", value.tireCordIntegrity);
+    pushNumberField("tireSidewallIntegrity", value.tireSidewallIntegrity);
+    pushNumberField("tireBeadRetention", value.tireBeadRetention);
     pushNumberField("tireTreadAttachment", value.tireTreadAttachment);
+    pushNumberField("tireRimIntegrity", value.tireRimIntegrity);
+    pushNumberField("tireRunFlatSupportHealth", value.tireRunFlatSupportHealth);
+    pushNumberField("tireTreadGraining", value.tireTreadGraining);
+    pushNumberField("tireTreadBlistering", value.tireTreadBlistering);
+    pushNumberField("tireDelaminationFraction", value.tireDelaminationFraction);
     pushNumberField("tireRimContactFraction", value.tireRimContactFraction);
     pushNumberField("tireFailureEventElapsedSeconds", value.tireFailureEventElapsedSeconds);
     pushNumberField("tireThermalFrictionScale", value.tireThermalFrictionScale);
     pushNumberField("tireThermalStiffnessScale", value.tireThermalStiffnessScale);
     pushNumberField("tireSlipDissipationWatts", value.tireSlipDissipationWatts);
     pushNumberField("tireThermalLossDissipationWatts", value.tireThermalLossDissipationWatts);
+    pushNumberField("tireSidewallDissipationWatts", value.tireSidewallDissipationWatts);
     pushNumberField("tireRoadHeatFlowWatts", value.tireRoadHeatFlowWatts);
     pushNumberField("tireAirHeatFlowWatts", value.tireAirHeatFlowWatts);
     pushNumberField("tireBrakeHeatInputWatts", value.tireBrakeHeatInputWatts);
@@ -545,6 +558,57 @@ int LuaVehicleBindingHandlers::luaVehicleGetWheelTelemetry(lua_State* state)
     pushNumberField("wheelUpY", value.worldWheelUp.y);
     pushNumberField("wheelUpZ", value.worldWheelUp.z);
 
+    return 1;
+}
+
+int LuaVehicleBindingHandlers::luaVehicleMeasureWheelGeometry(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime) return 0;
+
+    const auto wheelIndexArgument = [&](int argument, LuaInteger fallback) {
+        int converted = 0;
+        const LuaInteger value = runtime->m_api.lua_tointegerx(
+            state, argument, &converted);
+        const LuaInteger oneBased = converted ? value : fallback;
+        return oneBased >= 1
+            ? static_cast<std::size_t>(oneBased - 1)
+            : static_cast<std::size_t>(-1);
+    };
+    heritage::vehicles::VehicleWheelGeometryMeasurement value;
+    const bool result = runtime->m_physics
+        && runtime->m_physics->vehicles().measureWheelGeometry(
+            LuaModuleRuntime::vehicleHandleArgument(*runtime, state, 1),
+            wheelIndexArgument(2, 1),
+            wheelIndexArgument(3, 2),
+            wheelIndexArgument(4, 3),
+            wheelIndexArgument(5, 4),
+            value);
+    if (!result)
+    {
+        runtime->m_api.lua_pushnil(state);
+        return 1;
+    }
+
+    runtime->m_api.lua_createtable(state, 0, 13);
+    const auto pushNumberField = [&](const char* name, LuaNumber fieldValue) {
+        runtime->m_api.lua_pushnumber(state, fieldValue);
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    runtime->m_api.lua_pushboolean(state, value.valid ? 1 : 0);
+    runtime->m_api.lua_setfield(state, -2, "valid");
+    pushNumberField("wheelbaseM", value.wheelbaseM);
+    pushNumberField("frontTrackM", value.frontTrackM);
+    pushNumberField("rearTrackM", value.rearTrackM);
+    pushNumberField("spatialWheelbaseM", value.spatialWheelbaseM);
+    pushNumberField("spatialFrontTrackM", value.spatialFrontTrackM);
+    pushNumberField("spatialRearTrackM", value.spatialRearTrackM);
+    pushNumberField("frontCenterX", value.frontAxleCenterWorld.x);
+    pushNumberField("frontCenterY", value.frontAxleCenterWorld.y);
+    pushNumberField("frontCenterZ", value.frontAxleCenterWorld.z);
+    pushNumberField("rearCenterX", value.rearAxleCenterWorld.x);
+    pushNumberField("rearCenterY", value.rearAxleCenterWorld.y);
+    pushNumberField("rearCenterZ", value.rearAxleCenterWorld.z);
     return 1;
 }
 

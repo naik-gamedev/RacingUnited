@@ -633,6 +633,9 @@
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaUiBindings.cpp">
       <Filter>Lua Bindings</Filter>
     </ClCompile>
+    <ClCompile Include="..\Core\Modules\LuaBindings\LuaUiWorldLabelBindings.cpp">
+      <Filter>Lua Bindings</Filter>
+    </ClCompile>
     <ClCompile Include="..\Core\Modules\LuaBindings\LuaVegetationBindings.cpp">
       <Filter>Lua Bindings</Filter>
     </ClCompile>

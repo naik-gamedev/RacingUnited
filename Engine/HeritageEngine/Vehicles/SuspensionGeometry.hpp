@@ -2,7 +2,17 @@
 
 #include "SuspensionModel.hpp"
 #include "Suspension/Geometry/MacPherson/MacPhersonKinematics.hpp"
+#include "Suspension/Geometry/DoubleWishbone/DoubleWishboneKinematics.hpp"
+#include "Suspension/Geometry/PushrodDoubleWishbone/PushrodDoubleWishboneKinematics.hpp"
 #include "Suspension/Geometry/TrailingArm/TrailingArmKinematics.hpp"
+#include "Suspension/Geometry/LiveAxle/LiveAxleKinematics.hpp"
+#include "Suspension/Springs/LeafSpring/LeafSpringLiveAxle.hpp"
+#include "Suspension/Geometry/MotorcycleFork/MotorcycleForkKinematics.hpp"
+#include "Suspension/Geometry/MotorcycleSwingarm/MotorcycleSwingarmKinematics.hpp"
+#include "Suspension/Geometry/Kart/KartChassisKinematics.hpp"
+#include "Suspension/Geometry/MultiLink/MultiLinkKinematics.hpp"
+#include "Suspension/Geometry/SemiTrailingArm/SemiTrailingArmKinematics.hpp"
+#include "Suspension/Geometry/TwistBeam/TwistBeamKinematics.hpp"
 
 #include "../Core/Math/Math.hpp"
 
@@ -28,7 +38,17 @@ struct SuspensionGeometryDescription
     float toeGainDegreesPerM = 0.0f;
     float toeProgressionDegreesPerM2 = 0.0f;
     MacPhersonHardpoints macPherson;
+    DoubleWishboneHardpoints doubleWishbone;
+    PushrodDoubleWishboneHardpoints pushrodDoubleWishbone;
     TrailingArmHardpoints trailingArm;
+    LiveAxleHardpoints liveAxle;
+    LeafSpringLiveAxleHardpoints leafSpringLiveAxle;
+    MotorcycleForkHardpoints motorcycleFork;
+    MotorcycleSwingarmHardpoints motorcycleSwingarm;
+    KartChassisHardpoints kartChassis;
+    MultiLinkHardpoints multiLink;
+    SemiTrailingArmHardpoints semiTrailingArm;
+    TwistBeamHardpoints twistBeam;
 };
 
 struct SuspensionGeometryInput
@@ -36,6 +56,11 @@ struct SuspensionGeometryInput
     float compressionM = 0.0f;
     float steeringDegrees = 0.0f;
     heritage::math::Vec3 localSuspensionDirection{ 0.0f, -1.0f, 0.0f };
+    bool pairedCompressionValid = false;
+    float pairedCompressionM = 0.0f;
+    bool pairedCompressionVelocityValid = false;
+    float compressionVelocityMps = 0.0f;
+    float pairedCompressionVelocityMps = 0.0f;
 };
 
 struct SuspensionGeometryOutput
@@ -55,7 +80,10 @@ struct SuspensionGeometryOutput
     bool kinematicsValid = true;
     bool travelClamped = false;
     float bumpSteerDegrees = 0.0f;
+    float casterDegrees = 0.0f;
+    float kingpinInclinationDegrees = 0.0f;
     float strutCompressionM = 0.0f;
+    float springCompressionM = 0.0f;
     float springMotionRatio = 1.0f;
     // Separate-damper and rotational-spring mechanisms expose their own
     // generalized coordinates. MacPherson keeps both ratios equal because the
@@ -65,10 +93,40 @@ struct SuspensionGeometryOutput
     float springTwistRadians = 0.0f;
     float springAngularMotionRatioRadPerM = 0.0f;
     float referenceSpringAngularMotionRatioRadPerM = 0.0f;
+    // SUSP10 motorcycle-specific diagnostics/force-coupling geometry.
+    float motorcycleRakeDegreesFromVertical = 0.0f;
+    float motorcycleSwingarmAngleRadians = 0.0f;
+    float motorcycleRockerAngleRadians = 0.0f;
+    float motorcycleChainDistanceMotionRatio = 0.0f;
+    float wheelbaseDeltaM = 0.0f;
+    // SUSP11 kart-specific steering/frame diagnostics. The provider has no
+    // conventional spring/damper travel; steering jacking is an actual wheel-
+    // centre displacement and the chassis torsion mode supplies frame compliance.
+    float kartSteeringJackingM = 0.0f;
+    float kartKingpinRadialOffsetM = 0.0f;
+    float multiLinkSteeringRackDisplacementM = 0.0f;
+    float twistBeamTwistRadians = 0.0f;
+    float twistBeamTwistRateRadiansPerSecond = 0.0f;
+    float twistBeamAngularMotionRatioRadPerM = 0.0f;
     heritage::math::Vec3 localWheelCenter{};
 };
 
 SuspensionGeometryOutput evaluateSuspensionGeometry(
+    const SuspensionGeometryDescription& description,
+    const SuspensionGeometryInput& input);
+
+// SUSP05: hardpoint-derived wheel-centre motion is also contact-query authority.
+// The high-rate ray solver already owns travel along the suspension axis, so
+// linkage providers contribute only the component perpendicular to that axis.
+// This makes real lateral/longitudinal wheel scrub and steering-axis offset move
+// the tire contact query without double-counting suspension compression.
+struct SuspensionSupportOffsetOutput
+{
+    bool valid = false;
+    heritage::math::Vec3 localTransverseOffset{};
+};
+
+SuspensionSupportOffsetOutput evaluateSuspensionSupportOffset(
     const SuspensionGeometryDescription& description,
     const SuspensionGeometryInput& input);
 

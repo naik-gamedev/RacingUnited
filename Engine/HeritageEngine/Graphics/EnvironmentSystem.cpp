@@ -59,60 +59,6 @@ heritage::math::Vec3 normalize(const heritage::math::Vec3& value)
     return multiply(value, inverseLength);
 }
 
-float dot(
-    const heritage::math::Vec3& a,
-    const heritage::math::Vec3& b)
-{
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-heritage::math::Vec3 cross(
-    const heritage::math::Vec3& a,
-    const heritage::math::Vec3& b)
-{
-    return {
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    };
-}
-
-heritage::math::Vec3 sphericalMix(
-    const heritage::math::Vec3& aValue,
-    const heritage::math::Vec3& bValue,
-    float t)
-{
-    const heritage::math::Vec3 a = normalize(aValue);
-    const heritage::math::Vec3 b = normalize(bValue);
-    t = clamp01(t);
-    const float cosine = std::clamp(dot(a, b), -1.0f, 1.0f);
-
-    // Ordinary directions use a true great-circle interpolation.  This is
-    // important for dawn/dusk: linearly blending a Moon direction and an
-    // almost-opposite Sun direction can collapse toward a zero vector and then
-    // flip hemispheres as the power ratio crosses 50/50.
-    if (cosine > -0.9990f)
-    {
-        const float angle = std::acos(cosine);
-        if (angle <= 1.0e-5f)
-            return normalize(mix(a, b, t));
-        const float sine = std::sin(angle);
-        const float wa = std::sin((1.0f - t) * angle) / sine;
-        const float wb = std::sin(t * angle) / sine;
-        return normalize(add(multiply(a, wa), multiply(b, wb)));
-    }
-
-    // Exact/near antipodes have no unique great circle. Pick a stable axis so
-    // the key light still rotates continuously instead of disappearing.
-    heritage::math::Vec3 reference = std::abs(a.y) < 0.90f
-        ? heritage::math::Vec3{ 0.0f, 1.0f, 0.0f }
-        : heritage::math::Vec3{ 1.0f, 0.0f, 0.0f };
-    const heritage::math::Vec3 axis = normalize(cross(a, reference));
-    const float angle = static_cast<float>(kPi) * t;
-    const float c = std::cos(angle);
-    const float si = std::sin(angle);
-    return normalize(add(multiply(a, c), multiply(cross(axis, a), si)));
-}
 
 bool leapYear(int year)
 {
@@ -317,43 +263,49 @@ void buildWorldToCelestialRows(
 
 void resolveCelestialKeyLight(EnvironmentLighting& lighting)
 {
+    // CELESTIAL07: the legacy renderer can cast only one ordinary directional
+    // shadow map at a time. Never invent a direction between the Sun and Moon:
+    // around twilight they are often close to opposite and even a mathematically
+    // continuous spherical interpolation can sweep tens of degrees per simulated
+    // minute. Fade the outgoing physical source to zero, switch ownership only
+    // inside a zero-direct-light bridge, then fade the incoming source up.
+    const float day = std::clamp(lighting.daylightFactor, 0.0f, 1.0f);
     const float sunPower = std::max(lighting.sunIntensity, 0.0f);
     const float moonPower = std::max(
         lighting.moonIntensity * kMoonSceneIlluminationScale,
         0.0f);
-    const float totalPower = sunPower + moonPower;
 
-    if (totalPower <= 1.0e-6f)
+    const float sunOwnership = smoothstep(0.155f, 0.195f, day);
+    const float moonOwnership = 1.0f - smoothstep(0.085f, 0.125f, day);
+    const float sunAltitudeSafety = smoothstep(0.005f, 0.055f, lighting.sunDirection.y);
+    const float moonAltitudeSafety = smoothstep(0.010f, 0.070f, lighting.moonDirection.y);
+    const float stableSunPower = sunPower * sunOwnership * sunAltitudeSafety;
+    const float stableMoonPower = moonPower * moonOwnership * moonAltitudeSafety;
+
+    if (stableSunPower > 1.0e-6f)
     {
         lighting.keyLightDirection = lighting.sunDirection;
         lighting.keyLightColor = lighting.sunColor;
-        lighting.keyLightIntensity = 0.0f;
+        lighting.keyLightIntensity = stableSunPower;
+        return;
+    }
+    if (stableMoonPower > 1.0e-6f)
+    {
+        lighting.keyLightDirection = lighting.moonDirection;
+        lighting.keyLightColor = lighting.moonColor;
+        lighting.keyLightIntensity = stableMoonPower;
         return;
     }
 
-    // CLOUDURP15M: dawn/dusk continuity.  The old renderer made a binary
-    // Moon -> Sun handoff at unrelated thresholds.  Around dawn that could
-    // replace a still-strong moon key with a much weaker newborn sun, making
-    // the whole scene suddenly go dark before sunrise recovered.  Blend the
-    // celestial ownership from their actual scene powers instead.
-    const float sunShare = sunPower / totalPower;
-    const float sunBlend = smoothstep(0.18f, 0.82f, sunShare);
-
-    // CLOUDURP15N: never linearly interpolate celestial directions. Around
-    // sunrise/sunset the Sun and Moon can be almost opposite; normalized lerp
-    // then approaches zero and can swing/flip the scene light during the very
-    // period where the user is watching the transition. Great-circle mixing
-    // keeps the single legacy key-light direction continuous. Volumetric
-    // clouds below no longer use this synthetic key at all: they receive the
-    // physical Sun and Moon channels separately.
-    lighting.keyLightDirection = sphericalMix(
-        lighting.moonDirection, lighting.sunDirection, sunBlend);
-    lighting.keyLightColor = mix(lighting.moonColor, lighting.sunColor, sunBlend);
-
-    // Add the two celestial contributions instead of choosing one.  There is
-    // still only one directional renderer light, but its energy cannot form
-    // the artificial pre-sunrise trough caused by the old hard handoff.
-    lighting.keyLightIntensity = totalPower;
+    // During the ownership bridge the direct key is intentionally zero. Ambient
+    // sky/cloud transport still contains both physical celestial sources, so the
+    // scene remains continuously lit without a synthetic shadow direction.
+    const bool preferSunDirection = day >= 0.14f;
+    lighting.keyLightDirection = preferSunDirection
+        ? lighting.sunDirection : lighting.moonDirection;
+    lighting.keyLightColor = preferSunDirection
+        ? lighting.sunColor : lighting.moonColor;
+    lighting.keyLightIntensity = 0.0f;
 }
 
 void EnvironmentSystem::reset()
@@ -526,37 +478,44 @@ void EnvironmentSystem::rebuildLighting()
     const heritage::math::Vec3 moonDirection = horizontalDirection(
         localSiderealRadians, latitudeRadians, lunarEq);
 
-    const float daylight = smoothstep(-0.09f, 0.12f, solarElevation);
+    // CELESTIAL06: EnricoMonese/DayNightCycle-style single authority. The
+    // reference implementation derives every presentation curve from one
+    // clamped Sun/up dot instead of maintaining separate day/night switches.
+    // Heritage keeps astronomical Sun motion, but all *state* below consumes
+    // this one normalized solar-cycle value. The -0.20 minimum matches the
+    // reference's default minPoint and begins the transition in twilight.
+    constexpr float kCycleMinimumSolarElevation = -0.20f;
+    constexpr float kCycleRange = 1.0f - kCycleMinimumSolarElevation;
+    constexpr float kGeometricHorizonCycle =
+        (0.0f - kCycleMinimumSolarElevation) / kCycleRange;
+    const float dayNightCycle = clamp01(
+        (solarElevation - kCycleMinimumSolarElevation) / kCycleRange);
+    // CELESTIAL07: publish the one solar-cycle authority before resolving the
+    // legacy single directional key so its physical Sun/Moon ownership bridge
+    // consumes the same day/night scalar as the rest of the renderer.
+    lighting.daylightFactor = dayNightCycle;
 
-    // CLOUDURP15N: one continuous low-Sun warmth envelope. Earlier revisions
-    // used separate twilight and post-horizon bands with different endpoints;
-    // at accelerated time scale their overlap could read as blue -> warm ->
-    // blue -> warm pulses even though every individual curve was continuous.
-    // This envelope rises during astronomical/civil twilight, stays strong
-    // through the horizon crossing, then decays gradually as the Sun climbs.
-    const float twilightArrival = smoothstep(-0.30f, -0.08f, solarElevation);
-    const float twilightDeparture = 1.0f - smoothstep(0.10f, 0.42f, solarElevation);
-    const float twilight = twilightArrival * twilightDeparture;
-    const float warmHorizon = smoothstep(-0.20f, -0.035f, solarElevation)
-        * (1.0f - smoothstep(0.08f, 0.45f, solarElevation));
+    // Gradient-like envelopes evaluated from the same cycle scalar. No
+    // astronomicalDay/deepNightHold/twilightArrival secondary authorities.
+    const float daylight = smoothstep(0.035f, 0.72f, dayNightCycle);
+    const float twilight = smoothstep(0.025f, 0.115f, dayNightCycle)
+        * (1.0f - smoothstep(0.24f, 0.46f, dayNightCycle));
+    const float warmHorizon = smoothstep(0.045f, 0.125f, dayNightCycle)
+        * (1.0f - smoothstep(0.19f, 0.36f, dayNightCycle));
+    const float directSunVisibility = smoothstep(
+        kGeometricHorizonCycle - 0.025f,
+        kGeometricHorizonCycle + 0.025f,
+        dayNightCycle);
 
-    const float astronomicalDay = smoothstep(-0.08f, 0.16f, solarElevation);
-    const float deepNightHold = 1.0f - smoothstep(-0.16f, -0.03f, solarElevation);
-    const float twilightExposure = smoothstep(-0.20f, 0.08f, solarElevation);
-    const float uncappedSkyExposure = std::clamp(
-        0.045f + 0.955f * astronomicalDay + 0.12f * twilightExposure * (1.0f - astronomicalDay),
-        0.045f, 1.0f);
+    lighting.skyExposure = 0.050f
+        + 0.950f * smoothstep(0.015f, 0.68f, dayNightCycle);
+    lighting.atmosphereThickness = 0.87f
+        + (0.40f - 0.87f) * smoothstep(0.025f, 0.74f, dayNightCycle);
 
-    // CLOUDURP15M: the former `if (deepNight > 0)` held exposure at 0.055
-    // until solar elevation crossed exactly -0.03, then released it to about
-    // 0.22 in one frame.  Blend the night hold out continuously instead.
-    const float nightHeldExposure = std::min(uncappedSkyExposure, 0.055f);
-    lighting.skyExposure = nightHeldExposure
-        + (uncappedSkyExposure - nightHeldExposure) * (1.0f - deepNightHold);
-    lighting.atmosphereThickness = 0.87f + (0.40f - 0.87f) * astronomicalDay;
-
-    const heritage::math::Vec3 nightZenith{ 0.0030f, 0.0060f, 0.020f };
-    const heritage::math::Vec3 nightHorizon{ 0.010f, 0.016f, 0.038f };
+    // CELESTIAL12: darker rural night reference. Keep the star field
+    // legible against a near-black sky instead of a persistent navy wash.
+    const heritage::math::Vec3 nightZenith{ 0.00035f, 0.00060f, 0.00180f };
+    const heritage::math::Vec3 nightHorizon{ 0.00120f, 0.00180f, 0.00420f };
     const heritage::math::Vec3 twilightZenith{ 0.09f, 0.12f, 0.26f };
     const heritage::math::Vec3 twilightHorizon{ 0.75f, 0.34f, 0.16f };
     const heritage::math::Vec3 dayZenith{ 0.00f, 0.30f, 0.84f };
@@ -577,7 +536,7 @@ void EnvironmentSystem::rebuildLighting()
             warmHorizon * 0.58f);
     }
 
-    const heritage::math::Vec3 nightGround{ 0.0120f, 0.0140f, 0.020f };
+    const heritage::math::Vec3 nightGround{ 0.0035f, 0.0040f, 0.0060f };
     const heritage::math::Vec3 dayGroundHorizon{ 0.22f, 0.22f, 0.21f };
     const heritage::math::Vec3 dayGroundNadir{ 0.060f, 0.064f, 0.060f };
     lighting.groundHorizon = mix(nightGround, dayGroundHorizon, daylight);
@@ -597,14 +556,16 @@ void EnvironmentSystem::rebuildLighting()
     const heritage::math::Vec3 warmSun{ 1.0f, 0.44f, 0.20f };
     const heritage::math::Vec3 daySun{ 1.0f, 0.96f, 0.88f };
     lighting.sunDirection = solarDirection;
-    lighting.sunColor = mix(warmSun, daySun, smoothstep(0.02f, 0.42f, solarElevation));
-    lighting.sunIntensity = daylight * (0.18f + (3.40f - 0.18f) * smoothstep(0.0f, 0.70f, solarElevation));
+    lighting.sunColor = mix(warmSun, daySun, smoothstep(0.18f, 0.58f, dayNightCycle));
+    lighting.sunIntensity = directSunVisibility
+        * (0.18f + (3.40f - 0.18f) * smoothstep(0.17f, 0.78f, dayNightCycle));
 
     const float moonVisibility = smoothstep(-0.16f, 0.08f, moonDirection.y);
     lighting.moonDirection = moonDirection;
     lighting.moonColor = { 0.62f, 0.68f, 0.78f };
     lighting.moonPhase = 0.5f;
-    lighting.moonIntensity = 0.54f * moonVisibility * (1.0f - daylight);
+    lighting.moonIntensity = 0.54f * moonVisibility
+        * (1.0f - smoothstep(0.10f, 0.30f, dayNightCycle));
 
     resolveCelestialKeyLight(lighting);
 
@@ -613,20 +574,24 @@ void EnvironmentSystem::rebuildLighting()
     // branch applied the full lift and then removed it abruptly at the
     // Sun/Moon key-light threshold, creating another dawn discontinuity.
     const float moonIllumination01 = clamp01(lighting.moonIntensity / 0.54f);
-    const float moonSkyLift = 0.48f * kMoonSceneIlluminationScale * moonIllumination01;
+    // Keep the visible Moon and its local halo, but do not let a full
+    // Moon repaint the entire sky dome bright blue. The global lunar sky
+    // lift is deliberately tiny so the overall night remains predominantly
+    // black like the rural reference image.
+    const float moonSkyLift = 0.09f * kMoonSceneIlluminationScale * moonIllumination01;
     if (moonSkyLift > 0.0001f)
     {
-        lighting.skyZenith = mix(lighting.skyZenith, heritage::math::Vec3{ 0.030f, 0.040f, 0.080f }, moonSkyLift);
-        lighting.skyHorizon = mix(lighting.skyHorizon, heritage::math::Vec3{ 0.036f, 0.042f, 0.080f }, moonSkyLift);
-        lighting.groundHorizon = mix(lighting.groundHorizon, heritage::math::Vec3{ 0.016f, 0.018f, 0.025f }, moonSkyLift * 0.78f);
-        lighting.groundNadir = mix(lighting.groundNadir, heritage::math::Vec3{ 0.014f, 0.016f, 0.022f }, moonSkyLift * 0.66f);
+        lighting.skyZenith = mix(lighting.skyZenith, heritage::math::Vec3{ 0.008f, 0.010f, 0.018f }, moonSkyLift);
+        lighting.skyHorizon = mix(lighting.skyHorizon, heritage::math::Vec3{ 0.010f, 0.012f, 0.020f }, moonSkyLift);
+        lighting.groundHorizon = mix(lighting.groundHorizon, heritage::math::Vec3{ 0.006f, 0.007f, 0.010f }, moonSkyLift * 0.54f);
+        lighting.groundNadir = mix(lighting.groundNadir, heritage::math::Vec3{ 0.005f, 0.006f, 0.009f }, moonSkyLift * 0.42f);
     }
 
-    // The NASA HDR star map is always geometrically present. Atmospheric
-    // daylight controls visibility continuously; there is no procedural pixel
-    // star field and no binary on/off transition at sunset.
-    lighting.starIntensity = 1.0f - smoothstep(-0.31f, -0.10f, solarElevation);
-    lighting.daylightFactor = daylight;
+    // The NASA HDR star map is always geometrically present. CELESTIAL06
+    // evaluates its fade from the same cycle scalar as every other day/night
+    // effect. Bright stars begin appearing while the Sun is still near the
+    // orange horizon, then build continuously through civil twilight.
+    lighting.starIntensity = 1.0f - smoothstep(0.050f, 0.190f, dayNightCycle);
 
     m_lighting = lighting;
 }

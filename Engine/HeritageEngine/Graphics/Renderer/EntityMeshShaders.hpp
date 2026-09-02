@@ -416,9 +416,9 @@ uniform sampler2D uAmbientOcclusionMap;
 uniform sampler2D uEmissiveMap;
 uniform sampler2D uOpacityMap;
 uniform samplerCube uEnvironmentMap;
+uniform samplerCube uEnvironmentMapPrevious;
 uniform sampler2DArrayShadow uShadowMap;
 uniform sampler2DArray uShadowDepthMap;
-uniform sampler2D uVolumetricCloudShadow;
 
 // LIVETRACK15 production water uses a near 10m/256x256 RGBA8 topology atlas
 // plus a rolling 10m/32x32 RGB8 far topology cache through 500m. Both carry immutable
@@ -445,8 +445,6 @@ uniform bool uHasEmissiveMap;
 uniform bool uHasOpacityMap;
 uniform bool uHasEnvironmentMap;
 uniform bool uHasShadowMap;
-uniform bool uHasVolumetricCloudShadow;
-uniform float uVolumetricCloudShadowHalfRangeM;
 uniform bool uSurfaceWetnessReceiver;
 uniform bool uHasSurfaceWetnessBreakupMask;
 uniform bool uGpuDynamicSurfaceAuthorityActive;
@@ -479,6 +477,7 @@ uniform int uOpacityChannel;
 uniform int uSpecularFactorChannel;
 uniform bool uUseVertexColor;
 uniform float uEnvironmentMaxLod;
+uniform float uEnvironmentBlend;
 uniform mat4 uShadowMatrices[4];
 uniform vec4 uShadowSplits;
 uniform float uShadowStrength;
@@ -487,6 +486,7 @@ uniform int uShadowFilterMode;
 uniform vec3 uEye;
 uniform vec3 uSunDirection;
 uniform vec3 uSunRadiance;
+uniform float uDayNightCycle;
 uniform float uGamma;
 uniform float uBrightness;
 uniform float uContrast;
@@ -548,46 +548,27 @@ vec3 regionalCloudSunTransmission(vec3 surfacePosition, vec3 lightDirection)
     float storm = weather.a;
     float optical = smoothstep(0.18, 0.88, cloud)
         * mix(0.55, 1.0, storm);
-    float transmission = mix(1.0, 0.22, optical);
-    transmission *= mix(1.0, 0.78, rain * storm);
-    // Dense cloud shifts direct sunlight slightly cooler/greyer. Day/night sun
-    // colour remains the astronomical authority; weather only filters it.
-    vec3 tint = mix(vec3(1.0), vec3(0.80, 0.86, 0.94), optical * 0.34);
+    // CELESTIAL08: preserve the exact regional-cloud response shape, but blend
+    // only ten percent of CELESTIAL07's illumination loss/tint into the receiver.
+    // Volumetric cloud density/opacity itself is unchanged.
+    float legacyTransmission = mix(1.0, 0.22, optical);
+    legacyTransmission *= mix(1.0, 0.78, rain * storm);
+    float transmission = mix(1.0, legacyTransmission, 0.10);
+    vec3 legacyTint = mix(vec3(1.0), vec3(0.80, 0.86, 0.94), optical * 0.34);
+    vec3 tint = mix(vec3(1.0), legacyTint, 0.10);
     return tint * transmission;
 }
 
 vec3 volumetricCloudSunTransmission(vec3 surfacePosition, vec3 lightDirection)
 {
-    // CELESTIAL01: uSunDirection is Heritage's continuous celestial key in the
-    // material pass. The same cookie therefore filters sunlight by day and
-    // moonlight by night, while regional weather supplies a subtle spectral
-    // shift under dense cloud instead of a purely grey visibility multiplier.
-    vec3 regionalTransmission = regionalCloudSunTransmission(surfacePosition, lightDirection);
-    if (!uHasVolumetricCloudShadow || uVolumetricCloudShadowHalfRangeM <= 1.0)
-        return regionalTransmission;
-
-    // The shadow texture is generated on Heritage's y=0 receiver plane. Project
-    // this surface point backwards along the incoming celestial light onto that
-    // plane, matching the light-space cookie trace.
-    float safeLightY = max(lightDirection.y, 0.06);
-    vec2 receiverXZ = surfacePosition.xz - lightDirection.xz * (surfacePosition.y / safeLightY);
-    vec2 uv = vec2(0.5) + receiverXZ / (2.0 * uVolumetricCloudShadowHalfRangeM);
-    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
-        return regionalTransmission;
-
-    float detailedTransmission = clamp(texture(uVolumetricCloudShadow, uv).r, 0.0, 1.0);
-    float regionalLuminance = max(
-        dot(regionalTransmission, vec3(0.2126, 0.7152, 0.0722)),
-        0.02);
-    vec3 spectralShape = clamp(regionalTransmission / regionalLuminance, vec3(0.75), vec3(1.25));
-
-    // CELESTIAL02: CELESTIAL01 accidentally normalized away the magnitude of
-    // the regional transmission when the detailed cookie was present.  Keep
-    // its colour shape, but never let the detailed cookie make an overcast
-    // region brighter.  The cookie itself already carries the strengthened
-    // optical-depth trace, so this remains a direct-light attenuation only.
-    float combinedTransmission=min(regionalLuminance,detailedTransmission);
-    return clamp(spectralShape * combinedTransmission, vec3(0.0), vec3(1.0));
+    // CELESTIAL07: the detailed 256x256 optical-depth cookie has exactly one
+    // receiver authority: the dedicated post-opaque ground-shadow pass. The
+    // old material path sampled the same cookie again, so a validity/source
+    // change could darken direct light + ambient here and then multiply the
+    // finished receiver a second time. Keep only the continuous regional cloud
+    // transmission in materials; detailed moving shadow structure is applied
+    // once after opaque rendering.
+    return regionalCloudSunTransmission(surfacePosition, lightDirection);
 }
 
 float distributionGGX(vec3 normal, vec3 halfwayDirection, float roughness)
@@ -1571,7 +1552,7 @@ vec3 applyDynamicSurfaceWater(
         * clamp(dynamicSurfaceLodDetail, 0.0, 1.0);
 
     float ndv = clamp(dot(waterNormal, viewDirection), 0.0, 1.0);
-    float deepNight = 1.0 - smoothstep(-0.10, 0.04, uSunDirection.y);
+    float deepNight = 1.0 - smoothstep(0.020, 0.280, uDayNightCycle);
     float fresnelFull = 0.0204 + 0.9796 * pow(1.0 - ndv, 5.0);
     float fresnel = mix(0.0204, fresnelFull, distanceDetail);
 
@@ -1877,10 +1858,9 @@ void main()
     vec3 directLighting=vec3(0.0);
     vec3 directRadiance=max(uSunRadiance,vec3(0.0));
     float sunPower=max(directRadiance.r,max(directRadiance.g,directRadiance.b));
-    // CELESTIAL03: evaluate the cloud receiver once so the same optical field
-    // can attenuate both direct celestial light and a smaller physically
-    // plausible fraction of diffuse skylight. Real cloud shadows remain lit
-    // by the rest of the sky dome; they are not black projected decals.
+    // CELESTIAL07: material lighting keeps only broad regional cloud
+    // transmission. The detailed moving cookie is applied once later by the
+    // dedicated post-opaque receiver, avoiding the former double attenuation.
     vec3 celestialCloudTransmission=sunPower>0.00001
         ?volumetricCloudSunTransmission(vWorldPosition,lightDirection):vec3(1.0);
     float celestialCloudVisibility=clamp(
@@ -1911,14 +1891,14 @@ void main()
         // deterministic roughness-aware reflection approximation. A future
         // GGX prefilter/BRDF LUT can replace this without changing materials.
         vec3 reflectionDirection = reflect(-viewDirection, normal);
-        vec3 diffuseEnvironment = textureLod(
-            uEnvironmentMap,
-            normal,
-            uEnvironmentMaxLod).rgb;
-        vec3 specularEnvironment = textureLod(
-            uEnvironmentMap,
-            reflectionDirection,
-            roughness * uEnvironmentMaxLod).rgb;
+        vec3 diffuseEnvironment = mix(
+            textureLod(uEnvironmentMapPrevious, normal, uEnvironmentMaxLod).rgb,
+            textureLod(uEnvironmentMap, normal, uEnvironmentMaxLod).rgb,
+            uEnvironmentBlend);
+        vec3 specularEnvironment = mix(
+            textureLod(uEnvironmentMapPrevious, reflectionDirection, roughness * uEnvironmentMaxLod).rgb,
+            textureLod(uEnvironmentMap, reflectionDirection, roughness * uEnvironmentMaxLod).rgb,
+            uEnvironmentBlend);
 
         vec3 environmentFresnel =
             fresnelSchlickRoughness(nDotV, f0, roughness);
@@ -1929,7 +1909,7 @@ void main()
         vec3 specularIbl = specularEnvironment * environmentFresnel
             * mix(1.0, 0.55, roughness);
         ambientLighting = (diffuseIbl + specularIbl) * ao;
-        float ambientDeepNight = 1.0 - smoothstep(-0.10, 0.04, uSunDirection.y);
+        float ambientDeepNight = 1.0 - smoothstep(0.020, 0.280, uDayNightCycle);
         ambientLighting *= mix(1.0, 0.12, ambientDeepNight);
     }
     else
@@ -1937,15 +1917,13 @@ void main()
         float upFacing = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
         float hemisphere = mix(0.12, 0.30, upFacing);
         ambientLighting = baseColor * (1.0 - metallic) * hemisphere * ao;
-        float ambientDeepNight = 1.0 - smoothstep(-0.10, 0.04, uSunDirection.y);
+        float ambientDeepNight = 1.0 - smoothstep(0.020, 0.280, uDayNightCycle);
         ambientLighting *= mix(1.0, 0.12, ambientDeepNight);
     }
 
-    // CELESTIAL03: a cloud blocks the key light completely but only part of
-    // the hemispherical sky. Modulate diffuse/IBL modestly so the moving cloud
-    // shadow is visibly present on roads/terrain even when bright sky ambient
-    // would otherwise wash out the direct-light shadow. Dense cloud also cools
-    // the remaining ambient slightly, as observed under real overcast cells.
+    // Broad regional cloud cover blocks only part of the hemispherical sky.
+    // Modulate diffuse/IBL modestly here; detailed moving cloud-shadow structure
+    // is deliberately not sampled in this material path anymore.
     float cloudAmbientVisibility=mix(0.62,1.0,pow(celestialCloudVisibility,0.70));
     vec3 cloudAmbientTint=mix(vec3(0.84,0.90,1.0),vec3(1.0),celestialCloudVisibility);
     ambientLighting*=cloudAmbientVisibility*cloudAmbientTint;

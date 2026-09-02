@@ -51,12 +51,51 @@ struct VehicleAssetSuspensionHardpointMetadata
     float confidence = 0.75f;
 };
 
+// Coarse but deterministic ride-height datums reconstructed from the GLB's
+// authored node transforms and POSITION accessor bounds. Tire geometry defines
+// the authored road plane; non-wheel geometry defines front/rear lowest points.
+struct VehicleAssetRideHeightGeometryMetadata
+{
+    bool valid = false;
+    heritage::math::Vec3 bodyMinimum{};
+    heritage::math::Vec3 bodyMaximum{};
+    float referenceGroundPlaneLocalY = 0.0f;
+    float axleSplitLocalZ = 0.0f;
+    float frontLowestBodyLocalY = 0.0f;
+    float rearLowestBodyLocalY = 0.0f;
+    float frontAuthoredClearanceM = 0.0f;
+    float rearAuthoredClearanceM = 0.0f;
+    std::size_t bodyNodeCount = 0;
+    std::size_t tireNodeCount = 0;
+    std::string provenance = "glb_accessor_bounds_v1";
+};
+
+// Nominal geometry reconstructed from the authored tire mesh bounds. This is
+// deliberately separate from the vehicle definition's factory reference and
+// from live suspension geometry so tooling can expose mismatches instead of
+// silently treating the visual model as engineering truth.
+struct VehicleAssetWheelGeometryMetadata
+{
+    bool valid = false;
+    float wheelbaseM = 0.0f;
+    float frontTrackM = 0.0f;
+    float rearTrackM = 0.0f;
+    heritage::math::Vec3 frontLeftCenter{};
+    heritage::math::Vec3 frontRightCenter{};
+    heritage::math::Vec3 rearLeftCenter{};
+    heritage::math::Vec3 rearRightCenter{};
+    std::size_t tireNodeCount = 0;
+    std::string provenance = "glb_tire_accessor_bounds_v1";
+};
+
 struct VehicleAssetMetadata
 {
     std::filesystem::path sourcePath;
     std::vector<VehicleAssetPartMetadata> parts;
     std::vector<VehicleAssetWheelFitmentDatumMetadata> wheelFitmentDatums;
     std::vector<VehicleAssetSuspensionHardpointMetadata> suspensionHardpoints;
+    VehicleAssetRideHeightGeometryMetadata rideHeightGeometry;
+    VehicleAssetWheelGeometryMetadata wheelGeometry;
     std::vector<std::string> warnings;
 
     const VehicleAssetPartMetadata* findBySlot(const std::string& slot) const;

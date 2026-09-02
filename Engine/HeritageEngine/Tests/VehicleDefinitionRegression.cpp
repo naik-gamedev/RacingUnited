@@ -33,6 +33,71 @@ void authorMacPhersonHardpoints(
     };
 }
 
+void authorDoubleWishboneHardpoints(
+    heritage::vehicles::VehicleSuspensionDefinition& suspension,
+    const Vec3& wheelCenter,
+    bool leftSide)
+{
+    const float side = leftSide ? -1.0f : 1.0f;
+    const auto point = [&](float lateral, float vertical, float longitudinal) {
+        return Vec3{
+            wheelCenter.x + side * lateral,
+            wheelCenter.y + vertical,
+            wheelCenter.z + longitudinal
+        };
+    };
+    suspension.hardpoints = {
+        { "upper_arm_inner_front", point(-0.39f, 0.29f, 0.25f), "measured", 1.0f },
+        { "upper_arm_inner_rear", point(-0.39f, 0.29f, -0.25f), "measured", 1.0f },
+        { "upper_ball_joint", point(-0.025f, 0.22f, 0.0f), "measured", 1.0f },
+        { "lower_arm_inner_front", point(-0.48f, -0.10f, 0.25f), "measured", 1.0f },
+        { "lower_arm_inner_rear", point(-0.48f, -0.10f, -0.25f), "measured", 1.0f },
+        { "lower_ball_joint", point(0.045f, -0.14f, 0.0f), "measured", 1.0f },
+        { "tie_rod_inner", point(-0.42f, 0.02f, -0.12f), "measured", 1.0f },
+        { "tie_rod_outer", point(-0.045f, -0.05f, -0.07f), "measured", 1.0f },
+        { "wheel_center", wheelCenter, "measured", 1.0f },
+        { "damper_upper_mount", point(-0.27f, 0.67f, 0.0f), "measured", 1.0f },
+        { "damper_lower_mount", point(-0.25f, -0.08f, 0.0f), "measured", 1.0f }
+    };
+}
+
+void authorPushrodDoubleWishboneHardpoints(
+    heritage::vehicles::VehicleSuspensionDefinition& suspension,
+    const Vec3& wheelCenter,
+    bool leftSide)
+{
+    authorDoubleWishboneHardpoints(suspension, wheelCenter, leftSide);
+    suspension.hardpoints.erase(
+        std::remove_if(
+            suspension.hardpoints.begin(),
+            suspension.hardpoints.end(),
+            [](const auto& hardpoint) {
+                return hardpoint.id == "damper_upper_mount"
+                    || hardpoint.id == "damper_lower_mount";
+            }),
+        suspension.hardpoints.end());
+
+    const float side = leftSide ? -1.0f : 1.0f;
+    const auto point = [&](float lateral, float vertical, float longitudinal) {
+        return Vec3{
+            wheelCenter.x + side * lateral,
+            wheelCenter.y + vertical,
+            wheelCenter.z + longitudinal
+        };
+    };
+    const auto add = [&](const char* id, const Vec3& position) {
+        suspension.hardpoints.push_back({ id, position, "measured", 1.0f });
+    };
+    add("pushrod_lower_arm_mount", point(-0.135f, -0.12f, 0.0f));
+    add("rocker_pivot_front", point(-0.355f, 0.45f, 0.12f));
+    add("rocker_pivot_rear", point(-0.355f, 0.45f, -0.12f));
+    add("rocker_pushrod_mount", point(-0.215f, 0.45f, 0.0f));
+    add("spring_chassis_mount", point(-0.555f, 0.59f, 0.0f));
+    add("spring_rocker_mount", point(-0.355f, 0.59f, 0.0f));
+    add("damper_chassis_mount", point(-0.555f, 0.55f, 0.0f));
+    add("damper_rocker_mount", point(-0.355f, 0.55f, 0.0f));
+}
+
 void authorTrailingArmHardpoints(
     heritage::vehicles::VehicleSuspensionDefinition& suspension,
     const Vec3& wheelCenter)
@@ -54,6 +119,148 @@ void authorTrailingArmHardpoints(
     add("wheel_center", estimate.hardpoints.wheelCenter);
     add("damper_upper_mount", estimate.hardpoints.damperUpperMount);
     add("damper_lower_mount", estimate.hardpoints.damperLowerMount);
+}
+
+
+void authorSemiTrailingArmHardpoints(
+    heritage::vehicles::VehicleSuspensionDefinition& suspension,
+    const Vec3& wheelCenter,
+    bool leftSide,
+    const std::string& prefix = {})
+{
+    const float side = leftSide ? -1.0f : 1.0f;
+    const auto point = [&](float inboard, float vertical, float longitudinal) {
+        return Vec3{ wheelCenter.x + inboard * side,
+            wheelCenter.y + vertical, wheelCenter.z + longitudinal };
+    };
+    const auto add = [&](const std::string& id, const Vec3& position) {
+        suspension.hardpoints.push_back({ prefix + id, position, "measured", 1.0f });
+    };
+    add("arm_pivot_inner", point(-0.56f, 0.34f, 0.33f));
+    add("arm_pivot_outer", point(-0.14f, 0.35f, 0.20f));
+    add("wheel_center", wheelCenter);
+    add("spring_upper_mount", point(-0.30f, 0.68f, 0.23f));
+    add("spring_lower_mount", point(-0.16f, 0.16f, 0.10f));
+    add("damper_upper_mount", point(-0.24f, 0.70f, 0.32f));
+    add("damper_lower_mount", point(-0.12f, 0.14f, 0.05f));
+}
+
+void authorTwistBeamHardpoints(
+    heritage::vehicles::VehicleSuspensionDefinition& suspension,
+    const Vec3& leftWheelCenter,
+    const Vec3& rightWheelCenter)
+{
+    suspension.hardpoints.clear();
+    authorSemiTrailingArmHardpoints(suspension,leftWheelCenter,true,"left_");
+    authorSemiTrailingArmHardpoints(suspension,rightWheelCenter,false,"right_");
+    suspension.hardpoints.push_back({"beam_left_attachment",
+        {leftWheelCenter.x+0.28f,leftWheelCenter.y+0.26f,leftWheelCenter.z+0.18f},"measured",1.0f});
+    suspension.hardpoints.push_back({"beam_right_attachment",
+        {rightWheelCenter.x-0.28f,rightWheelCenter.y+0.26f,rightWheelCenter.z+0.18f},"measured",1.0f});
+}
+
+void authorMotorcycleForkHardpoints(
+    heritage::vehicles::VehicleSuspensionDefinition& suspension,
+    const Vec3& wheelCenter)
+{
+    suspension.hardpoints = {
+        { "steering_stem_upper", { wheelCenter.x, 0.95f, wheelCenter.z - 0.53f }, "measured", 1.0f },
+        { "steering_stem_lower", { wheelCenter.x, 0.60f, wheelCenter.z - 0.70f }, "measured", 1.0f },
+        { "wheel_center", wheelCenter, "measured", 1.0f }
+    };
+}
+
+void authorMotorcycleSwingarmHardpoints(
+    heritage::vehicles::VehicleSuspensionDefinition& suspension,
+    const Vec3& wheelCenter)
+{
+    const float dx = wheelCenter.x;
+    const float dz = wheelCenter.z + 1.48f;
+    suspension.hardpoints = {
+        { "swingarm_pivot_left", { dx - 0.18f, 0.50f, -0.25f + dz }, "measured", 1.0f },
+        { "swingarm_pivot_right", { dx + 0.18f, 0.50f, -0.25f + dz }, "measured", 1.0f },
+        { "wheel_center", wheelCenter, "measured", 1.0f },
+        { "linkage_swingarm_mount", { dx, 0.30f, -1.05f + dz }, "measured", 1.0f },
+        { "rocker_pivot_left", { dx - 0.06f, 0.62f, -0.48f + dz }, "measured", 1.0f },
+        { "rocker_pivot_right", { dx + 0.06f, 0.62f, -0.48f + dz }, "measured", 1.0f },
+        { "rocker_link_mount", { dx, 0.52f, -0.75f + dz }, "measured", 1.0f },
+        { "shock_chassis_mount", { dx, 0.75f, -0.40f + dz }, "measured", 1.0f },
+        { "shock_rocker_mount", { dx, 0.76f, -0.72f + dz }, "measured", 1.0f },
+        { "countershaft_center", { dx, 0.54f, -0.18f + dz }, "measured", 1.0f }
+    };
+    suspension.motorcycleRearSprocketPitchRadiusM = 0.105f;
+}
+
+void authorKartChassisHardpoints(
+    heritage::vehicles::VehicleSuspensionDefinition& suspension,
+    const Vec3& frontLeft,
+    const Vec3& frontRight,
+    const Vec3& rearLeft,
+    const Vec3& rearRight)
+{
+    suspension.hardpoints.clear();
+    const auto add = [&](const char* id, const Vec3& position) {
+        suspension.hardpoints.push_back({ id, position, "measured", 1.0f });
+    };
+    add("front_left_kingpin_upper",
+        { frontLeft.x + 0.12f, frontLeft.y + 0.26f, frontLeft.z - 0.06f });
+    add("front_left_kingpin_lower",
+        { frontLeft.x + 0.07f, frontLeft.y - 0.07f, frontLeft.z - 0.02f });
+    add("front_left_wheel_center", frontLeft);
+    add("front_right_kingpin_upper",
+        { frontRight.x - 0.12f, frontRight.y + 0.26f, frontRight.z - 0.06f });
+    add("front_right_kingpin_lower",
+        { frontRight.x - 0.07f, frontRight.y - 0.07f, frontRight.z - 0.02f });
+    add("front_right_wheel_center", frontRight);
+    add("rear_axle_bearing_left", { -0.34f, rearLeft.y, rearLeft.z });
+    add("rear_axle_bearing_right", { 0.34f, rearRight.y, rearRight.z });
+    add("rear_left_wheel_center", rearLeft);
+    add("rear_right_wheel_center", rearRight);
+}
+
+void authorLiveAxleHardpoints(
+    heritage::vehicles::VehicleSuspensionDefinition& suspension,
+    float axleZ)
+{
+    const float wheelY = 0.30f;
+    const auto add = [&](const char* id, const Vec3& position) {
+        suspension.hardpoints.push_back({ id, position, "measured", 1.0f });
+    };
+    add("axle_center", { 0.0f, wheelY, axleZ });
+    add("left_wheel_center", { -0.714f, wheelY, axleZ });
+    add("right_wheel_center", { 0.714f, wheelY, axleZ });
+    add("panhard_chassis_mount", { -0.55f, 0.58f, axleZ + 0.04f });
+    add("panhard_axle_mount", { 0.55f, wheelY, axleZ + 0.04f });
+    add("left_trailing_chassis_mount", { -0.45f, 0.42f, axleZ + 0.92f });
+    add("left_trailing_axle_mount", { -0.45f, 0.27f, axleZ + 0.05f });
+    add("right_trailing_chassis_mount", { 0.45f, 0.42f, axleZ + 0.92f });
+    add("right_trailing_axle_mount", { 0.45f, 0.27f, axleZ + 0.05f });
+    add("left_spring_chassis_mount", { -0.50f, 0.78f, axleZ });
+    add("left_spring_axle_mount", { -0.50f, wheelY, axleZ });
+    add("right_spring_chassis_mount", { 0.50f, 0.78f, axleZ });
+    add("right_spring_axle_mount", { 0.50f, wheelY, axleZ });
+    add("left_damper_chassis_mount", { -0.58f, 0.82f, axleZ + 0.19f });
+    add("left_damper_axle_mount", { -0.48f, 0.28f, axleZ - 0.06f });
+    add("right_damper_chassis_mount", { 0.58f, 0.82f, axleZ + 0.19f });
+    add("right_damper_axle_mount", { 0.48f, 0.28f, axleZ - 0.06f });
+}
+
+
+void authorLeafSpringHardpoints(
+    heritage::vehicles::VehicleSuspensionDefinition& suspension,
+    float axleZ)
+{
+    const auto add = [&](const char* id, const Vec3& position) {
+        suspension.hardpoints.push_back({ id, position, "measured", 1.0f });
+    };
+    add("left_leaf_front_eye", { -0.50f, 0.55f, axleZ + 0.871f });
+    add("left_leaf_rear_shackle_pivot", { -0.50f, 0.72f, axleZ - 0.859f });
+    add("left_leaf_rear_eye", { -0.50f, 0.54f, axleZ - 0.799f });
+    add("left_leaf_axle_clamp", { -0.50f, 0.30f, axleZ });
+    add("right_leaf_front_eye", { 0.50f, 0.55f, axleZ + 0.871f });
+    add("right_leaf_rear_shackle_pivot", { 0.50f, 0.72f, axleZ - 0.859f });
+    add("right_leaf_rear_eye", { 0.50f, 0.54f, axleZ - 0.799f });
+    add("right_leaf_axle_clamp", { 0.50f, 0.30f, axleZ });
 }
 
 } // namespace
@@ -400,9 +607,293 @@ bool vehicleDefinitionCompilerAndLoaderWork()
     const auto categoryOnlyResult = VehicleDefinitionCompiler::compile(categoryOnly);
 
     VehicleDefinitionV2Source futureSuspension = source;
-    futureSuspension.suspensions[0].provider = "double_wishbone_v1";
+    futureSuspension.suspensions[0].provider = "pullrod_double_wishbone_v1";
     const auto futureSuspensionResult =
         VehicleDefinitionCompiler::compile(futureSuspension);
+
+    VehicleDefinitionV2Source doubleWishboneSource = source;
+    for (std::size_t index = 0; index < 4; ++index)
+    {
+        doubleWishboneSource.suspensions[index].provider = "double_wishbone_v1";
+        const auto& contact = doubleWishboneSource.contactUnits[index];
+        const auto& suspension = doubleWishboneSource.suspensions[index];
+        const Vec3 wheelCenter{
+            contact.localMount.x
+                + contact.suspensionDirection.x * suspension.restLengthM,
+            contact.localMount.y
+                + contact.suspensionDirection.y * suspension.restLengthM,
+            contact.localMount.z
+                + contact.suspensionDirection.z * suspension.restLengthM
+        };
+        authorDoubleWishboneHardpoints(
+            doubleWishboneSource.suspensions[index],
+            wheelCenter,
+            index == 0 || index == 2);
+    }
+    const auto doubleWishboneResult =
+        VehicleDefinitionCompiler::compile(doubleWishboneSource);
+    std::string doubleWishboneLoadMessage;
+    VehicleDefinitionLoadSettings doubleWishboneLoadSettings = loadSettings;
+    doubleWishboneLoadSettings.vehicle.chassisBody = bodies.create(bodyDescription);
+    const VehicleHandle doubleWishboneVehicle = VehicleDefinitionLoader::create(
+        doubleWishboneResult.definition,
+        doubleWishboneLoadSettings,
+        bodies,
+        vehicles,
+        doubleWishboneLoadMessage);
+    heritage::vehicles::SuspensionGeometryDescription doubleWishboneReadback;
+    const bool doubleWishboneRuntimeReady = doubleWishboneResult.valid
+        && doubleWishboneResult.currentSolverReady
+        && doubleWishboneVehicle != heritage::vehicles::InvalidVehicle
+        && vehicles.wheelSuspensionGeometry(
+            doubleWishboneVehicle, 0, doubleWishboneReadback)
+        && doubleWishboneReadback.provider
+            == heritage::vehicles::SuspensionProviderKind::DoubleWishboneV1
+        && doubleWishboneReadback.doubleWishbone.authored;
+
+    VehicleDefinitionV2Source incompleteDoubleWishbone = doubleWishboneSource;
+    incompleteDoubleWishbone.suspensions[0].hardpoints.pop_back();
+    const auto incompleteDoubleWishboneResult =
+        VehicleDefinitionCompiler::compile(incompleteDoubleWishbone);
+
+    VehicleDefinitionV2Source pushrodSource = source;
+    for (std::size_t index = 0; index < 4; ++index)
+    {
+        pushrodSource.suspensions[index].provider =
+            "pushrod_double_wishbone_v1";
+        const auto& contact = pushrodSource.contactUnits[index];
+        const auto& suspension = pushrodSource.suspensions[index];
+        const Vec3 wheelCenter{
+            contact.localMount.x
+                + contact.suspensionDirection.x * suspension.restLengthM,
+            contact.localMount.y
+                + contact.suspensionDirection.y * suspension.restLengthM,
+            contact.localMount.z
+                + contact.suspensionDirection.z * suspension.restLengthM
+        };
+        authorPushrodDoubleWishboneHardpoints(
+            pushrodSource.suspensions[index],
+            wheelCenter,
+            index == 0 || index == 2);
+    }
+    const auto pushrodResult = VehicleDefinitionCompiler::compile(pushrodSource);
+    std::string pushrodLoadMessage;
+    VehicleDefinitionLoadSettings pushrodLoadSettings = loadSettings;
+    pushrodLoadSettings.vehicle.chassisBody = bodies.create(bodyDescription);
+    const VehicleHandle pushrodVehicle = VehicleDefinitionLoader::create(
+        pushrodResult.definition,
+        pushrodLoadSettings,
+        bodies,
+        vehicles,
+        pushrodLoadMessage);
+    heritage::vehicles::SuspensionGeometryDescription pushrodReadback;
+    const bool pushrodRuntimeReady = pushrodResult.valid
+        && pushrodResult.currentSolverReady
+        && pushrodVehicle != heritage::vehicles::InvalidVehicle
+        && vehicles.wheelSuspensionGeometry(
+            pushrodVehicle, 0, pushrodReadback)
+        && pushrodReadback.provider
+            == heritage::vehicles::SuspensionProviderKind::PushrodDoubleWishboneV1
+        && pushrodReadback.pushrodDoubleWishbone.authored;
+
+    VehicleDefinitionV2Source incompletePushrod = pushrodSource;
+    incompletePushrod.suspensions[0].hardpoints.pop_back();
+    const auto incompletePushrodResult =
+        VehicleDefinitionCompiler::compile(incompletePushrod);
+
+    VehicleDefinitionV2Source liveAxleSource = source;
+    for (std::size_t index = 2; index < 4; ++index)
+    {
+        liveAxleSource.suspensions[index].provider = "live_axle_v1";
+        liveAxleSource.suspensions[index].hardpoints.clear();
+        authorLiveAxleHardpoints(
+            liveAxleSource.suspensions[index],
+            liveAxleSource.contactUnits[index].localMount.z);
+    }
+    const auto liveAxleResult = VehicleDefinitionCompiler::compile(liveAxleSource);
+    std::string liveAxleLoadMessage;
+    VehicleDefinitionLoadSettings liveAxleLoadSettings = loadSettings;
+    liveAxleLoadSettings.vehicle.chassisBody = bodies.create(bodyDescription);
+    const VehicleHandle liveAxleVehicle = VehicleDefinitionLoader::create(
+        liveAxleResult.definition,
+        liveAxleLoadSettings,
+        bodies,
+        vehicles,
+        liveAxleLoadMessage);
+    heritage::vehicles::SuspensionGeometryDescription liveAxleReadback;
+    const bool liveAxleRuntimeReady = liveAxleResult.valid
+        && liveAxleResult.currentSolverReady
+        && liveAxleVehicle != heritage::vehicles::InvalidVehicle
+        && vehicles.wheelSuspensionGeometry(
+            liveAxleVehicle, 2, liveAxleReadback)
+        && liveAxleReadback.provider
+            == heritage::vehicles::SuspensionProviderKind::LiveAxleV1
+        && liveAxleReadback.liveAxle.authored;
+    VehicleDefinitionV2Source incompleteLiveAxle = liveAxleSource;
+    incompleteLiveAxle.suspensions[2].hardpoints.pop_back();
+    const auto incompleteLiveAxleResult =
+        VehicleDefinitionCompiler::compile(incompleteLiveAxle);
+
+    VehicleDefinitionV2Source leafAxleSource = liveAxleSource;
+    for (std::size_t index = 2; index < 4; ++index)
+    {
+        leafAxleSource.suspensions[index].provider = "live_axle_leaf_v1";
+        authorLeafSpringHardpoints(
+            leafAxleSource.suspensions[index],
+            leafAxleSource.contactUnits[index].localMount.z);
+    }
+    const auto leafAxleResult = VehicleDefinitionCompiler::compile(leafAxleSource);
+    std::string leafAxleLoadMessage;
+    VehicleDefinitionLoadSettings leafAxleLoadSettings = loadSettings;
+    leafAxleLoadSettings.vehicle.chassisBody = bodies.create(bodyDescription);
+    const VehicleHandle leafAxleVehicle = VehicleDefinitionLoader::create(
+        leafAxleResult.definition,
+        leafAxleLoadSettings,
+        bodies,
+        vehicles,
+        leafAxleLoadMessage);
+    heritage::vehicles::SuspensionGeometryDescription leafAxleReadback;
+    const bool leafAxleRuntimeReady = leafAxleResult.valid
+        && leafAxleResult.currentSolverReady
+        && leafAxleVehicle != heritage::vehicles::InvalidVehicle
+        && vehicles.wheelSuspensionGeometry(
+            leafAxleVehicle, 2, leafAxleReadback)
+        && leafAxleReadback.provider
+            == heritage::vehicles::SuspensionProviderKind::LeafSpringLiveAxleV1
+        && leafAxleReadback.leafSpringLiveAxle.authored;
+    VehicleDefinitionV2Source incompleteLeafAxle = leafAxleSource;
+    incompleteLeafAxle.suspensions[2].hardpoints.pop_back();
+    const auto incompleteLeafAxleResult =
+        VehicleDefinitionCompiler::compile(incompleteLeafAxle);
+
+    VehicleDefinitionV2Source motorcycleSuspensionSource = source;
+    for (std::size_t index = 0; index < 4; ++index)
+    {
+        const auto& contact = motorcycleSuspensionSource.contactUnits[index];
+        const auto& suspension = motorcycleSuspensionSource.suspensions[index];
+        const Vec3 wheelCenter{
+            contact.localMount.x + contact.suspensionDirection.x * suspension.restLengthM,
+            contact.localMount.y + contact.suspensionDirection.y * suspension.restLengthM,
+            contact.localMount.z + contact.suspensionDirection.z * suspension.restLengthM };
+        if (index < 2)
+        {
+            motorcycleSuspensionSource.suspensions[index].provider =
+                "motorcycle_telescopic_fork_v1";
+            authorMotorcycleForkHardpoints(
+                motorcycleSuspensionSource.suspensions[index], wheelCenter);
+        }
+        else
+        {
+            motorcycleSuspensionSource.suspensions[index].provider =
+                "motorcycle_swingarm_linkage_v1";
+            authorMotorcycleSwingarmHardpoints(
+                motorcycleSuspensionSource.suspensions[index], wheelCenter);
+        }
+    }
+    const auto motorcycleSuspensionResult =
+        VehicleDefinitionCompiler::compile(motorcycleSuspensionSource);
+    std::string motorcycleSuspensionLoadMessage;
+    VehicleDefinitionLoadSettings motorcycleSuspensionLoadSettings = loadSettings;
+    motorcycleSuspensionLoadSettings.vehicle.chassisBody = bodies.create(bodyDescription);
+    const VehicleHandle motorcycleSuspensionVehicle = VehicleDefinitionLoader::create(
+        motorcycleSuspensionResult.definition,
+        motorcycleSuspensionLoadSettings,
+        bodies,
+        vehicles,
+        motorcycleSuspensionLoadMessage);
+    heritage::vehicles::SuspensionGeometryDescription motorcycleForkReadback;
+    heritage::vehicles::SuspensionGeometryDescription motorcycleRearReadback;
+    const bool motorcycleSuspensionRuntimeReady = motorcycleSuspensionResult.valid
+        && motorcycleSuspensionResult.currentSolverReady
+        && motorcycleSuspensionVehicle != heritage::vehicles::InvalidVehicle
+        && vehicles.wheelSuspensionGeometry(
+            motorcycleSuspensionVehicle, 0, motorcycleForkReadback)
+        && vehicles.wheelSuspensionGeometry(
+            motorcycleSuspensionVehicle, 2, motorcycleRearReadback)
+        && motorcycleForkReadback.provider
+            == heritage::vehicles::SuspensionProviderKind::MotorcycleTelescopicForkV1
+        && motorcycleForkReadback.motorcycleFork.authored
+        && motorcycleRearReadback.provider
+            == heritage::vehicles::SuspensionProviderKind::MotorcycleSwingarmLinkageV1
+        && motorcycleRearReadback.motorcycleSwingarm.authored;
+    VehicleDefinitionV2Source incompleteMotorcycleFork = motorcycleSuspensionSource;
+    incompleteMotorcycleFork.suspensions[0].hardpoints.pop_back();
+    const auto incompleteMotorcycleForkResult =
+        VehicleDefinitionCompiler::compile(incompleteMotorcycleFork);
+    VehicleDefinitionV2Source incompleteMotorcycleRear = motorcycleSuspensionSource;
+    incompleteMotorcycleRear.suspensions[2].hardpoints.pop_back();
+    const auto incompleteMotorcycleRearResult =
+        VehicleDefinitionCompiler::compile(incompleteMotorcycleRear);
+
+    VehicleDefinitionV2Source kartSource = source;
+    const auto kartWheelCenter = [&](std::size_t index) {
+        const auto& contact = kartSource.contactUnits[index];
+        const auto& suspension = kartSource.suspensions[index];
+        return Vec3{
+            contact.localMount.x
+                + contact.suspensionDirection.x * suspension.restLengthM,
+            contact.localMount.y
+                + contact.suspensionDirection.y * suspension.restLengthM,
+            contact.localMount.z
+                + contact.suspensionDirection.z * suspension.restLengthM
+        };
+    };
+    const Vec3 kartFrontLeft = kartWheelCenter(0);
+    const Vec3 kartFrontRight = kartWheelCenter(1);
+    const Vec3 kartRearLeft = kartWheelCenter(2);
+    const Vec3 kartRearRight = kartWheelCenter(3);
+    for (std::size_t index = 0; index < 4; ++index)
+    {
+        auto& suspension = kartSource.suspensions[index];
+        suspension.provider = "kart_chassis_flex_v1";
+        suspension.maximumCompressionM = 0.0f;
+        suspension.maximumDroopM = 0.0f;
+        suspension.springPreloadN = 0.0f;
+        suspension.springRateNPerM = 0.0f;
+        suspension.springProgressionNPerM2 = 0.0f;
+        suspension.bumpDampingNsPerM = 0.0f;
+        suspension.bumpHighSpeedDampingNsPerM = 0.0f;
+        suspension.reboundDampingNsPerM = 0.0f;
+        suspension.reboundHighSpeedDampingNsPerM = 0.0f;
+        suspension.bumpStopRateNPerM = 0.0f;
+        suspension.droopStopRateNPerM = 0.0f;
+        authorKartChassisHardpoints(
+            suspension, kartFrontLeft, kartFrontRight,
+            kartRearLeft, kartRearRight);
+    }
+    kartSource.chassisFlex.enabled = true;
+    kartSource.chassisFlex.provider = "chassis_torsional_mode_v1";
+    kartSource.chassisFlex.torsionalRigidityNmPerDegree = 1200.0f;
+    kartSource.chassisFlex.torsionalDampingNmsPerRad = 550.0f;
+    kartSource.chassisFlex.effectiveTorsionalInertiaKgM2 = 35.0f;
+    kartSource.chassisFlex.maximumTwistDegrees = 4.0f;
+    const auto kartResult = VehicleDefinitionCompiler::compile(kartSource);
+    std::string kartLoadMessage;
+    VehicleDefinitionLoadSettings kartLoadSettings = loadSettings;
+    kartLoadSettings.vehicle.chassisBody = bodies.create(bodyDescription);
+    const VehicleHandle kartVehicle = VehicleDefinitionLoader::create(
+        kartResult.definition, kartLoadSettings, bodies, vehicles, kartLoadMessage);
+    heritage::vehicles::SuspensionGeometryDescription kartReadback;
+    const bool kartRuntimeReady = kartResult.valid
+        && kartResult.currentSolverReady
+        && kartVehicle != heritage::vehicles::InvalidVehicle
+        && vehicles.wheelSuspensionGeometry(kartVehicle, 0, kartReadback)
+        && kartReadback.provider
+            == heritage::vehicles::SuspensionProviderKind::KartChassisFlexV1
+        && kartReadback.kartChassis.authored;
+
+    VehicleDefinitionV2Source incompleteKart = kartSource;
+    incompleteKart.suspensions[0].hardpoints.pop_back();
+    const auto incompleteKartResult =
+        VehicleDefinitionCompiler::compile(incompleteKart);
+    VehicleDefinitionV2Source kartWithFakeTravel = kartSource;
+    kartWithFakeTravel.suspensions[0].maximumCompressionM = 0.01f;
+    const auto kartWithFakeTravelResult =
+        VehicleDefinitionCompiler::compile(kartWithFakeTravel);
+    VehicleDefinitionV2Source kartWithoutFlex = kartSource;
+    kartWithoutFlex.chassisFlex.enabled = false;
+    const auto kartWithoutFlexResult =
+        VehicleDefinitionCompiler::compile(kartWithoutFlex);
 
     VehicleDefinitionV2Source macPhersonSource = source;
     for (std::size_t index = 0; index < 2; ++index)
@@ -480,6 +971,73 @@ bool vehicleDefinitionCompilerAndLoaderWork()
     incompleteTrailingArm.suspensions[2].hardpoints.pop_back();
     const auto incompleteTrailingArmResult =
         VehicleDefinitionCompiler::compile(incompleteTrailingArm);
+
+    VehicleDefinitionV2Source semiTrailingSource = macPhersonSource;
+    for (std::size_t index = 2; index < 4; ++index)
+    {
+        auto& suspension = semiTrailingSource.suspensions[index];
+        suspension.provider = "semi_trailing_arm_v1";
+        suspension.hardpoints.clear();
+        const auto& contact = semiTrailingSource.contactUnits[index];
+        const Vec3 wheelCenter{
+            contact.localMount.x + contact.suspensionDirection.x * suspension.restLengthM,
+            contact.localMount.y + contact.suspensionDirection.y * suspension.restLengthM,
+            contact.localMount.z + contact.suspensionDirection.z * suspension.restLengthM };
+        authorSemiTrailingArmHardpoints(suspension,wheelCenter,index==2);
+    }
+    const auto semiTrailingResult=VehicleDefinitionCompiler::compile(semiTrailingSource);
+    VehicleDefinitionLoadSettings semiTrailingLoadSettings=loadSettings;
+    semiTrailingLoadSettings.vehicle.chassisBody=bodies.create(bodyDescription);
+    std::string semiTrailingLoadMessage;
+    const VehicleHandle semiTrailingVehicle=VehicleDefinitionLoader::create(
+        semiTrailingResult.definition,semiTrailingLoadSettings,bodies,vehicles,semiTrailingLoadMessage);
+    heritage::vehicles::SuspensionGeometryDescription semiTrailingReadback;
+    const bool semiTrailingRuntimeReady=semiTrailingResult.valid
+        && semiTrailingResult.currentSolverReady
+        && semiTrailingVehicle!=heritage::vehicles::InvalidVehicle
+        && vehicles.wheelSuspensionGeometry(semiTrailingVehicle,2,semiTrailingReadback)
+        && semiTrailingReadback.provider==heritage::vehicles::SuspensionProviderKind::SemiTrailingArmV1
+        && semiTrailingReadback.semiTrailingArm.authored;
+    VehicleDefinitionV2Source incompleteSemiTrailing=semiTrailingSource;
+    incompleteSemiTrailing.suspensions[2].hardpoints.pop_back();
+    const auto incompleteSemiTrailingResult=VehicleDefinitionCompiler::compile(incompleteSemiTrailing);
+
+    VehicleDefinitionV2Source twistBeamSource = macPhersonSource;
+    const auto rearCenter = [&](std::size_t index) {
+        const auto& contact=twistBeamSource.contactUnits[index];
+        const auto& suspension=twistBeamSource.suspensions[index];
+        return Vec3{contact.localMount.x+contact.suspensionDirection.x*suspension.restLengthM,
+            contact.localMount.y+contact.suspensionDirection.y*suspension.restLengthM,
+            contact.localMount.z+contact.suspensionDirection.z*suspension.restLengthM};
+    };
+    const Vec3 rearLeftCenter=rearCenter(2),rearRightCenter=rearCenter(3);
+    for(std::size_t index=2;index<4;++index)
+    {
+        auto& suspension=twistBeamSource.suspensions[index];
+        suspension.provider="twist_beam_v1";
+        suspension.twistBeamTorsionalStiffnessNmPerRad=3500.0f;
+        suspension.twistBeamTorsionalDampingNmsPerRad=180.0f;
+        authorTwistBeamHardpoints(suspension,rearLeftCenter,rearRightCenter);
+    }
+    const auto twistBeamResult=VehicleDefinitionCompiler::compile(twistBeamSource);
+    VehicleDefinitionLoadSettings twistBeamLoadSettings=loadSettings;
+    twistBeamLoadSettings.vehicle.chassisBody=bodies.create(bodyDescription);
+    std::string twistBeamLoadMessage;
+    const VehicleHandle twistBeamVehicle=VehicleDefinitionLoader::create(
+        twistBeamResult.definition,twistBeamLoadSettings,bodies,vehicles,twistBeamLoadMessage);
+    heritage::vehicles::SuspensionGeometryDescription twistBeamReadback;
+    heritage::vehicles::SuspensionModelDescription twistBeamModelReadback;
+    const bool twistBeamRuntimeReady=twistBeamResult.valid
+        && twistBeamResult.currentSolverReady
+        && twistBeamVehicle!=heritage::vehicles::InvalidVehicle
+        && vehicles.wheelSuspensionGeometry(twistBeamVehicle,2,twistBeamReadback)
+        && vehicles.wheelSuspensionModel(twistBeamVehicle,2,twistBeamModelReadback)
+        && twistBeamReadback.provider==heritage::vehicles::SuspensionProviderKind::TwistBeamV1
+        && twistBeamReadback.twistBeam.authored
+        && std::abs(twistBeamModelReadback.twistBeamTorsionalStiffnessNmPerRad-3500.0)<=0.001;
+    VehicleDefinitionV2Source incompleteTwistBeam=twistBeamSource;
+    incompleteTwistBeam.suspensions[2].hardpoints.pop_back();
+    const auto incompleteTwistBeamResult=VehicleDefinitionCompiler::compile(incompleteTwistBeam);
 
     heritage::vehicles::SuspensionModelDescription suspensionDescription;
     suspensionDescription.springRateNPerM = 10000.0f;
@@ -644,6 +1202,48 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         << " category_ignored=" << categoryOnlyResult.currentSolverReady
         << " future_suspension_ready="
         << futureSuspensionResult.currentSolverReady
+        << " double_wishbone_valid=" << doubleWishboneResult.valid
+        << " double_wishbone_solver_ready="
+        << doubleWishboneResult.currentSolverReady
+        << " double_wishbone_handle="
+        << (doubleWishboneVehicle != heritage::vehicles::InvalidVehicle)
+        << " double_wishbone_ready=" << doubleWishboneRuntimeReady
+        << " incomplete_double_wishbone_rejected="
+        << (!incompleteDoubleWishboneResult.valid)
+        << " pushrod_valid=" << pushrodResult.valid
+        << " pushrod_solver_ready=" << pushrodResult.currentSolverReady
+        << " pushrod_handle="
+        << (pushrodVehicle != heritage::vehicles::InvalidVehicle)
+        << " pushrod_ready=" << pushrodRuntimeReady
+        << " incomplete_pushrod_rejected="
+        << (!incompletePushrodResult.valid)
+        << " live_axle_valid=" << liveAxleResult.valid
+        << " live_axle_solver_ready=" << liveAxleResult.currentSolverReady
+        << " live_axle_handle="
+        << (liveAxleVehicle != heritage::vehicles::InvalidVehicle)
+        << " live_axle_ready=" << liveAxleRuntimeReady
+        << " incomplete_live_axle_rejected="
+        << (!incompleteLiveAxleResult.valid)
+        << " leaf_axle_valid=" << leafAxleResult.valid
+        << " leaf_axle_solver_ready=" << leafAxleResult.currentSolverReady
+        << " leaf_axle_handle="
+        << (leafAxleVehicle != heritage::vehicles::InvalidVehicle)
+        << " leaf_axle_ready=" << leafAxleRuntimeReady
+        << " incomplete_leaf_axle_rejected="
+        << (!incompleteLeafAxleResult.valid)
+        << " motorcycle_suspension_valid=" << motorcycleSuspensionResult.valid
+        << " motorcycle_suspension_ready=" << motorcycleSuspensionRuntimeReady
+        << " incomplete_motorcycle_fork_rejected="
+        << (!incompleteMotorcycleForkResult.valid)
+        << " incomplete_motorcycle_rear_rejected="
+        << (!incompleteMotorcycleRearResult.valid)
+        << " kart_valid=" << kartResult.valid
+        << " kart_solver_ready=" << kartResult.currentSolverReady
+        << " kart_handle=" << (kartVehicle != heritage::vehicles::InvalidVehicle)
+        << " kart_ready=" << kartRuntimeReady
+        << " incomplete_kart_rejected=" << (!incompleteKartResult.valid)
+        << " kart_fake_travel_rejected=" << (!kartWithFakeTravelResult.valid)
+        << " kart_missing_flex_rejected=" << (!kartWithoutFlexResult.valid)
         << " macpherson_valid=" << macPhersonResult.valid
         << " macpherson_solver_ready=" << macPhersonResult.currentSolverReady
         << " macpherson_handle=" << (macPhersonVehicle != heritage::vehicles::InvalidVehicle)
@@ -659,6 +1259,12 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         << " trailing_arm_ready=" << trailingArmRuntimeReady
         << " incomplete_trailing_arm_rejected="
         << (!incompleteTrailingArmResult.valid)
+        << " semi_trailing_valid=" << semiTrailingResult.valid
+        << " semi_trailing_ready=" << semiTrailingRuntimeReady
+        << " incomplete_semi_trailing_rejected=" << (!incompleteSemiTrailingResult.valid)
+        << " twist_beam_valid=" << twistBeamResult.valid
+        << " twist_beam_ready=" << twistBeamRuntimeReady
+        << " incomplete_twist_beam_rejected=" << (!incompleteTwistBeamResult.valid)
         << " motion_ratio_force_n=" << bumpOutput.normalForceN
         << " nonlinear_force_n=" << nonlinearBump.normalForceN
         << " damper_power_w=" << nonlinearBump.damperDissipationW
@@ -693,8 +1299,41 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && categoryOnlyResult.currentSolverReady
         && futureSuspensionResult.valid
         && !futureSuspensionResult.currentSolverReady
-        && futureSuspensionResult.issueSummary().find("double_wishbone_v1")
+        && futureSuspensionResult.issueSummary().find("pullrod_double_wishbone_v1")
             != std::string::npos
+        && doubleWishboneRuntimeReady
+        && !incompleteDoubleWishboneResult.valid
+        && incompleteDoubleWishboneResult.issueSummary().find(
+            "eleven named hardpoints") != std::string::npos
+        && pushrodRuntimeReady
+        && !incompletePushrodResult.valid
+        && incompletePushrodResult.issueSummary().find(
+            "seventeen named hardpoints") != std::string::npos
+        && liveAxleRuntimeReady
+        && !incompleteLiveAxleResult.valid
+        && incompleteLiveAxleResult.issueSummary().find(
+            "seventeen named hardpoints") != std::string::npos
+        && leafAxleRuntimeReady
+        && !incompleteLeafAxleResult.valid
+        && incompleteLeafAxleResult.issueSummary().find(
+            "plus eight leaf/shackle points") != std::string::npos
+        && motorcycleSuspensionRuntimeReady
+        && !incompleteMotorcycleForkResult.valid
+        && incompleteMotorcycleForkResult.issueSummary().find(
+            "steering_stem_upper") != std::string::npos
+        && !incompleteMotorcycleRearResult.valid
+        && incompleteMotorcycleRearResult.issueSummary().find(
+            "all ten named") != std::string::npos
+        && kartRuntimeReady
+        && !incompleteKartResult.valid
+        && incompleteKartResult.issueSummary().find(
+            "complete ten-point") != std::string::npos
+        && !kartWithFakeTravelResult.valid
+        && kartWithFakeTravelResult.issueSummary().find(
+            "zero bump/droop") != std::string::npos
+        && !kartWithoutFlexResult.valid
+        && kartWithoutFlexResult.issueSummary().find(
+            "chassis_torsional_mode_v1") != std::string::npos
         && macPhersonRuntimeReady
         && !incompleteMacPhersonResult.valid
         && incompleteMacPhersonResult.issueSummary().find(
@@ -703,6 +1342,12 @@ bool vehicleDefinitionCompilerAndLoaderWork()
         && !incompleteTrailingArmResult.valid
         && incompleteTrailingArmResult.issueSummary().find(
             "five named hardpoints") != std::string::npos
+        && semiTrailingRuntimeReady
+        && !incompleteSemiTrailingResult.valid
+        && incompleteSemiTrailingResult.issueSummary().find("seven named") != std::string::npos
+        && twistBeamRuntimeReady
+        && !incompleteTwistBeamResult.valid
+        && incompleteTwistBeamResult.issueSummary().find("two beam attachment") != std::string::npos
         && suspensionForcesWorked
         && nonlinearSuspensionWorked
         && liveSuspensionRoundTrip

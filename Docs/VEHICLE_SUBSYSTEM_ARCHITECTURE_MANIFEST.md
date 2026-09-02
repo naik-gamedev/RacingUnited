@@ -15,7 +15,7 @@ The common vehicle core remains arbitrary-wheel-count. Topology-specific couplin
 | Core | Vehicle assembly; simulation scheduling | Extract when `VehicleSystem` orchestration has a stable independent responsibility and regression coverage |
 | Steering | Steering system; Ackermann geometry; power steering | Implement as reusable mechanisms, not four-wheel assumptions |
 | Suspension common | Spring/damper; bump stop; heave spring | Create when the current suspension model needs an independently testable mechanism owner |
-| Suspension geometry | Double wishbone; semi-trailing arm; multi-link | Geometry solver owns kinematics only; force elements remain reusable |
+| Suspension geometry | Semi-trailing arm remains planned; Double wishbone and multi-link are now native | Geometry solver owns kinematics only; force elements remain reusable |
 | Axles | Solid axle; torsion beam | Topology/constraint-specific kinematics only |
 | Springs | Coil; leaf; air; hydropneumatic | Constitutive element models with common suspension interfaces |
 | Motorcycle suspension | Telescopic fork; Telelever; rear swingarm; rear linkage | Native physics, shared tire/contact interfaces |

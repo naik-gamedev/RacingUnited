@@ -40,7 +40,9 @@ function EnsureSuspensionHardpointEstimates(forceRebuild)
         local existing = assembly.hardpointsByCorner
             and assembly.hardpointsByCorner[cornerName]
             and assembly.hardpointsByCorner[cornerName][id]
-        if SuspensionAuthoringHardpointProvenance(existing) == "estimated" then
+        local provenance = SuspensionAuthoringHardpointProvenance(existing)
+        if provenance == "estimated"
+            or provenance == "reference_constrained_estimate" then
             assembly.hardpointsByCorner[cornerName][id] = nil
         end
     end
@@ -48,15 +50,22 @@ function EnsureSuspensionHardpointEstimates(forceRebuild)
     local function insertEstimate(assembly, wheel, estimate)
         local count = 0
         local estimatedPoints = estimate.hardpoints or {}
+        local allowsReferenceConstrainedPhysics =
+            assembly.minimumPhysicsProvenance == "reference_constrained_estimate"
+        local provenance = allowsReferenceConstrainedPhysics
+            and "reference_constrained_estimate" or "estimated"
+        local profile = allowsReferenceConstrainedPhysics
+            and tostring(assembly.referenceConstrainedEstimateProfile)
+            or tostring(estimate.profile_id or "estimated_suspension_v1")
         for _, id in ipairs(assembly.requiredHardpoints or {}) do
             local point = estimatedPoints[id]
             if point ~= nil then
                 clearEstimatedPoint(assembly, wheel.name, id)
                 local record = SuspensionAuthoringMakeHardpoint(
                     { point.x, point.y, point.z },
-                    "estimated",
+                    provenance,
                     tonumber(estimate.confidence) or 0.30,
-                    tostring(estimate.profile_id or "estimated_suspension_v1"))
+                    profile)
                 if SuspensionAuthoringSetHardpoint(
                     assembly, wheel.name, id, record, forceRebuild == true) then
                     count = count + 1
@@ -96,10 +105,13 @@ function EnsureSuspensionHardpointEstimates(forceRebuild)
     end
 
     vehicleSuspensionAuthoring.estimateProfile =
-        "estimated_macpherson_road_v1 + estimated_trailing_arm_torsion_bar_road_v1"
+        tostring(front.referenceConstrainedEstimateProfile
+            or "estimated_macpherson_road_v1") .. " + " ..
+        tostring(rear.referenceConstrainedEstimateProfile
+            or "estimated_trailing_arm_torsion_bar_road_v1")
     vehicleSuspensionAuthoring.estimatedCount = inserted
     vehicleSuspensionAuthoring.message = string.format(
-        "Assisted authoring supplied %d front + %d rear low-confidence hardpoints; estimates are authoring-only until stronger evidence exists",
+        "Assisted authoring supplied %d front + %d rear low-confidence hardpoints; this vehicle explicitly accepts reference-constrained estimates until authored or measured points replace them",
         frontInserted, rearInserted)
     return true
 end

@@ -2,6 +2,7 @@
 #include "VehicleSystemInternal.hpp"
 #include "Tires/TireSlipDynamics.hpp"
 #include "Tires/TireContactPatch.hpp"
+#include "Suspension/Springs/LeafSpring/LeafSpringAxleDynamics.hpp"
 #include "../Physics/Surfaces/SurfaceWorld.hpp"
 
 #include <algorithm>
@@ -709,6 +710,85 @@ void VehicleSystem::simulateVehicleSubstep(
     vehicle.tractionControlActiveWheelCount = 0;
     updateChassisFlexSubstep(vehicle, substepDeltaTime);
     prepareAntiRollBarForces(vehicle);
+    // SUSP09: leaf-sprung live axles carry one bounded axle-housing wind-up
+    // degree of freedom per rigid pair. Ground longitudinal reaction torque
+    // drives it; a reusable torsional spring/damper owner advances the state
+    // once before the wheel loop and mirrors it onto both paired wheels.
+    for (std::size_t leftIndex = 0; leftIndex < vehicle.wheels.size(); ++leftIndex)
+    {
+        auto& leftWheel = vehicle.wheels[leftIndex];
+        if (leftWheel.description.suspensionProvider
+            != SuspensionProviderKind::LeafSpringLiveAxleV1)
+            continue;
+        std::size_t rightIndex = vehicle.wheels.size();
+        for (std::size_t candidateIndex = leftIndex + 1;
+            candidateIndex < vehicle.wheels.size(); ++candidateIndex)
+        {
+            const auto& candidate = vehicle.wheels[candidateIndex];
+            if (candidate.description.suspensionProvider
+                    != SuspensionProviderKind::LeafSpringLiveAxleV1)
+                continue;
+            const bool sameAxle = !leftWheel.description.suspensionAxleId.empty()
+                && candidate.description.suspensionAxleId
+                    == leftWheel.description.suspensionAxleId;
+            const bool fallbackPair = leftWheel.description.suspensionAxleId.empty()
+                && std::abs(candidate.description.localMount.z
+                    - leftWheel.description.localMount.z) < 0.08f
+                && candidate.description.localMount.x
+                    * leftWheel.description.localMount.x <= 0.0f;
+            if (sameAxle || fallbackPair)
+            {
+                rightIndex = candidateIndex;
+                break;
+            }
+        }
+        if (rightIndex >= vehicle.wheels.size())
+            continue;
+        auto& rightWheel = vehicle.wheels[rightIndex];
+        const VehicleScalar leftRadius = std::max(
+            leftWheel.state.tireEffectiveRollingRadius,
+            static_cast<VehicleScalar>(leftWheel.description.radius));
+        const VehicleScalar rightRadius = std::max(
+            rightWheel.state.tireEffectiveRollingRadius,
+            static_cast<VehicleScalar>(rightWheel.description.radius));
+        const VehicleScalar reactionTorque = -(
+            leftWheel.state.longitudinalForce * leftRadius
+            + rightWheel.state.longitudinalForce * rightRadius);
+        const LeafSpringAxleWrapDescription wrapDescription{
+            VehicleScalar{0.5} * (
+                leftWheel.description.leafAxleWrapStiffnessNmPerRad
+                + rightWheel.description.leafAxleWrapStiffnessNmPerRad),
+            VehicleScalar{0.5} * (
+                leftWheel.description.leafAxleWrapDampingNmsPerRad
+                + rightWheel.description.leafAxleWrapDampingNmsPerRad),
+            VehicleScalar{0.5} * (
+                leftWheel.description.leafAxleWrapInertiaKgM2
+                + rightWheel.description.leafAxleWrapInertiaKgM2),
+            VehicleScalar{0.22} };
+        const LeafSpringAxleWrapState wrapState{
+            VehicleScalar{0.5} * (
+                leftWheel.state.leafAxleWrapAngleRadians
+                + rightWheel.state.leafAxleWrapAngleRadians),
+            VehicleScalar{0.5} * (
+                leftWheel.state.leafAxleWrapRateRadiansPerSecond
+                + rightWheel.state.leafAxleWrapRateRadiansPerSecond) };
+        const LeafSpringAxleWrapState nextWrap = advanceLeafSpringAxleWrap(
+            wrapDescription,
+            wrapState,
+            { reactionTorque, static_cast<VehicleScalar>(substepDeltaTime) });
+        leftWheel.state.leafAxleWrapAngleRadians = nextWrap.angleRadians;
+        rightWheel.state.leafAxleWrapAngleRadians = nextWrap.angleRadians;
+        leftWheel.state.leafAxleWrapRateRadiansPerSecond = nextWrap.rateRadiansPerSecond;
+        rightWheel.state.leafAxleWrapRateRadiansPerSecond = nextWrap.rateRadiansPerSecond;
+    }
+
+    // SUSP08: snapshot all corner travel before any wheel is advanced. Live
+    // axles consume both sides from this same 1 kHz instant, preventing left-
+    // versus-right iteration order from becoming an artificial axle input.
+    vehicle.suspensionCompressionScratch.resize(vehicle.wheels.size());
+    for (std::size_t index = 0; index < vehicle.wheels.size(); ++index)
+        vehicle.suspensionCompressionScratch[index] =
+            vehicle.wheels[index].state.compression;
     std::size_t groundedCount = 0;
     for (std::size_t wheelIndex = 0;
         wheelIndex < vehicle.wheels.size();

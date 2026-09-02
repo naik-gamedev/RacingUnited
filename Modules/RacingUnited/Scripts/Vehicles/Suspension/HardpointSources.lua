@@ -65,9 +65,10 @@ local function SuspensionAuthoringHardpointConfidence(value)
 end
 
 local function SuspensionAuthoringSourcePriority(provenance)
-    if provenance == "measured" then return 4 end
-    if provenance == "asset_authored" then return 3 end
-    if provenance == "legacy_authored" then return 2 end
+    if provenance == "measured" then return 5 end
+    if provenance == "asset_authored" then return 4 end
+    if provenance == "legacy_authored" then return 3 end
+    if provenance == "reference_constrained_estimate" then return 2 end
     if provenance == "estimated" then return 1 end
     return 0
 end
@@ -127,16 +128,13 @@ local function SuspensionAuthoringPhysicsHardpointsReady(assembly, wheel)
 
     local hardpoints = assembly.hardpointsByCorner
         and assembly.hardpointsByCorner[wheel.name] or {}
-    -- TIRE45D: estimated coordinates are useful creator scaffolding, but they
-    -- are explicitly too weak to become vehicle-force authority.  The current
-    -- Peugeot GLB contains no suspension hardpoints, and the deterministic
-    -- MacPherson estimate was creating ~1.6 deg camber and ~1.0 deg bump toe at
-    -- ordinary loaded travel.  That false alignment generated real MF6.2
-    -- lateral force / aligning moment and therefore real carcass ring yaw while
-    -- the car merely rolled forward.  Require at least legacy-authored evidence
-    -- for every required point before a hardpoint provider may drive physics.
+    -- Generic estimates remain creator scaffolding and cannot drive physics.
+    -- A vehicle may explicitly opt into a stronger reference-constrained
+    -- estimate after its architecture, dimensions and alignment are sourced.
+    -- This is still weaker than authored/measured hardpoints and is replaced by
+    -- either automatically through the normal source-priority contract.
     local minimumPhysicsPriority = SuspensionAuthoringSourcePriority(
-        "legacy_authored")
+        assembly.minimumPhysicsProvenance or "legacy_authored")
     for _, id in ipairs(required) do
         local value = hardpoints[id]
         if SuspensionAuthoringHardpointPosition(value) == nil then

@@ -144,6 +144,9 @@ function RefreshVehicleAssetMetadata()
     local path = string.lower(tostring(vehicleVisual.assetPath or ""))
     if not string.match(path, "%.glb$") then
         vehicleAssetMetadataMessage = "Current visual is not GLB; semantic Custom Properties are available on GLB assets."
+        if VehicleGeometryImportAssetGeometry ~= nil then
+            VehicleGeometryImportAssetGeometry(nil)
+        end
         if RefreshEmbeddedVehicleWheelBinding ~= nil then
             RefreshEmbeddedVehicleWheelBinding()
         end
@@ -153,6 +156,9 @@ function RefreshVehicleAssetMetadata()
     local metadata, errorMessage = Vehicle.InspectAssetMetadata(vehicleVisual.assetPath)
     if metadata == nil then
         vehicleAssetMetadataMessage = "METADATA ERROR: " .. tostring(errorMessage)
+        if VehicleGeometryImportAssetGeometry ~= nil then
+            VehicleGeometryImportAssetGeometry(nil)
+        end
         if RefreshEmbeddedVehicleWheelBinding ~= nil then
             RefreshEmbeddedVehicleWheelBinding()
         end
@@ -170,6 +176,12 @@ function RefreshVehicleAssetMetadata()
     end
     if VehicleFitmentImportReferenceFromMetadata ~= nil then
         VehicleFitmentImportReferenceFromMetadata(metadata)
+    end
+    if RideHeightImportAssetGeometry ~= nil then
+        RideHeightImportAssetGeometry(metadata)
+    end
+    if VehicleGeometryImportAssetGeometry ~= nil then
+        VehicleGeometryImportAssetGeometry(metadata)
     end
     if RefreshEmbeddedVehicleWheelBinding ~= nil then
         RefreshEmbeddedVehicleWheelBinding()

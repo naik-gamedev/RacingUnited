@@ -5,8 +5,8 @@
 namespace heritage::graphics {
 
 // Framebuffer used by the current post-processing pipeline.
-// Supports either a texture-backed single-sample color target or a
-// multisampled renderbuffer color target.
+// Color is always texture-backed. Multisampled scenes can therefore be read
+// directly by post effects instead of first resolving into a throwaway copy.
 class PostFramebuffer
 {
 public:
@@ -14,6 +14,7 @@ public:
     GLuint tex = 0;
     GLuint colorRbo = 0;
     GLuint rbo = 0;
+    GLuint depthStencilTex = 0;
     int w = 0;
     int h = 0;
 

@@ -3,6 +3,7 @@
 #include "MagicFormula62.hpp"
 #include "../MotorcycleTireProfile.hpp"
 #include "../TireThermal.hpp"
+#include "../TireFailure.hpp"
 #include "../TireWear.hpp"
 #include "../TireSurfaceInteraction.hpp"
 #include "../TireWetSurfaceInteraction.hpp"
@@ -26,6 +27,8 @@ struct TirePropertyFileData
     MotorcycleTireProfileDescription motorcycleProfile;
     TireThermalDescription thermal;
     bool hasHeritageThermalModel = false;
+    TireFailureDescription failure;
+    bool hasHeritageDamageModel = false;
     TireWearDescription wear;
     bool hasHeritageTreadState = false;
     TireContaminationDescription contamination;
@@ -69,9 +72,9 @@ struct TirePropertyFileData
     VehicleScalar qV1 = 0.0;
     VehicleScalar qV2 = 0.0;
 
-    // Finite contact-patch property-file vocabulary. TIRE04 activates Q_RA1/2
-    // for contact length. Q_RB1/2 are preserved for the later SWIFT contact/
-    // enveloping provider until their complete public equation is integrated.
+    // Finite contact-patch property-file vocabulary. Q_RA1/2 drive the
+    // identified contact-length relation; Q_RB1/2 are retained as bounded
+    // geometry metadata where a source file provides them.
     bool hasContactPatchLengthModel = false;
     VehicleScalar qRa1 = 0.0;
     VehicleScalar qRa2 = 0.0;
@@ -113,9 +116,8 @@ struct TirePropertyFileData
     VehicleScalar rigidRingLowSpeedDampingScale = 1.0;
     VehicleScalar rigidRingLowSpeedThresholdMps = 1.0;
 
-    // Raw transient coefficients are preserved for the later transient/Swift
-    // milestones even though TIRE02 does not yet claim the complete 6.2
-    // relaxation-length equations.
+    // Public MF6.2 relaxation-length coefficients consumed by the active
+    // longitudinal/lateral transient-slip state.
     VehicleScalar pTx1 = 0.0;
     VehicleScalar pTx2 = 0.0;
     VehicleScalar pTx3 = 0.0;

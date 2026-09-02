@@ -2,8 +2,15 @@
 #include "LuaVehicleBindingHandlers.hpp"
 #include "../LuaBindingInternals.hpp"
 #include "../../../../Vehicles/Suspension/Authoring/MacPhersonHardpointEstimator.hpp"
+#include "../../../../Vehicles/Suspension/Geometry/DoubleWishbone/DoubleWishboneKinematics.hpp"
+#include "../../../../Vehicles/Suspension/Geometry/PushrodDoubleWishbone/PushrodDoubleWishboneKinematics.hpp"
+#include "../../../../Vehicles/Suspension/Geometry/Kart/KartChassisKinematics.hpp"
+#include "../../../../Vehicles/Suspension/Geometry/MultiLink/MultiLinkKinematics.hpp"
+#include "../../../../Vehicles/Suspension/Geometry/SemiTrailingArm/SemiTrailingArmKinematics.hpp"
+#include "../../../../Vehicles/Suspension/Geometry/TwistBeam/TwistBeamKinematics.hpp"
 #include "../../../../Vehicles/Suspension/Authoring/TrailingArmHardpointEstimator.hpp"
 #include "../../../../Vehicles/Dynamics/ChassisFlex/ChassisFlexEstimator.hpp"
+#include "../../../../Vehicles/SuspensionModel.hpp"
 
 #include <algorithm>
 #include "../../../../Physics/PhysicsWorld.hpp"
@@ -119,6 +126,215 @@ bool readMacPhersonHardpoints(
     return complete && heritage::vehicles::validMacPhersonHardpoints(value);
 }
 
+
+void pushDoubleWishboneHardpoints(
+    const LuaApi& api,
+    lua_State* state,
+    const heritage::vehicles::DoubleWishboneHardpoints& value)
+{
+    api.lua_createtable(state, 0, 11);
+    const auto setPoint = [&](const char* id, const heritage::math::Vec3& point) {
+        pushNamedVector3(api, state, point);
+        api.lua_setfield(state, -2, id);
+    };
+    setPoint("upper_arm_inner_front", value.upperArmInnerFront);
+    setPoint("upper_arm_inner_rear", value.upperArmInnerRear);
+    setPoint("upper_ball_joint", value.upperBallJoint);
+    setPoint("lower_arm_inner_front", value.lowerArmInnerFront);
+    setPoint("lower_arm_inner_rear", value.lowerArmInnerRear);
+    setPoint("lower_ball_joint", value.lowerBallJoint);
+    setPoint("tie_rod_inner", value.tieRodInner);
+    setPoint("tie_rod_outer", value.tieRodOuter);
+    setPoint("wheel_center", value.wheelCenter);
+    setPoint("damper_upper_mount", value.damperUpperMount);
+    setPoint("damper_lower_mount", value.damperLowerMount);
+}
+
+bool readDoubleWishboneHardpoints(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    heritage::vehicles::DoubleWishboneHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readNamedVector3(api, state, tableIndex, "upper_arm_inner_front", value.upperArmInnerFront)
+        && readNamedVector3(api, state, tableIndex, "upper_arm_inner_rear", value.upperArmInnerRear)
+        && readNamedVector3(api, state, tableIndex, "upper_ball_joint", value.upperBallJoint)
+        && readNamedVector3(api, state, tableIndex, "lower_arm_inner_front", value.lowerArmInnerFront)
+        && readNamedVector3(api, state, tableIndex, "lower_arm_inner_rear", value.lowerArmInnerRear)
+        && readNamedVector3(api, state, tableIndex, "lower_ball_joint", value.lowerBallJoint)
+        && readNamedVector3(api, state, tableIndex, "tie_rod_inner", value.tieRodInner)
+        && readNamedVector3(api, state, tableIndex, "tie_rod_outer", value.tieRodOuter)
+        && readNamedVector3(api, state, tableIndex, "wheel_center", value.wheelCenter)
+        && readNamedVector3(api, state, tableIndex, "damper_upper_mount", value.damperUpperMount)
+        && readNamedVector3(api, state, tableIndex, "damper_lower_mount", value.damperLowerMount);
+    value.authored = complete;
+    return complete && heritage::vehicles::validDoubleWishboneHardpoints(value);
+}
+bool readPushrodDoubleWishboneHardpoints(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    heritage::vehicles::PushrodDoubleWishboneHardpoints& value)
+{
+    value = {};
+    auto& wishbone = value.wishbone;
+    const bool complete =
+        readNamedVector3(api, state, tableIndex, "upper_arm_inner_front", wishbone.upperArmInnerFront)
+        && readNamedVector3(api, state, tableIndex, "upper_arm_inner_rear", wishbone.upperArmInnerRear)
+        && readNamedVector3(api, state, tableIndex, "upper_ball_joint", wishbone.upperBallJoint)
+        && readNamedVector3(api, state, tableIndex, "lower_arm_inner_front", wishbone.lowerArmInnerFront)
+        && readNamedVector3(api, state, tableIndex, "lower_arm_inner_rear", wishbone.lowerArmInnerRear)
+        && readNamedVector3(api, state, tableIndex, "lower_ball_joint", wishbone.lowerBallJoint)
+        && readNamedVector3(api, state, tableIndex, "tie_rod_inner", wishbone.tieRodInner)
+        && readNamedVector3(api, state, tableIndex, "tie_rod_outer", wishbone.tieRodOuter)
+        && readNamedVector3(api, state, tableIndex, "wheel_center", wishbone.wheelCenter)
+        && readNamedVector3(api, state, tableIndex, "pushrod_lower_arm_mount", value.pushrodLowerArmMount)
+        && readNamedVector3(api, state, tableIndex, "rocker_pivot_front", value.rockerPivotFront)
+        && readNamedVector3(api, state, tableIndex, "rocker_pivot_rear", value.rockerPivotRear)
+        && readNamedVector3(api, state, tableIndex, "rocker_pushrod_mount", value.rockerPushrodMount)
+        && readNamedVector3(api, state, tableIndex, "spring_chassis_mount", value.springChassisMount)
+        && readNamedVector3(api, state, tableIndex, "spring_rocker_mount", value.springRockerMount)
+        && readNamedVector3(api, state, tableIndex, "damper_chassis_mount", value.damperChassisMount)
+        && readNamedVector3(api, state, tableIndex, "damper_rocker_mount", value.damperRockerMount);
+    wishbone.authored = complete;
+    value.authored = complete;
+    return complete
+        && heritage::vehicles::validPushrodDoubleWishboneHardpoints(value);
+}
+
+bool readLiveAxleHardpoints(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    heritage::vehicles::LiveAxleHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readNamedVector3(api, state, tableIndex, "axle_center", value.axleCenter)
+        && readNamedVector3(api, state, tableIndex, "left_wheel_center", value.leftWheelCenter)
+        && readNamedVector3(api, state, tableIndex, "right_wheel_center", value.rightWheelCenter)
+        && readNamedVector3(api, state, tableIndex, "panhard_chassis_mount", value.panhardChassisMount)
+        && readNamedVector3(api, state, tableIndex, "panhard_axle_mount", value.panhardAxleMount)
+        && readNamedVector3(api, state, tableIndex, "left_trailing_chassis_mount", value.leftTrailingChassisMount)
+        && readNamedVector3(api, state, tableIndex, "left_trailing_axle_mount", value.leftTrailingAxleMount)
+        && readNamedVector3(api, state, tableIndex, "right_trailing_chassis_mount", value.rightTrailingChassisMount)
+        && readNamedVector3(api, state, tableIndex, "right_trailing_axle_mount", value.rightTrailingAxleMount)
+        && readNamedVector3(api, state, tableIndex, "left_spring_chassis_mount", value.leftSpringChassisMount)
+        && readNamedVector3(api, state, tableIndex, "left_spring_axle_mount", value.leftSpringAxleMount)
+        && readNamedVector3(api, state, tableIndex, "right_spring_chassis_mount", value.rightSpringChassisMount)
+        && readNamedVector3(api, state, tableIndex, "right_spring_axle_mount", value.rightSpringAxleMount)
+        && readNamedVector3(api, state, tableIndex, "left_damper_chassis_mount", value.leftDamperChassisMount)
+        && readNamedVector3(api, state, tableIndex, "left_damper_axle_mount", value.leftDamperAxleMount)
+        && readNamedVector3(api, state, tableIndex, "right_damper_chassis_mount", value.rightDamperChassisMount)
+        && readNamedVector3(api, state, tableIndex, "right_damper_axle_mount", value.rightDamperAxleMount);
+    value.authored = complete;
+    return complete && heritage::vehicles::validLiveAxleHardpoints(value);
+}
+
+bool readLeafSpringLiveAxleHardpoints(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    heritage::vehicles::LeafSpringLiveAxleHardpoints& value)
+{
+    value = {};
+    const bool complete = readLiveAxleHardpoints(api, state, tableIndex, value.axle)
+        && readNamedVector3(api, state, tableIndex, "left_leaf_front_eye", value.leftLeafFrontEye)
+        && readNamedVector3(api, state, tableIndex, "left_leaf_rear_shackle_pivot", value.leftLeafRearShacklePivot)
+        && readNamedVector3(api, state, tableIndex, "left_leaf_rear_eye", value.leftLeafRearEye)
+        && readNamedVector3(api, state, tableIndex, "left_leaf_axle_clamp", value.leftLeafAxleClamp)
+        && readNamedVector3(api, state, tableIndex, "right_leaf_front_eye", value.rightLeafFrontEye)
+        && readNamedVector3(api, state, tableIndex, "right_leaf_rear_shackle_pivot", value.rightLeafRearShacklePivot)
+        && readNamedVector3(api, state, tableIndex, "right_leaf_rear_eye", value.rightLeafRearEye)
+        && readNamedVector3(api, state, tableIndex, "right_leaf_axle_clamp", value.rightLeafAxleClamp);
+    value.authored = complete;
+    return complete && heritage::vehicles::validLeafSpringLiveAxleHardpoints(value);
+}
+
+bool readMultiLinkHardpoints(
+    const LuaApi& api, lua_State* state, int tableIndex,
+    heritage::vehicles::MultiLinkHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readNamedVector3(api,state,tableIndex,"link1_inner",value.link1Inner)
+        && readNamedVector3(api,state,tableIndex,"link1_outer",value.link1Outer)
+        && readNamedVector3(api,state,tableIndex,"link2_inner",value.link2Inner)
+        && readNamedVector3(api,state,tableIndex,"link2_outer",value.link2Outer)
+        && readNamedVector3(api,state,tableIndex,"link3_inner",value.link3Inner)
+        && readNamedVector3(api,state,tableIndex,"link3_outer",value.link3Outer)
+        && readNamedVector3(api,state,tableIndex,"link4_inner",value.link4Inner)
+        && readNamedVector3(api,state,tableIndex,"link4_outer",value.link4Outer)
+        && readNamedVector3(api,state,tableIndex,"toe_link_inner",value.toeLinkInner)
+        && readNamedVector3(api,state,tableIndex,"toe_link_outer",value.toeLinkOuter)
+        && readNamedVector3(api,state,tableIndex,"wheel_center",value.wheelCenter)
+        && readNamedVector3(api,state,tableIndex,"spring_upper_mount",value.springUpperMount)
+        && readNamedVector3(api,state,tableIndex,"spring_lower_mount",value.springLowerMount)
+        && readNamedVector3(api,state,tableIndex,"damper_upper_mount",value.damperUpperMount)
+        && readNamedVector3(api,state,tableIndex,"damper_lower_mount",value.damperLowerMount)
+        && readNamedVector3(api,state,tableIndex,"steering_rack_axis_start",value.steeringRackAxisStart)
+        && readNamedVector3(api,state,tableIndex,"steering_rack_axis_end",value.steeringRackAxisEnd);
+    value.authored = complete;
+    return complete && heritage::vehicles::validMultiLinkHardpoints(value);
+}
+
+bool readSemiTrailingArmHardpoints(
+    const LuaApi& api, lua_State* state, int tableIndex,
+    heritage::vehicles::SemiTrailingArmHardpoints& value,
+    const std::string& prefix = {})
+{
+    value = {};
+    const auto field = [&](const char* suffix) { return prefix + suffix; };
+    const bool complete =
+        readNamedVector3(api,state,tableIndex,field("arm_pivot_inner").c_str(),value.armPivotInner)
+        && readNamedVector3(api,state,tableIndex,field("arm_pivot_outer").c_str(),value.armPivotOuter)
+        && readNamedVector3(api,state,tableIndex,field("wheel_center").c_str(),value.wheelCenter)
+        && readNamedVector3(api,state,tableIndex,field("spring_upper_mount").c_str(),value.springUpperMount)
+        && readNamedVector3(api,state,tableIndex,field("spring_lower_mount").c_str(),value.springLowerMount)
+        && readNamedVector3(api,state,tableIndex,field("damper_upper_mount").c_str(),value.damperUpperMount)
+        && readNamedVector3(api,state,tableIndex,field("damper_lower_mount").c_str(),value.damperLowerMount);
+    value.authored = complete;
+    return complete && heritage::vehicles::validSemiTrailingArmHardpoints(value);
+}
+
+bool readTwistBeamHardpoints(
+    const LuaApi& api, lua_State* state, int tableIndex,
+    heritage::vehicles::TwistBeamHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readSemiTrailingArmHardpoints(api,state,tableIndex,value.leftArm,"left_")
+        && readSemiTrailingArmHardpoints(api,state,tableIndex,value.rightArm,"right_")
+        && readNamedVector3(api,state,tableIndex,"beam_left_attachment",value.beamLeftAttachment)
+        && readNamedVector3(api,state,tableIndex,"beam_right_attachment",value.beamRightAttachment);
+    value.authored = complete;
+    return complete && heritage::vehicles::validTwistBeamHardpoints(value);
+}
+
+bool readKartChassisHardpoints(
+    const LuaApi& api,
+    lua_State* state,
+    int tableIndex,
+    heritage::vehicles::KartChassisHardpoints& value)
+{
+    value = {};
+    const bool complete =
+        readNamedVector3(api, state, tableIndex, "front_left_kingpin_upper", value.frontLeftKingpinUpper)
+        && readNamedVector3(api, state, tableIndex, "front_left_kingpin_lower", value.frontLeftKingpinLower)
+        && readNamedVector3(api, state, tableIndex, "front_left_wheel_center", value.frontLeftWheelCenter)
+        && readNamedVector3(api, state, tableIndex, "front_right_kingpin_upper", value.frontRightKingpinUpper)
+        && readNamedVector3(api, state, tableIndex, "front_right_kingpin_lower", value.frontRightKingpinLower)
+        && readNamedVector3(api, state, tableIndex, "front_right_wheel_center", value.frontRightWheelCenter)
+        && readNamedVector3(api, state, tableIndex, "rear_axle_bearing_left", value.rearAxleBearingLeft)
+        && readNamedVector3(api, state, tableIndex, "rear_axle_bearing_right", value.rearAxleBearingRight)
+        && readNamedVector3(api, state, tableIndex, "rear_left_wheel_center", value.rearLeftWheelCenter)
+        && readNamedVector3(api, state, tableIndex, "rear_right_wheel_center", value.rearRightWheelCenter);
+    value.authored = complete;
+    return complete && heritage::vehicles::validKartChassisHardpoints(value);
+}
+
 void pushTrailingArmHardpoints(
     const LuaApi& api,
     lua_State* state,
@@ -229,6 +445,72 @@ int LuaVehicleBindingHandlers::luaVehicleGetWheelSuspensionModel(lua_State* stat
     runtime->m_api.lua_pushnumber(state, value.motionRatio);
     runtime->m_api.lua_pushnumber(state, value.maximumForceN);
     return 17;
+}
+
+int LuaVehicleBindingHandlers::luaVehicleSolveStaticRideHeight(lua_State* state)
+{
+    LuaModuleRuntime* runtime = LuaModuleRuntime::runtimeFrom(state);
+    if (!runtime)
+        return 0;
+
+    heritage::vehicles::StaticRideHeightInput input;
+    const std::string providerId = LuaModuleRuntime::stringArgument(
+        *runtime, state, 1);
+    if (!heritage::vehicles::parseSuspensionProvider(
+            providerId, input.provider))
+    {
+        runtime->m_api.lua_pushnil(state);
+        const std::string error = "unknown suspension provider: " + providerId;
+        runtime->m_api.lua_pushlstring(state, error.c_str(), error.size());
+        return 2;
+    }
+    input.supportedLoadN = LuaModuleRuntime::numberArgument(
+        *runtime, state, 2, 0.0);
+    input.targetBodyOffsetM = LuaModuleRuntime::numberArgument(
+        *runtime, state, 3, 0.0);
+    input.mountHeightFromAuthoredGroundM = LuaModuleRuntime::numberArgument(
+        *runtime, state, 4, 0.0);
+    input.unloadedTireRadiusM = LuaModuleRuntime::numberArgument(
+        *runtime, state, 5, 0.30);
+    input.suspensionRestLengthM = LuaModuleRuntime::numberArgument(
+        *runtime, state, 6, 0.50);
+    input.maximumCompressionM = LuaModuleRuntime::numberArgument(
+        *runtime, state, 7, 0.20);
+    input.maximumDroopM = LuaModuleRuntime::numberArgument(
+        *runtime, state, 8, 0.15);
+    input.springRateNPerM = LuaModuleRuntime::numberArgument(
+        *runtime, state, 9, 35000.0);
+    input.springProgressionNPerM2 = LuaModuleRuntime::numberArgument(
+        *runtime, state, 10, 0.0);
+    input.motionRatio = LuaModuleRuntime::numberArgument(
+        *runtime, state, 11, 1.0);
+    input.tireVerticalStiffnessNPerM = LuaModuleRuntime::numberArgument(
+        *runtime, state, 12, 220000.0);
+
+    const heritage::vehicles::StaticRideHeightOutput output =
+        heritage::vehicles::solveStaticRideHeight(input);
+    if (!output.valid)
+    {
+        runtime->m_api.lua_pushnil(state);
+        runtime->m_api.lua_pushstring(state, output.diagnostic);
+        return 2;
+    }
+
+    const auto setNumber = [&](const char* name, double value) {
+        runtime->m_api.lua_pushnumber(state, static_cast<LuaNumber>(value));
+        runtime->m_api.lua_setfield(state, -2, name);
+    };
+    runtime->m_api.lua_createtable(state, 0, 7);
+    setNumber("spring_preload_n", output.requiredSpringPreloadN);
+    setNumber("target_compression_m", output.targetCompressionM);
+    setNumber("target_suspension_length_m", output.targetSuspensionLengthM);
+    setNumber("static_tire_deflection_m", output.staticTireDeflectionM);
+    setNumber("reconstructed_support_force_n",
+        output.reconstructedSupportForceN);
+    runtime->m_api.lua_pushstring(state, output.diagnostic);
+    runtime->m_api.lua_setfield(state, -2, "diagnostic");
+    runtime->m_api.lua_pushnil(state);
+    return 2;
 }
 
 int LuaVehicleBindingHandlers::luaVehicleSetWheelSuspensionGeometry(lua_State* state)
@@ -608,7 +890,132 @@ int LuaVehicleBindingHandlers::luaVehicleSetWheelSuspensionHardpoints(lua_State*
             runtime->m_api.lua_pushboolean(state, 0);
             return 1;
         }
+        geometry.doubleWishbone = {};
+        geometry.pushrodDoubleWishbone = {};
         geometry.trailingArm = {};
+        geometry.liveAxle = {};
+    }
+    else if (provider == heritage::vehicles::SuspensionProviderKind::DoubleWishboneV1)
+    {
+        if (runtime->m_api.lua_type(state, 4) != kLuaTypeTable
+            || !readDoubleWishboneHardpoints(
+                runtime->m_api, state, 4, geometry.doubleWishbone))
+        {
+            runtime->m_api.lua_pushboolean(state, 0);
+            return 1;
+        }
+        geometry.macPherson = {};
+        geometry.pushrodDoubleWishbone = {};
+        geometry.trailingArm = {};
+        geometry.liveAxle = {};
+    }
+    else if (provider
+        == heritage::vehicles::SuspensionProviderKind::PushrodDoubleWishboneV1)
+    {
+        if (runtime->m_api.lua_type(state, 4) != kLuaTypeTable
+            || !readPushrodDoubleWishboneHardpoints(
+                runtime->m_api, state, 4, geometry.pushrodDoubleWishbone))
+        {
+            runtime->m_api.lua_pushboolean(state, 0);
+            return 1;
+        }
+        geometry.macPherson = {};
+        geometry.doubleWishbone = {};
+        geometry.trailingArm = {};
+        geometry.liveAxle = {};
+    }
+    else if (provider == heritage::vehicles::SuspensionProviderKind::MultiLinkV1)
+    {
+        if (runtime->m_api.lua_type(state, 4) != kLuaTypeTable
+            || !readMultiLinkHardpoints(runtime->m_api, state, 4, geometry.multiLink))
+        {
+            runtime->m_api.lua_pushboolean(state, 0);
+            return 1;
+        }
+        geometry.macPherson = {}; geometry.doubleWishbone = {};
+        geometry.pushrodDoubleWishbone = {}; geometry.trailingArm = {};
+        geometry.liveAxle = {}; geometry.leafSpringLiveAxle = {};
+        geometry.motorcycleFork = {}; geometry.motorcycleSwingarm = {};
+        geometry.kartChassis = {};
+    }
+    else if (provider == heritage::vehicles::SuspensionProviderKind::SemiTrailingArmV1)
+    {
+        if (runtime->m_api.lua_type(state, 4) != kLuaTypeTable
+            || !readSemiTrailingArmHardpoints(
+                runtime->m_api, state, 4, geometry.semiTrailingArm))
+        {
+            runtime->m_api.lua_pushboolean(state, 0);
+            return 1;
+        }
+        geometry.macPherson = {}; geometry.doubleWishbone = {};
+        geometry.pushrodDoubleWishbone = {}; geometry.multiLink = {};
+        geometry.trailingArm = {}; geometry.liveAxle = {};
+        geometry.leafSpringLiveAxle = {}; geometry.motorcycleFork = {};
+        geometry.motorcycleSwingarm = {}; geometry.kartChassis = {};
+        geometry.twistBeam = {};
+    }
+    else if (provider == heritage::vehicles::SuspensionProviderKind::TwistBeamV1)
+    {
+        if (runtime->m_api.lua_type(state, 4) != kLuaTypeTable
+            || !readTwistBeamHardpoints(
+                runtime->m_api, state, 4, geometry.twistBeam))
+        {
+            runtime->m_api.lua_pushboolean(state, 0);
+            return 1;
+        }
+        geometry.macPherson = {}; geometry.doubleWishbone = {};
+        geometry.pushrodDoubleWishbone = {}; geometry.multiLink = {};
+        geometry.trailingArm = {}; geometry.liveAxle = {};
+        geometry.leafSpringLiveAxle = {}; geometry.motorcycleFork = {};
+        geometry.motorcycleSwingarm = {}; geometry.kartChassis = {};
+        geometry.semiTrailingArm = {};
+    }
+    else if (provider == heritage::vehicles::SuspensionProviderKind::LiveAxleV1)
+    {
+        if (runtime->m_api.lua_type(state, 4) != kLuaTypeTable
+            || !readLiveAxleHardpoints(
+                runtime->m_api, state, 4, geometry.liveAxle))
+        {
+            runtime->m_api.lua_pushboolean(state, 0);
+            return 1;
+        }
+        geometry.macPherson = {};
+        geometry.doubleWishbone = {};
+        geometry.pushrodDoubleWishbone = {};
+        geometry.trailingArm = {};
+    }
+    else if (provider == heritage::vehicles::SuspensionProviderKind::LeafSpringLiveAxleV1)
+    {
+        if (runtime->m_api.lua_type(state, 4) != kLuaTypeTable
+            || !readLeafSpringLiveAxleHardpoints(
+                runtime->m_api, state, 4, geometry.leafSpringLiveAxle))
+        {
+            runtime->m_api.lua_pushboolean(state, 0);
+            return 1;
+        }
+        geometry.macPherson = {};
+        geometry.doubleWishbone = {};
+        geometry.pushrodDoubleWishbone = {};
+        geometry.trailingArm = {};
+        geometry.liveAxle = {};
+    }
+    else if (provider == heritage::vehicles::SuspensionProviderKind::KartChassisFlexV1)
+    {
+        if (runtime->m_api.lua_type(state, 4) != kLuaTypeTable
+            || !readKartChassisHardpoints(
+                runtime->m_api, state, 4, geometry.kartChassis))
+        {
+            runtime->m_api.lua_pushboolean(state, 0);
+            return 1;
+        }
+        geometry.macPherson = {};
+        geometry.doubleWishbone = {};
+        geometry.pushrodDoubleWishbone = {};
+        geometry.trailingArm = {};
+        geometry.liveAxle = {};
+        geometry.leafSpringLiveAxle = {};
+        geometry.motorcycleFork = {};
+        geometry.motorcycleSwingarm = {};
     }
     else if (provider
         == heritage::vehicles::SuspensionProviderKind::TrailingArmTorsionBarV1)
@@ -621,6 +1028,9 @@ int LuaVehicleBindingHandlers::luaVehicleSetWheelSuspensionHardpoints(lua_State*
             return 1;
         }
         geometry.macPherson = {};
+        geometry.doubleWishbone = {};
+        geometry.pushrodDoubleWishbone = {};
+        geometry.liveAxle = {};
     }
     else if (provider != heritage::vehicles::SuspensionProviderKind::LinearRaycastV1)
     {
@@ -630,7 +1040,10 @@ int LuaVehicleBindingHandlers::luaVehicleSetWheelSuspensionHardpoints(lua_State*
     else
     {
         geometry.macPherson = {};
+        geometry.doubleWishbone = {};
+        geometry.pushrodDoubleWishbone = {};
         geometry.trailingArm = {};
+        geometry.liveAxle = {};
     }
 
     geometry.provider = provider;

@@ -26,12 +26,17 @@ for diagnostics and future constrained unsprung-mass providers.
 
 ## Motion ratio
 
-`motionRatio` is damper/spring shaft travel divided by wheel travel. Spring and
-damper rates therefore reach the wheel through the square of the motion ratio;
-preload reaches it through one factor. Progressive spring terms include the
-additional shaft-displacement factor. This makes the authoring value useful for
-pushrod, pullrod and unequal-lever layouts even before their geometry providers
-derive the ratio dynamically.
+`motionRatio` is damper/spring shaft travel divided by wheel travel for the
+legacy/direct-acting force contract. With a constant ratio, spring and damper
+rates reach the wheel through the square of that ratio; preload reaches it
+through one factor. Progressive spring terms include the additional
+shaft-displacement factor.
+
+Mechanisms with geometry-derived *variable* leverage must not approximate shaft
+displacement as `wheel travel * current ratio`. SUSP07 therefore supplies actual
+spring shaft compression plus independent spring/damper derivatives from the
+rocker geometry. The authored scalar remains a compatibility/default value for
+providers that do not expose those generalized coordinates.
 
 ## Torsion-bar springing (SUS03B)
 
@@ -123,3 +128,85 @@ Those effects require linkage geometry and trustworthy baseline captures first.
 Unsprung inertia and radial tire energy now exist, but no random degradation
 belongs in the solver until healthy geometry, loads and thermal state are
 authoritative.
+
+## Geometry-owned nonlinear rocker actuation (SUSP07)
+
+`pushrod_double_wishbone_v1` no longer uses the constant-ratio spring shortcut.
+Its geometry provider supplies actual spring shaft compression plus independent
+instantaneous spring and damper motion ratios. Spring force is evaluated from
+the real shaft displacement and mapped to wheel force through the current
+spring ratio. Damper shaft velocity is derived with the current damper ratio and
+the resulting shaft force is mapped back through that ratio.
+
+This preserves virtual-work leverage through nonlinear bellcrank motion while
+leaving the legacy/direct-acting providers behavior-compatible.
+
+
+## Leaf-spring live-axle force path (SUSP09)
+
+`live_axle_leaf_v1` uses the actual leaf generalized compression and geometry-
+derived leaf motion ratio from the SUSP09 kinematic provider. The common
+preload/rate/progression fields therefore calibrate effective leaf-pack bending
+rather than a fictitious coil spring at the wheel. The direct shock keeps its
+own SUSP08 shaft geometry and motion ratio.
+
+Interleaf friction is evaluated separately using a smooth Coulomb term plus a
+viscous term at leaf generalized velocity. Its wheel force and dissipated power
+are exposed separately from shock dissipation. One paired axle-housing wind-up
+state uses authorable torsional stiffness, damping and inertia; physical tire
+longitudinal reaction torque excites it, and only a bounded jacking component is
+fed back into vertical support.
+
+## Motorcycle suspension force path (SUSP10)
+
+`motorcycle_telescopic_fork_v1` is direct acting: the common spring/damper force
+model consumes the actual fork compression with 1:1 shaft leverage. No generic
+"anti-dive percentage" is injected into a conventional fork.
+
+`motorcycle_swingarm_linkage_v1` consumes the actual shock shaft compression and
+instantaneous motion ratio produced by the swingarm/dogbone/rocker geometry.
+The same virtual-work convention as SUSP07 maps spring/damper shaft force back
+to wheel support through current leverage.
+
+Rear chain geometry adds one separate physical contribution. The kinematics
+provider exposes `d(countershaft-to-axle distance)/d(wheel compression)`. The
+force model combines that derivative with previous-step longitudinal tire force,
+effective wheel radius and authored rear-sprocket pitch radius. This produces a
+bounded chain-jacking term with the correct sign from geometry, rather than a
+throttle-based anti-squat scalar. Its value is exposed separately as
+`motorcycleChainJackingForceN`.
+
+
+## Kart chassis force path (SUSP11)
+
+`kart_chassis_flex_v1` intentionally returns zero generic spring, damper and
+travel-stop force. A racing kart has no hidden four-corner coilover model. The
+high-rate support query fixes hub length at its authored rest length, while the
+pneumatic tire/structural tire model supplies radial compliance. The resulting
+tire normal force is transmitted directly to the chassis.
+
+Frame compliance remains owned by the reusable `chassis_torsional_mode_v1`
+solver. VehicleDefinition therefore rejects a kart provider unless that chassis
+torsional mode is enabled, and rejects nonzero authored bump/droop travel. Front
+kingpin steering jacking enters through geometry/SUSP05 rather than as a force
+scalar, so diagonal load transfer and inside-rear unloading emerge from the
+combined chassis, tire and steering geometry.
+
+## Five-link generalized force path (SUSP12)
+
+`multilink_v1` supplies actual spring and damper shaft coordinates from the
+solved rigid-upright geometry. The common nonlinear spring/damper model therefore
+uses `springCompressionM`, `springMotionRatio` and `damperMotionRatio` exactly as
+the SUSP07/08/10 generalized mechanisms do. This avoids a constant motion-ratio
+approximation while keeping spring/damper constitutive behavior reusable.
+
+## Semi-trailing / twist-beam generalized force path (SUSP13)
+
+Both SUSP13 providers use actual geometry-derived spring and damper coordinates.
+For `twist_beam_v1`, crossbeam torque is
+`K_beam * relativeArmAngle + C_beam * relativeArmAngularVelocity`. The wheel
+coupling force follows virtual work by multiplying that torque by the signed
+instantaneous derivative of relative beam twist with respect to the selected
+wheel's compression. Beam damping dissipation is tracked independently from the
+shock absorber. A generic anti-roll bar is not substituted for this structural
+beam mechanism.

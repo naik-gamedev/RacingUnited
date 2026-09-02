@@ -143,9 +143,9 @@ struct TireForceResult
     VehicleScalar turnSlipCorneringReduction = 1.0;
     VehicleScalar turnSlipTrailReduction = 1.0;
 
-    // Motorcycle contour telemetry. The current chassis contact ray remains
-    // authoritative until the future SWIFT/enveloping contact provider is
-    // promoted; this value is already usable by motorcycle wheel kinematics.
+    // Motorcycle contour telemetry mirrors the live support geometry. TIRE46
+    // promotes the rounded crown into the authoritative high-rate support/query
+    // path; these fields expose that physical result to diagnostics/kinematics.
     bool motorcycleContourValid = false;
     VehicleScalar motorcycleContactLateralOffset = 0.0;
     VehicleScalar motorcycleCenterToRoad = 0.0;

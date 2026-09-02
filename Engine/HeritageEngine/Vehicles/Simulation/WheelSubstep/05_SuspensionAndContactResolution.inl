@@ -4,7 +4,7 @@
 // It preserves the validated lexical scope and statement order while making phase ownership explicit.
 
     VehicleScalar suspensionForce = 0.0;
-    if (description.effectiveUnsprungMass <= 0.0f)
+    if (description.effectiveUnsprungMass <= 0.0f && !kartRigidSupport)
     {
         if (!hitGround)
         {
@@ -132,7 +132,18 @@
                   state.compressionVelocity,
                   currentGeometryOutput.springTwistRadians,
                   currentGeometryOutput.springAngularMotionRatioRadPerM,
-                  currentGeometryOutput.referenceSpringAngularMotionRatioRadPerM });
+                  currentGeometryOutput.referenceSpringAngularMotionRatioRadPerM,
+                  currentGeometryOutput.springCompressionM,
+                  currentGeometryOutput.springMotionRatio,
+                  currentGeometryOutput.damperMotionRatio,
+                  state.leafAxleWrapAngleRadians,
+                  state.leafAxleWrapRateRadiansPerSecond,
+                  previousLongitudinalTireForce,
+                  previousEffectiveRollingRadius,
+                  currentGeometryOutput.motorcycleChainDistanceMotionRatio,
+                  currentGeometryOutput.twistBeamTwistRadians,
+                  currentGeometryOutput.twistBeamTwistRateRadiansPerSecond,
+                  currentGeometryOutput.twistBeamAngularMotionRatioRadPerM });
         suspensionForce = std::clamp(
             suspensionOutput.normalForceN + antiRollBarForceN,
             0.0,
@@ -144,6 +155,12 @@
         state.suspensionUnclampedForce = suspensionOutput.unclampedForceN;
         state.damperDissipationWatts =
             suspensionOutput.damperDissipationW;
+        state.leafInterleafFrictionForceN = suspensionOutput.leafInterleafForceN;
+        state.leafInterleafDissipationWatts = suspensionOutput.leafInterleafDissipationW;
+        state.leafAxleWrapJackingForceN = suspensionOutput.leafAxleWrapJackingForceN;
+        state.motorcycleChainJackingForceN = suspensionOutput.motorcycleChainJackingForceN;
+        state.twistBeamCouplingForceN = suspensionOutput.twistBeamCouplingForceN;
+        state.twistBeamDissipationWatts = suspensionOutput.twistBeamDissipationW;
         state.normalForce = suspensionForce;
         if (suspensionForce > 0.0f)
         {
@@ -235,15 +252,31 @@
                   state.compressionVelocity,
                   currentGeometryOutput.springTwistRadians,
                   currentGeometryOutput.springAngularMotionRatioRadPerM,
-                  currentGeometryOutput.referenceSpringAngularMotionRatioRadPerM });
+                  currentGeometryOutput.referenceSpringAngularMotionRatioRadPerM,
+                  currentGeometryOutput.springCompressionM,
+                  currentGeometryOutput.springMotionRatio,
+                  currentGeometryOutput.damperMotionRatio,
+                  state.leafAxleWrapAngleRadians,
+                  state.leafAxleWrapRateRadiansPerSecond,
+                  previousLongitudinalTireForce,
+                  previousEffectiveRollingRadius,
+                  currentGeometryOutput.motorcycleChainDistanceMotionRatio,
+                  currentGeometryOutput.twistBeamTwistRadians,
+                  currentGeometryOutput.twistBeamTwistRateRadiansPerSecond,
+                  currentGeometryOutput.twistBeamAngularMotionRatioRadPerM });
         const VehicleScalar suspensionLinkForce = std::clamp(
             suspensionOutput.unclampedForceN + antiRollBarForceN,
             -static_cast<VehicleScalar>(description.maximumSuspensionForce),
             static_cast<VehicleScalar>(description.maximumSuspensionForce));
 
         UnsprungMassDescription unsprungDescription;
-        unsprungDescription.effectiveMassKg =
-            description.effectiveUnsprungMass;
+        // SUSP11 fixed kart hubs still use the tire radial model even when no
+        // explicit unsprung mass is authored. A tiny numerical mass is enough
+        // because minimumLength == maximumLength; the state cannot acquire a
+        // hidden suspension DOF and tire deflection remains the force authority.
+        unsprungDescription.effectiveMassKg = kartRigidSupport
+            ? std::max(static_cast<VehicleScalar>(description.effectiveUnsprungMass), VehicleScalar{1.0})
+            : static_cast<VehicleScalar>(description.effectiveUnsprungMass);
         // TIRE17C1: pressure must affect the pneumatic support rather than
         // being only a force-model/contact-area input. Keep the authored
         // vertical stiffness authoritative at nominal pressure, then apply a
@@ -317,6 +350,12 @@
             suspensionOutput.unclampedForceN;
         state.damperDissipationWatts =
             suspensionOutput.damperDissipationW;
+        state.leafInterleafFrictionForceN = suspensionOutput.leafInterleafForceN;
+        state.leafInterleafDissipationWatts = suspensionOutput.leafInterleafDissipationW;
+        state.leafAxleWrapJackingForceN = suspensionOutput.leafAxleWrapJackingForceN;
+        state.motorcycleChainJackingForceN = suspensionOutput.motorcycleChainJackingForceN;
+        state.twistBeamCouplingForceN = suspensionOutput.twistBeamCouplingForceN;
+        state.twistBeamDissipationWatts = suspensionOutput.twistBeamDissipationW;
         state.normalForce = unsprungOutput.normalForceN;
         suspensionForce = state.normalForce;
         state.grounded = hitGround && unsprungOutput.grounded;
@@ -357,11 +396,17 @@
             state.surfaceTemperatureC = hitSurfaceConditions.surfaceTemperatureC;
         }
 
-        if (std::abs(suspensionLinkForce) > 0.0f)
+        // SUSP11: with a rigid kart hub there is no spring link between tire
+        // and frame. Transmit the pneumatic tire reaction directly into the
+        // chassis at the physical wheel mount. Other suspension families keep
+        // their existing spring/damper link-force transmission unchanged.
+        const VehicleScalar chassisSupportForce = kartRigidSupport
+            ? state.normalForce : suspensionLinkForce;
+        if (std::abs(chassisSupportForce) > 0.0f)
         {
             const heritage::math::Vec3 suspensionImpulse = scale(
                 suspensionDirection,
-                -suspensionLinkForce * substepDeltaTime);
+                -chassisSupportForce * substepDeltaTime);
             bodies.applyImpulseAtPoint(
                 vehicle.description.chassisBody,
                 suspensionImpulse,

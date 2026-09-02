@@ -85,6 +85,16 @@ rotational torsion-bar spring helper. This keeps rear springing mechanically
 distinct from a coil spring while retaining a creator-friendly reference wheel
 rate until better torsion-bar stiffness data is available.
 
+## Physical wheel-path contact authority (SUSP05)
+
+Hardpoint-derived wheel-centre motion is now consumed by the physical tire-support
+query, not only by upright orientation and presentation. The high-rate solver uses
+the previous 1 kHz geometry state to obtain the wheel-centre displacement relative
+to its authored reference position, removes the component along the suspension
+axis, and offsets the next support ray by the remaining lateral/longitudinal motion.
+This captures linkage scrub/fore-aft path and steering-axis scrub without creating
+a second bump/droop solver. `linear_raycast_v1` retains a zero offset.
+
 ## Authoritative consumers
 
 - `VehicleSystem` evaluates geometry in every high-rate wheel substep after the
@@ -162,3 +172,141 @@ Vehicle GLB nodes can later replace individual estimates through stable
 `SUS_FL/SUS_FR/SUS_RL/SUS_RR` names or semantic extras. This preserves one
 physics mechanism per suspension type while progressively improving its input
 evidence.
+
+## Provider: `double_wishbone_v1` (SUSP06)
+
+SUSP06 adds a conventional unequal-length double-wishbone hardpoint provider.
+Upper and lower A-arms each rotate about their two chassis pivots. A bounded
+Newton solve finds both arm angles that simultaneously preserve the rigid
+upper/lower-ball-joint upright length and satisfy requested wheel-centre travel.
+
+The instantaneous upper/lower-ball-joint line is steering-axis authority. The
+rigid upright carries the wheel centre and tie-rod outer point; tie-rod length
+therefore creates passive bump steer before commanded steering is applied. The
+provider reports live camber, toe, caster, kingpin inclination and wheel-centre
+path rather than using authored camber/toe travel curves.
+
+A chassis-fixed damper upper eye and lower-arm-fixed lower eye derive damper
+compression and instantaneous motion ratio. This is the direct-acting wishbone
+provider; pushrod/rocker suspension remains a separate topology because its
+spring/damper leverage is indirect.
+
+As with MacPherson and trailing-arm providers, SUSP05 is the sole contact-query
+bridge: only the wheel-centre motion perpendicular to the authored suspension
+axis offsets the physical 1 kHz tire support query.
+
+## Provider: `pushrod_double_wishbone_v1` (SUSP07)
+
+SUSP07 reuses the SUSP06 unequal-length A-arm/upright/tie-rod solve and adds an
+indirect inboard actuation chain. The outboard pushrod pickup is fixed to the
+lower arm. Its inboard pickup rotates on a rigid rocker about a chassis-fixed
+axis; rocker angle is solved from constant pushrod length for each wheel pose.
+
+Separate spring and damper rocker pickups are supported. Their physical shaft
+compression and instantaneous motion ratios are evaluated independently, so a
+rocker may produce different rising/falling-rate curves for spring and damper.
+The common SUSP05 wheel-centre support-query bridge remains authoritative for
+physical contact scrub.
+
+
+## Provider: `live_axle_v1` (SUSP08)
+
+SUSP08 introduces pair-coupled suspension geometry. Both wheel centres belong to
+one rigid axle body, so equal travel produces bounce and asymmetric travel
+produces axle roll while preserving track width. A fixed-length Panhard rod and
+paired trailing links determine lateral/longitudinal axle path. Independent
+spring and damper attachment geometry on each side provides actual shaft
+compression and instantaneous leverage.
+
+The 1 kHz vehicle step snapshots both wheel compressions before advancing either
+wheel, so left/right iteration order cannot become a hidden axle input. SUSP05
+remains the sole bridge from the solved axle wheel-centre path to tire-support
+query scrub.
+
+## Provider: `live_axle_leaf_v1` (SUSP09)
+
+SUSP09 keeps the complete SUSP08 rigid axle location/roll solution and adds a
+semi-elliptic leaf-pack/shackle mechanism. Each side solves the moving rear leaf
+eye from fixed rear-leaf-segment and shackle lengths. Signed pack sag relative
+to the instantaneous front-eye/rear-eye chord supplies actual leaf compression;
+its derivative supplies nonlinear leaf motion ratio.
+
+Interleaf Coulomb/viscous hysteresis is an explicit spring-pack loss mechanism,
+not shock tuning. A separate paired axle-housing torsional state responds to the
+physical tire longitudinal reaction torque, providing bounded wind-up/release,
+tramp excitation and jacking coupling while both wheel centres remain owned by
+the one SUSP08 rigid axle body.
+
+## Providers: `motorcycle_telescopic_fork_v1` and `motorcycle_swingarm_linkage_v1` (SUSP10)
+
+SUSP10 makes conventional motorcycle suspension geometry native rather than
+reusing car camber/toe curves. The telescopic-fork provider uses the authored
+upper/lower steering-stem line as both steering and fork-slide authority. Axle
+compression moves along that line and commanded steer rotates the moved axle
+about it. The output exposes live rake, steering-axis point/direction,
+wheel-centre path and wheelbase change; SUSP05 carries the transverse component
+of that path into the physical tire-support query.
+
+The rear provider rotates the axle and dogbone pickup on a rigid swingarm axis.
+A fixed dogbone length solves a chassis-pivoted rocker, whose moved shock pickup
+produces actual shaft compression and instantaneous shock leverage. The
+countershaft-to-axle distance derivative is also exposed for the SUSP10 chain
+anti-squat virtual-work force path.
+
+These providers are suspension mechanisms only. A complete two-wheel runtime
+still needs free steering/rider/lean/gyroscopic vehicle dynamics; that boundary
+remains explicit in VehicleDefinition rather than being approximated here.
+
+
+## Provider: `kart_chassis_flex_v1` (SUSP11)
+
+SUSP11 models a racing kart without inventing four conventional suspension
+units. A complete ten-point package authors the left/right front kingpin upper
+and lower points, front wheel centres, rear axle bearing points and rear wheel
+centres. The front wheel centre rotates around its physical inclined kingpin
+when steering, so caster/KPI geometry creates real steering jacking. Unlike the
+other SUSP05 descendants, the kart support offset deliberately preserves this
+vertical kingpin displacement in the 1 kHz road-support query; removing the
+suspension-axis component would erase the mechanism that unloads the inside
+rear tire.
+
+The rear wheel centres are fixed to one authored axle line and ignore requested
+independent bump/droop. The compiler requires zero conventional suspension
+travel. Tire radial compliance and `chassis_torsional_mode_v1` frame twist own
+the support compliance instead. This makes steering jacking, tire compliance
+and frame torsion capable of producing inside-rear unloading as physical force
+paths rather than an authored lift percentage.
+
+## Provider: `multilink_v1` (SUSP12)
+
+SUSP12 adds a generic five-link independent wheel-carrier solver. The five
+chassis-to-upright rods retain their authored rest lengths while a sixth
+constraint requests wheel-centre travel along the suspension axis. A bounded
+six-variable Newton solve therefore recovers the rigid upright translation and
+rotation directly from hardpoint geometry. Camber, toe and wheel-centre scrub
+are outputs of that solve rather than authored travel curves.
+
+The fifth rod is the toe/steering link. Its inner pickup may translate along the
+authored steering-rack axis. At zero rack displacement, ordinary travel retains
+passive bump steer. For steering input the provider derives a reference rack
+travel from the rest-pose toe sensitivity, moves the toe-link inner pickup, then
+resolves all five link lengths at the requested wheel travel.
+
+Separate spring and damper chassis/upright mounts produce actual shaft
+compression and independent instantaneous motion ratios. SUSP05 remains the
+sole bridge from solved wheel-centre motion to the physical tire-support query.
+
+## Providers: `semi_trailing_arm_v1` and `twist_beam_v1` (SUSP13)
+
+`semi_trailing_arm_v1` rotates one rigid arm around an arbitrary swept pivot
+axis. Wheel-centre path, camber migration, passive toe/bump-steer and lateral /
+longitudinal scrub therefore come directly from the authored pivot geometry.
+Separate spring and damper lower eyes rotate with the arm and expose independent
+instantaneous motion ratios.
+
+`twist_beam_v1` evaluates a paired left/right semi-trailing-arm mechanism and
+uses relative arm rotation as the crossbeam torsion coordinate. Mirrored arm
+axes are transformed into a common physical beam-axis convention, so symmetric
+bump does not create fictitious beam twist. Split travel produces real relative
+twist and twist rate. SUSP05 applies the selected arm wheel-centre scrub to the
+physical support query exactly as for the other hardpoint providers.

@@ -264,6 +264,11 @@
     "returns": "nothing",
     "description": "Draws an auto-scaled native line plot from up to 512 numeric arguments. Intended for bounded diagnostic series rather than gameplay rendering."
   },
+  "UI.WorldLabel": {
+    "arguments": "(text: string, worldX: number, worldY: number, worldZ: number, red?: number, green?: number, blue?: number, alpha?: number, verticalOffsetPixels?: number)",
+    "returns": "visible: boolean",
+    "description": "Projects a local-world point through the final presented gameplay camera and draws centered Orbitron UI text above it. Labels render over the scene but below ordinary UI panels."
+  },
   "UI.SliderFloat": {
     "arguments": "(label: string, value: number, minimum: number, maximum: number, format?: string)",
     "returns": "value: number, changed: boolean",
@@ -429,6 +434,11 @@
     "returns": "provider, springPreloadN, springRateNPerM, springProgressionNPerM2, bumpDampingNsPerM, bumpHighSpeedDampingNsPerM, bumpDampingKneeVelocityMps, reboundDampingNsPerM, reboundHighSpeedDampingNsPerM, reboundDampingKneeVelocityMps, bumpStopEngagementM, bumpStopRateNPerM, bumpStopProgressionNPerM2, droopStopEngagementM, droopStopRateNPerM, motionRatio, maximumForceN",
     "description": "Reads the exact native nonlinear suspension description assigned to one wheel so live tools never infer state from Lua defaults."
   },
+  "Vehicle.SolveStaticRideHeight": {
+    "arguments": "(providerId, supportedLoadN, targetBodyOffsetM, mountHeightFromAuthoredGroundM, unloadedTireRadiusM, suspensionRestLengthM, maximumCompressionM, maximumDroopM, springRateNPerM, springProgressionNPerM2, motionRatio, tireVerticalStiffnessNPerM)",
+    "returns": "calibration: table|nil, error: string|nil",
+    "description": "Solves deterministic kerb-mass static equilibrium for spring or equivalent torsion-bar preload while including pneumatic tire deflection. Dampers are deliberately excluded because velocity-dependent damping is zero at rest."
+  },
   "Vehicle.GetWheelTelemetry": {
     "arguments": "(vehicle: VehicleHandle, oneBasedWheelIndex: integer)",
     "returns": "telemetry: table|nil",
@@ -452,7 +462,12 @@
   "Vehicle.InspectAssetMetadata": {
     "arguments": "(assetPath: string)",
     "returns": "metadata: table|nil, error: string|nil",
-    "description": "Inspects Heritage semantic metadata in a vehicle GLB, including authored vehicle parts, suspension hardpoint nodes, and explicit wheel-fitment datums. Wheel datums report corner/role, chassis-local position, local +X axis, provenance, and confidence without assuming arbitrary WH_* origins have engineering meaning."
+    "description": "Inspects Heritage semantic metadata in a vehicle GLB, including authored vehicle parts, suspension hardpoint nodes, explicit wheel-fitment datums, ride-height bounds, and wheelbase/front/rear track reconstructed independently from authored tire bounds. Wheel datums report corner/role, chassis-local position, local +X axis, provenance, and confidence without assuming arbitrary WH_* origins have engineering meaning."
+  },
+  "Vehicle.MeasureWheelGeometry": {
+    "arguments": "(vehicle: VehicleHandle, frontLeft?: integer, frontRight?: integer, rearLeft?: integer, rearRight?: integer)",
+    "returns": "measurement: table|nil",
+    "description": "Measures live wheelbase and front/rear track from authoritative native wheel centres. Measurements are projected onto averaged upright axes so vehicle pitch/roll and mirrored camber signs do not inflate nominal geometry; spatial 3D distances and axle centres are also returned for diagnostics. Wheel indices are Lua 1-based and default to 1,2,3,4."
   },
   "Vehicle.SetAntiRollBar": {
     "arguments": "(vehicle, barIndex, leftWheel, rightWheel, torsionalStiffnessNmPerRad, torsionalDampingNmsPerRad, leftLeverArmM, rightLeverArmM, leftLinkMotionRatio, rightLinkMotionRatio, maximumWheelForceN, enabled)",

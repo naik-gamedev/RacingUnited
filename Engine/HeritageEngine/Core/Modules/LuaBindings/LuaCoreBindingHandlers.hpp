@@ -181,6 +181,7 @@ struct LuaCoreBindingHandlers
     static int luaUiGetCursorPos(lua_State* state);
     static int luaUiDummy(lua_State* state);
     static int luaUiTextColored(lua_State* state);
+    static int luaUiWorldLabel(lua_State* state);
     static int luaUiProgressBar(lua_State* state);
     static int luaUiPlotLines(lua_State* state);
     static int luaUiPlotLinesRange(lua_State* state);
